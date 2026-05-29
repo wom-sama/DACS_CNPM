@@ -1,0 +1,10 @@
+* text=auto
+
+*.pt binary
+*.pth binary
+*.ckpt binary
+*.onnx binary
+*.engine binary
+*.plan binary
+*.trt binary
+*.safetensors binary

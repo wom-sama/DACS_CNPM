@@ -1,0 +1,8 @@
+numpy<=2
+Pillow==11.3.0
+PyYAML==6.0.3
+matplotlib==3.9.4
+torch==2.6.0
+torchvision==0.21.0
+tqdm
+scipy==1.13.1

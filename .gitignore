@@ -1,0 +1,54 @@
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments and local settings
+.venv/
+venv/
+env/
+.env
+.env.*
+
+# Editor and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Training outputs, experiments, and logs
+runs/
+outputs/
+logs/
+lightning_logs/
+wandb/
+mlruns/
+tensorboard/
+*.log
+*.tmp
+*.bak
+
+# Datasets stay outside git. Pass --data to point at data.yaml.
+data/
+dataset/
+datasets/
+images/
+labels/
+
+# Model and deployment artifacts
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.engine
+*.plan
+*.trt
+*.safetensors
+
+# Generated reports/artifacts
+deploy/
+robustness/
+attention_viz/
