@@ -11,13 +11,13 @@ import torch
 import torch.nn.functional as F
 from PIL import Image
 
-from inference import (
+from trkh.inference.inference import (
     invert_bbox_from_transform_meta,
     post_process_detections,
     resolve_confidence_threshold,
     resolve_detection_output_limit,
 )
-from stream_infer import (
+from trkh.inference.stream_infer import (
     StreamSmoother,
     build_output_video_path,
     compute_preview_size,
@@ -29,7 +29,7 @@ from stream_infer import (
     resolve_capture_source,
     resolve_display_limits,
 )
-from utils import PredictionDriftMonitor, load_checkpoint
+from trkh.core.utils import PredictionDriftMonitor, load_checkpoint
 
 
 def parse_args() -> argparse.Namespace:

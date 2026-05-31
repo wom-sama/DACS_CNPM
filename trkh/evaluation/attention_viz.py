@@ -9,8 +9,8 @@ import torch
 import torch.nn.functional as F
 from PIL import Image
 
-from dataset import build_eval_transform
-from feature_hooks import (
+from trkh.data.dataset import build_eval_transform
+from trkh.models.feature_hooks import (
     HookRecorder,
     build_attention_heatmap,
     build_featuremap_heatmap,
@@ -22,9 +22,9 @@ from feature_hooks import (
     resolve_attention_index,
     resolve_feature_hook,
 )
-from inference import crop_with_yolo_bbox, load_model
-from model import extract_bbox_from_model_output
-from utils import ensure_dir, json_dump, summarize_token_norms
+from trkh.inference.inference import crop_with_yolo_bbox, load_model
+from trkh.models.model import extract_bbox_from_model_output
+from trkh.core.utils import ensure_dir, json_dump, summarize_token_norms
 
 
 def parse_args() -> argparse.Namespace:

@@ -8,16 +8,16 @@ import sys
 from pathlib import Path
 from typing import Dict, List
 
-from utils import ensure_dir, json_dump
+from trkh.core.utils import ensure_dir, json_dump
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Chay ablation grid cho ViT-Registers.")
-    parser.add_argument("--output-dir", type=Path, default=Path(__file__).resolve().parent / "runs")
+    parser.add_argument("--output-dir", type=Path, default=Path(__file__).resolve().parents[2] / "runs")
     parser.add_argument("--study-name", type=str, default="vit640_ablation")
     parser.add_argument("--python", type=Path, default=Path(sys.executable))
-    parser.add_argument("--train-script", type=Path, default=Path(__file__).resolve().parent / "train.py")
-    parser.add_argument("--eval-script", type=Path, default=Path(__file__).resolve().parent / "evaluate.py")
+    parser.add_argument("--train-script", type=Path, default=Path(__file__).resolve().parents[2] / "train.py")
+    parser.add_argument("--eval-script", type=Path, default=Path(__file__).resolve().parents[2] / "evaluate.py")
     parser.add_argument("--split", choices=("train", "val"), default="val")
     parser.add_argument("--register-grid", type=int, nargs="+", default=[1, 4, 8])
     parser.add_argument("--register-pos-grid", nargs="+", default=["false", "true"])
@@ -128,7 +128,7 @@ def collect_row(
 
 def main() -> None:
     args = parse_args()
-    project_dir = Path(__file__).resolve().parent
+    project_dir = Path(__file__).resolve().parents[2]
     base_train_args = normalize_train_args(args.train_args)
     register_pos_grid = parse_bool_grid(args.register_pos_grid)
 

@@ -7,7 +7,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List
 
-from config import default_data_yaml, load_data_spec
+from trkh.core.config import default_data_yaml, load_data_spec
 
 
 def parse_args() -> argparse.Namespace:

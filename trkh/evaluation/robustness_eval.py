@@ -11,14 +11,14 @@ import torch.nn.functional as F
 from PIL import Image, ImageEnhance
 from torch.utils.data import DataLoader, Dataset
 
-from attention_viz import analyze_tensor, resolve_layer_index
-from config import IMAGENET_MEAN, default_data_yaml, load_data_spec, to_serializable
-from dataset import MangoYOLOCropDataset, PseudoVideoAugmenter, build_eval_transform
-from evaluate import resolve_crop_to_primary_object
-from feature_hooks import count_attention_layers
-from inference import load_model
-from model import extract_bbox_from_model_output, extract_head_input_from_features
-from utils import (
+from trkh.evaluation.attention_viz import analyze_tensor, resolve_layer_index
+from trkh.core.config import IMAGENET_MEAN, default_data_yaml, load_data_spec, to_serializable
+from trkh.data.dataset import MangoYOLOCropDataset, PseudoVideoAugmenter, build_eval_transform
+from trkh.evaluation.evaluate import resolve_crop_to_primary_object
+from trkh.models.feature_hooks import count_attention_layers
+from trkh.inference.inference import load_model
+from trkh.models.model import extract_bbox_from_model_output, extract_head_input_from_features
+from trkh.core.utils import (
     build_safe_dataloader_kwargs,
     ensure_dir,
     json_dump,

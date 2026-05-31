@@ -7,16 +7,16 @@ from typing import Dict, List, Optional
 import torch
 from PIL import Image
 
-from config import to_serializable
-from inference import (
+from trkh.core.config import to_serializable
+from trkh.inference.inference import (
     invert_bbox_from_transform_meta,
     post_process_detections,
     resolve_confidence_threshold,
     resolve_detection_output_limit,
 )
-from stream_infer import prepare_transform
-from stream_infer_trt import TensorRTHybridModel, predict_tensor_outputs_trt
-from utils import ensure_dir, json_dump, load_checkpoint
+from trkh.inference.stream_infer import prepare_transform
+from trkh.inference.stream_infer_trt import TensorRTHybridModel, predict_tensor_outputs_trt
+from trkh.core.utils import ensure_dir, json_dump, load_checkpoint
 
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}

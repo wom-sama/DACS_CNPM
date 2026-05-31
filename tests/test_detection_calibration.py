@@ -7,9 +7,9 @@ from pathlib import Path
 
 import torch
 
-import model as model_module
-from config import AugmentationConfig, ModelConfig, TrainConfig, load_data_spec
-from evaluate import (
+import trkh.models.model as model_module
+from trkh.core.config import AugmentationConfig, ModelConfig, TrainConfig, load_data_spec
+from trkh.evaluation.evaluate import (
     _build_background_aware_classification_metrics,
     _build_detection_confidence_curve,
     _build_detection_confidence_curve_from_prepared,
@@ -20,21 +20,23 @@ from evaluate import (
     _resolve_adaptive_max_detections,
     _score_detection_queries,
 )
-from dataset import (
+from trkh.data.dataset import (
     RareClassRepeatDataset,
     build_rare_class_repeat_factors,
     build_train_collate_fn,
     build_train_transform,
 )
-from inference import post_process_detections, resolve_detection_output_limit
-from loss import DETRSetCriterion
-from matcher import HungarianMatcher
-from model import create_model
-from train import (
+from trkh.inference.inference import post_process_detections, resolve_detection_output_limit
+from trkh.training.loss import DETRSetCriterion
+from trkh.training.matcher import HungarianMatcher
+from trkh.models.model import create_model
+from trkh.training.train import (
     apply_balance_file_auto_adjustment,
     _initial_training_progress_from_resume,
     _load_resume_configs_from_checkpoint,
     _load_training_checkpoint,
+    _apply_adaptive_detection_loss,
+    _resolve_adaptive_detection_loss,
     _resolve_classification_overfit_guard,
     _resolve_eval_num_workers,
     _resolve_resume_checkpoint_path,
@@ -43,7 +45,7 @@ from train import (
     _save_interrupt_checkpoint,
     train_one_epoch,
 )
-from utils import append_csv_row, build_warmup_decay_scheduler, load_checkpoint, resolve_amp_dtype, save_checkpoint
+from trkh.core.utils import append_csv_row, build_warmup_decay_scheduler, load_checkpoint, resolve_amp_dtype, save_checkpoint
 
 
 class DetectionCalibrationTests(unittest.TestCase):
@@ -728,6 +730,40 @@ dataset_balance:
         self.assertTrue(summary["active"])
         self.assertLess(summary["multiplier"], 1.0)
         self.assertGreaterEqual(summary["multiplier"], 0.25)
+
+    def test_adaptive_detection_loss_boosts_detection_weights_when_detection_lags(self):
+        train_config = TrainConfig(
+            adaptive_detection_loss=True,
+            adaptive_detection_macro_f1_threshold=0.93,
+            adaptive_detection_f1_target=0.90,
+            adaptive_detection_gap_threshold=0.20,
+            adaptive_detection_bbox_iou_target=0.70,
+            adaptive_detection_max_multiplier=2.0,
+        )
+        previous_metrics = {
+            "macro_f1": 0.96,
+            "bbox": {"mean_iou": 0.52},
+            "detection_confidence_curve": {"best_f1_50": 0.54},
+        }
+
+        summary = _resolve_adaptive_detection_loss(
+            train_config=train_config,
+            detection_mode=True,
+            stage_name="stage2_full_detection",
+            previous_val_metrics=previous_metrics,
+        )
+        stage_config = {
+            "bbox_l1_weight": 1.0,
+            "bbox_giou_weight": 0.7,
+            "objectness_weight": 6.0,
+            "cardinality_weight": 0.1,
+        }
+        _apply_adaptive_detection_loss(stage_config, summary)
+
+        self.assertTrue(summary["active"])
+        self.assertGreater(summary["multiplier"], 1.0)
+        self.assertGreater(stage_config["bbox_l1_weight"], 1.0)
+        self.assertGreater(stage_config["objectness_weight"], 6.0)
 
     def test_eval_num_workers_can_be_overridden_for_cached_validation(self):
         previous = os.environ.pop("TRKH_EVAL_NUM_WORKERS", None)

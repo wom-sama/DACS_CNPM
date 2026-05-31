@@ -39,6 +39,8 @@ dataset/
 datasets/
 images/
 labels/
+!trkh/data/
+!trkh/data/*.py
 
 # Model and deployment artifacts
 *.pt

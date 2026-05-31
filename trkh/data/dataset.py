@@ -17,7 +17,7 @@ from torchvision import transforms
 from torchvision.transforms import functional as TF
 from torchvision.transforms import InterpolationMode
 
-from config import IMAGENET_MEAN, IMAGENET_STD, DataSpec, load_data_spec
+from trkh.core.config import IMAGENET_MEAN, IMAGENET_STD, DataSpec, load_data_spec
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 

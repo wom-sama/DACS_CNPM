@@ -1,6 +1,6 @@
 # Training Guide
 
-This file replaces the older 640px classification guide. The active project target is scratch-only DETR-style mango detection and ripeness classification.
+The active project target is scratch-only DETR-style mango detection and ripeness classification.
 
 ## Non-Negotiable Rule
 
@@ -13,194 +13,89 @@ Do not use pretraining:
 
 Allowed resume source: checkpoints produced by this repository from random initialization.
 
-## Before A Long Run
+## Code Layout
 
-Local Windows:
+Training code now lives under `trkh/`:
 
-```powershell
-$env:PYTHONPATH='D:\DataAI\AIEx\TRKH'
-D:\DataAI\.venv\Scripts\python.exe -m compileall train.py loss.py utils.py config.py dataset.py render_history_artifacts.py tests\test_detection_calibration.py
-D:\DataAI\.venv\Scripts\python.exe -m unittest discover -s tests -p "test_*.py" -v
-```
+- `trkh.training.train`: main training entrypoint
+- `trkh.evaluation.evaluate`: validation/test entrypoint
+- `trkh.data.dataset`: YOLO dataset and bbox-aware composition
+- `trkh.tools.build_dataset`: dataset organizer replacing the old `soan3.py`
 
-Lightning/Linux:
+Root `train.py` and `evaluate.py` are compatibility wrappers.
 
-```bash
-export PYTHONPATH="$PWD"
-python -m compileall train.py loss.py utils.py config.py dataset.py render_history_artifacts.py tests/test_detection_calibration.py
-python -m unittest discover -s tests -p "test_*.py" -v
-```
-
-Current expected test result: `34` tests passed.
-
-## Recommended Next Run
-
-Use q16/q24 before q34. The previous 416 q34 run became numerically unstable and its old checkpoint was not competitive after post-processing.
+## Required Tests
 
 Windows:
 
 ```powershell
-D:\DataAI\.venv\Scripts\python.exe D:\DataAI\AIEx\TRKH\train.py ^
-  --data D:\DataAI\AIEx\dataset\data.yaml ^
-  --run-name mango_detr_416_q16_scratch_v1 ^
-  --image-size 416 ^
-  --batch-size 1 ^
-  --grad-accum-steps 8 ^
-  --epochs 120 ^
-  --patience 18 ^
-  --num-workers 0 ^
-  --eval-num-workers 0 ^
-  --train-image-cache-mb 4096 ^
-  --eval-image-cache-mb 2048 ^
-  --model-type vit_registers_hybrid ^
-  --num-queries 16 ^
-  --full-image-detection ^
-  --learning-rate 5e-5 ^
-  --min-learning-rate 1e-6 ^
-  --warmup-epochs 10 ^
-  --grad-clip-norm 0.5 ^
-  --max-nonfinite-grad-steps 4 ^
-  --quality-head ^
-  --quality-loss-weight 0.05 ^
-  --count-head ^
-  --count-loss-weight 0.05 ^
-  --auxiliary-decoder-loss ^
-  --auxiliary-loss-weight 0.10 ^
-  --objectness-loss-weight 5.0 ^
-  --bbox-l1-loss-weight 1.0 ^
-  --bbox-giou-loss-weight 0.5 ^
-  --best-metric macro_detection_hmean ^
-  --eval-detection-score-mode class_sqrt_objectness ^
-  --eval-detection-nms-iou-threshold 0.2 ^
-  --eval-max-detections-per-image 3
+$env:PYTHONPATH='D:\DataAI\AIEx\TRKH'
+D:\DataAI\.venv\Scripts\python.exe -m compileall train.py evaluate.py scripts trkh tests
+D:\DataAI\.venv\Scripts\python.exe -m unittest discover -s tests -p "test_*.py" -v
 ```
 
-Lightning/Linux uses the same flags with Linux paths:
+Linux/Lightning:
 
 ```bash
-python train.py \
-  --data /path/to/dataset/data.yaml \
-  --run-name mango_detr_416_q16_scratch_lightning_v1 \
-  --image-size 416 \
-  --batch-size 1 \
-  --grad-accum-steps 8 \
-  --epochs 120 \
-  --patience 18 \
-  --num-workers 2 \
-  --eval-num-workers 2 \
-  --train-image-cache-mb 0 \
-  --eval-image-cache-mb 0 \
-  --model-type vit_registers_hybrid \
-  --num-queries 16 \
-  --full-image-detection \
-  --learning-rate 5e-5 \
-  --min-learning-rate 1e-6 \
-  --warmup-epochs 10 \
-  --grad-clip-norm 0.5 \
-  --max-nonfinite-grad-steps 4 \
-  --quality-head \
-  --quality-loss-weight 0.05 \
-  --count-head \
-  --count-loss-weight 0.05 \
-  --auxiliary-decoder-loss \
-  --auxiliary-loss-weight 0.10 \
-  --objectness-loss-weight 5.0 \
-  --bbox-l1-loss-weight 1.0 \
-  --bbox-giou-loss-weight 0.5 \
-  --best-metric macro_detection_hmean \
-  --eval-detection-score-mode class_sqrt_objectness \
-  --eval-detection-nms-iou-threshold 0.2 \
-  --eval-max-detections-per-image 3
+export PYTHONPATH="$PWD"
+python -m compileall train.py evaluate.py scripts trkh tests
+python -m unittest discover -s tests -p "test_*.py" -v
 ```
 
-## Smoke Test
+Expected result after the refactor: `36` tests passed.
 
-Use this only to check stability after cloning or changing hardware:
+## Dataset Builder
 
 ```bash
-python train.py \
-  --data /path/to/dataset/data.yaml \
-  --run-name smoke_416_bf16 \
-  --image-size 416 \
-  --batch-size 1 \
-  --grad-accum-steps 8 \
-  --epochs 1 \
-  --max-train-batches 16 \
-  --max-val-batches 8 \
-  --num-workers 2 \
-  --eval-num-workers 2 \
-  --train-image-cache-mb 0 \
-  --eval-image-cache-mb 0 \
-  --model-type vit_registers_hybrid \
-  --num-queries 16 \
-  --full-image-detection \
-  --quality-head \
-  --count-head \
-  --auxiliary-decoder-loss \
-  --learning-rate 5e-5 \
-  --best-metric macro_detection_hmean \
-  --skip-final-test
+python -m trkh.tools.build_dataset \
+  --images-dir /path/to/images \
+  --labels-dir /path/to/labels \
+  --output-dir /path/to/dataset \
+  --audit-dir /path/to/audit_images \
+  --train-ratio 0.7 \
+  --val-ratio 0.2 \
+  --seed 42 \
+  --overwrite
 ```
 
-Never use `--skip-final-test` for a real metric report.
+It writes `images/{train,val,test}`, `labels/{train,val,test}`, `data.yaml`, and `canbang.yaml`.
 
-## Evaluation
+## One-Shot Training Rule
 
-```bash
-python evaluate.py \
-  --checkpoint runs/mango_detr_416_q16_scratch_lightning_v1/checkpoints/best.pt \
-  --data /path/to/dataset/data.yaml \
-  --split test \
-  --batch-size 1 \
-  --num-workers 2 \
-  --detection-score-mode class_sqrt_objectness \
-  --detection-nms-iou-threshold 0.2 \
-  --max-detections-per-image 3
-```
+For the current imbalanced 5-class dataset, prefer one long run from scratch instead of manual phase 1/phase 2 resumes:
 
-## Artifact Recovery
+- `--stage1-epochs 0` enables detection from epoch 1.
+- `--epochs 0 --scheduler-total-epochs 160 --patience 100` trains until early stopping.
+- classification guard reduces classification weight only when classification is ahead of detection.
+- adaptive detection loss boosts bbox/objectness/cardinality/count pressure when validation says detection lags.
+- checkpoints are still scratch-only; do not use external weights.
 
-If a Lightning run has `history.csv` but no root-level training plots, regenerate them without retraining:
+## Recommended Local Command
 
-```bash
-python render_history_artifacts.py \
-  --run-dir runs/<run_name>
-```
+Use the command in `README.md` section `One-Shot Local Training Candidate`.
 
-This creates the main training/detection/convergence PNG files and `history_summary.json`.
+## Detection Augmentation
 
-## Imbalanced Multi-Object Data
-
-For datasets with a rare class and too few crowded images, keep training scratch-only and use bbox-aware synthetic composition instead of external data:
+For datasets with few crowded images:
 
 - `--mosaic-probability` creates 4-image composites.
 - `--cutmix-probability` pastes rectangular regions and updates/clips boxes.
 - `--copy-paste-probability` pastes real labeled objects into other images and drops heavily occluded base boxes.
 
-Use these lightly at first. Too much synthetic composition can improve recall but hurt localization realism.
-
-## Phase Resume Rule
-
-When starting a new phase from a scratch checkpoint, keep the no-pretrain rule
-and resume only project-produced weights. Use:
-
-```bash
---resume-use-cli-config \
---resume-reset-optimizer \
---resume-reset-scheduler \
---resume-reset-scaler \
---resume-reset-epoch
-```
-
-`--resume-reset-epoch` makes the new run start at epoch 1 so the scheduler
-warmup/decay is computed for the new phase instead of the source checkpoint's
-old epoch number.
+Keep these light. The stopped v2 run showed that heavy synthetic composition can increase recall but still leave precision low.
 
 ## Current Evidence
 
-- q12 224 baseline test: `macro_f1=0.979963`, `detection_f1@50=0.748283`.
-- Best q12 post-processing test: `detection_f1@50=0.751958`.
-- Old q34 416 checkpoint after sweep: val `macro_f1=0.924749`, `detection_f1@50=0.635828`.
-- Lightning T4 q16 batch16 scratch phase 1: best val calibrated `detection_f1@50=0.851810`, test `macro_f1=0.992270`, test calibrated `detection_f1@50=0.828399`, test best-threshold `detection_f1@50=0.828683`.
+- Lightning T4 q16 batch16 scratch: test `macro_f1=0.992270`, calibrated `detection_f1@50=0.828399`.
+- Local q40 5-class copy-paste v2 stopped at epoch 30: best val epoch 18, `macro_f1=0.952560`, `best_detection_f1@50=0.539130`, `bbox_iou=0.522800`.
+- Local q40 5-class copy-paste v2 `best.pt` test: `macro_f1=0.958867`, calibrated `macro_f1=0.968724`, `best_detection_f1@50=0.549635`, `bbox_iou=0.520143`.
+- The next bottleneck is detection precision and false positives, so the one-shot command raises objectness/background/cardinality pressure and uses adaptive detection-loss boosting.
 
-The `0.98/0.98` target is not yet supported by evidence. Macro F1 is now above target, but detection F1 is still the bottleneck. Continue with scratch-only phase training and false-positive/false-negative analysis before trying larger q34 runs.
+## Artifact Recovery
+
+```bash
+python -m trkh.evaluation.render_history_artifacts \
+  --run-dir runs/<run_name>
+```
+
+This creates `training_curves.png`, `results.png`, `all_training_metrics.png`, `per_class_training_metrics.png`, `detection_training_metrics.png`, `validation_convergence.png`, and `history_summary.json`.

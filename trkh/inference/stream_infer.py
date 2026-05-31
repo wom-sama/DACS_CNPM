@@ -11,8 +11,8 @@ import numpy as np
 import torch
 from PIL import Image
 
-from dataset import build_eval_transform
-from inference import (
+from trkh.data.dataset import build_eval_transform
+from trkh.inference.inference import (
     invert_bbox_from_transform_meta,
     load_model,
     post_process_detections as inference_post_process_detections,
@@ -20,7 +20,7 @@ from inference import (
     resolve_confidence_threshold,
     resolve_detection_output_limit,
 )
-from utils import PredictionDriftMonitor, ensure_dir
+from trkh.core.utils import PredictionDriftMonitor, ensure_dir
 
 
 def parse_args() -> argparse.Namespace:

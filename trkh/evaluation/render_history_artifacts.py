@@ -11,7 +11,7 @@ import matplotlib
 
 matplotlib.use("Agg")
 
-from utils import (
+from trkh.core.utils import (
     plot_all_training_metrics,
     plot_detection_training_metrics,
     plot_per_class_training_metrics,

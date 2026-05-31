@@ -28,7 +28,7 @@ from torch import Tensor
 from torch.utils.data import DataLoader, Dataset
 import torchvision.transforms as transforms
 
-from utils import build_safe_dataloader_kwargs, maybe_enable_dataset_image_cache
+from trkh.core.utils import build_safe_dataloader_kwargs, maybe_enable_dataset_image_cache
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')

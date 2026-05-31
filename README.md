@@ -1,6 +1,6 @@
 # DACS_CNPM / TRKH Mango DETR
 
-Scratch-only mango ripeness detection project built around a ViT-Registers DETR-style model. The current priority is multi-object detection plus ripeness classification, with `macro_f1` and `detection_f1@50` tracked together.
+Scratch-only mango ripeness detection project built around a ViT-Registers DETR-style model. The active target is multi-object detection plus ripeness classification, with `macro_f1` and `detection_f1@50` optimized together.
 
 ## Hard Rule
 
@@ -13,67 +13,47 @@ No pretraining is allowed:
 
 Only checkpoints created by this repository from random initialization may be resumed.
 
-The model code rejects common pretrained config keys, and training docs keep this rule explicit.
+## Current Evidence
 
-## Current Status
+- Lightning T4 q16 batch16 scratch run reached test `macro_f1=0.992270`, calibrated `detection_f1@50=0.828399`.
+- Local 5-class imbalanced q40 copy-paste v2 was stopped at epoch 30 for analysis. Best val `selection_metric=0.688553` at epoch 18, `macro_f1=0.952560`, `best_detection_f1@50=0.539130`, `bbox_iou=0.522800`.
+- The same v2 `best.pt` on test reached `macro_f1=0.958867`, calibrated `macro_f1=0.968724`, `best_detection_f1@50=0.549635`, `bbox_iou=0.520143`.
+- The v2 bottleneck is detection precision/false positives, not classification. The next run should train one-shot from scratch with full detection enabled from epoch 1 and adaptive detection-loss boosting.
 
-- q12 224 baseline recheck: test `macro_f1=0.979963`, `detection_f1@50=0.748283`.
-- Best small post-process gain: `class_sqrt_objectness`, NMS `0.2`, max detections `3`, test `detection_f1@50=0.751958`.
-- Failed 416 q34 run was stabilized in code, but the old checkpoint is not a good main path: val `detection_f1@50` stayed around `0.636`.
-- Lightning T4 q16 batch16 scratch phase 1 improved detection substantially: best val calibrated `detection_f1@50=0.851810`; test `macro_f1=0.992270`, calibrated `detection_f1@50=0.828399`.
-- Main next experiment should continue scratch-only phase training from the phase 1 best checkpoint with scheduler/epoch reset before trying q34 again.
+The `0.98/0.98` target is not yet supported by evidence. Keep the no-pretrain rule first.
 
-See:
+## Project Layout
 
-- `docs/BASELINE_RECHECK_20260529.md`
-- `docs/STABILITY_FIX_20260529.md`
-- `LIGHTNING_TRAINING.md`
+```text
+trkh/
+  core/          config, utilities, AMP/checkpoint/artifact helpers
+  data/          YOLO dataset, transforms, mosaic/cutmix/copy-paste
+  models/        ViT-Registers / DETR model code
+  training/      train loop, matcher, losses, stability/debug tools
+  evaluation/    evaluate, metrics, plots, robustness/attention analysis
+  inference/     image/video/TensorRT inference and deployment helpers
+  tools/         dataset builders and split tools
+scripts/         thin CLI wrappers
+tests/           unit and stability tests
+```
 
-## Main Files
-
-- `train.py`: training loop, resume logic, bf16/AMP handling, staged detection loss, cache controls.
-- `evaluate.py`: validation/test metrics, calibration, NMS, detection score modes.
-- `inference.py`: single-image inference.
-- `model.py`: ViT-Registers hybrid DETR model and pretrained-option rejection.
-- `loss.py`: hybrid detection/classification loss with fp32 sanitization for bf16 stability.
-- `dataset.py`: YOLO dataset loader, crop/full-image modes, image-stem indexing, cache support.
-- `metrics.py`: classification and detection metrics.
-- `utils.py`: dataloaders, optimizer groups, AMP helpers, checkpointing, artifact plotting.
-- Detection augmentations support bbox-aware mosaic, cutmix, and copy-paste through train CLI flags.
-- `render_history_artifacts.py`: regenerate run-level plots from `history.csv` after interrupted/cloud runs.
-- `tests/test_detection_calibration.py`: calibration, loss stability, stage gating, and non-finite gradient tests.
-
-Older classification utilities (`ablation.py`, `deploy.py`, `robustness_eval.py`, `attention_viz.py`, stream scripts) remain in the repo for compatibility, but the active target is DETR-style detection.
+Root `train.py` and `evaluate.py` are compatibility wrappers. Preferred commands use module paths, for example `python -m trkh.training.train`.
 
 ## Setup
 
-Recommended local interpreter:
-
-```powershell
-D:\DataAI\.venv\Scripts\python.exe
-```
-
-Install dependencies:
-
 ```powershell
 D:\DataAI\.venv\Scripts\python.exe -m pip install -r requirements.txt
-```
-
-Set import root for tests:
-
-```powershell
 $env:PYTHONPATH='D:\DataAI\AIEx\TRKH'
 ```
 
 ## Dataset
 
-Do not commit datasets to git. Keep YOLO data outside this repo and pass `--data` explicitly.
-
-Expected layout:
+Keep datasets outside git and pass `--data` explicitly. Expected YOLO layout:
 
 ```text
 dataset/
   data.yaml
+  canbang.yaml
   images/train
   images/val
   images/test
@@ -82,119 +62,95 @@ dataset/
   labels/test
 ```
 
-Current local default:
+Build a dataset from separate image/label folders:
 
-```text
-D:\DataAI\AIEx\dataset\data.yaml
+```powershell
+D:\DataAI\.venv\Scripts\python.exe -m trkh.tools.build_dataset `
+  --images-dir D:\DataAI\Resize `
+  --labels-dir D:\DataAI\Nhan `
+  --output-dir D:\DataAI\AIEx\dataset `
+  --audit-dir D:\DataAI\AIEx\QuanSat `
+  --train-ratio 0.7 `
+  --val-ratio 0.2 `
+  --seed 42 `
+  --overwrite
 ```
+
+For custom/non-4-class datasets use `--class-name-mode raw --expected-num-classes <N>` while training.
 
 ## Required Checks
 
-Run before any long training job:
+Run before long training:
 
 ```powershell
-D:\DataAI\.venv\Scripts\python.exe -m compileall train.py loss.py utils.py config.py dataset.py render_history_artifacts.py tests\test_detection_calibration.py
+D:\DataAI\.venv\Scripts\python.exe -m compileall train.py evaluate.py scripts trkh tests
 D:\DataAI\.venv\Scripts\python.exe -m unittest discover -s tests -p "test_*.py" -v
 ```
 
-Expected current result: `34` tests passed.
+Current expected result: `36` tests passed.
 
-## Conservative Scratch 416 Candidate
+## One-Shot Local Training Candidate
 
-Use this as the next Lightning/local long-run candidate. It avoids the unstable q34/high-LR setup that produced non-finite gradients.
+This is the next local RTX 4060 8GB candidate for the current 5-class imbalanced dataset. It is scratch-only, has no manual phase resume, uses `--epochs 0` plus `--patience 100`, and lets adaptive guards change loss pressure from validation metrics.
 
 ```powershell
-D:\DataAI\.venv\Scripts\python.exe D:\DataAI\AIEx\TRKH\train.py ^
-  --data D:\DataAI\AIEx\dataset\data.yaml ^
-  --run-name mango_detr_416_q16_scratch_v1 ^
-  --image-size 416 ^
-  --batch-size 1 ^
-  --grad-accum-steps 8 ^
-  --epochs 120 ^
-  --patience 18 ^
-  --num-workers 0 ^
-  --eval-num-workers 0 ^
-  --train-image-cache-mb 4096 ^
-  --eval-image-cache-mb 2048 ^
-  --model-type vit_registers_hybrid ^
-  --num-queries 16 ^
-  --full-image-detection ^
-  --learning-rate 5e-5 ^
-  --min-learning-rate 1e-6 ^
-  --warmup-epochs 10 ^
-  --grad-clip-norm 0.5 ^
-  --max-nonfinite-grad-steps 4 ^
-  --quality-head ^
-  --quality-loss-weight 0.05 ^
-  --count-head ^
-  --count-loss-weight 0.05 ^
-  --auxiliary-decoder-loss ^
-  --auxiliary-loss-weight 0.10 ^
-  --objectness-loss-weight 5.0 ^
-  --bbox-l1-loss-weight 1.0 ^
-  --bbox-giou-loss-weight 0.5 ^
-  --best-metric macro_detection_hmean ^
-  --eval-detection-score-mode class_sqrt_objectness ^
-  --eval-detection-nms-iou-threshold 0.2 ^
-  --eval-max-detections-per-image 3
+cd D:\DataAI\AIEx\TRKH
+$env:PYTHONPATH='D:\DataAI\AIEx\TRKH'
+$env:TRKH_AMP_DTYPE='bf16'
+$env:OMP_NUM_THREADS='6'
+$env:TRKH_ALLOW_WINDOWS_MULTIPROCESSING='1'
+$env:TRKH_ALLOW_WINDOWS_PIN_MEMORY='1'
+$env:TRKH_ALLOW_WINDOWS_PERSISTENT_WORKERS='1'
+
+D:\DataAI\.venv\Scripts\python.exe -m trkh.training.train `
+  --data D:\DataAI\AIEx\dataset\data.yaml `
+  --class-name-mode raw --expected-num-classes 5 `
+  --run-name mango_detr_416_q40_5cls_one_shot_adaptive_v1 `
+  --output-dir runs --disable-resume --seed 42 `
+  --model-type vit_registers_hybrid --image-size 416 --patch-size 16 `
+  --embed-dim 256 --depth 8 --num-heads 8 --num-registers 4 --drop-path-rate 0.08 `
+  --num-queries 40 --decoder-depth 4 --decoder-num-heads 8 --decoder-ffn-dim 1024 `
+  --full-image-detection --quality-head --count-head --auxiliary-decoder-loss `
+  --batch-size 10 --grad-accum-steps 2 --epochs 0 --scheduler-total-epochs 160 --patience 100 `
+  --learning-rate 2.5e-5 --min-learning-rate 8e-7 --weight-decay 0.04 --warmup-epochs 10 `
+  --grad-clip-norm 0.30 --max-nonfinite-grad-steps 4 `
+  --num-workers 2 --eval-num-workers 2 --train-image-cache-mb 0 --eval-image-cache-mb 0 `
+  --class-weight-mode sqrt_inverse --weighted-sampler --weighted-sampler-epoch-multiplier 1.15 `
+  --focal-loss-gamma 2.0 --focal-loss-mix 0.25 --label-smoothing 0.02 `
+  --stage1-epochs 0 `
+  --classification-guard-macro-f1-threshold 0.94 --classification-guard-detection-gap 0.20 --classification-guard-min-cls-weight 0.35 `
+  --adaptive-detection-macro-f1-threshold 0.93 --adaptive-detection-f1-target 0.90 --adaptive-detection-gap-threshold 0.20 `
+  --adaptive-detection-bbox-iou-target 0.70 --adaptive-detection-max-multiplier 2.20 `
+  --bbox-l1-loss-weight 1.3 --bbox-giou-loss-weight 0.85 `
+  --background-loss-weight 0.55 --objectness-loss-weight 8.0 `
+  --objectness-focal-alpha 0.85 --objectness-focal-gamma 1.25 --matcher-objectness-cost 2.0 `
+  --cardinality-loss-weight 0.18 --count-objectness-consistency-weight 0.08 `
+  --quality-loss-weight 0.02 --count-loss-weight 0.04 --auxiliary-loss-weight 0.05 `
+  --best-metric macro_detection_hmean `
+  --eval-detection-score-mode class_sqrt_objectness --eval-detection-nms-iou-threshold 0.18 `
+  --eval-adaptive-max-detections --eval-adaptive-count-source auto --eval-adaptive-count-margin 1 --eval-adaptive-min-detections 1 `
+  --resize-mode pad --brightness 0.10 --contrast 0.10 --saturation 0.03 --hue 0.01 `
+  --random-erasing-probability 0.0 --random-affine-degrees 4 --random-affine-translate 0.03 --random-affine-scale-min 0.94 `
+  --horizontal-flip-probability 0.5 --vertical-flip-probability 0.02 --rotate90-probability 0.06 --lighting-probability 0.06 `
+  --mosaic-probability 0.06 --cutmix-probability 0.05 --copy-paste-probability 0.12 --copy-paste-max-objects 2 `
+  --cutmix-alpha 1.0 --mixup-probability 0.0
 ```
 
-On Linux/Lightning, use the same flags but replace the interpreter and dataset paths. See `LIGHTNING_TRAINING.md`.
-
-## Smoke Command
-
-Use only to verify stability, not to report final quality:
+Monitor:
 
 ```powershell
-D:\DataAI\.venv\Scripts\python.exe D:\DataAI\AIEx\TRKH\train.py ^
-  --data D:\DataAI\AIEx\dataset\data.yaml ^
-  --run-name smoke_416_bf16_after_clone ^
-  --image-size 416 ^
-  --batch-size 1 ^
-  --grad-accum-steps 8 ^
-  --epochs 1 ^
-  --max-train-batches 16 ^
-  --max-val-batches 8 ^
-  --num-workers 0 ^
-  --eval-num-workers 0 ^
-  --train-image-cache-mb 512 ^
-  --eval-image-cache-mb 512 ^
-  --model-type vit_registers_hybrid ^
-  --num-queries 16 ^
-  --full-image-detection ^
-  --quality-head ^
-  --count-head ^
-  --auxiliary-decoder-loss ^
-  --learning-rate 5e-5 ^
-  --best-metric macro_detection_hmean ^
-  --skip-final-test
-```
-
-## Evaluation
-
-```powershell
-D:\DataAI\.venv\Scripts\python.exe D:\DataAI\AIEx\TRKH\evaluate.py ^
-  --checkpoint D:\DataAI\AIEx\TRKH\runs\mango_detr_416_q16_scratch_v1\checkpoints\best.pt ^
-  --data D:\DataAI\AIEx\dataset\data.yaml ^
-  --split test ^
-  --batch-size 1 ^
-  --num-workers 0 ^
-  --detection-score-mode class_sqrt_objectness ^
-  --detection-nms-iou-threshold 0.2 ^
-  --max-detections-per-image 3
+Get-Content runs\mango_detr_416_q40_5cls_one_shot_adaptive_v1\history.csv -Tail 5 -Wait
 ```
 
 ## Artifact Recovery
 
-If a cloud job is interrupted or killed before `train.py` finishes its post-run cleanup, checkpoints and `history.csv` may exist while root-level plots are missing. Regenerate them from the downloaded run directory:
+If a run has `history.csv` but missing root-level plots:
 
 ```powershell
-D:\DataAI\.venv\Scripts\python.exe D:\DataAI\AIEx\TRKH\render_history_artifacts.py ^
+D:\DataAI\.venv\Scripts\python.exe -m trkh.evaluation.render_history_artifacts `
   --run-dir D:\DataAI\AIEx\TRKH\runs\<run_name>
 ```
 
-This writes `training_curves.png`, `results.png`, `all_training_metrics.png`, `per_class_training_metrics.png`, `detection_training_metrics.png`, `validation_convergence.png`, and `history_summary.json`.
-
 ## Output Policy
 
-Training outputs go under `runs/<run_name>` and are ignored by git. Checkpoints, ONNX/TensorRT files, datasets, logs, and cache folders are intentionally ignored to keep GitHub usable.
+Training outputs go under `runs/<run_name>` and are ignored by git. Checkpoints, ONNX/TensorRT files, datasets, logs, and cache folders are intentionally ignored.

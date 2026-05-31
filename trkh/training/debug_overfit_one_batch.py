@@ -9,11 +9,11 @@ from typing import Dict, List, Sequence, Tuple
 import torch
 from torch.utils.data import DataLoader, Subset
 
-from config import default_data_yaml, load_data_spec
-from dataset import MangoYOLOCropDataset, build_eval_transform, build_train_collate_fn
-from loss import HybridDetectionClassificationLoss
-from model import DETRVisionTransformerWithRegisters
-from utils import ensure_dir, set_seed
+from trkh.core.config import default_data_yaml, load_data_spec
+from trkh.data.dataset import MangoYOLOCropDataset, build_eval_transform, build_train_collate_fn
+from trkh.training.loss import HybridDetectionClassificationLoss
+from trkh.models.model import DETRVisionTransformerWithRegisters
+from trkh.core.utils import ensure_dir, set_seed
 
 
 def parse_args() -> argparse.Namespace:
@@ -31,7 +31,7 @@ def parse_args() -> argparse.Namespace:
         default=0,
         help="Neu > 0, validate so class trong data.yaml truoc debug.",
     )
-    parser.add_argument("--output-dir", type=Path, default=Path(__file__).resolve().parent / "runs" / "debug_overfit_one_batch")
+    parser.add_argument("--output-dir", type=Path, default=Path(__file__).resolve().parents[2] / "runs" / "debug_overfit_one_batch")
     parser.add_argument("--split", choices=("train", "val", "test"), default="train")
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--iterations", type=int, default=200)

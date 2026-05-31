@@ -9,11 +9,11 @@ import torch.nn.functional as F
 from PIL import Image
 from torch import nn
 
-from config import IMAGENET_MEAN, IMAGENET_STD, to_serializable
-from dataset import bbox_xywh_to_xyxy, build_eval_transform
-from debug_and_optimization import TestTimeAugmentation
-from model import build_model_from_checkpoint, extract_bbox_from_model_output, extract_detection_from_model_output
-from utils import autocast_context, ensure_dir, json_dump, load_checkpoint
+from trkh.core.config import IMAGENET_MEAN, IMAGENET_STD, to_serializable
+from trkh.data.dataset import bbox_xywh_to_xyxy, build_eval_transform
+from trkh.training.debug_and_optimization import TestTimeAugmentation
+from trkh.models.model import build_model_from_checkpoint, extract_bbox_from_model_output, extract_detection_from_model_output
+from trkh.core.utils import autocast_context, ensure_dir, json_dump, load_checkpoint
 
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}

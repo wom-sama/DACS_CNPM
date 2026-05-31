@@ -7,8 +7,8 @@ import torch
 import torch.nn.functional as F
 from torch import Tensor, nn
 
-from debug_and_optimization import BboxDebugger
-from matcher import HungarianMatcher
+from trkh.training.debug_and_optimization import BboxDebugger
+from trkh.training.matcher import HungarianMatcher
 
 logger = logging.getLogger(__name__)
 LOSS_LOGIT_CLAMP = 60.0

@@ -21,7 +21,7 @@ CLASS_NAME_MODES = ("auto", "raw", "mango")
 
 
 def project_dir() -> Path:
-    return Path(__file__).resolve().parent
+    return Path(__file__).resolve().parents[2]
 
 
 def default_data_yaml() -> Path:
@@ -232,6 +232,12 @@ class TrainConfig:
     classification_guard_macro_f1_threshold: float = 0.985
     classification_guard_detection_gap: float = 0.12
     classification_guard_min_cls_weight: float = 0.25
+    adaptive_detection_loss: bool = True
+    adaptive_detection_macro_f1_threshold: float = 0.93
+    adaptive_detection_f1_target: float = 0.90
+    adaptive_detection_gap_threshold: float = 0.20
+    adaptive_detection_bbox_iou_target: float = 0.70
+    adaptive_detection_max_multiplier: float = 2.0
     bbox_l1_loss_weight: float = 1.0
     bbox_giou_loss_weight: float = 0.5
     background_loss_weight: float = 0.3

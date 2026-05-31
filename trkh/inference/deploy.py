@@ -14,17 +14,17 @@ from torch import nn
 from torch.ao.quantization import quantize_dynamic
 from torch.utils.data import DataLoader
 
-from config import default_data_yaml, load_data_spec, to_serializable
-from dataset import (
+from trkh.core.config import default_data_yaml, load_data_spec, to_serializable
+from trkh.data.dataset import (
     MangoYOLOCropDataset,
     PseudoVideoAugmenter,
     build_eval_transform,
     build_train_collate_fn,
 )
-from evaluate import evaluate_model, resolve_crop_to_primary_object
-from inference import export_onnx
-from model import build_model_from_checkpoint as build_checkpoint_model
-from utils import (
+from trkh.evaluation.evaluate import evaluate_model, resolve_crop_to_primary_object
+from trkh.inference.inference import export_onnx
+from trkh.models.model import build_model_from_checkpoint as build_checkpoint_model
+from trkh.core.utils import (
     build_safe_dataloader_kwargs,
     ensure_dir,
     json_dump,
