@@ -64,7 +64,9 @@ It writes `images/{train,val,test}`, `labels/{train,val,test}`, `data.yaml`, and
 
 For the current imbalanced 5-class dataset, prefer one long run from scratch instead of manual phase 1/phase 2 resumes:
 
-- `--stage1-epochs 0` enables detection from epoch 1.
+- `--stage1-epochs 5` lets classification stabilize first, saves `stage1_best.pt` and `stage1.pt`, then continues into full detection in the same run.
+- `--matcher-class-cost 0.0` keeps Hungarian assignment object-first: box/objectness decide which query owns which object, then classification learns the matched object's label.
+- `--eval-detection-score-mode objectness` ranks/filter detections by objectness; the metric still counts true positives only when the final class label is also correct.
 - `--epochs 0 --scheduler-total-epochs 160 --patience 100` trains until early stopping.
 - classification guard reduces classification weight only when classification is ahead of detection.
 - adaptive detection loss boosts bbox/objectness/cardinality/count pressure when validation says detection lags.
@@ -89,7 +91,8 @@ Keep these light. The stopped v2 run showed that heavy synthetic composition can
 - Lightning T4 q16 batch16 scratch: test `macro_f1=0.992270`, calibrated `detection_f1@50=0.828399`.
 - Local q40 5-class copy-paste v2 stopped at epoch 30: best val epoch 18, `macro_f1=0.952560`, `best_detection_f1@50=0.539130`, `bbox_iou=0.522800`.
 - Local q40 5-class copy-paste v2 `best.pt` test: `macro_f1=0.958867`, calibrated `macro_f1=0.968724`, `best_detection_f1@50=0.549635`, `bbox_iou=0.520143`.
-- The next bottleneck is detection precision and false positives, so the one-shot command raises objectness/background/cardinality pressure and uses adaptive detection-loss boosting.
+- Local q40 one-shot no-stage1 v1 stopped at epoch 72: best val epoch 60, `macro_f1=0.891489`, `best_detection_f1@50=0.636304`, `bbox_iou=0.654993`.
+- The next bottleneck is class 1 precision plus detection precision. The current command removes strict balanced sampling, relies on `canbang.yaml` rare-class repeat, restores a short classification-only stage, keeps detection matching independent from class confidence, and keeps adaptive detection-loss boosting for stage 2.
 
 ## Artifact Recovery
 

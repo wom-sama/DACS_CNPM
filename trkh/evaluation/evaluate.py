@@ -1414,6 +1414,7 @@ def main() -> None:
             objectness_weight=float(checkpoint.get("train_config", {}).get("objectness_loss_weight", 5.0)),
             objectness_focal_alpha=float(checkpoint.get("train_config", {}).get("objectness_focal_alpha", 0.75)),
             objectness_focal_gamma=float(checkpoint.get("train_config", {}).get("objectness_focal_gamma", 0.5)),
+            matcher_class_cost=float(checkpoint.get("train_config", {}).get("matcher_class_cost", 1.0)),
             matcher_objectness_cost=float(checkpoint.get("train_config", {}).get("matcher_objectness_cost", 1.0)),
             cardinality_weight=float(checkpoint.get("train_config", {}).get("cardinality_loss_weight", 0.0)),
             count_weight=float(checkpoint.get("train_config", {}).get("count_loss_weight", 0.0)),

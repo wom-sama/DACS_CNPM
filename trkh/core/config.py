@@ -244,6 +244,7 @@ class TrainConfig:
     objectness_loss_weight: float = 5.0
     objectness_focal_alpha: float = 0.75
     objectness_focal_gamma: float = 0.5
+    matcher_class_cost: float = 1.0
     matcher_objectness_cost: float = 1.0
     cardinality_loss_weight: float = 0.0
     count_loss_weight: float = 0.0

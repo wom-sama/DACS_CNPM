@@ -387,6 +387,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--objectness-loss-weight", type=float, default=5.0)
     parser.add_argument("--objectness-focal-alpha", type=float, default=0.75)
     parser.add_argument("--objectness-focal-gamma", type=float, default=0.5)
+    parser.add_argument(
+        "--matcher-class-cost",
+        type=float,
+        default=1.0,
+        help=(
+            "Chi phi class trong Hungarian matcher. Dat 0 de matcher gan query theo box/objectness "
+            "truoc, roi moi hoc class tren query da match."
+        ),
+    )
     parser.add_argument("--matcher-objectness-cost", type=float, default=1.0)
     parser.add_argument("--cardinality-loss-weight", type=float, default=0.0)
     parser.add_argument("--count-loss-weight", type=float, default=0.0)
@@ -579,6 +588,8 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         raise ValueError("--objectness-focal-alpha phai nam trong [0, 1].")
     if args.objectness_focal_gamma < 0.0:
         raise ValueError("--objectness-focal-gamma phai >= 0.")
+    if args.matcher_class_cost < 0.0:
+        raise ValueError("--matcher-class-cost phai >= 0.")
     if args.matcher_objectness_cost < 0.0:
         raise ValueError("--matcher-objectness-cost phai >= 0.")
     if args.count_loss_weight < 0.0:
@@ -714,6 +725,7 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         objectness_loss_weight=args.objectness_loss_weight,
         objectness_focal_alpha=args.objectness_focal_alpha,
         objectness_focal_gamma=args.objectness_focal_gamma,
+        matcher_class_cost=args.matcher_class_cost,
         matcher_objectness_cost=args.matcher_objectness_cost,
         cardinality_loss_weight=args.cardinality_loss_weight,
         count_loss_weight=args.count_loss_weight,
@@ -2783,6 +2795,7 @@ def main() -> None:
             objectness_weight=train_config.objectness_loss_weight,
             objectness_focal_alpha=train_config.objectness_focal_alpha,
             objectness_focal_gamma=train_config.objectness_focal_gamma,
+            matcher_class_cost=train_config.matcher_class_cost,
             matcher_objectness_cost=train_config.matcher_objectness_cost,
             cardinality_weight=train_config.cardinality_loss_weight,
             count_weight=train_config.count_loss_weight,
@@ -2801,6 +2814,7 @@ def main() -> None:
             objectness_weight=train_config.objectness_loss_weight,
             objectness_focal_alpha=train_config.objectness_focal_alpha,
             objectness_focal_gamma=train_config.objectness_focal_gamma,
+            matcher_class_cost=train_config.matcher_class_cost,
             matcher_objectness_cost=train_config.matcher_objectness_cost,
             cardinality_weight=train_config.cardinality_loss_weight,
             count_weight=train_config.count_loss_weight,
@@ -2951,6 +2965,9 @@ def main() -> None:
     best_selection_metric_higher_is_better = bool(resume_progress["best_selection_metric_higher_is_better"])
     best_epoch = int(resume_progress["best_epoch"])
     epochs_without_improvement = int(resume_progress["epochs_without_improvement"])
+    stage1_best_macro_f1 = -1.0
+    stage1_best_epoch = 0
+    stage1_boundary_checkpoint_saved = False
     previous_val_metrics: Optional[Dict[str, object]] = (
         resume_progress["previous_val_metrics"]
         if isinstance(resume_progress["previous_val_metrics"], dict)
@@ -3324,9 +3341,78 @@ def main() -> None:
                     "next_epoch": int(epoch) + 1,
                     "checkpoint_kind": "last",
                 }
-                count_early_stopping = not (
-                    detection_mode and str(stage_config["stage_name"]) == "stage1_cls_only"
-                )
+                is_stage1_epoch = detection_mode and str(stage_config["stage_name"]) == "stage1_cls_only"
+                if is_stage1_epoch:
+                    stage1_improved = current_macro_f1 > float(stage1_best_macro_f1)
+                    if stage1_improved:
+                        stage1_best_macro_f1 = current_macro_f1
+                        stage1_best_epoch = int(epoch)
+                        stage1_best_payload = dict(checkpoint_payload)
+                        stage1_best_payload["optimizer_state"] = None
+                        stage1_best_payload["resume_state"] = {
+                            "last_completed_epoch": int(epoch),
+                            "next_epoch": int(epoch) + 1,
+                            "checkpoint_kind": "stage1_best",
+                        }
+                        stage1_best_payload["stage1_checkpoint"] = {
+                            "kind": "stage1_best",
+                            "epoch": int(epoch),
+                            "macro_f1": float(current_macro_f1),
+                            "next_stage": "stage2_full_detection"
+                            if int(epoch) >= int(train_config.stage1_epochs)
+                            else "stage1_cls_only",
+                        }
+                        checkpoint_start = time.time()
+                        save_checkpoint(checkpoints_dir / "stage1_best.pt", stage1_best_payload)
+                        checkpoint_seconds += time.time() - checkpoint_start
+                        artifact_start = time.time()
+                        save_evaluation_artifacts(val_metrics, data_spec.class_names, run_dir / "stage1_best_val")
+                        json_dump(run_dir / "stage1_best_metrics.json", to_serializable(val_metrics))
+                        artifact_seconds += time.time() - artifact_start
+                        print(
+                            {
+                                "stage1_checkpoint": "stage1_best",
+                                "path": str(checkpoints_dir / "stage1_best.pt"),
+                                "epoch": int(epoch),
+                                "macro_f1": round(float(current_macro_f1), 4),
+                            },
+                            flush=True,
+                        )
+                        del stage1_best_payload
+                    if int(epoch) >= int(train_config.stage1_epochs) and not stage1_boundary_checkpoint_saved:
+                        stage1_boundary_checkpoint_saved = True
+                        stage1_payload = dict(checkpoint_payload)
+                        stage1_payload["resume_state"] = {
+                            "last_completed_epoch": int(epoch),
+                            "next_epoch": int(epoch) + 1,
+                            "checkpoint_kind": "stage1_boundary",
+                        }
+                        stage1_payload["stage1_checkpoint"] = {
+                            "kind": "stage1_boundary",
+                            "epoch": int(epoch),
+                            "macro_f1": float(current_macro_f1),
+                            "best_stage1_epoch": int(stage1_best_epoch),
+                            "best_stage1_macro_f1": float(stage1_best_macro_f1),
+                            "next_stage": "stage2_full_detection",
+                        }
+                        checkpoint_start = time.time()
+                        save_checkpoint(checkpoints_dir / "stage1.pt", stage1_payload)
+                        checkpoint_seconds += time.time() - checkpoint_start
+                        json_dump(run_dir / "stage1_metrics.json", to_serializable(val_metrics))
+                        print(
+                            {
+                                "stage1_checkpoint": "stage1_boundary",
+                                "path": str(checkpoints_dir / "stage1.pt"),
+                                "epoch": int(epoch),
+                                "next_epoch": int(epoch) + 1,
+                                "next_stage": "stage2_full_detection",
+                                "best_stage1_epoch": int(stage1_best_epoch),
+                                "best_stage1_macro_f1": round(float(stage1_best_macro_f1), 4),
+                            },
+                            flush=True,
+                        )
+                        del stage1_payload
+                count_early_stopping = not is_stage1_epoch
                 if is_improved:
                     best_selection_metric_name = selection_metric_name
                     best_selection_metric_value = float(selection_metric_value)
@@ -3699,6 +3785,7 @@ def main() -> None:
                 objectness_weight=float(best_checkpoint.get("train_config", {}).get("objectness_loss_weight", 5.0)),
                 objectness_focal_alpha=float(best_checkpoint.get("train_config", {}).get("objectness_focal_alpha", 0.75)),
                 objectness_focal_gamma=float(best_checkpoint.get("train_config", {}).get("objectness_focal_gamma", 0.5)),
+                matcher_class_cost=float(best_checkpoint.get("train_config", {}).get("matcher_class_cost", 1.0)),
                 matcher_objectness_cost=float(best_checkpoint.get("train_config", {}).get("matcher_objectness_cost", 1.0)),
                 cardinality_weight=float(best_checkpoint.get("train_config", {}).get("cardinality_loss_weight", 0.0)),
                 count_weight=float(best_checkpoint.get("train_config", {}).get("count_loss_weight", 0.0)),

@@ -201,6 +201,7 @@ class DETRSetCriterion(nn.Module):
         objectness_weight: float = 5.0,
         objectness_focal_alpha: float = 0.75,
         objectness_focal_gamma: float = 0.5,
+        matcher_class_cost: float = 1.0,
         matcher_objectness_cost: float = 1.0,
         cardinality_weight: float = 0.0,
         count_weight: float = 0.0,
@@ -217,6 +218,7 @@ class DETRSetCriterion(nn.Module):
         self.objectness_weight = float(max(0.0, objectness_weight))
         self.objectness_focal_alpha = float(min(max(objectness_focal_alpha, 0.0), 1.0))
         self.objectness_focal_gamma = float(max(0.0, objectness_focal_gamma))
+        self.matcher_class_cost = float(max(0.0, matcher_class_cost))
         self.matcher_objectness_cost = float(max(0.0, matcher_objectness_cost))
         self.cardinality_weight = float(max(0.0, cardinality_weight))
         self.count_weight = float(max(0.0, count_weight))
@@ -224,7 +226,7 @@ class DETRSetCriterion(nn.Module):
         self.auxiliary_weight = float(max(0.0, auxiliary_weight))
         self.count_objectness_consistency_weight = float(max(0.0, count_objectness_consistency_weight))
         self.matcher = matcher or HungarianMatcher(
-            cost_class=1.0,
+            cost_class=self.matcher_class_cost,
             cost_bbox=self.bbox_l1_weight,
             cost_giou=self.bbox_giou_weight,
             cost_objectness=self.matcher_objectness_cost,
@@ -313,6 +315,7 @@ class DETRSetCriterion(nn.Module):
             "objectness_weight": float(self.objectness_weight),
             "objectness_focal_alpha": float(self.objectness_focal_alpha),
             "objectness_focal_gamma": float(self.objectness_focal_gamma),
+            "matcher_class_cost": float(self.matcher_class_cost),
             "matcher_objectness_cost": float(self.matcher_objectness_cost),
             "bbox_l1_weight": float(self.bbox_l1_weight),
             "bbox_giou_weight": float(self.bbox_giou_weight),
