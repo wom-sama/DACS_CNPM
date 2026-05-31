@@ -626,6 +626,36 @@ dataset_balance:
         self.assertTrue(all(target["labels"].numel() > 1 for target in targets))
         self.assertTrue(all(target["boxes"].shape[-1] == 4 for target in targets))
 
+    def test_detection_copy_paste_collate_adds_valid_objects(self):
+        torch.manual_seed(11)
+        collate = build_train_collate_fn(
+            num_classes=5,
+            batch_mix_probability=1.0,
+            mosaic_probability=0.0,
+            cutmix_probability=0.0,
+            copy_paste_probability=1.0,
+            copy_paste_max_objects=2,
+            max_detection_objects=8,
+        )
+        batch = []
+        for index in range(4):
+            image = torch.zeros((3, 48, 48), dtype=torch.float32)
+            image[:, 10 + index : 26 + index, 12 + index : 28 + index] = 0.2 + 0.1 * index
+            target = {
+                "labels": torch.tensor([index % 5], dtype=torch.long),
+                "boxes": torch.tensor([[0.42, 0.40, 0.28, 0.28]], dtype=torch.float32),
+            }
+            batch.append((image, target))
+
+        images, targets = collate(batch)
+
+        self.assertEqual(tuple(images.shape), (4, 3, 48, 48))
+        self.assertTrue(any(target["labels"].numel() > 1 for target in targets))
+        for target in targets:
+            self.assertEqual(target["boxes"].shape[-1], 4)
+            self.assertTrue(torch.all(target["boxes"] >= 0.0))
+            self.assertTrue(torch.all(target["boxes"] <= 1.0))
+
     def test_rare_class_repeat_targets_extreme_class_two_three_imbalance(self):
         class TinyLabelDataset(torch.utils.data.Dataset):
             def __init__(self, labels):

@@ -214,6 +214,8 @@ class TrainConfig:
     mixup_alpha: float = 0.4
     cutmix_probability: float = 0.5
     cutmix_alpha: float = 1.0
+    copy_paste_probability: float = 0.0
+    copy_paste_max_objects: int = 2
     eval_tta: bool = False
     tta_brightness_delta: float = 0.08
     log_artifact_stats: bool = True

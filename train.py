@@ -351,6 +351,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--mixup-alpha", type=float, default=0.4)
     parser.add_argument("--cutmix-probability", type=float, default=0.45)
     parser.add_argument("--cutmix-alpha", type=float, default=1.0)
+    parser.add_argument("--copy-paste-probability", type=float, default=0.0)
+    parser.add_argument("--copy-paste-max-objects", type=int, default=2)
     parser.add_argument("--eval-tta", action="store_true", default=False)
     parser.add_argument("--tta-brightness-delta", type=float, default=0.08)
     parser.add_argument("--disable-artifact-logging", action="store_true", default=False)
@@ -507,6 +509,10 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         raise ValueError("--stage1-epochs-optimized phai bang 5 khi bat --optimized-scheduler.")
     if args.multi_scale_epochs < 1:
         raise ValueError("--multi-scale-epochs phai >= 1.")
+    if args.copy_paste_probability < 0.0:
+        raise ValueError("--copy-paste-probability phai >= 0.")
+    if args.copy_paste_max_objects < 0:
+        raise ValueError("--copy-paste-max-objects phai >= 0.")
     if args.stage1_bbox_l1_loss_weight < 0.0 or args.stage1_bbox_giou_loss_weight < 0.0:
         raise ValueError("Stage 1 detection loss weights phai >= 0.")
     if not 0.0 <= args.classification_guard_macro_f1_threshold < 1.0:
@@ -662,6 +668,8 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         mixup_alpha=args.mixup_alpha,
         cutmix_probability=args.cutmix_probability,
         cutmix_alpha=args.cutmix_alpha,
+        copy_paste_probability=args.copy_paste_probability,
+        copy_paste_max_objects=args.copy_paste_max_objects,
         eval_tta=args.eval_tta,
         tta_brightness_delta=args.tta_brightness_delta,
         log_artifact_stats=not args.disable_artifact_logging,
@@ -2080,6 +2088,7 @@ def make_train_transform(
     mosaic_probability: float = 0.0,
     mixup_probability: float = 0.0,
     cutmix_probability: float = 0.0,
+    copy_paste_probability: float = 0.0,
 ) -> Callable:
     enabled_augmentations = []
     if multi_scale_training:
@@ -2090,6 +2099,8 @@ def make_train_transform(
         enabled_augmentations.append("mixup")
     if cutmix_probability > 0.0:
         enabled_augmentations.append("cutmix")
+    if copy_paste_probability > 0.0:
+        enabled_augmentations.append("copy_paste")
     if augmentation_config.color_jitter_brightness > 0.0:
         enabled_augmentations.append("brightness")
     if augmentation_config.color_jitter_contrast > 0.0:
@@ -2279,6 +2290,7 @@ def main() -> None:
         mosaic_probability=train_config.mosaic_probability,
         mixup_probability=train_config.mixup_probability,
         cutmix_probability=train_config.cutmix_probability,
+        copy_paste_probability=train_config.copy_paste_probability,
     )
     base_train_transform = train_transform_factory(model_config.image_size)
     base_eval_transform = build_eval_transform(
@@ -2499,6 +2511,8 @@ def main() -> None:
         mixup_alpha=train_config.mixup_alpha,
         cutmix_probability=train_config.cutmix_probability,
         cutmix_alpha=train_config.cutmix_alpha,
+        copy_paste_probability=train_config.copy_paste_probability,
+        copy_paste_max_objects=train_config.copy_paste_max_objects,
         max_detection_objects=model_config.num_queries,
         class_aware_mix_probability_boost=(
             augmentation_config.class_aware_mix_probability_boost

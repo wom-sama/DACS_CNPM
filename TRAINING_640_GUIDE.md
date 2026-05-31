@@ -169,6 +169,16 @@ python render_history_artifacts.py \
 
 This creates the main training/detection/convergence PNG files and `history_summary.json`.
 
+## Imbalanced Multi-Object Data
+
+For datasets with a rare class and too few crowded images, keep training scratch-only and use bbox-aware synthetic composition instead of external data:
+
+- `--mosaic-probability` creates 4-image composites.
+- `--cutmix-probability` pastes rectangular regions and updates/clips boxes.
+- `--copy-paste-probability` pastes real labeled objects into other images and drops heavily occluded base boxes.
+
+Use these lightly at first. Too much synthetic composition can improve recall but hurt localization realism.
+
 ## Phase Resume Rule
 
 When starting a new phase from a scratch checkpoint, keep the no-pretrain rule

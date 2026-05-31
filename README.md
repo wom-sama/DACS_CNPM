@@ -39,6 +39,7 @@ See:
 - `dataset.py`: YOLO dataset loader, crop/full-image modes, image-stem indexing, cache support.
 - `metrics.py`: classification and detection metrics.
 - `utils.py`: dataloaders, optimizer groups, AMP helpers, checkpointing, artifact plotting.
+- Detection augmentations support bbox-aware mosaic, cutmix, and copy-paste through train CLI flags.
 - `render_history_artifacts.py`: regenerate run-level plots from `history.csv` after interrupted/cloud runs.
 - `tests/test_detection_calibration.py`: calibration, loss stability, stage gating, and non-finite gradient tests.
 

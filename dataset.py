@@ -474,6 +474,190 @@ def _apply_cutmix_detection_batch(
     return mixed_images, mixed_targets
 
 
+def _apply_copypaste_detection_batch(
+    images: Tensor,
+    targets: Sequence[Dict[str, Tensor]],
+    max_objects: int,
+    max_paste_objects: int = 2,
+    source_weights: Optional[Tensor] = None,
+    padding_ratio: float = 0.06,
+    occlusion_threshold: float = 0.6,
+) -> Tuple[Tensor, List[Dict[str, Tensor]]]:
+    batch_size = int(images.size(0))
+    height = int(images.size(-2))
+    width = int(images.size(-1))
+    if batch_size < 2 or max_paste_objects <= 0:
+        return images, _limit_detection_targets(targets, max_objects=max_objects)
+
+    normalized_targets = [_normalize_detection_target(target) for target in targets]
+    if source_weights is not None and source_weights.numel() == batch_size:
+        source_weights = source_weights.detach().cpu().to(dtype=torch.float32).clamp(min=1e-6)
+        source_weights = source_weights / source_weights.sum().clamp(min=1e-6)
+    else:
+        source_weights = None
+
+    pasted_images = images.clone()
+    pasted_targets: List[Dict[str, Tensor]] = []
+    max_paste_objects = max(1, int(max_paste_objects))
+    padding_ratio = max(0.0, float(padding_ratio))
+    occlusion_threshold = min(max(float(occlusion_threshold), 0.0), 1.0)
+
+    for batch_index in range(batch_size):
+        base_target = normalized_targets[batch_index]
+        base_labels = base_target["labels"].clone()
+        base_boxes = base_target["boxes"].clone()
+        base_mask = base_target.get("image_mask")
+        if torch.is_tensor(base_mask):
+            mixed_mask = base_mask.detach().clone().to(dtype=torch.bool)
+        else:
+            mixed_mask = torch.ones((height, width), dtype=torch.bool)
+
+        labels_to_merge: List[Tensor] = [base_labels]
+        boxes_to_merge: List[Tensor] = [base_boxes]
+        pasted_patches: List[Tensor] = []
+
+        paste_count = int(torch.randint(1, max_paste_objects + 1, (1,)).item())
+        for _ in range(paste_count):
+            if source_weights is None:
+                source_index = int(torch.randint(0, batch_size, (1,)).item())
+            else:
+                source_index = int(torch.multinomial(source_weights, num_samples=1, replacement=True).item())
+            source_target = normalized_targets[source_index]
+            source_boxes = source_target["boxes"]
+            source_labels = source_target["labels"]
+            if source_boxes.numel() == 0:
+                continue
+
+            source_areas = (source_boxes[:, 2] * source_boxes[:, 3]).to(dtype=torch.float32)
+            valid_object_indices = torch.nonzero(source_areas > 1e-5, as_tuple=False).flatten()
+            if valid_object_indices.numel() == 0:
+                continue
+            object_index = int(valid_object_indices[torch.randint(0, valid_object_indices.numel(), (1,)).item()].item())
+
+            source_xyxy = _xywh_to_xyxy_tensor(source_boxes[object_index : object_index + 1])[0]
+            box_width = float((source_xyxy[2] - source_xyxy[0]).clamp(min=0.0).item())
+            box_height = float((source_xyxy[3] - source_xyxy[1]).clamp(min=0.0).item())
+            if box_width <= 1e-5 or box_height <= 1e-5:
+                continue
+
+            pad_x = box_width * padding_ratio
+            pad_y = box_height * padding_ratio
+            crop_xyxy = torch.tensor(
+                (
+                    max(0.0, float(source_xyxy[0].item()) - pad_x),
+                    max(0.0, float(source_xyxy[1].item()) - pad_y),
+                    min(1.0, float(source_xyxy[2].item()) + pad_x),
+                    min(1.0, float(source_xyxy[3].item()) + pad_y),
+                ),
+                dtype=torch.float32,
+            )
+            crop_x1 = int(math.floor(float(crop_xyxy[0].item()) * width))
+            crop_y1 = int(math.floor(float(crop_xyxy[1].item()) * height))
+            crop_x2 = int(math.ceil(float(crop_xyxy[2].item()) * width))
+            crop_y2 = int(math.ceil(float(crop_xyxy[3].item()) * height))
+            crop_x1 = min(max(crop_x1, 0), max(0, width - 1))
+            crop_y1 = min(max(crop_y1, 0), max(0, height - 1))
+            crop_x2 = min(max(crop_x2, crop_x1 + 1), width)
+            crop_y2 = min(max(crop_y2, crop_y1 + 1), height)
+            patch_width = int(crop_x2 - crop_x1)
+            patch_height = int(crop_y2 - crop_y1)
+            if patch_width <= 1 or patch_height <= 1 or patch_width >= width or patch_height >= height:
+                continue
+
+            dst_x1 = int(torch.randint(0, max(1, width - patch_width + 1), (1,)).item())
+            dst_y1 = int(torch.randint(0, max(1, height - patch_height + 1), (1,)).item())
+            dst_x2 = dst_x1 + patch_width
+            dst_y2 = dst_y1 + patch_height
+            pasted_images[batch_index, :, dst_y1:dst_y2, dst_x1:dst_x2] = images[
+                source_index,
+                :,
+                crop_y1:crop_y2,
+                crop_x1:crop_x2,
+            ]
+            source_mask = source_target.get("image_mask")
+            if torch.is_tensor(source_mask):
+                mixed_mask[dst_y1:dst_y2, dst_x1:dst_x2] = source_mask.to(dtype=torch.bool)[
+                    crop_y1:crop_y2,
+                    crop_x1:crop_x2,
+                ]
+            else:
+                mixed_mask[dst_y1:dst_y2, dst_x1:dst_x2] = True
+
+            rel_object_x1 = float(source_xyxy[0].item()) - float(crop_xyxy[0].item())
+            rel_object_y1 = float(source_xyxy[1].item()) - float(crop_xyxy[1].item())
+            rel_object_x2 = float(source_xyxy[2].item()) - float(crop_xyxy[0].item())
+            rel_object_y2 = float(source_xyxy[3].item()) - float(crop_xyxy[1].item())
+            crop_width_norm = max(1e-6, float(crop_xyxy[2].item()) - float(crop_xyxy[0].item()))
+            crop_height_norm = max(1e-6, float(crop_xyxy[3].item()) - float(crop_xyxy[1].item()))
+            pasted_xyxy = torch.tensor(
+                (
+                    (float(dst_x1) + rel_object_x1 / crop_width_norm * float(patch_width)) / float(width),
+                    (float(dst_y1) + rel_object_y1 / crop_height_norm * float(patch_height)) / float(height),
+                    (float(dst_x1) + rel_object_x2 / crop_width_norm * float(patch_width)) / float(width),
+                    (float(dst_y1) + rel_object_y2 / crop_height_norm * float(patch_height)) / float(height),
+                ),
+                dtype=torch.float32,
+            ).clamp(0.0, 1.0)
+            if (
+                float((pasted_xyxy[2] - pasted_xyxy[0]).item()) <= 1e-5
+                or float((pasted_xyxy[3] - pasted_xyxy[1]).item()) <= 1e-5
+            ):
+                continue
+            pasted_patches.append(
+                torch.tensor(
+                    (
+                        dst_x1 / float(width),
+                        dst_y1 / float(height),
+                        dst_x2 / float(width),
+                        dst_y2 / float(height),
+                    ),
+                    dtype=torch.float32,
+                )
+            )
+            labels_to_merge.append(source_labels[object_index : object_index + 1])
+            boxes_to_merge.append(_xyxy_to_xywh_tensor(pasted_xyxy.view(1, 4)))
+
+        if pasted_patches and base_boxes.numel() > 0:
+            base_xyxy = _xywh_to_xyxy_tensor(base_boxes)
+            keep_base = torch.ones((base_xyxy.shape[0],), dtype=torch.bool)
+            base_area = (
+                (base_xyxy[:, 2] - base_xyxy[:, 0]).clamp(min=1e-6)
+                * (base_xyxy[:, 3] - base_xyxy[:, 1]).clamp(min=1e-6)
+            )
+            for patch_xyxy in pasted_patches:
+                inter_x1 = torch.maximum(base_xyxy[:, 0], patch_xyxy[0])
+                inter_y1 = torch.maximum(base_xyxy[:, 1], patch_xyxy[1])
+                inter_x2 = torch.minimum(base_xyxy[:, 2], patch_xyxy[2])
+                inter_y2 = torch.minimum(base_xyxy[:, 3], patch_xyxy[3])
+                inter_area = (inter_x2 - inter_x1).clamp(min=0.0) * (inter_y2 - inter_y1).clamp(min=0.0)
+                keep_base = keep_base & ((inter_area / base_area) <= occlusion_threshold)
+            labels_to_merge[0] = base_labels[keep_base]
+            boxes_to_merge[0] = base_boxes[keep_base]
+
+        labels_to_merge = [labels for labels in labels_to_merge if labels.numel() > 0]
+        boxes_to_merge = [boxes for boxes in boxes_to_merge if boxes.numel() > 0]
+        if labels_to_merge and boxes_to_merge:
+            pasted_targets.append(
+                _filter_detection_target(
+                    labels=torch.cat(labels_to_merge, dim=0),
+                    boxes=torch.cat(boxes_to_merge, dim=0),
+                    max_objects=max_objects,
+                    image_mask=mixed_mask,
+                )
+            )
+        else:
+            pasted_targets.append(
+                _filter_detection_target(
+                    torch.zeros(0, dtype=torch.long),
+                    torch.zeros(0, 4),
+                    max_objects,
+                    image_mask=mixed_mask,
+                )
+            )
+
+    return pasted_images, pasted_targets
+
+
 @dataclass
 class TrainBatchCollator:
     num_classes: int
@@ -485,6 +669,8 @@ class TrainBatchCollator:
     mixup_alpha: float = 0.4
     cutmix_probability: float = 0.5
     cutmix_alpha: float = 1.0
+    copy_paste_probability: float = 0.0
+    copy_paste_max_objects: int = 2
     max_detection_objects: int = 40
     class_aware_mix_probability_boost: float = 0.0
     class_aware_mix_source_power: float = 1.0
@@ -499,6 +685,8 @@ class TrainBatchCollator:
         self.mixup_alpha = float(self.mixup_alpha)
         self.cutmix_probability = max(0.0, float(self.cutmix_probability))
         self.cutmix_alpha = float(self.cutmix_alpha)
+        self.copy_paste_probability = max(0.0, float(self.copy_paste_probability))
+        self.copy_paste_max_objects = max(0, int(self.copy_paste_max_objects))
         self.max_detection_objects = max(1, int(self.max_detection_objects))
         self.class_aware_mix_probability_boost = max(0.0, float(self.class_aware_mix_probability_boost))
         self.class_aware_mix_source_power = max(0.0, float(self.class_aware_mix_source_power))
@@ -537,6 +725,8 @@ class TrainBatchCollator:
                 detection_choices.append(("mosaic", self.mosaic_probability))
             if self.cutmix_probability > 0.0 and self.cutmix_alpha > 0.0:
                 detection_choices.append(("cutmix", self.cutmix_probability))
+            if self.copy_paste_probability > 0.0 and self.copy_paste_max_objects > 0:
+                detection_choices.append(("copy_paste", self.copy_paste_probability))
             if not detection_choices:
                 return images, _limit_detection_targets(targets, max_objects=self.max_detection_objects)
 
@@ -551,6 +741,14 @@ class TrainBatchCollator:
                     min_split=self.mosaic_min_split,
                     max_split=self.mosaic_max_split,
                     max_objects=self.max_detection_objects,
+                    source_weights=source_weights,
+                )
+            if choice_name == "copy_paste":
+                return _apply_copypaste_detection_batch(
+                    images,
+                    targets,
+                    max_objects=self.max_detection_objects,
+                    max_paste_objects=self.copy_paste_max_objects,
                     source_weights=source_weights,
                 )
             return _apply_cutmix_detection_batch(
@@ -611,6 +809,8 @@ def build_train_collate_fn(
     mixup_alpha: float = 0.4,
     cutmix_probability: float = 0.5,
     cutmix_alpha: float = 1.0,
+    copy_paste_probability: float = 0.0,
+    copy_paste_max_objects: int = 2,
     max_detection_objects: int = 40,
     class_aware_mix_probability_boost: float = 0.0,
     class_aware_mix_source_power: float = 1.0,
@@ -625,6 +825,8 @@ def build_train_collate_fn(
         mixup_alpha=mixup_alpha,
         cutmix_probability=cutmix_probability,
         cutmix_alpha=cutmix_alpha,
+        copy_paste_probability=copy_paste_probability,
+        copy_paste_max_objects=copy_paste_max_objects,
         max_detection_objects=max_detection_objects,
         class_aware_mix_probability_boost=class_aware_mix_probability_boost,
         class_aware_mix_source_power=class_aware_mix_source_power,
