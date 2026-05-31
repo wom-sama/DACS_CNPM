@@ -21,6 +21,7 @@ Thumbs.db
 
 # Training outputs, experiments, and logs
 runs/
+Cloud/
 outputs/
 logs/
 lightning_logs/
@@ -28,6 +29,7 @@ wandb/
 mlruns/
 tensorboard/
 *.log
+history*.csv
 *.tmp
 *.bak
 

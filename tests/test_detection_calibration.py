@@ -32,6 +32,7 @@ from matcher import HungarianMatcher
 from model import create_model
 from train import (
     apply_balance_file_auto_adjustment,
+    _initial_training_progress_from_resume,
     _load_resume_configs_from_checkpoint,
     _load_training_checkpoint,
     _resolve_classification_overfit_guard,
@@ -941,6 +942,48 @@ dataset_balance:
             )
 
         self.assertIsNone(resolved)
+
+    def test_resume_reset_epoch_starts_phase_progress_from_one(self):
+        resume_summary = {
+            "completed_epoch": 104,
+            "next_epoch": 105,
+        }
+        checkpoint = {
+            "epoch": 104,
+            "best_macro_f1": 0.994,
+            "best_epoch": 104,
+            "best_selection_metric": {
+                "name": "detection_f1",
+                "value": 0.8518,
+                "higher_is_better": True,
+            },
+            "epochs_without_improvement": 0,
+            "metrics": {
+                "macro_f1": 0.993,
+                "detection_confidence_curve": {"best_f1_50": 0.8518},
+            },
+        }
+
+        inherited = _initial_training_progress_from_resume(
+            resume_summary,
+            checkpoint,
+            reset_epoch=False,
+        )
+        reset = _initial_training_progress_from_resume(
+            resume_summary,
+            checkpoint,
+            reset_epoch=True,
+        )
+
+        self.assertEqual(inherited["start_epoch"], 105)
+        self.assertAlmostEqual(inherited["best_selection_metric_value"], 0.8518)
+        self.assertEqual(reset["start_epoch"], 1)
+        self.assertEqual(reset["best_epoch"], 0)
+        self.assertEqual(reset["best_macro_f1"], -1.0)
+        self.assertIsNone(reset["best_selection_metric_value"])
+        self.assertEqual(reset["source_completed_epoch"], 104)
+        self.assertEqual(reset["source_best_epoch"], 104)
+        self.assertIs(reset["previous_val_metrics"], checkpoint["metrics"])
 
     def test_resume_loads_configs_from_checkpoint_without_redeclaring_flags(self):
         checkpoint = {

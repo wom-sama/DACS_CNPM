@@ -162,3 +162,7 @@ python train.py \
 ```
 
 Prefer `best.pt` over `last.pt` after any non-finite-gradient event.
+
+For a new phase/fine-tune run, add `--resume-reset-epoch` together with
+`--resume-reset-scheduler`. Without it, epoch numbering continues from the
+source checkpoint and the new scheduler can start near its minimum LR.

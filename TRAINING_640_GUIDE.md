@@ -158,6 +158,23 @@ python evaluate.py \
   --max-detections-per-image 3
 ```
 
+## Phase Resume Rule
+
+When starting a new phase from a scratch checkpoint, keep the no-pretrain rule
+and resume only project-produced weights. Use:
+
+```bash
+--resume-use-cli-config \
+--resume-reset-optimizer \
+--resume-reset-scheduler \
+--resume-reset-scaler \
+--resume-reset-epoch
+```
+
+`--resume-reset-epoch` makes the new run start at epoch 1 so the scheduler
+warmup/decay is computed for the new phase instead of the source checkpoint's
+old epoch number.
+
 ## Current Evidence
 
 - q12 224 baseline test: `macro_f1=0.979963`, `detection_f1@50=0.748283`.

@@ -160,6 +160,16 @@ def parse_args() -> argparse.Namespace:
         default=False,
         help="Khi resume, khong nap AMP GradScaler state tu checkpoint.",
     )
+    parser.add_argument(
+        "--resume-reset-epoch",
+        "--resume-reset-progress",
+        action="store_true",
+        default=False,
+        help=(
+            "Khi resume cho phase moi, nap model weights nhung reset epoch/best/early-stopping ve run moi. "
+            "Nen dung cung --resume-reset-scheduler de LR warmup/decay khong bi tinh theo epoch cu."
+        ),
+    )
 
     parser.add_argument(
         "--model-type",
@@ -469,6 +479,8 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         raise ValueError("--grad-accum-steps phai >= 1.")
     if args.weighted_sampler_epoch_multiplier < 1.0:
         raise ValueError("--weighted-sampler-epoch-multiplier phai >= 1.0.")
+    if args.resume_reset_epoch and not args.resume_reset_scheduler:
+        raise ValueError("--resume-reset-epoch phai dung cung --resume-reset-scheduler de tranh scheduler state/progress lech.")
     if args.scheduler_total_epochs < 0:
         raise ValueError("--scheduler-total-epochs phai >= 0.")
     if args.backbone_lr_scale <= 0.0:
@@ -1229,6 +1241,58 @@ def _load_training_checkpoint(
         "epochs_without_improvement": int(checkpoint.get("epochs_without_improvement", 0) or 0),
     }
     return summary, checkpoint
+
+
+def _initial_training_progress_from_resume(
+    resume_summary: Optional[Dict[str, object]],
+    resume_checkpoint: Optional[Dict[str, object]],
+    *,
+    reset_epoch: bool = False,
+) -> Dict[str, object]:
+    progress = {
+        "start_epoch": 1,
+        "best_macro_f1": -1.0,
+        "best_epoch": 0,
+        "best_selection_metric_name": "",
+        "best_selection_metric_value": None,
+        "best_selection_metric_higher_is_better": True,
+        "epochs_without_improvement": 0,
+        "previous_val_metrics": None,
+        "reset_epoch": bool(reset_epoch),
+    }
+    if resume_checkpoint is None or resume_summary is None:
+        return progress
+
+    checkpoint_metrics = (
+        resume_checkpoint.get("metrics")
+        if isinstance(resume_checkpoint.get("metrics"), dict)
+        else None
+    )
+    progress["previous_val_metrics"] = checkpoint_metrics
+    if reset_epoch:
+        progress["source_completed_epoch"] = int(resume_summary.get("completed_epoch", 0) or 0)
+        progress["source_best_epoch"] = int(
+            resume_checkpoint.get("best_epoch", resume_checkpoint.get("epoch", 0)) or 0
+        )
+        return progress
+
+    progress["start_epoch"] = max(1, int(resume_summary.get("next_epoch", 1) or 1))
+    progress["best_macro_f1"] = float(resume_checkpoint.get("best_macro_f1", -1.0) or -1.0)
+    progress["best_epoch"] = int(resume_checkpoint.get("best_epoch", resume_checkpoint.get("epoch", 0)) or 0)
+    best_selection_metric = resume_checkpoint.get("best_selection_metric")
+    if not isinstance(best_selection_metric, dict):
+        best_selection_metric = resume_checkpoint.get("selection_metric", {})
+    if isinstance(best_selection_metric, dict):
+        progress["best_selection_metric_name"] = str(best_selection_metric.get("name", ""))
+        metric_value = best_selection_metric.get("value")
+        progress["best_selection_metric_value"] = float(metric_value) if metric_value is not None else None
+        progress["best_selection_metric_higher_is_better"] = bool(
+            best_selection_metric.get("higher_is_better", True)
+        )
+    progress["epochs_without_improvement"] = int(
+        resume_checkpoint.get("epochs_without_improvement", 0) or 0
+    )
+    return progress
 
 
 def _save_interrupt_checkpoint(
@@ -2721,6 +2785,14 @@ def main() -> None:
         "effective_train_amp": train_amp,
         "effective_amp_dtype": str(effective_amp_dtype).replace("torch.", "") if effective_amp_dtype is not None else None,
         "grad_scaler_enabled": bool(scaler is not None and scaler.is_enabled()),
+        "resume": {
+            "path": str(resume_checkpoint_path) if resume_checkpoint_path is not None else None,
+            "loaded": resume_checkpoint is not None,
+            "reset_epoch": bool(args.resume_reset_epoch),
+            "reset_optimizer": bool(args.resume_reset_optimizer),
+            "reset_scheduler": bool(args.resume_reset_scheduler),
+            "reset_scaler": bool(args.resume_reset_scaler),
+        },
         "effective_batch_size": effective_batch_size,
         "parameter_count": count_parameters(model),
     }
@@ -2728,32 +2800,25 @@ def main() -> None:
     parameter_count = int(config_payload["parameter_count"])
 
     history_csv = run_dir / "history.csv"
-    best_macro_f1 = -1.0
-    best_selection_metric_name = ""
-    best_selection_metric_value = None
-    best_selection_metric_higher_is_better = True
-    best_epoch = 0
-    epochs_without_improvement = 0
-    previous_val_metrics: Optional[Dict[str, object]] = None
-    start_epoch = 1
-    if resume_checkpoint is not None and resume_summary is not None:
-        start_epoch = max(1, int(resume_summary.get("next_epoch", 1) or 1))
-        best_macro_f1 = float(resume_checkpoint.get("best_macro_f1", -1.0) or -1.0)
-        best_epoch = int(resume_checkpoint.get("best_epoch", resume_checkpoint.get("epoch", 0)) or 0)
-        best_selection_metric = resume_checkpoint.get("best_selection_metric")
-        if not isinstance(best_selection_metric, dict):
-            best_selection_metric = resume_checkpoint.get("selection_metric", {})
-        if isinstance(best_selection_metric, dict):
-            best_selection_metric_name = str(best_selection_metric.get("name", ""))
-            metric_value = best_selection_metric.get("value")
-            best_selection_metric_value = float(metric_value) if metric_value is not None else None
-            best_selection_metric_higher_is_better = bool(
-                best_selection_metric.get("higher_is_better", True)
-            )
-        epochs_without_improvement = int(
-            resume_checkpoint.get("epochs_without_improvement", 0) or 0
-        )
-        previous_val_metrics = resume_checkpoint.get("metrics") if isinstance(resume_checkpoint.get("metrics"), dict) else None
+    resume_progress = _initial_training_progress_from_resume(
+        resume_summary,
+        resume_checkpoint,
+        reset_epoch=bool(args.resume_reset_epoch),
+    )
+    start_epoch = int(resume_progress["start_epoch"])
+    best_macro_f1 = float(resume_progress["best_macro_f1"])
+    best_selection_metric_name = str(resume_progress["best_selection_metric_name"])
+    best_selection_metric_value = resume_progress["best_selection_metric_value"]
+    best_selection_metric_higher_is_better = bool(resume_progress["best_selection_metric_higher_is_better"])
+    best_epoch = int(resume_progress["best_epoch"])
+    epochs_without_improvement = int(resume_progress["epochs_without_improvement"])
+    previous_val_metrics: Optional[Dict[str, object]] = (
+        resume_progress["previous_val_metrics"]
+        if isinstance(resume_progress["previous_val_metrics"], dict)
+        else None
+    )
+    if resume_checkpoint is not None and bool(args.resume_reset_epoch):
+        print({"resume_progress_reset": resume_progress}, flush=True)
     last_epoch = max(0, start_epoch - 1)
     stop_reason = "completed"
 
