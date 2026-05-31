@@ -56,7 +56,7 @@ For the current mango 4-class dataset, `auto` is fine.
 Run these before any long job:
 
 ```bash
-python -m compileall train.py loss.py utils.py config.py dataset.py tests/test_detection_calibration.py
+python -m compileall train.py loss.py utils.py config.py dataset.py render_history_artifacts.py tests/test_detection_calibration.py
 python -m unittest discover -s tests -p "test_*.py" -v
 ```
 
@@ -145,7 +145,18 @@ python evaluate.py \
   --max-detections-per-image 3
 ```
 
-## 7. Resume Rules
+## 7. Recover Missing Run Plots
+
+Lightning can stop a process before the final post-run artifact block runs. If a run has `history.csv` but is missing root-level plots, regenerate them without retraining:
+
+```bash
+python render_history_artifacts.py \
+  --run-dir runs/<run_name>
+```
+
+This creates `training_curves.png`, `results.png`, `all_training_metrics.png`, `per_class_training_metrics.png`, `detection_training_metrics.png`, `validation_convergence.png`, and `history_summary.json`.
+
+## 8. Resume Rules
 
 Resume only repository-produced scratch checkpoints:
 

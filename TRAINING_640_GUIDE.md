@@ -19,7 +19,7 @@ Local Windows:
 
 ```powershell
 $env:PYTHONPATH='D:\DataAI\AIEx\TRKH'
-D:\DataAI\.venv\Scripts\python.exe -m compileall train.py loss.py utils.py config.py dataset.py tests\test_detection_calibration.py
+D:\DataAI\.venv\Scripts\python.exe -m compileall train.py loss.py utils.py config.py dataset.py render_history_artifacts.py tests\test_detection_calibration.py
 D:\DataAI\.venv\Scripts\python.exe -m unittest discover -s tests -p "test_*.py" -v
 ```
 
@@ -27,11 +27,11 @@ Lightning/Linux:
 
 ```bash
 export PYTHONPATH="$PWD"
-python -m compileall train.py loss.py utils.py config.py dataset.py tests/test_detection_calibration.py
+python -m compileall train.py loss.py utils.py config.py dataset.py render_history_artifacts.py tests/test_detection_calibration.py
 python -m unittest discover -s tests -p "test_*.py" -v
 ```
 
-Current expected test result: `33` tests passed.
+Current expected test result: `34` tests passed.
 
 ## Recommended Next Run
 
@@ -158,6 +158,17 @@ python evaluate.py \
   --max-detections-per-image 3
 ```
 
+## Artifact Recovery
+
+If a Lightning run has `history.csv` but no root-level training plots, regenerate them without retraining:
+
+```bash
+python render_history_artifacts.py \
+  --run-dir runs/<run_name>
+```
+
+This creates the main training/detection/convergence PNG files and `history_summary.json`.
+
 ## Phase Resume Rule
 
 When starting a new phase from a scratch checkpoint, keep the no-pretrain rule
@@ -180,5 +191,6 @@ old epoch number.
 - q12 224 baseline test: `macro_f1=0.979963`, `detection_f1@50=0.748283`.
 - Best q12 post-processing test: `detection_f1@50=0.751958`.
 - Old q34 416 checkpoint after sweep: val `macro_f1=0.924749`, `detection_f1@50=0.635828`.
+- Lightning T4 q16 batch16 scratch phase 1: best val calibrated `detection_f1@50=0.851810`, test `macro_f1=0.992270`, test calibrated `detection_f1@50=0.828399`, test best-threshold `detection_f1@50=0.828683`.
 
-The `0.98/0.98` target is not yet supported by evidence. The next useful work is stable scratch training plus false-positive/false-negative analysis, not bigger q34 runs by default.
+The `0.98/0.98` target is not yet supported by evidence. Macro F1 is now above target, but detection F1 is still the bottleneck. Continue with scratch-only phase training and false-positive/false-negative analysis before trying larger q34 runs.

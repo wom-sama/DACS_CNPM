@@ -1,6 +1,6 @@
 # Handover
 
-Last updated: 2026-05-29.
+Last updated: 2026-05-31.
 
 ## Active Goal
 
@@ -18,6 +18,7 @@ No pretraining is allowed. This includes ImageNet, timm, torchvision pretrained 
 - Local dataset default: `D:\DataAI\AIEx\dataset\data.yaml`.
 - Run outputs: `runs/<run_name>`, ignored by git.
 - Checkpoints are not committed.
+- Cloud/downloaded run artifacts are ignored by git under `Cloud/`.
 
 ## Stability Work Completed
 
@@ -44,12 +45,12 @@ Details: `docs/STABILITY_FIX_20260529.md`.
 Passed locally after the stability fix:
 
 ```powershell
-D:\DataAI\.venv\Scripts\python.exe -m compileall train.py loss.py utils.py config.py dataset.py tests\test_detection_calibration.py
+D:\DataAI\.venv\Scripts\python.exe -m compileall train.py loss.py utils.py config.py dataset.py render_history_artifacts.py tests\test_detection_calibration.py
 $env:PYTHONPATH='D:\DataAI\AIEx\TRKH'
 D:\DataAI\.venv\Scripts\python.exe -m unittest discover -s tests -p "test_*.py" -v
 ```
 
-Result: `33` tests passed.
+Result: `34` tests passed.
 
 Extra checks:
 
@@ -78,17 +79,25 @@ Old q34 416 val sweep:
 - best `detection_f1@50=0.635828`
 - not recommended as the main resume path
 
+Lightning T4 q16 batch16 scratch phase 1:
+
+- run: `mango_detr_416_q16_scratch_batch16_w4_pat80_t4_v1`
+- best val calibrated `detection_f1@50=0.851810` at epoch 104
+- test `macro_f1=0.992270`
+- test calibrated `detection_f1@50=0.828399`
+- test best-threshold `detection_f1@50=0.828683`
+- root training plots can be regenerated from `history.csv` with `render_history_artifacts.py`
+
 Details: `docs/BASELINE_RECHECK_20260529.md`.
 
 ## Next Recommended Work
 
-1. Push code to GitHub and clone in Lightning Studio.
-2. Upload/mount dataset separately; do not commit data.
-3. Run compile/unit tests in Lightning.
-4. Run short smoke with `--skip-final-test`.
-5. Start conservative scratch 416 q16 run from `TRAINING_640_GUIDE.md` or `LIGHTNING_TRAINING.md`.
-6. If stable and detection F1 improves, scale to q24 before q34.
-7. Before any bigger run, inspect false positives/false negatives from q12 post-processing result.
+1. Pull latest code in Lightning and run compile/unit tests.
+2. Keep using `/teamspace/studios/this_studio/datasets/dataset/data.yaml`; do not point training at `canbang.yaml`.
+3. Resume only project-produced scratch checkpoints.
+4. For a new phase from phase 1 best, use `--resume-reset-epoch` with `--resume-reset-scheduler` so LR warmup restarts correctly.
+5. Inspect false positives/false negatives from the T4 q16 phase 1 best checkpoint before trying larger q24/q34 variants.
+6. If a cloud run is missing root plots, run `python render_history_artifacts.py --run-dir runs/<run_name>`.
 
 ## Files To Read First
 

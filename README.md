@@ -20,7 +20,8 @@ The model code rejects common pretrained config keys, and training docs keep thi
 - q12 224 baseline recheck: test `macro_f1=0.979963`, `detection_f1@50=0.748283`.
 - Best small post-process gain: `class_sqrt_objectness`, NMS `0.2`, max detections `3`, test `detection_f1@50=0.751958`.
 - Failed 416 q34 run was stabilized in code, but the old checkpoint is not a good main path: val `detection_f1@50` stayed around `0.636`.
-- Main next experiment should be a conservative scratch 416 q16/q24 run before trying q34 again.
+- Lightning T4 q16 batch16 scratch phase 1 improved detection substantially: best val calibrated `detection_f1@50=0.851810`; test `macro_f1=0.992270`, calibrated `detection_f1@50=0.828399`.
+- Main next experiment should continue scratch-only phase training from the phase 1 best checkpoint with scheduler/epoch reset before trying q34 again.
 
 See:
 
@@ -38,6 +39,7 @@ See:
 - `dataset.py`: YOLO dataset loader, crop/full-image modes, image-stem indexing, cache support.
 - `metrics.py`: classification and detection metrics.
 - `utils.py`: dataloaders, optimizer groups, AMP helpers, checkpointing, artifact plotting.
+- `render_history_artifacts.py`: regenerate run-level plots from `history.csv` after interrupted/cloud runs.
 - `tests/test_detection_calibration.py`: calibration, loss stability, stage gating, and non-finite gradient tests.
 
 Older classification utilities (`ablation.py`, `deploy.py`, `robustness_eval.py`, `attention_viz.py`, stream scripts) remain in the repo for compatibility, but the active target is DETR-style detection.
@@ -90,11 +92,11 @@ D:\DataAI\AIEx\dataset\data.yaml
 Run before any long training job:
 
 ```powershell
-D:\DataAI\.venv\Scripts\python.exe -m compileall train.py loss.py utils.py config.py dataset.py tests\test_detection_calibration.py
+D:\DataAI\.venv\Scripts\python.exe -m compileall train.py loss.py utils.py config.py dataset.py render_history_artifacts.py tests\test_detection_calibration.py
 D:\DataAI\.venv\Scripts\python.exe -m unittest discover -s tests -p "test_*.py" -v
 ```
 
-Expected current result: `33` tests passed.
+Expected current result: `34` tests passed.
 
 ## Conservative Scratch 416 Candidate
 
@@ -180,6 +182,17 @@ D:\DataAI\.venv\Scripts\python.exe D:\DataAI\AIEx\TRKH\evaluate.py ^
   --detection-nms-iou-threshold 0.2 ^
   --max-detections-per-image 3
 ```
+
+## Artifact Recovery
+
+If a cloud job is interrupted or killed before `train.py` finishes its post-run cleanup, checkpoints and `history.csv` may exist while root-level plots are missing. Regenerate them from the downloaded run directory:
+
+```powershell
+D:\DataAI\.venv\Scripts\python.exe D:\DataAI\AIEx\TRKH\render_history_artifacts.py ^
+  --run-dir D:\DataAI\AIEx\TRKH\runs\<run_name>
+```
+
+This writes `training_curves.png`, `results.png`, `all_training_metrics.png`, `per_class_training_metrics.png`, `detection_training_metrics.png`, `validation_convergence.png`, and `history_summary.json`.
 
 ## Output Policy
 

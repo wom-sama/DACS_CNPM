@@ -39,7 +39,7 @@ Main fixes:
 Passed:
 
 ```powershell
-D:\DataAI\.venv\Scripts\python.exe -m compileall train.py loss.py utils.py config.py dataset.py tests\test_detection_calibration.py
+D:\DataAI\.venv\Scripts\python.exe -m compileall train.py loss.py utils.py config.py dataset.py render_history_artifacts.py tests\test_detection_calibration.py
 ```
 
 Passed:
@@ -49,7 +49,7 @@ $env:PYTHONPATH='D:\DataAI\AIEx\TRKH'
 D:\DataAI\.venv\Scripts\python.exe -m unittest discover -s tests -p "test_*.py" -v
 ```
 
-Result: `33` tests passed.
+Current result after later resume/artifact utility additions: `34` tests passed.
 
 Extra checks:
 
