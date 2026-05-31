@@ -117,7 +117,7 @@ D:\DataAI\.venv\Scripts\python.exe -m trkh.training.train `
   --num-workers 2 --eval-num-workers 2 --train-image-cache-mb 0 --eval-image-cache-mb 0 `
   --class-weight-mode sqrt_inverse `
   --focal-loss-gamma 2.0 --focal-loss-mix 0.22 --label-smoothing 0.02 `
-  --stage1-epochs 5 `
+  --stage1-epochs 5 --stage1-auto-advance-macro-f1-threshold 0.995 --stage1-auto-advance-min-epochs 2 `
   --classification-guard-macro-f1-threshold 0.94 --classification-guard-detection-gap 0.20 --classification-guard-min-cls-weight 0.35 `
   --adaptive-detection-macro-f1-threshold 0.93 --adaptive-detection-f1-target 0.90 --adaptive-detection-gap-threshold 0.20 `
   --adaptive-detection-bbox-iou-target 0.70 --adaptive-detection-max-multiplier 1.75 `
@@ -136,7 +136,7 @@ D:\DataAI\.venv\Scripts\python.exe -m trkh.training.train `
   --cutmix-alpha 1.0 --mixup-probability 0.0
 ```
 
-Stage 1 now writes `checkpoints/stage1_best.pt`, `checkpoints/stage1.pt`, `stage1_best_metrics.json`, and `stage1_metrics.json`. `best.pt` remains reserved for stage 2 deploy-quality checkpoints.
+Stage 1 now writes `checkpoints/stage1_best.pt`, `checkpoints/stage1.pt`, `stage1_best_metrics.json`, and `stage1_metrics.json`. With `--stage1-auto-advance-macro-f1-threshold 0.995`, stage 1 is a maximum of 5 epochs but switches to stage 2 earlier once validation macro F1 reaches 0.995 after at least 2 epochs. `best.pt` remains reserved for stage 2 deploy-quality checkpoints.
 
 `--matcher-class-cost 0.0` makes stage 2 Hungarian matching use box/objectness rather than class confidence, so detection assignment is object-first; class loss is still applied after a query is matched to a target box. Stage 1 keeps class-aware matching internally so the cls-only warmup still works. `--eval-detection-score-mode objectness` also filters boxes by objectness first while the detection metric still requires the predicted class to match the target class.
 

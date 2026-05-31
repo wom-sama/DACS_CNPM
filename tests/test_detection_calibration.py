@@ -802,6 +802,27 @@ dataset_balance:
         self.assertEqual(stage["auxiliary_weight"], 0.0)
         self.assertEqual(stage["count_objectness_consistency_weight"], 0.0)
 
+    def test_stage1_auto_advance_moves_next_epoch_to_stage2(self):
+        train_config = TrainConfig(stage1_epochs=5, matcher_class_cost=0.0)
+
+        stage1 = _resolve_detection_stage(
+            train_config=train_config,
+            epoch_index=2,
+            detection_mode=True,
+            stage1_auto_advance_epoch=None,
+        )
+        stage2 = _resolve_detection_stage(
+            train_config=train_config,
+            epoch_index=3,
+            detection_mode=True,
+            stage1_auto_advance_epoch=2,
+        )
+
+        self.assertEqual(stage1["stage_name"], "stage1_cls_only")
+        self.assertEqual(stage1["matcher_class_cost"], 1.0)
+        self.assertEqual(stage2["stage_name"], "stage2_full_detection")
+        self.assertEqual(stage2["matcher_class_cost"], 0.0)
+
     def test_detection_loss_casts_bf16_outputs_to_stable_fp32(self):
         criterion = DETRSetCriterion(
             num_classes=4,

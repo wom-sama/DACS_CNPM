@@ -224,6 +224,8 @@ class TrainConfig:
     multi_scale_training: bool = False
     multi_scale_epochs: int = 10
     stage1_epochs: int = 30
+    stage1_auto_advance_macro_f1_threshold: float = 0.0
+    stage1_auto_advance_min_epochs: int = 1
     stage1_bbox_l1_loss_weight: float = 0.0
     stage1_bbox_giou_loss_weight: float = 0.0
     best_metric: str = "composite"

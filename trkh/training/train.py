@@ -363,6 +363,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--multi-scale-training", action="store_true", default=False)
     parser.add_argument("--multi-scale-epochs", type=int, default=10)
     parser.add_argument("--stage1-epochs", type=int, default=30)
+    parser.add_argument(
+        "--stage1-auto-advance-macro-f1-threshold",
+        type=float,
+        default=0.0,
+        help="Neu > 0, tu chuyen stage1 sang stage2 khi val_macro_f1 dat nguong nay.",
+    )
+    parser.add_argument(
+        "--stage1-auto-advance-min-epochs",
+        type=int,
+        default=1,
+        help="So epoch stage1 toi thieu truoc khi cho phep tu chuyen sang stage2.",
+    )
     parser.add_argument("--stage1-bbox-l1-loss-weight", type=float, default=0.0)
     parser.add_argument("--stage1-bbox-giou-loss-weight", type=float, default=0.0)
     parser.add_argument(
@@ -518,6 +530,10 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         raise ValueError("Loss weights phai >= 0.")
     if args.stage1_epochs < 0:
         raise ValueError("--stage1-epochs phai >= 0.")
+    if not 0.0 <= args.stage1_auto_advance_macro_f1_threshold <= 1.0:
+        raise ValueError("--stage1-auto-advance-macro-f1-threshold phai nam trong [0, 1].")
+    if args.stage1_auto_advance_min_epochs < 1:
+        raise ValueError("--stage1-auto-advance-min-epochs phai >= 1.")
     if args.stage1_epochs_optimized < 0:
         raise ValueError("--stage1-epochs-optimized phai >= 0.")
     if args.optimized_scheduler and int(args.stage1_epochs_optimized) != 5:
@@ -705,6 +721,8 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         multi_scale_training=args.multi_scale_training,
         multi_scale_epochs=args.multi_scale_epochs,
         stage1_epochs=5 if args.optimized_scheduler else args.stage1_epochs,
+        stage1_auto_advance_macro_f1_threshold=args.stage1_auto_advance_macro_f1_threshold,
+        stage1_auto_advance_min_epochs=args.stage1_auto_advance_min_epochs,
         stage1_bbox_l1_loss_weight=args.stage1_bbox_l1_loss_weight,
         stage1_bbox_giou_loss_weight=args.stage1_bbox_giou_loss_weight,
         best_metric=args.best_metric,
@@ -1038,6 +1056,7 @@ def _resolve_detection_stage(
     train_config: TrainConfig,
     epoch_index: int,
     detection_mode: bool,
+    stage1_auto_advance_epoch: Optional[int] = None,
 ) -> Dict[str, object]:
     if not detection_mode:
         return {
@@ -1053,7 +1072,16 @@ def _resolve_detection_stage(
             "count_objectness_consistency_weight": float(train_config.count_objectness_consistency_weight),
             "matcher_class_cost": float(train_config.matcher_class_cost),
         }
-    stage1_active = int(train_config.stage1_epochs) > 0 and int(epoch_index) <= int(train_config.stage1_epochs)
+    auto_advanced = (
+        stage1_auto_advance_epoch is not None
+        and int(stage1_auto_advance_epoch) > 0
+        and int(epoch_index) > int(stage1_auto_advance_epoch)
+    )
+    stage1_active = (
+        not auto_advanced
+        and int(train_config.stage1_epochs) > 0
+        and int(epoch_index) <= int(train_config.stage1_epochs)
+    )
     if stage1_active:
         return {
             "stage_name": "stage1_cls_only",
@@ -1406,6 +1434,7 @@ def _initial_training_progress_from_resume(
         "best_selection_metric_value": None,
         "best_selection_metric_higher_is_better": True,
         "epochs_without_improvement": 0,
+        "stage1_auto_advance_epoch": None,
         "previous_val_metrics": None,
         "reset_epoch": bool(reset_epoch),
     }
@@ -1441,6 +1470,9 @@ def _initial_training_progress_from_resume(
     progress["epochs_without_improvement"] = int(
         resume_checkpoint.get("epochs_without_improvement", 0) or 0
     )
+    auto_epoch = resume_checkpoint.get("stage1_auto_advance_epoch")
+    if auto_epoch is not None:
+        progress["stage1_auto_advance_epoch"] = int(auto_epoch)
     return progress
 
 
@@ -1466,6 +1498,7 @@ def _save_interrupt_checkpoint(
     best_selection_metric_value: Optional[float],
     best_selection_metric_higher_is_better: bool,
     epochs_without_improvement: int,
+    stage1_auto_advance_epoch: Optional[int] = None,
 ) -> Dict[str, object]:
     checkpoint = {
         "epoch": int(epoch),
@@ -1489,6 +1522,9 @@ def _save_interrupt_checkpoint(
             "higher_is_better": best_selection_metric_higher_is_better,
         },
         "epochs_without_improvement": int(epochs_without_improvement),
+        "stage1_auto_advance_epoch": (
+            int(stage1_auto_advance_epoch) if stage1_auto_advance_epoch is not None else None
+        ),
         "resume_state": {
             "checkpoint_kind": "keyboard_interrupt",
             "interrupted_epoch": int(epoch),
@@ -2969,6 +3005,9 @@ def main() -> None:
     best_selection_metric_higher_is_better = bool(resume_progress["best_selection_metric_higher_is_better"])
     best_epoch = int(resume_progress["best_epoch"])
     epochs_without_improvement = int(resume_progress["epochs_without_improvement"])
+    stage1_auto_advance_epoch = resume_progress.get("stage1_auto_advance_epoch")
+    if stage1_auto_advance_epoch is not None:
+        stage1_auto_advance_epoch = int(stage1_auto_advance_epoch)
     stage1_best_macro_f1 = -1.0
     stage1_best_epoch = 0
     stage1_boundary_checkpoint_saved = False
@@ -3041,6 +3080,7 @@ def main() -> None:
                         train_config=train_config,
                         epoch_index=int(epoch),
                         detection_mode=detection_mode,
+                        stage1_auto_advance_epoch=stage1_auto_advance_epoch,
                     )
                 classification_guard = _resolve_classification_overfit_guard(
                     train_config=train_config,
@@ -3165,6 +3205,41 @@ def main() -> None:
                     is_improved = selection_metric_value > float(best_selection_metric_value)
                 else:
                     is_improved = selection_metric_value < float(best_selection_metric_value)
+                is_stage1_epoch = detection_mode and str(stage_config["stage_name"]) == "stage1_cls_only"
+                stage1_auto_advance_triggered = False
+                stage1_auto_threshold = float(
+                    getattr(train_config, "stage1_auto_advance_macro_f1_threshold", 0.0) or 0.0
+                )
+                stage1_auto_min_epochs = max(
+                    1,
+                    int(getattr(train_config, "stage1_auto_advance_min_epochs", 1) or 1),
+                )
+                if (
+                    is_stage1_epoch
+                    and stage1_auto_advance_epoch is None
+                    and stage1_auto_threshold > 0.0
+                    and int(epoch) >= stage1_auto_min_epochs
+                    and current_macro_f1 >= stage1_auto_threshold
+                ):
+                    stage1_auto_advance_epoch = int(epoch)
+                    stage1_auto_advance_triggered = True
+                    print(
+                        {
+                            "stage1_auto_advance": "triggered",
+                            "epoch": int(epoch),
+                            "macro_f1": round(float(current_macro_f1), 6),
+                            "threshold": float(stage1_auto_threshold),
+                            "next_stage": "stage2_full_detection",
+                        },
+                        flush=True,
+                    )
+                stage1_boundary_reached = bool(
+                    is_stage1_epoch
+                    and (
+                        int(epoch) >= int(train_config.stage1_epochs)
+                        or stage1_auto_advance_triggered
+                    )
+                )
                 val_detection = val_metrics.get("detection", {})
                 val_detection_curve = val_metrics.get("detection_confidence_curve", {})
                 row = {
@@ -3212,6 +3287,8 @@ def main() -> None:
                         detection_loss_adaptation.get("multiplier", 1.0)
                     ),
                     "adaptive_detection_loss_active": int(bool(detection_loss_adaptation.get("active"))),
+                    "stage1_auto_advance_triggered": int(bool(stage1_auto_advance_triggered)),
+                    "stage1_auto_advance_epoch": int(stage1_auto_advance_epoch or 0),
                     "val_loss": val_metrics["loss"],
                     "val_cls_loss": val_metrics.get("loss_components", {}).get("cls_loss", val_metrics["loss"]),
                     "val_objectness_loss": val_metrics.get("loss_components", {}).get("objectness_loss", 0.0),
@@ -3347,7 +3424,18 @@ def main() -> None:
                     "next_epoch": int(epoch) + 1,
                     "checkpoint_kind": "last",
                 }
-                is_stage1_epoch = detection_mode and str(stage_config["stage_name"]) == "stage1_cls_only"
+                checkpoint_payload["stage1_auto_advance_epoch"] = (
+                    int(stage1_auto_advance_epoch) if stage1_auto_advance_epoch is not None else None
+                )
+                checkpoint_payload["stage1_auto_advance"] = {
+                    "enabled": bool(stage1_auto_threshold > 0.0),
+                    "threshold": float(stage1_auto_threshold),
+                    "min_epochs": int(stage1_auto_min_epochs),
+                    "triggered_this_epoch": bool(stage1_auto_advance_triggered),
+                    "advance_epoch": (
+                        int(stage1_auto_advance_epoch) if stage1_auto_advance_epoch is not None else None
+                    ),
+                }
                 if is_stage1_epoch:
                     stage1_improved = current_macro_f1 > float(stage1_best_macro_f1)
                     if stage1_improved:
@@ -3365,7 +3453,7 @@ def main() -> None:
                             "epoch": int(epoch),
                             "macro_f1": float(current_macro_f1),
                             "next_stage": "stage2_full_detection"
-                            if int(epoch) >= int(train_config.stage1_epochs)
+                            if stage1_boundary_reached
                             else "stage1_cls_only",
                         }
                         checkpoint_start = time.time()
@@ -3385,7 +3473,7 @@ def main() -> None:
                             flush=True,
                         )
                         del stage1_best_payload
-                    if int(epoch) >= int(train_config.stage1_epochs) and not stage1_boundary_checkpoint_saved:
+                    if stage1_boundary_reached and not stage1_boundary_checkpoint_saved:
                         stage1_boundary_checkpoint_saved = True
                         stage1_payload = dict(checkpoint_payload)
                         stage1_payload["resume_state"] = {
@@ -3399,6 +3487,7 @@ def main() -> None:
                             "macro_f1": float(current_macro_f1),
                             "best_stage1_epoch": int(stage1_best_epoch),
                             "best_stage1_macro_f1": float(stage1_best_macro_f1),
+                            "auto_advance_triggered": bool(stage1_auto_advance_triggered),
                             "next_stage": "stage2_full_detection",
                         }
                         checkpoint_start = time.time()
@@ -3537,6 +3626,8 @@ def main() -> None:
                         "classification_overfit_guard_active",
                         "adaptive_detection_loss_multiplier",
                         "adaptive_detection_loss_active",
+                        "stage1_auto_advance_triggered",
+                        "stage1_auto_advance_epoch",
                         "val_loss",
                         "val_cls_loss",
                         "val_objectness_loss",
@@ -3703,6 +3794,7 @@ def main() -> None:
                     best_selection_metric_value=best_selection_metric_value,
                     best_selection_metric_higher_is_better=best_selection_metric_higher_is_better,
                     epochs_without_improvement=epochs_without_improvement,
+                    stage1_auto_advance_epoch=stage1_auto_advance_epoch,
                 )
                 save_checkpoint(checkpoints_dir / "last.pt", interrupt_payload)
                 print(
