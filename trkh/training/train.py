@@ -1051,6 +1051,7 @@ def _resolve_detection_stage(
             "quality_weight": float(train_config.quality_loss_weight),
             "auxiliary_weight": float(train_config.auxiliary_loss_weight),
             "count_objectness_consistency_weight": float(train_config.count_objectness_consistency_weight),
+            "matcher_class_cost": float(train_config.matcher_class_cost),
         }
     stage1_active = int(train_config.stage1_epochs) > 0 and int(epoch_index) <= int(train_config.stage1_epochs)
     if stage1_active:
@@ -1065,6 +1066,7 @@ def _resolve_detection_stage(
             "quality_weight": 0.0,
             "auxiliary_weight": 0.0,
             "count_objectness_consistency_weight": 0.0,
+            "matcher_class_cost": max(1.0, float(train_config.matcher_class_cost)),
         }
     return {
         "stage_name": "stage2_full_detection",
@@ -1077,6 +1079,7 @@ def _resolve_detection_stage(
         "quality_weight": float(train_config.quality_loss_weight),
         "auxiliary_weight": float(train_config.auxiliary_loss_weight),
         "count_objectness_consistency_weight": float(train_config.count_objectness_consistency_weight),
+        "matcher_class_cost": float(train_config.matcher_class_cost),
     }
 
 
@@ -1099,6 +1102,7 @@ def _configure_detection_criterion(
         ("quality_weight", "quality_weight"),
         ("auxiliary_weight", "auxiliary_weight"),
         ("count_objectness_consistency_weight", "count_objectness_consistency_weight"),
+        ("matcher_class_cost", "matcher_class_cost"),
     ):
         if stage_key in stage_config:
             loss_weight_kwargs[loss_key] = float(stage_config[stage_key])
@@ -3022,6 +3026,7 @@ def main() -> None:
                             "cls_weight": 1.0,
                             "bbox_l1_weight": 0.0,
                             "bbox_giou_weight": 0.0,
+                            "matcher_class_cost": max(1.0, float(train_config.matcher_class_cost)),
                         }
                     else:
                         stage_config = {
@@ -3029,6 +3034,7 @@ def main() -> None:
                             "cls_weight": float(train_config.cls_loss_weight),
                             "bbox_l1_weight": float(train_config.bbox_l1_loss_weight),
                             "bbox_giou_weight": float(train_config.bbox_giou_loss_weight),
+                            "matcher_class_cost": float(train_config.matcher_class_cost),
                         }
                 else:
                     stage_config = _resolve_detection_stage(

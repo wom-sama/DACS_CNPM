@@ -65,7 +65,7 @@ It writes `images/{train,val,test}`, `labels/{train,val,test}`, `data.yaml`, and
 For the current imbalanced 5-class dataset, prefer one long run from scratch instead of manual phase 1/phase 2 resumes:
 
 - `--stage1-epochs 5` lets classification stabilize first, saves `stage1_best.pt` and `stage1.pt`, then continues into full detection in the same run.
-- `--matcher-class-cost 0.0` keeps Hungarian assignment object-first: box/objectness decide which query owns which object, then classification learns the matched object's label.
+- `--matcher-class-cost 0.0` keeps stage 2 Hungarian assignment object-first: box/objectness decide which query owns which object, then classification learns the matched object's label. Stage 1 still uses class-aware matching for the cls-only warmup.
 - `--eval-detection-score-mode objectness` ranks/filter detections by objectness; the metric still counts true positives only when the final class label is also correct.
 - `--epochs 0 --scheduler-total-epochs 160 --patience 100` trains until early stopping.
 - classification guard reduces classification weight only when classification is ahead of detection.

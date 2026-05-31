@@ -268,6 +268,7 @@ class DETRSetCriterion(nn.Module):
         quality_weight: Optional[float] = None,
         auxiliary_weight: Optional[float] = None,
         count_objectness_consistency_weight: Optional[float] = None,
+        matcher_class_cost: Optional[float] = None,
         sync_matcher_to_loss: bool = False,
     ) -> None:
         if cls_weight is not None:
@@ -289,7 +290,11 @@ class DETRSetCriterion(nn.Module):
         if count_objectness_consistency_weight is not None:
             self.count_objectness_consistency_weight = float(max(0.0, count_objectness_consistency_weight))
         if sync_matcher_to_loss and hasattr(self.matcher, "cost_bbox") and hasattr(self.matcher, "cost_giou"):
-            self.matcher.cost_class = float(self.base_matcher_cost_class)
+            self.matcher.cost_class = (
+                float(max(0.0, matcher_class_cost))
+                if matcher_class_cost is not None
+                else float(self.base_matcher_cost_class)
+            )
             self.matcher.cost_bbox = float(self.bbox_l1_weight)
             self.matcher.cost_giou = float(self.bbox_giou_weight)
             if hasattr(self.matcher, "cost_objectness"):

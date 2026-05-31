@@ -138,7 +138,7 @@ D:\DataAI\.venv\Scripts\python.exe -m trkh.training.train `
 
 Stage 1 now writes `checkpoints/stage1_best.pt`, `checkpoints/stage1.pt`, `stage1_best_metrics.json`, and `stage1_metrics.json`. `best.pt` remains reserved for stage 2 deploy-quality checkpoints.
 
-`--matcher-class-cost 0.0` makes Hungarian matching use box/objectness rather than class confidence, so the detection assignment is object-first; class loss is still applied after a query is matched to a target box. `--eval-detection-score-mode objectness` also filters boxes by objectness first while the detection metric still requires the predicted class to match the target class.
+`--matcher-class-cost 0.0` makes stage 2 Hungarian matching use box/objectness rather than class confidence, so detection assignment is object-first; class loss is still applied after a query is matched to a target box. Stage 1 keeps class-aware matching internally so the cls-only warmup still works. `--eval-detection-score-mode objectness` also filters boxes by objectness first while the detection metric still requires the predicted class to match the target class.
 
 Monitor:
 
