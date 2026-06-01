@@ -22,6 +22,7 @@ from trkh.evaluation.evaluate import (
 )
 from trkh.data.dataset import (
     RareClassRepeatDataset,
+    _apply_copypaste_detection_batch,
     build_rare_class_repeat_factors,
     build_train_collate_fn,
     build_train_transform,
@@ -36,8 +37,10 @@ from trkh.training.train import (
     _load_resume_configs_from_checkpoint,
     _load_training_checkpoint,
     _apply_adaptive_detection_loss,
+    _combine_class_target_scales,
     _resolve_adaptive_detection_loss,
     _resolve_classification_overfit_guard,
+    _resolve_rare_class_recall_guard,
     _resolve_eval_num_workers,
     _resolve_resume_checkpoint_path,
     _resolve_checkpoint_selection,
@@ -658,6 +661,43 @@ dataset_balance:
             self.assertTrue(torch.all(target["boxes"] >= 0.0))
             self.assertTrue(torch.all(target["boxes"] <= 1.0))
 
+    def test_targeted_copy_paste_prefers_scaled_object_class(self):
+        torch.manual_seed(7)
+        images = torch.zeros((2, 3, 48, 48), dtype=torch.float32)
+        images[1, :, 8:18, 8:18] = 0.5
+        images[1, :, 28:38, 28:38] = 0.9
+        targets = [
+            {
+                "labels": torch.tensor([0], dtype=torch.long),
+                "boxes": torch.tensor([[0.75, 0.75, 0.16, 0.16]], dtype=torch.float32),
+            },
+            {
+                "labels": torch.tensor([1, 2], dtype=torch.long),
+                "boxes": torch.tensor(
+                    [
+                        [0.27, 0.27, 0.18, 0.18],
+                        [0.69, 0.69, 0.18, 0.18],
+                    ],
+                    dtype=torch.float32,
+                ),
+            },
+        ]
+
+        _, pasted_targets = _apply_copypaste_detection_batch(
+            images,
+            targets,
+            max_objects=8,
+            max_paste_objects=1,
+            source_weights=torch.tensor([0.0, 1.0], dtype=torch.float32),
+            target_class_scales=torch.tensor([1.0, 2.2, 1.0], dtype=torch.float32),
+            target_scale_threshold=1.5,
+            target_probability=1.0,
+        )
+
+        pasted_labels = pasted_targets[0]["labels"].tolist()
+        self.assertIn(1, pasted_labels)
+        self.assertNotIn(2, pasted_labels)
+
     def test_rare_class_repeat_targets_extreme_class_two_three_imbalance(self):
         class TinyLabelDataset(torch.utils.data.Dataset):
             def __init__(self, labels):
@@ -730,6 +770,57 @@ dataset_balance:
         self.assertTrue(summary["active"])
         self.assertLess(summary["multiplier"], 1.0)
         self.assertGreaterEqual(summary["multiplier"], 0.25)
+
+    def test_rare_class_recall_guard_boosts_only_scaled_low_recall_classes(self):
+        train_config = TrainConfig(
+            rare_class_recall_guard=True,
+            rare_class_recall_target=0.70,
+            rare_class_recall_guard_scale_threshold=1.5,
+            rare_class_recall_guard_max_multiplier=2.0,
+            rare_class_recall_guard_min_precision=0.35,
+        )
+        class_scales = _combine_class_target_scales(
+            3,
+            class_augmentation_scales=[1.0, 2.3, 1.1],
+            rare_class_repeat_factors=[1.0, 2.0, 1.0],
+        )
+        previous_metrics = {
+            "per_class": [
+                {"class_index": 0, "precision": 0.9, "recall": 0.8, "support": 10},
+                {"class_index": 1, "precision": 0.7, "recall": 0.35, "support": 12},
+                {"class_index": 2, "precision": 0.9, "recall": 0.4, "support": 10},
+            ]
+        }
+
+        summary = _resolve_rare_class_recall_guard(
+            train_config=train_config,
+            detection_mode=True,
+            stage_name="stage2_full_detection",
+            previous_val_metrics=previous_metrics,
+            class_target_scales=class_scales,
+        )
+
+        self.assertTrue(summary["active"])
+        self.assertEqual(summary["active_class_count"], 1)
+        self.assertEqual(len(summary["multipliers"]), 3)
+        self.assertEqual(summary["multipliers"][0], 1.0)
+        self.assertGreater(summary["multipliers"][1], 1.0)
+        self.assertEqual(summary["multipliers"][2], 1.0)
+
+    def test_detr_class_weight_multipliers_are_resettable(self):
+        criterion = DETRSetCriterion(
+            num_classes=3,
+            class_weights=torch.tensor([1.0, 1.5, 0.8], dtype=torch.float32),
+            background_weight=0.2,
+        )
+        base_weight = criterion.empty_weight.clone()
+
+        criterion.set_class_weight_multipliers(torch.tensor([1.0, 2.0, 1.0], dtype=torch.float32))
+        self.assertAlmostEqual(float(criterion.empty_weight[1].item()), 3.0, places=5)
+        self.assertAlmostEqual(float(criterion.empty_weight[-1].item()), 0.2, places=5)
+
+        criterion.reset_class_weight_multipliers()
+        self.assertTrue(torch.allclose(criterion.empty_weight, base_weight))
 
     def test_adaptive_detection_loss_boosts_detection_weights_when_detection_lags(self):
         train_config = TrainConfig(

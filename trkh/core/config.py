@@ -216,6 +216,8 @@ class TrainConfig:
     cutmix_alpha: float = 1.0
     copy_paste_probability: float = 0.0
     copy_paste_max_objects: int = 2
+    targeted_copy_paste_scale_threshold: float = 1.5
+    targeted_copy_paste_probability: float = 1.0
     eval_tta: bool = False
     tta_brightness_delta: float = 0.08
     log_artifact_stats: bool = True
@@ -240,6 +242,11 @@ class TrainConfig:
     adaptive_detection_gap_threshold: float = 0.20
     adaptive_detection_bbox_iou_target: float = 0.70
     adaptive_detection_max_multiplier: float = 2.0
+    rare_class_recall_guard: bool = True
+    rare_class_recall_target: float = 0.70
+    rare_class_recall_guard_scale_threshold: float = 1.5
+    rare_class_recall_guard_max_multiplier: float = 2.0
+    rare_class_recall_guard_min_precision: float = 0.35
     bbox_l1_loss_weight: float = 1.0
     bbox_giou_loss_weight: float = 0.5
     background_loss_weight: float = 0.3

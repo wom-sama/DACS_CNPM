@@ -87,7 +87,7 @@ D:\DataAI\.venv\Scripts\python.exe -m compileall train.py evaluate.py scripts tr
 D:\DataAI\.venv\Scripts\python.exe -m unittest discover -s tests -p "test_*.py" -v
 ```
 
-Current expected result: `36` tests passed.
+Current expected result: `40` tests passed.
 
 ## Stage1-to-Stage2 Local Training Candidate
 
@@ -121,6 +121,8 @@ D:\DataAI\.venv\Scripts\python.exe -m trkh.training.train `
   --classification-guard-macro-f1-threshold 0.94 --classification-guard-detection-gap 0.20 --classification-guard-min-cls-weight 0.35 `
   --adaptive-detection-macro-f1-threshold 0.93 --adaptive-detection-f1-target 0.90 --adaptive-detection-gap-threshold 0.20 `
   --adaptive-detection-bbox-iou-target 0.70 --adaptive-detection-max-multiplier 1.75 `
+  --rare-class-recall-target 0.70 --rare-class-recall-guard-scale-threshold 1.5 `
+  --rare-class-recall-guard-max-multiplier 2.0 --rare-class-recall-guard-min-precision 0.35 `
   --bbox-l1-loss-weight 1.15 --bbox-giou-loss-weight 0.80 `
   --background-loss-weight 0.65 --objectness-loss-weight 7.0 `
   --objectness-focal-alpha 0.80 --objectness-focal-gamma 1.50 --matcher-class-cost 0.0 --matcher-objectness-cost 2.20 `
@@ -129,16 +131,21 @@ D:\DataAI\.venv\Scripts\python.exe -m trkh.training.train `
   --best-metric macro_detection_hmean `
   --eval-detection-score-mode objectness --eval-detection-nms-iou-threshold 0.16 `
   --eval-adaptive-max-detections --eval-adaptive-count-source auto --eval-adaptive-count-margin 1 --eval-adaptive-min-detections 1 `
-  --resize-mode pad --brightness 0.10 --contrast 0.10 --saturation 0.03 --hue 0.01 `
+  --resize-mode pad --brightness 0.0 --contrast 0.0 --saturation 0.0 --hue 0.0 `
   --random-erasing-probability 0.0 --random-affine-degrees 4 --random-affine-translate 0.03 --random-affine-scale-min 0.94 `
-  --horizontal-flip-probability 0.5 --vertical-flip-probability 0.02 --rotate90-probability 0.06 --lighting-probability 0.06 `
+  --horizontal-flip-probability 0.5 --vertical-flip-probability 0.02 --rotate90-probability 0.06 --lighting-probability 0.0 `
   --mosaic-probability 0.08 --cutmix-probability 0.04 --copy-paste-probability 0.16 --copy-paste-max-objects 3 `
+  --targeted-copy-paste-scale-threshold 1.5 --targeted-copy-paste-probability 1.0 `
   --cutmix-alpha 1.0 --mixup-probability 0.0
 ```
 
 Stage 1 now writes `checkpoints/stage1_best.pt`, `checkpoints/stage1.pt`, `stage1_best_metrics.json`, and `stage1_metrics.json`. With `--stage1-auto-advance-macro-f1-threshold 0.995`, stage 1 is a maximum of 5 epochs but switches to stage 2 earlier once validation macro F1 reaches 0.995 after at least 2 epochs. `best.pt` remains reserved for stage 2 deploy-quality checkpoints.
 
 `--matcher-class-cost 0.0` makes stage 2 Hungarian matching use box/objectness rather than class confidence, so detection assignment is object-first; class loss is still applied after a query is matched to a target box. Stage 1 keeps class-aware matching internally so the cls-only warmup still works. `--eval-detection-score-mode objectness` also filters boxes by objectness first while the detection metric still requires the predicted class to match the target class.
+
+Rare-class handling is now object-targeted instead of color-targeted. `--class-aware-photometric-augmentation` stays off by default, and the recommended command sets brightness/contrast/saturation/hue/lighting to `0` for the imbalanced 5-class run. `--targeted-copy-paste-scale-threshold 1.5` automatically targets any class whose augmentation/repeat scale is at least 1.5x; with the current `canbang.yaml`, this means class 1. The rare-class recall guard then raises only those class weights in stage 2 when previous validation recall is below target and precision is still usable.
+
+To apply these changes to an existing scratch run, stop it cleanly so `checkpoints/last.pt` is written, update the code, then restart with the same `--run-name` and `--auto-resume` instead of `--disable-resume`. The new rows append to the existing `history.csv`; old epochs simply have blank/default values for the new guard columns.
 
 Monitor:
 

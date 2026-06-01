@@ -480,6 +480,9 @@ def _apply_copypaste_detection_batch(
     max_objects: int,
     max_paste_objects: int = 2,
     source_weights: Optional[Tensor] = None,
+    target_class_scales: Optional[Tensor] = None,
+    target_scale_threshold: float = 1.5,
+    target_probability: float = 1.0,
     padding_ratio: float = 0.06,
     occlusion_threshold: float = 0.6,
 ) -> Tuple[Tensor, List[Dict[str, Tensor]]]:
@@ -495,12 +498,18 @@ def _apply_copypaste_detection_batch(
         source_weights = source_weights / source_weights.sum().clamp(min=1e-6)
     else:
         source_weights = None
+    if target_class_scales is not None and target_class_scales.numel() > 0:
+        target_class_scales = target_class_scales.detach().cpu().to(dtype=torch.float32).clamp(min=1.0)
+    else:
+        target_class_scales = None
 
     pasted_images = images.clone()
     pasted_targets: List[Dict[str, Tensor]] = []
     max_paste_objects = max(1, int(max_paste_objects))
     padding_ratio = max(0.0, float(padding_ratio))
     occlusion_threshold = min(max(float(occlusion_threshold), 0.0), 1.0)
+    target_scale_threshold = max(1.0, float(target_scale_threshold))
+    target_probability = min(max(float(target_probability), 0.0), 1.0)
 
     for batch_index in range(batch_size):
         base_target = normalized_targets[batch_index]
@@ -532,7 +541,41 @@ def _apply_copypaste_detection_batch(
             valid_object_indices = torch.nonzero(source_areas > 1e-5, as_tuple=False).flatten()
             if valid_object_indices.numel() == 0:
                 continue
-            object_index = int(valid_object_indices[torch.randint(0, valid_object_indices.numel(), (1,)).item()].item())
+            selected_indices = valid_object_indices
+            if (
+                target_class_scales is not None
+                and target_scale_threshold > 1.0
+                and target_probability > 0.0
+                and torch.rand(1).item() < target_probability
+            ):
+                candidate_labels = source_labels[valid_object_indices].to(dtype=torch.long)
+                valid_label_mask = (candidate_labels >= 0) & (candidate_labels < target_class_scales.numel())
+                if valid_label_mask.any():
+                    candidate_scales = torch.ones_like(candidate_labels, dtype=torch.float32)
+                    valid_candidate_labels = candidate_labels[valid_label_mask]
+                    candidate_scales[valid_label_mask] = target_class_scales[valid_candidate_labels]
+                    rare_mask = candidate_scales >= target_scale_threshold
+                    if rare_mask.any():
+                        selected_indices = valid_object_indices[rare_mask]
+                        selected_weights = candidate_scales[rare_mask].clamp(min=1e-6)
+                        selected_weights = selected_weights / selected_weights.sum().clamp(min=1e-6)
+                        object_index = int(
+                            selected_indices[
+                                torch.multinomial(selected_weights, num_samples=1).item()
+                            ].item()
+                        )
+                    else:
+                        object_index = int(
+                            valid_object_indices[
+                                torch.randint(0, valid_object_indices.numel(), (1,)).item()
+                            ].item()
+                        )
+                else:
+                    object_index = int(
+                        valid_object_indices[torch.randint(0, valid_object_indices.numel(), (1,)).item()].item()
+                    )
+            else:
+                object_index = int(selected_indices[torch.randint(0, selected_indices.numel(), (1,)).item()].item())
 
             source_xyxy = _xywh_to_xyxy_tensor(source_boxes[object_index : object_index + 1])[0]
             box_width = float((source_xyxy[2] - source_xyxy[0]).clamp(min=0.0).item())
@@ -674,6 +717,9 @@ class TrainBatchCollator:
     max_detection_objects: int = 40
     class_aware_mix_probability_boost: float = 0.0
     class_aware_mix_source_power: float = 1.0
+    targeted_copy_paste_class_scales: Optional[Sequence[float]] = None
+    targeted_copy_paste_scale_threshold: float = 1.5
+    targeted_copy_paste_probability: float = 1.0
 
     def __post_init__(self) -> None:
         self.num_classes = max(1, int(self.num_classes))
@@ -690,6 +736,19 @@ class TrainBatchCollator:
         self.max_detection_objects = max(1, int(self.max_detection_objects))
         self.class_aware_mix_probability_boost = max(0.0, float(self.class_aware_mix_probability_boost))
         self.class_aware_mix_source_power = max(0.0, float(self.class_aware_mix_source_power))
+        self.targeted_copy_paste_scale_threshold = max(
+            1.0,
+            float(self.targeted_copy_paste_scale_threshold),
+        )
+        self.targeted_copy_paste_probability = min(
+            max(float(self.targeted_copy_paste_probability), 0.0),
+            1.0,
+        )
+        if self.targeted_copy_paste_class_scales is not None:
+            self.targeted_copy_paste_class_scales = torch.tensor(
+                list(self.targeted_copy_paste_class_scales),
+                dtype=torch.float32,
+            ).clamp(min=1.0)
 
     def __call__(self, batch) -> Tuple[Tensor, Tensor]:
         if not batch:
@@ -750,6 +809,13 @@ class TrainBatchCollator:
                     max_objects=self.max_detection_objects,
                     max_paste_objects=self.copy_paste_max_objects,
                     source_weights=source_weights,
+                    target_class_scales=(
+                        self.targeted_copy_paste_class_scales
+                        if torch.is_tensor(self.targeted_copy_paste_class_scales)
+                        else None
+                    ),
+                    target_scale_threshold=self.targeted_copy_paste_scale_threshold,
+                    target_probability=self.targeted_copy_paste_probability,
                 )
             return _apply_cutmix_detection_batch(
                 images,
@@ -814,6 +880,9 @@ def build_train_collate_fn(
     max_detection_objects: int = 40,
     class_aware_mix_probability_boost: float = 0.0,
     class_aware_mix_source_power: float = 1.0,
+    targeted_copy_paste_class_scales: Optional[Sequence[float]] = None,
+    targeted_copy_paste_scale_threshold: float = 1.5,
+    targeted_copy_paste_probability: float = 1.0,
 ) -> Callable:
     return TrainBatchCollator(
         num_classes=num_classes,
@@ -830,6 +899,9 @@ def build_train_collate_fn(
         max_detection_objects=max_detection_objects,
         class_aware_mix_probability_boost=class_aware_mix_probability_boost,
         class_aware_mix_source_power=class_aware_mix_source_power,
+        targeted_copy_paste_class_scales=targeted_copy_paste_class_scales,
+        targeted_copy_paste_scale_threshold=targeted_copy_paste_scale_threshold,
+        targeted_copy_paste_probability=targeted_copy_paste_probability,
     )
 
 

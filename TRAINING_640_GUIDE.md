@@ -42,7 +42,7 @@ python -m compileall train.py evaluate.py scripts trkh tests
 python -m unittest discover -s tests -p "test_*.py" -v
 ```
 
-Expected result after the refactor: `36` tests passed.
+Expected result after the refactor: `40` tests passed.
 
 ## Dataset Builder
 
@@ -70,6 +70,8 @@ For the current imbalanced 5-class dataset, prefer one long run from scratch ins
 - `--epochs 0 --scheduler-total-epochs 160 --patience 100` trains until early stopping.
 - classification guard reduces classification weight only when classification is ahead of detection.
 - adaptive detection loss boosts bbox/objectness/cardinality/count pressure when validation says detection lags.
+- targeted copy-paste uses class augmentation/repeat scale to choose the pasted object itself, not just the source image. `--targeted-copy-paste-scale-threshold 1.5` automatically targets any class at or above 1.5x exposure.
+- rare-class recall guard raises only the affected class weights in stage 2 when a scaled class still has low recall and acceptable precision.
 - checkpoints are still scratch-only; do not use external weights.
 
 ## Recommended Local Command
@@ -83,8 +85,11 @@ For datasets with few crowded images:
 - `--mosaic-probability` creates 4-image composites.
 - `--cutmix-probability` pastes rectangular regions and updates/clips boxes.
 - `--copy-paste-probability` pastes real labeled objects into other images and drops heavily occluded base boxes.
+- `--targeted-copy-paste-scale-threshold 1.5` makes copy-paste choose objects from any class whose rare-repeat/class-aware scale is at least 1.5x.
 
-Keep these light. The stopped v2 run showed that heavy synthetic composition can increase recall but still leave precision low.
+Keep these light. The class-aware scaling path does not amplify brightness/contrast/saturation/lighting unless `--class-aware-photometric-augmentation` is explicitly enabled. For the current imbalanced 5-class dataset, keep photometric flags at `0` and spend augmentation budget on geometry plus targeted copy-paste.
+
+To resume a current scratch run after these code changes, stop training cleanly, keep the same `--run-name`, replace `--disable-resume` with `--auto-resume`, and reuse the updated flags. `history.csv` will continue from the old file; the new guard columns are appended by the CSV writer.
 
 ## Current Evidence
 

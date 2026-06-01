@@ -254,6 +254,7 @@ class DETRSetCriterion(nn.Module):
                 raise ValueError("class_weights phai co do dai bang num_classes.")
             empty_weight[:-1] = class_weights
         empty_weight[-1] = float(max(0.0, background_weight))
+        self.register_buffer("base_empty_weight", empty_weight.clone())
         self.register_buffer("empty_weight", empty_weight)
 
     def set_loss_weights(
@@ -313,6 +314,20 @@ class DETRSetCriterion(nn.Module):
             count_objectness_consistency_weight=self.base_count_objectness_consistency_weight,
             sync_matcher_to_loss=sync_matcher_to_loss,
         )
+
+    def set_class_weight_multipliers(self, multipliers: Optional[Tensor]) -> None:
+        if multipliers is None:
+            self.empty_weight.copy_(self.base_empty_weight)
+            return
+        multipliers = multipliers.detach().to(device=self.empty_weight.device, dtype=torch.float32)
+        if multipliers.numel() != self.num_classes:
+            raise ValueError("class weight multipliers phai co do dai bang num_classes.")
+        updated_weight = self.base_empty_weight.clone()
+        updated_weight[:-1] = updated_weight[:-1] * multipliers.clamp(min=0.0)
+        self.empty_weight.copy_(updated_weight)
+
+    def reset_class_weight_multipliers(self) -> None:
+        self.set_class_weight_multipliers(None)
 
     def get_loss_weights(self) -> Dict[str, float]:
         return {

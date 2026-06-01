@@ -353,6 +353,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--cutmix-alpha", type=float, default=1.0)
     parser.add_argument("--copy-paste-probability", type=float, default=0.0)
     parser.add_argument("--copy-paste-max-objects", type=int, default=2)
+    parser.add_argument(
+        "--targeted-copy-paste-scale-threshold",
+        type=float,
+        default=1.5,
+        help="Tu dong uu tien paste object cua lop co augmentation/repeat scale >= nguong nay.",
+    )
+    parser.add_argument(
+        "--targeted-copy-paste-probability",
+        type=float,
+        default=1.0,
+        help="Xac suat chon object cua lop hiem khi source image co object du dieu kien.",
+    )
     parser.add_argument("--eval-tta", action="store_true", default=False)
     parser.add_argument("--tta-brightness-delta", type=float, default=0.08)
     parser.add_argument("--disable-artifact-logging", action="store_true", default=False)
@@ -393,6 +405,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--adaptive-detection-gap-threshold", type=float, default=0.20)
     parser.add_argument("--adaptive-detection-bbox-iou-target", type=float, default=0.70)
     parser.add_argument("--adaptive-detection-max-multiplier", type=float, default=2.0)
+    parser.add_argument("--disable-rare-class-recall-guard", action="store_true", default=False)
+    parser.add_argument("--rare-class-recall-target", type=float, default=0.70)
+    parser.add_argument("--rare-class-recall-guard-scale-threshold", type=float, default=1.5)
+    parser.add_argument("--rare-class-recall-guard-max-multiplier", type=float, default=2.0)
+    parser.add_argument("--rare-class-recall-guard-min-precision", type=float, default=0.35)
     parser.add_argument("--bbox-l1-loss-weight", type=float, default=1.0)
     parser.add_argument("--bbox-giou-loss-weight", type=float, default=0.5)
     parser.add_argument("--background-loss-weight", type=float, default=0.3)
@@ -544,6 +561,10 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         raise ValueError("--copy-paste-probability phai >= 0.")
     if args.copy_paste_max_objects < 0:
         raise ValueError("--copy-paste-max-objects phai >= 0.")
+    if args.targeted_copy_paste_scale_threshold < 1.0:
+        raise ValueError("--targeted-copy-paste-scale-threshold phai >= 1.")
+    if not 0.0 <= args.targeted_copy_paste_probability <= 1.0:
+        raise ValueError("--targeted-copy-paste-probability phai nam trong [0, 1].")
     if args.stage1_bbox_l1_loss_weight < 0.0 or args.stage1_bbox_giou_loss_weight < 0.0:
         raise ValueError("Stage 1 detection loss weights phai >= 0.")
     if not 0.0 <= args.classification_guard_macro_f1_threshold < 1.0:
@@ -562,6 +583,14 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         raise ValueError("--adaptive-detection-bbox-iou-target phai nam trong [0, 1].")
     if args.adaptive_detection_max_multiplier < 1.0:
         raise ValueError("--adaptive-detection-max-multiplier phai >= 1.")
+    if not 0.0 <= args.rare_class_recall_target <= 1.0:
+        raise ValueError("--rare-class-recall-target phai nam trong [0, 1].")
+    if args.rare_class_recall_guard_scale_threshold < 1.0:
+        raise ValueError("--rare-class-recall-guard-scale-threshold phai >= 1.")
+    if args.rare_class_recall_guard_max_multiplier < 1.0:
+        raise ValueError("--rare-class-recall-guard-max-multiplier phai >= 1.")
+    if not 0.0 <= args.rare_class_recall_guard_min_precision <= 1.0:
+        raise ValueError("--rare-class-recall-guard-min-precision phai nam trong [0, 1].")
     if args.background_loss_weight < 0.0 or args.cardinality_loss_weight < 0.0:
         raise ValueError("Detection loss weights phai >= 0.")
     if args.eval_detection_nms_iou_threshold < 0.0:
@@ -713,6 +742,8 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         cutmix_alpha=args.cutmix_alpha,
         copy_paste_probability=args.copy_paste_probability,
         copy_paste_max_objects=args.copy_paste_max_objects,
+        targeted_copy_paste_scale_threshold=args.targeted_copy_paste_scale_threshold,
+        targeted_copy_paste_probability=args.targeted_copy_paste_probability,
         eval_tta=args.eval_tta,
         tta_brightness_delta=args.tta_brightness_delta,
         log_artifact_stats=not args.disable_artifact_logging,
@@ -737,6 +768,11 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         adaptive_detection_gap_threshold=args.adaptive_detection_gap_threshold,
         adaptive_detection_bbox_iou_target=args.adaptive_detection_bbox_iou_target,
         adaptive_detection_max_multiplier=args.adaptive_detection_max_multiplier,
+        rare_class_recall_guard=not args.disable_rare_class_recall_guard,
+        rare_class_recall_target=args.rare_class_recall_target,
+        rare_class_recall_guard_scale_threshold=args.rare_class_recall_guard_scale_threshold,
+        rare_class_recall_guard_max_multiplier=args.rare_class_recall_guard_max_multiplier,
+        rare_class_recall_guard_min_precision=args.rare_class_recall_guard_min_precision,
         bbox_l1_loss_weight=args.bbox_l1_loss_weight,
         bbox_giou_loss_weight=args.bbox_giou_loss_weight,
         background_loss_weight=args.background_loss_weight,
@@ -1312,6 +1348,129 @@ def _apply_adaptive_detection_loss(
     ):
         if key in stage_config:
             stage_config[key] = float(stage_config[key]) * multiplier
+
+
+def _combine_class_target_scales(
+    num_classes: int,
+    class_augmentation_scales: Sequence[float],
+    rare_class_repeat_factors: Sequence[float],
+) -> List[float]:
+    combined: List[float] = []
+    for class_index in range(max(0, int(num_classes))):
+        augmentation_scale = (
+            float(class_augmentation_scales[class_index])
+            if class_index < len(class_augmentation_scales)
+            else 1.0
+        )
+        repeat_factor = (
+            float(rare_class_repeat_factors[class_index])
+            if class_index < len(rare_class_repeat_factors)
+            else 1.0
+        )
+        combined.append(max(1.0, augmentation_scale, repeat_factor))
+    return combined
+
+
+def _resolve_rare_class_recall_guard(
+    train_config: TrainConfig,
+    detection_mode: bool,
+    stage_name: str,
+    previous_val_metrics: Optional[Dict[str, object]],
+    class_target_scales: Sequence[float],
+) -> Dict[str, object]:
+    multipliers = [1.0 for _ in class_target_scales]
+    summary: Dict[str, object] = {
+        "enabled": bool(train_config.rare_class_recall_guard),
+        "active": False,
+        "multipliers": multipliers,
+        "active_class_count": 0,
+        "max_multiplier": 1.0,
+        "reason": "not_applicable",
+    }
+    if not train_config.rare_class_recall_guard:
+        summary["reason"] = "disabled"
+        return summary
+    if not detection_mode:
+        summary["reason"] = "classification_only_model"
+        return summary
+    if str(stage_name).strip().lower() == "stage1_cls_only":
+        summary["reason"] = "stage1_cls_only"
+        return summary
+    if not previous_val_metrics:
+        summary["reason"] = "no_previous_validation_metrics"
+        return summary
+
+    per_class = previous_val_metrics.get("per_class", [])
+    if not isinstance(per_class, list) or not per_class:
+        summary["reason"] = "no_per_class_metrics"
+        return summary
+
+    target_recall = float(train_config.rare_class_recall_target)
+    scale_threshold = float(train_config.rare_class_recall_guard_scale_threshold)
+    max_multiplier = max(1.0, float(train_config.rare_class_recall_guard_max_multiplier))
+    min_precision = float(train_config.rare_class_recall_guard_min_precision)
+    target_classes: List[Dict[str, object]] = []
+    metrics_by_class = {
+        int(item.get("class_index", index)): item
+        for index, item in enumerate(per_class)
+        if isinstance(item, dict)
+    }
+    for class_index, class_scale in enumerate(class_target_scales):
+        if float(class_scale) < scale_threshold:
+            continue
+        class_metrics = metrics_by_class.get(class_index)
+        if not class_metrics:
+            continue
+        support = int(class_metrics.get("support", 0) or 0)
+        if support <= 0:
+            continue
+        precision = float(class_metrics.get("precision", 0.0) or 0.0)
+        recall = float(class_metrics.get("recall", 0.0) or 0.0)
+        if recall >= target_recall:
+            continue
+        if precision < min_precision:
+            continue
+
+        deficit = (target_recall - recall) / max(1e-6, target_recall)
+        multiplier = 1.0 + max(0.0, deficit) * (max_multiplier - 1.0)
+        multiplier = min(max_multiplier, max(1.0, multiplier))
+        multipliers[class_index] = float(multiplier)
+        target_classes.append(
+            {
+                "class_index": int(class_index),
+                "scale": float(class_scale),
+                "precision": precision,
+                "recall": recall,
+                "support": support,
+                "multiplier": float(multiplier),
+            }
+        )
+
+    if not target_classes:
+        summary.update(
+            {
+                "reason": "no_scaled_class_below_recall_target",
+                "target_recall": target_recall,
+                "scale_threshold": scale_threshold,
+                "min_precision": min_precision,
+            }
+        )
+        return summary
+
+    summary.update(
+        {
+            "active": True,
+            "reason": "scaled_class_recall_below_target",
+            "multipliers": multipliers,
+            "target_classes": target_classes,
+            "active_class_count": len(target_classes),
+            "max_multiplier": max(float(value) for value in multipliers),
+            "target_recall": target_recall,
+            "scale_threshold": scale_threshold,
+            "min_precision": min_precision,
+        }
+    )
+    return summary
 
 
 def _resolve_resume_checkpoint_path(
@@ -2051,6 +2210,17 @@ def make_checkpoint_payload(
     if confidence_curves:
         calibration["best_macro_f1"] = confidence_curves.get("best_macro_f1")
         calibration["best_macro_f1_confidence"] = confidence_curves.get("best_macro_f1_confidence")
+        per_class_thresholds = {}
+        for item in confidence_curves.get("per_class", []):
+            if not isinstance(item, dict):
+                continue
+            class_index = item.get("class_index")
+            threshold = item.get("best_confidence")
+            if class_index is None or threshold is None:
+                continue
+            per_class_thresholds[str(int(class_index))] = float(threshold)
+        if per_class_thresholds:
+            calibration["per_class_macro_f1_confidence"] = per_class_thresholds
         calibration["source_split"] = "val"
         calibration["tta_enabled"] = metrics.get("tta_enabled", False)
         calibration["tta_brightness_delta"] = metrics.get("tta_brightness_delta", 0.0)
@@ -2647,6 +2817,25 @@ def main() -> None:
             "class_repeat_factors": rare_class_repeat_factors,
             "source": "canbang.yaml" if balance_auto_summary.get("enabled") else "train_class_counts",
         }
+    class_target_scales = _combine_class_target_scales(
+        data_spec.num_classes,
+        getattr(train_dataset, "class_augmentation_scales", []),
+        rare_class_repeat_factors,
+    )
+    targeted_copy_paste_summary = {
+        "scale_threshold": float(train_config.targeted_copy_paste_scale_threshold),
+        "target_probability": float(train_config.targeted_copy_paste_probability),
+        "class_target_scales": class_target_scales,
+        "targeted_classes": [
+            int(index)
+            for index, value in enumerate(class_target_scales)
+            if float(value) >= float(train_config.targeted_copy_paste_scale_threshold)
+        ],
+        "photometric_scaled_for_target_classes": bool(
+            augmentation_config.class_aware_photometric_augmentation
+        ),
+    }
+    print({"targeted_copy_paste": targeted_copy_paste_summary}, flush=True)
 
     train_sampler = (
         build_weighted_sampler(
@@ -2701,6 +2890,9 @@ def main() -> None:
             if augmentation_config.class_aware_augmentation
             else 0.0
         ),
+        targeted_copy_paste_class_scales=class_target_scales,
+        targeted_copy_paste_scale_threshold=train_config.targeted_copy_paste_scale_threshold,
+        targeted_copy_paste_probability=train_config.targeted_copy_paste_probability,
     )
     logger.info(
         "Creating train DataLoader: batch_size=%s requested_workers=%s "
@@ -2955,6 +3147,7 @@ def main() -> None:
         "total_class_counts": total_class_counts,
         "train_dataset_report": train_dataset_report,
         "rare_class_repeat": rare_class_repeat_summary,
+        "targeted_copy_paste": targeted_copy_paste_summary,
         "val_dataset_report": val_dataset_report,
         "test_dataset_report": test_dataset_report,
     }
@@ -3132,9 +3325,35 @@ def main() -> None:
                         flush=True,
                     )
                 stage_config["adaptive_detection_loss"] = detection_loss_adaptation
+                rare_class_recall_guard = _resolve_rare_class_recall_guard(
+                    train_config=train_config,
+                    detection_mode=detection_mode,
+                    stage_name=str(stage_config["stage_name"]),
+                    previous_val_metrics=previous_val_metrics,
+                    class_target_scales=class_target_scales,
+                )
+                if rare_class_recall_guard.get("active"):
+                    print(
+                        {
+                            "epoch": epoch,
+                            "rare_class_recall_guard": rare_class_recall_guard,
+                        },
+                        flush=True,
+                    )
+                stage_config["rare_class_recall_guard"] = rare_class_recall_guard
                 if detection_mode:
                     _configure_detection_criterion(criterion, stage_config)
                     _configure_detection_criterion(eval_criterion, stage_config)
+                    if hasattr(criterion, "set_class_weight_multipliers"):
+                        criterion.set_class_weight_multipliers(
+                            torch.tensor(
+                                rare_class_recall_guard.get("multipliers", [1.0] * data_spec.num_classes),
+                                dtype=torch.float32,
+                                device=device,
+                            )
+                        )
+                    if hasattr(eval_criterion, "reset_class_weight_multipliers"):
+                        eval_criterion.reset_class_weight_multipliers()
 
                 train_phase_start = time.time()
                 train_loss, train_artifact_stats, current_lr = train_one_epoch(
@@ -3287,6 +3506,13 @@ def main() -> None:
                         detection_loss_adaptation.get("multiplier", 1.0)
                     ),
                     "adaptive_detection_loss_active": int(bool(detection_loss_adaptation.get("active"))),
+                    "rare_class_recall_guard_active": int(bool(rare_class_recall_guard.get("active"))),
+                    "rare_class_recall_guard_class_count": int(
+                        rare_class_recall_guard.get("active_class_count", 0) or 0
+                    ),
+                    "rare_class_recall_guard_max_multiplier": float(
+                        rare_class_recall_guard.get("max_multiplier", 1.0) or 1.0
+                    ),
                     "stage1_auto_advance_triggered": int(bool(stage1_auto_advance_triggered)),
                     "stage1_auto_advance_epoch": int(stage1_auto_advance_epoch or 0),
                     "val_loss": val_metrics["loss"],
@@ -3403,6 +3629,8 @@ def main() -> None:
                 )
                 checkpoint_payload["train_stage"] = stage_config["stage_name"]
                 checkpoint_payload["classification_overfit_guard"] = classification_guard
+                checkpoint_payload["adaptive_detection_loss"] = detection_loss_adaptation
+                checkpoint_payload["rare_class_recall_guard"] = rare_class_recall_guard
                 checkpoint_payload["selection_metric"] = {
                     "name": selection_metric_name,
                     "value": selection_metric_value,
@@ -3626,6 +3854,9 @@ def main() -> None:
                         "classification_overfit_guard_active",
                         "adaptive_detection_loss_multiplier",
                         "adaptive_detection_loss_active",
+                        "rare_class_recall_guard_active",
+                        "rare_class_recall_guard_class_count",
+                        "rare_class_recall_guard_max_multiplier",
                         "stage1_auto_advance_triggered",
                         "stage1_auto_advance_epoch",
                         "val_loss",
@@ -3685,6 +3916,7 @@ def main() -> None:
                         "selection_metric_value": round(float(selection_metric_value), 4),
                         "eligible_for_best": eligible_for_best,
                         "classification_overfit_guard": classification_guard,
+                        "rare_class_recall_guard": rare_class_recall_guard,
                         "val_best_conf": round(
                             float(
                                 val_metrics.get("confidence_curves", {}).get(
