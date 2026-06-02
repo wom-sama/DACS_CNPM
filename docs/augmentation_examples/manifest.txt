@@ -1,5 +1,7 @@
 output_dir: D:\DataAI\AIEx\TRKH\docs\augmentation_examples
+mode: classification-only
 data_yaml: D:\DataAI\AIEx\dataset\data.yaml
 image_size: 416
-sample_indices: [0, 1, 2, 3]
+removed_for_classification: mosaic, cutmix, targeted_copy_paste
+object_level_crop_examples: 3
 class_names: ['Xoai_Song_Chua_KhoDap', 'Xoai_Song_ChuaNhe_CoNguyCo', 'Xoai_Chin_NgotThanh_DeDap', 'Xoai_ChinGia_NgotGat_KhongVanChuyen', 'Xoai_Hu_KhongAnDuoc']

@@ -918,6 +918,7 @@ class MangoSample:
     label_path: Path
     objects: List[MangoObject]
     primary_label: int
+    primary_object_index: int = -1
 
 
 class MangoYOLOCropDataset(Dataset):
@@ -936,6 +937,7 @@ class MangoYOLOCropDataset(Dataset):
         class_augmentation_power: float = 0.75,
         class_augmentation_max_scale: float = 1.8,
         classification_target: bool = False,
+        classification_object_crops: bool = True,
     ) -> None:
         self.images_dir = Path(images_dir)
         self.labels_dir = Path(labels_dir)
@@ -950,6 +952,7 @@ class MangoYOLOCropDataset(Dataset):
         self.class_augmentation_power = max(0.0, float(class_augmentation_power))
         self.class_augmentation_max_scale = max(1.0, float(class_augmentation_max_scale))
         self.classification_target = bool(classification_target)
+        self.classification_object_crops = bool(classification_object_crops)
         self._image_cache_enabled = False
         self._image_cache_max_bytes = 0
         self._image_cache_max_items = 0
@@ -965,7 +968,7 @@ class MangoYOLOCropDataset(Dataset):
             "Dataset initialized: split=%s images_dir=%s labels_dir=%s "
             "image_files=%s label_files=%s selected_samples=%s valid_objects=%s "
             "missing_images=%s invalid_bboxes=%s invalid_classes=%s crop_primary=%s "
-            "classification_target=%s class_aug=%s scales=%s",
+            "classification_target=%s object_crops=%s class_aug=%s scales=%s",
             self.split,
             self.images_dir,
             self.labels_dir,
@@ -978,6 +981,7 @@ class MangoYOLOCropDataset(Dataset):
             self.audit["invalid_class_count"],
             self.crop_to_primary_object,
             self.classification_target,
+            self.classification_object_crops,
             self.class_aware_augmentation,
             self.class_augmentation_scales,
         )
@@ -995,6 +999,7 @@ class MangoYOLOCropDataset(Dataset):
         class_augmentation_power: float = 0.75,
         class_augmentation_max_scale: float = 1.8,
         classification_target: bool = False,
+        classification_object_crops: bool = True,
     ) -> "MangoYOLOCropDataset":
         return cls(
             images_dir=data_spec.split_images_dir(split),
@@ -1009,6 +1014,7 @@ class MangoYOLOCropDataset(Dataset):
             class_augmentation_power=class_augmentation_power,
             class_augmentation_max_scale=class_augmentation_max_scale,
             classification_target=classification_target,
+            classification_object_crops=classification_object_crops,
         )
 
     @classmethod
@@ -1024,6 +1030,7 @@ class MangoYOLOCropDataset(Dataset):
         class_augmentation_power: float = 0.75,
         class_augmentation_max_scale: float = 1.8,
         classification_target: bool = False,
+        classification_object_crops: bool = True,
         class_name_mode: Optional[str] = None,
         expected_num_classes: Optional[int] = None,
     ) -> "MangoYOLOCropDataset":
@@ -1043,6 +1050,7 @@ class MangoYOLOCropDataset(Dataset):
             class_augmentation_power=class_augmentation_power,
             class_augmentation_max_scale=class_augmentation_max_scale,
             classification_target=classification_target,
+            classification_object_crops=classification_object_crops,
         )
 
     def _index_image_paths_by_stem(self) -> Dict[str, Path]:
@@ -1111,6 +1119,13 @@ class MangoYOLOCropDataset(Dataset):
                 -abs(float(item.bbox[1]) - 0.5),
             ),
         )
+
+    def _select_sample_primary_object(self, sample: MangoSample) -> MangoObject:
+        if sample.primary_object_index >= 0:
+            for obj in sample.objects:
+                if int(obj.object_index) == int(sample.primary_object_index):
+                    return obj
+        return self._select_primary_object(sample.objects)
 
     def _index_samples(self) -> List[MangoSample]:
         samples: List[MangoSample] = []
@@ -1189,16 +1204,32 @@ class MangoYOLOCropDataset(Dataset):
                 self.audit["single_object_image_count"] += 1
             if object_count > 1:
                 self.audit["multi_object_image_count"] += 1
-            primary_object = self._select_primary_object(objects)
-            samples.append(
-                MangoSample(
-                    image_path=image_path,
-                    label_path=label_path,
-                    objects=objects,
-                    primary_label=primary_object.label,
+            if self.classification_target and self.classification_object_crops:
+                for obj in objects:
+                    samples.append(
+                        MangoSample(
+                            image_path=image_path,
+                            label_path=label_path,
+                            objects=objects,
+                            primary_label=obj.label,
+                            primary_object_index=obj.object_index,
+                        )
+                    )
+                    self.audit["selected_sample_count"] += 1
+            else:
+                primary_object = self._select_primary_object(objects)
+                samples.append(
+                    MangoSample(
+                        image_path=image_path,
+                        label_path=label_path,
+                        objects=objects,
+                        primary_label=primary_object.label,
+                        primary_object_index=primary_object.object_index,
+                    )
                 )
-            )
-            self.audit["selected_sample_count"] += 1
+                self.audit["selected_sample_count"] += 1
+                if self.crop_to_primary_object:
+                    self.audit["ignored_object_count"] += max(0, object_count - 1)
         return samples
 
     def __len__(self) -> int:
@@ -1206,6 +1237,12 @@ class MangoYOLOCropDataset(Dataset):
 
     def class_counts(self, num_classes: int) -> List[int]:
         counts = [0 for _ in range(num_classes)]
+        if self.classification_target:
+            for sample in self.samples:
+                label = int(sample.primary_label)
+                if 0 <= label < num_classes:
+                    counts[label] += 1
+            return counts
         for sample in self.samples:
             for obj in sample.objects:
                 counts[obj.label] += 1
@@ -1243,6 +1280,8 @@ class MangoYOLOCropDataset(Dataset):
     def quality_report(self) -> Dict[str, object]:
         report = dict(self.audit)
         report["crop_to_primary_object"] = bool(self.crop_to_primary_object)
+        report["classification_target"] = bool(self.classification_target)
+        report["classification_object_crops"] = bool(self.classification_object_crops)
         if self.num_classes is not None:
             report["class_counts"] = self.class_counts(self.num_classes)
             report["class_augmentation_scales"] = list(self.class_augmentation_scales)
@@ -1342,7 +1381,7 @@ class MangoYOLOCropDataset(Dataset):
             return image, {"labels": labels, "boxes": boxes}
 
         width, height = image.size
-        primary_object = self._select_primary_object(sample.objects)
+        primary_object = self._select_sample_primary_object(sample)
         x1, y1, x2, y2 = bbox_xywh_to_xyxy(primary_object.bbox, width=width, height=height)
         box_width = max(1.0, x2 - x1)
         box_height = max(1.0, y2 - y1)
@@ -1681,6 +1720,8 @@ class RareClassRepeatDataset(Dataset):
         samples = getattr(self.dataset, "samples", None)
         if samples is not None:
             sample = samples[int(sample_index)]
+            if bool(getattr(self.dataset, "classification_target", False)):
+                return [int(getattr(sample, "primary_label"))]
             objects = getattr(sample, "objects", [])
             return [int(getattr(obj, "label")) for obj in objects]
         labels_fn = getattr(self.dataset, "labels", None)

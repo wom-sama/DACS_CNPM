@@ -87,6 +87,19 @@ def resolve_crop_to_primary_object(
     return True
 
 
+def resolve_classification_object_crops(
+    checkpoint: Dict[str, object],
+    *,
+    disable_classification_object_crops: bool = False,
+) -> bool:
+    if disable_classification_object_crops:
+        return False
+    data_summary = checkpoint.get("data_summary", {})
+    if isinstance(data_summary, dict) and "classification_object_crops" in data_summary:
+        return bool(data_summary["classification_object_crops"])
+    return True
+
+
 def _is_detection_targets(targets) -> bool:
     if isinstance(targets, list):
         return all(isinstance(item, dict) and "labels" in item and "boxes" in item for item in targets)
@@ -1302,6 +1315,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--tta-brightness-delta", type=float, default=0.08)
     parser.add_argument("--full-image-detection", action="store_true", default=False)
     parser.add_argument("--crop-to-primary-object", action="store_true", default=False)
+    parser.add_argument("--disable-classification-object-crops", action="store_true", default=False)
     parser.add_argument("--confidence-threshold", type=float, default=None)
     parser.add_argument("--disable-calibration", action="store_true", default=False)
     parser.add_argument("--detection-nms-iou-threshold", type=float, default=0.5)
@@ -1353,6 +1367,10 @@ def main() -> None:
         full_image_detection=args.full_image_detection,
         crop_to_primary_object=args.crop_to_primary_object,
     )
+    classification_object_crops = resolve_classification_object_crops(
+        checkpoint,
+        disable_classification_object_crops=args.disable_classification_object_crops,
+    )
 
     model = build_model_from_checkpoint(
         checkpoint=checkpoint,
@@ -1375,6 +1393,7 @@ def main() -> None:
         ),
         crop_to_primary_object=crop_to_primary_object,
         classification_target=not checkpoint_detection_mode,
+        classification_object_crops=classification_object_crops,
     )
     dataloader_kwargs, dataloader_summary = build_safe_dataloader_kwargs(
         requested_num_workers=args.num_workers,

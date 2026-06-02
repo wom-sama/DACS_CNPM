@@ -1,6 +1,6 @@
-# DACS_CNPM / TRKH Mango DETR
+# DACS_CNPM / TRKH Mango Classification
 
-Scratch-only mango ripeness detection project built around a ViT-Registers DETR-style model. The active target is multi-object detection plus ripeness classification, with `macro_f1` and `detection_f1@50` optimized together.
+Scratch-only mango ripeness/quality classification branch built around ViT-Registers. The active target on this branch is single-object crop classification only; detection, objectness, bbox regression, count head, quality head, mosaic/cutmix/copy-paste, and DETR stage scheduling stay on `main`.
 
 ## Hard Rule
 
@@ -15,19 +15,18 @@ Only checkpoints created by this repository from random initialization may be re
 
 ## Current Evidence
 
-- Lightning T4 q16 batch16 scratch run reached test `macro_f1=0.992270`, calibrated `detection_f1@50=0.828399`.
-- Local 5-class imbalanced q40 copy-paste v2 was stopped at epoch 30 for analysis. Best val `selection_metric=0.688553` at epoch 18, `macro_f1=0.952560`, `best_detection_f1@50=0.539130`, `bbox_iou=0.522800`.
-- The same v2 `best.pt` on test reached `macro_f1=0.958867`, calibrated `macro_f1=0.968724`, `best_detection_f1@50=0.549635`, `bbox_iou=0.520143`.
-- The v2 bottleneck is detection precision/false positives, not classification. The next run should train one-shot from scratch with full detection enabled from epoch 1 and adaptive detection-loss boosting.
+- Historical `runs/mango_hybrid_224` used `vit_registers_hybrid`, image size 224, 4 classes, and detection-style bbox auxiliary logic. Best validation `macro_f1=0.970986` at epoch 109.
+- That run had `valid_object_count=9392`, `selected_sample_count=7618`, and `ignored_object_count=1774` on train. The new classification-only branch fixes this by converting every valid bbox in a multi-object image into its own crop sample.
+- New classification-only runs should use `model_type=vit_registers`, object-level crops, `best_metric=macro_f1`, and no detection metrics.
 
-The `0.98/0.98` target is not yet supported by evidence. Keep the no-pretrain rule first.
+Keep the no-pretrain rule first.
 
 ## Project Layout
 
 ```text
 trkh/
   core/          config, utilities, AMP/checkpoint/artifact helpers
-  data/          YOLO dataset, transforms, mosaic/cutmix/copy-paste
+  data/          YOLO labels, object-crop dataset, classification transforms
   models/        ViT-Registers / DETR model code
   training/      train loop, matcher, losses, stability/debug tools
   evaluation/    evaluate, metrics, plots, robustness/attention analysis
@@ -87,11 +86,11 @@ D:\DataAI\.venv\Scripts\python.exe -m compileall train.py evaluate.py scripts tr
 D:\DataAI\.venv\Scripts\python.exe -m unittest discover -s tests -p "test_*.py" -v
 ```
 
-Current expected result: `42` tests passed.
+Current expected result: `43` tests passed.
 
 ## Classification-Only Experiment
 
-Use this when the goal is to measure the classification ceiling without objectness, bbox, Hungarian matching, count head, quality head, or detection metrics. The key is `--model-type vit_registers` and not passing `--full-image-detection`; this makes the YOLO dataset return cropped primary-object labels for classification loss.
+Use this for the classification paper track. The key is `--model-type vit_registers` and not passing `--full-image-detection`. In classification mode the dataset now turns every valid bbox into an object-level crop sample by default, so multi-object images are used without mosaic/cutmix/copy-paste.
 
 ```powershell
 cd D:\DataAI\AIEx\TRKH
@@ -105,7 +104,7 @@ $env:TRKH_ALLOW_WINDOWS_PERSISTENT_WORKERS='1'
 D:\DataAI\.venv\Scripts\python.exe -m trkh.training.train `
   --data D:\DataAI\AIEx\dataset\data.yaml `
   --class-name-mode raw --expected-num-classes 5 `
-  --run-name mango_cls_416_vitreg_5cls_imbalance_local_v1 `
+  --run-name mango_cls_416_vitreg_5cls_objectcrops_local_v2 `
   --output-dir runs --disable-resume --seed 42 `
   --model-type vit_registers --image-size 416 --patch-size 16 `
   --embed-dim 256 --depth 8 --num-heads 8 --num-registers 4 --drop-path-rate 0.08 `
@@ -121,68 +120,12 @@ D:\DataAI\.venv\Scripts\python.exe -m trkh.training.train `
   --batch-mix-probability 0.0 --mosaic-probability 0.0 --mixup-probability 0.0 --cutmix-probability 0.0 --copy-paste-probability 0.0
 ```
 
-## Stage1-to-Stage2 Local Training Candidate
-
-This is the next local RTX 4060 8GB candidate for the current 5-class imbalanced dataset. It is scratch-only, has no manual phase resume, uses `--epochs 0` plus `--patience 100`, saves explicit stage 1 checkpoints, then lets adaptive guards change detection pressure from validation metrics in stage 2.
-
-```powershell
-cd D:\DataAI\AIEx\TRKH
-$env:PYTHONPATH='D:\DataAI\AIEx\TRKH'
-$env:TRKH_AMP_DTYPE='bf16'
-$env:OMP_NUM_THREADS='6'
-$env:TRKH_ALLOW_WINDOWS_MULTIPROCESSING='1'
-$env:TRKH_ALLOW_WINDOWS_PIN_MEMORY='1'
-$env:TRKH_ALLOW_WINDOWS_PERSISTENT_WORKERS='1'
-
-D:\DataAI\.venv\Scripts\python.exe -m trkh.training.train `
-  --data D:\DataAI\AIEx\dataset\data.yaml `
-  --class-name-mode raw --expected-num-classes 5 `
-  --run-name mango_detr_416_q40_5cls_stage1_stage2_adaptive_v2 `
-  --output-dir runs --disable-resume --seed 42 `
-  --model-type vit_registers_hybrid --image-size 416 --patch-size 16 `
-  --embed-dim 256 --depth 8 --num-heads 8 --num-registers 4 --drop-path-rate 0.08 `
-  --num-queries 40 --decoder-depth 4 --decoder-num-heads 8 --decoder-ffn-dim 1024 `
-  --full-image-detection --quality-head --count-head --auxiliary-decoder-loss `
-  --batch-size 10 --grad-accum-steps 2 --epochs 0 --scheduler-total-epochs 160 --patience 100 `
-  --learning-rate 2.2e-5 --min-learning-rate 8e-7 --weight-decay 0.04 --warmup-epochs 10 `
-  --grad-clip-norm 0.25 --max-nonfinite-grad-steps 4 `
-  --num-workers 2 --eval-num-workers 2 --train-image-cache-mb 0 --eval-image-cache-mb 0 `
-  --class-weight-mode sqrt_inverse `
-  --focal-loss-gamma 2.0 --focal-loss-mix 0.22 --label-smoothing 0.02 `
-  --stage1-epochs 5 --stage1-auto-advance-macro-f1-threshold 0.995 --stage1-auto-advance-min-epochs 2 `
-  --classification-guard-macro-f1-threshold 0.94 --classification-guard-detection-gap 0.20 --classification-guard-min-cls-weight 0.35 `
-  --adaptive-detection-macro-f1-threshold 0.93 --adaptive-detection-f1-target 0.90 --adaptive-detection-gap-threshold 0.20 `
-  --adaptive-detection-bbox-iou-target 0.70 --adaptive-detection-max-multiplier 1.75 `
-  --rare-class-recall-target 0.70 --rare-class-recall-guard-scale-threshold 1.5 `
-  --rare-class-recall-guard-max-multiplier 2.0 --rare-class-recall-guard-min-precision 0.35 `
-  --bbox-l1-loss-weight 1.15 --bbox-giou-loss-weight 0.80 `
-  --background-loss-weight 0.65 --objectness-loss-weight 7.0 `
-  --objectness-focal-alpha 0.80 --objectness-focal-gamma 1.50 --matcher-class-cost 0.0 --matcher-objectness-cost 2.20 `
-  --cardinality-loss-weight 0.22 --count-objectness-consistency-weight 0.10 `
-  --quality-loss-weight 0.03 --count-loss-weight 0.06 --auxiliary-loss-weight 0.07 `
-  --best-metric macro_detection_hmean `
-  --eval-detection-score-mode objectness --eval-detection-nms-iou-threshold 0.16 `
-  --eval-adaptive-max-detections --eval-adaptive-count-source auto --eval-adaptive-count-margin 1 --eval-adaptive-min-detections 1 `
-  --resize-mode pad --brightness 0.0 --contrast 0.0 --saturation 0.0 --hue 0.0 `
-  --random-erasing-probability 0.0 --random-affine-degrees 4 --random-affine-translate 0.03 --random-affine-scale-min 0.94 `
-  --horizontal-flip-probability 0.5 --vertical-flip-probability 0.02 --rotate90-probability 0.06 --lighting-probability 0.0 `
-  --mosaic-probability 0.08 --cutmix-probability 0.04 --copy-paste-probability 0.16 --copy-paste-max-objects 3 `
-  --targeted-copy-paste-scale-threshold 1.5 --targeted-copy-paste-probability 1.0 `
-  --cutmix-alpha 1.0 --mixup-probability 0.0
-```
-
-Stage 1 now writes `checkpoints/stage1_best.pt`, `checkpoints/stage1.pt`, `stage1_best_metrics.json`, and `stage1_metrics.json`. With `--stage1-auto-advance-macro-f1-threshold 0.995`, stage 1 is a maximum of 5 epochs but switches to stage 2 earlier once validation macro F1 reaches 0.995 after at least 2 epochs. `best.pt` remains reserved for stage 2 deploy-quality checkpoints.
-
-`--matcher-class-cost 0.0` makes stage 2 Hungarian matching use box/objectness rather than class confidence, so detection assignment is object-first; class loss is still applied after a query is matched to a target box. Stage 1 keeps class-aware matching internally so the cls-only warmup still works. `--eval-detection-score-mode objectness` also filters boxes by objectness first while the detection metric still requires the predicted class to match the target class.
-
-Rare-class handling is now object-targeted instead of color-targeted. `--class-aware-photometric-augmentation` stays off by default, and the recommended command sets brightness/contrast/saturation/hue/lighting to `0` for the imbalanced 5-class run. `--targeted-copy-paste-scale-threshold 1.5` automatically targets any class whose augmentation/repeat scale is at least 1.5x; with the current `canbang.yaml`, this means class 1. The rare-class recall guard then raises only those class weights in stage 2 when previous validation recall is below target and precision is still usable.
-
-To apply these changes to an existing scratch run, stop it cleanly so `checkpoints/last.pt` is written, update the code, then restart with the same `--run-name` and `--auto-resume` instead of `--disable-resume`. The new rows append to the existing `history.csv`; old epochs simply have blank/default values for the new guard columns.
+Classification-only automatically disables batch composition methods that blur class labels: batch mix, mixup, mosaic, cutmix, and copy-paste. To reproduce the old primary-object-only behavior for an ablation, add `--disable-classification-object-crops`.
 
 Monitor:
 
 ```powershell
-Get-Content runs\mango_detr_416_q40_5cls_stage1_stage2_adaptive_v2\history.csv -Tail 5 -Wait
+Get-Content runs\mango_cls_416_vitreg_5cls_objectcrops_local_v2\history.csv -Tail 5 -Wait
 ```
 
 ## Artifact Recovery

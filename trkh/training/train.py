@@ -338,6 +338,15 @@ def parse_args() -> argparse.Namespace:
         default=False,
         help="Train detector tren anh goc day du thay vi crop quanh primary object.",
     )
+    parser.add_argument(
+        "--disable-classification-object-crops",
+        action="store_true",
+        default=False,
+        help=(
+            "Classification-only mac dinh bien moi bbox thanh mot crop sample. "
+            "Bat co nay de quay ve che do chi dung primary object cua moi anh."
+        ),
+    )
     parser.add_argument("--focal-loss-gamma", type=float, default=2.0)
     parser.add_argument("--focal-loss-mix", type=float, default=0.35)
     parser.add_argument("--disable-ldam", action="store_true", default=False)
@@ -2580,6 +2589,31 @@ def main() -> None:
                 flush=True,
             )
     detection_mode = model_config.model_type in DETECTION_MODEL_TYPES
+    classification_object_crops = bool(not detection_mode and not args.disable_classification_object_crops)
+    if not detection_mode:
+        disabled_batch_composition = {
+            "batch_mix_probability": train_config.batch_mix_probability,
+            "mosaic_probability": train_config.mosaic_probability,
+            "mixup_probability": train_config.mixup_probability,
+            "cutmix_probability": train_config.cutmix_probability,
+            "copy_paste_probability": train_config.copy_paste_probability,
+            "targeted_copy_paste_probability": train_config.targeted_copy_paste_probability,
+        }
+        train_config.batch_mix_probability = 0.0
+        train_config.mosaic_probability = 0.0
+        train_config.mixup_probability = 0.0
+        train_config.cutmix_probability = 0.0
+        train_config.copy_paste_probability = 0.0
+        train_config.targeted_copy_paste_probability = 0.0
+        print(
+            {
+                "classification_only": True,
+                "object_level_crops": classification_object_crops,
+                "disabled_batch_composition": disabled_batch_composition,
+                "reason": "classification-only dung crop theo bbox; mosaic/cutmix/copy-paste/mixup bi tat de giu nhan class ro rang",
+            },
+            flush=True,
+        )
     if model_config.model_type in DETECTION_MODEL_TYPES and model_config.temporal_frames > 1:
         raise ValueError(
             "DETR-ViT-Registers hien yeu cau temporal_frames=1. "
@@ -2663,6 +2697,7 @@ def main() -> None:
         crop_margin_ratio=augmentation_config.crop_margin_ratio,
         crop_to_primary_object=crop_to_primary_object,
         classification_target=not detection_mode,
+        classification_object_crops=classification_object_crops,
         class_aware_augmentation=augmentation_config.class_aware_augmentation,
         class_augmentation_power=augmentation_config.class_augmentation_power,
         class_augmentation_max_scale=augmentation_config.class_augmentation_max_scale,
@@ -2674,6 +2709,7 @@ def main() -> None:
         crop_margin_ratio=augmentation_config.crop_margin_ratio,
         crop_to_primary_object=crop_to_primary_object,
         classification_target=not detection_mode,
+        classification_object_crops=classification_object_crops,
         class_aware_augmentation=False,
     )
     test_dataset = None
@@ -2685,6 +2721,7 @@ def main() -> None:
             crop_margin_ratio=augmentation_config.crop_margin_ratio,
             crop_to_primary_object=crop_to_primary_object,
             classification_target=not detection_mode,
+            classification_object_crops=classification_object_crops,
             class_aware_augmentation=False,
         )
     if len(train_dataset) == 0 or len(val_dataset) == 0:
@@ -2825,19 +2862,28 @@ def main() -> None:
         getattr(train_dataset, "class_augmentation_scales", []),
         rare_class_repeat_factors,
     )
-    targeted_copy_paste_summary = {
-        "scale_threshold": float(train_config.targeted_copy_paste_scale_threshold),
-        "target_probability": float(train_config.targeted_copy_paste_probability),
-        "class_target_scales": class_target_scales,
-        "targeted_classes": [
-            int(index)
-            for index, value in enumerate(class_target_scales)
-            if float(value) >= float(train_config.targeted_copy_paste_scale_threshold)
-        ],
-        "photometric_scaled_for_target_classes": bool(
-            augmentation_config.class_aware_photometric_augmentation
-        ),
-    }
+    if detection_mode:
+        targeted_copy_paste_summary = {
+            "enabled": bool(train_config.copy_paste_probability > 0.0),
+            "scale_threshold": float(train_config.targeted_copy_paste_scale_threshold),
+            "target_probability": float(train_config.targeted_copy_paste_probability),
+            "class_target_scales": class_target_scales,
+            "targeted_classes": [
+                int(index)
+                for index, value in enumerate(class_target_scales)
+                if float(value) >= float(train_config.targeted_copy_paste_scale_threshold)
+            ],
+            "photometric_scaled_for_target_classes": bool(
+                augmentation_config.class_aware_photometric_augmentation
+            ),
+        }
+    else:
+        targeted_copy_paste_summary = {
+            "enabled": False,
+            "reason": "classification_only_uses_object_level_crops_instead",
+            "class_target_scales": class_target_scales,
+            "photometric_scaled_for_target_classes": False,
+        }
     print({"targeted_copy_paste": targeted_copy_paste_summary}, flush=True)
 
     train_sampler = (
@@ -3144,6 +3190,7 @@ def main() -> None:
         "crop_to_primary_object": crop_to_primary_object,
         "full_image_detection": not crop_to_primary_object,
         "classification_target": not detection_mode,
+        "classification_object_crops": classification_object_crops,
         "dataset_balance_auto_config": balance_auto_summary,
         "train_class_counts": train_class_counts,
         "val_class_counts": val_class_counts,

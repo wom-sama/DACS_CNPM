@@ -129,6 +129,46 @@ class DetectionCalibrationTests(unittest.TestCase):
             )
             self.assertTrue(torch.isfinite(loss))
 
+    def test_classification_object_crops_expand_multi_object_images(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            images_dir = root / "images"
+            labels_dir = root / "labels"
+            images_dir.mkdir()
+            labels_dir.mkdir()
+            Image.new("RGB", (128, 96), color=(100, 180, 80)).save(images_dir / "multi.jpg")
+            (labels_dir / "multi.txt").write_text(
+                "1 0.25 0.50 0.30 0.60\n"
+                "3 0.75 0.50 0.25 0.55\n",
+                encoding="utf-8",
+            )
+
+            dataset = MangoYOLOCropDataset(
+                images_dir=images_dir,
+                labels_dir=labels_dir,
+                transform=build_eval_transform(image_size=64, resize_mode="pad"),
+                crop_to_primary_object=True,
+                num_classes=5,
+                classification_target=True,
+                classification_object_crops=True,
+            )
+
+            self.assertEqual(len(dataset), 2)
+            self.assertEqual(dataset.labels(), [1, 3])
+            self.assertEqual(dataset.class_counts(5), [0, 1, 0, 1, 0])
+            self.assertEqual(dataset.quality_report()["ignored_object_count"], 0)
+
+            _, first_label = dataset[0]
+            _, second_label = dataset[1]
+            self.assertEqual([first_label, second_label], [1, 3])
+
+            repeated = RareClassRepeatDataset(
+                dataset,
+                class_repeat_factors=[1.0, 1.0, 1.0, 2.0, 1.0],
+                seed=42,
+            )
+            self.assertIn(3, repeated.labels())
+
     def test_objectness_loss_balances_positive_and_negative_queries(self):
         criterion = DETRSetCriterion(
             num_classes=4,

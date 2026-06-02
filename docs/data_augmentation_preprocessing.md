@@ -1,67 +1,69 @@
-# Data Augmentation and Preprocessing
+# Data Augmentation and Preprocessing Cho Phân Loại Xoài
 
-Tài liệu này tóm tắt các bước tiền xử lý ảnh và tăng cường dữ liệu đang được hỗ trợ trong dự án TRKH. Tất cả ví dụ ảnh bên dưới được tạo từ ảnh thật trong tập train, không dùng dữ liệu ngoài và không dùng bất kỳ pretrain nào.
+Tài liệu này mô tả pipeline tiền xử lý và tăng cường dữ liệu cho nhánh `classification-only-research`. Mục tiêu của nhánh này là phân loại độ chín/chất lượng xoài từ ảnh crop object, không tối ưu detection, bbox, objectness, count head hay quality head.
+
+Luật ưu tiên vẫn giữ nguyên: không dùng pretrain, không dùng backbone pretrained, không dùng checkpoint ngoài repo.
 
 Thư mục ảnh minh họa: [augmentation_examples](augmentation_examples/)
 
-Ghi chú: một số ảnh minh họa được đặt xác suất biến đổi = 1 hoặc dùng biến đổi mạnh hơn để dễ nhìn thấy tác động. Khi train chính thức, các xác suất và cường độ có thể được đặt nhẹ hơn để tránh làm hỏng tín hiệu màu sắc, hình dạng và bbox.
-
 ## Bảng Tóm Tắt
 
-| Nhóm / phương pháp | Chi tiết | Mục đích | Ảnh minh họa |
-|---|---|---|---|
-| Ảnh gốc kèm YOLO bbox | Đọc ảnh gốc và vẽ bbox từ label YOLO để kiểm tra nhanh vị trí nhãn. | Xác nhận label đúng trước khi train; phát hiện lỗi bbox, class sai, ảnh thiếu nhãn. | [00_original_with_yolo_boxes](augmentation_examples/00_original_with_yolo_boxes/) |
-| Resize + padding | Giữ tỉ lệ ảnh, scale vào khung 416x416 và pad phần thừa. Với lệnh 640 thì khung đích là 640x640. | Tạo đầu vào có kích thước cố định mà không làm méo trái xoài hay bbox. | [01_resize_pad_416](augmentation_examples/01_resize_pad_416/) |
-| Crop primary object | Crop quanh object chính theo bbox và margin, sau đó resize về kích thước đầu vào. Thường dùng cho bài toán classification-only. | Giảm nhiễu nền, giúp mô hình phân loại tập trung vào quả xoài chính. | [02_crop_primary_object](augmentation_examples/02_crop_primary_object/) |
-| Random affine | Xoay nhẹ, dịch chuyển, scale và shear trong giới hạn cấu hình. | Tăng khả năng chịu đựng với góc chụp, vị trí và kích thước object khác nhau. | [03_random_affine](augmentation_examples/03_random_affine/) |
-| Horizontal flipping | Lật trái/phải theo xác suất cấu hình. | Tăng độ đa dạng hướng đặt quả xoài mà vẫn giữ logic nhãn. | [04_horizontal_flip](augmentation_examples/04_horizontal_flip/) |
-| Vertical flipping | Lật trên/dưới với xác suất thấp. | Chỉ dùng nhẹ vì ảnh thật ít khi bị đảo ngược; giúp robustness nhưng không nên làm quá mạnh. | [05_vertical_flip](augmentation_examples/05_vertical_flip/) |
-| Rotate90 | Xoay ảnh theo bội số 90 độ với xác suất thấp. | Mô phỏng hướng camera/ảnh bị xoay, hữu ích khi dữ liệu thu thập không đồng nhất. | [06_rotate90](augmentation_examples/06_rotate90/) |
-| Color jitter | Hỗ trợ brightness, contrast, saturation và hue. | Tăng chịu đựng với điều kiện ánh sáng; với dữ liệu xoài, nên dùng rất nhẹ hoặc tắt nếu màu sắc là tín hiệu phân loại quan trọng. | [07_color_jitter](augmentation_examples/07_color_jitter/) |
-| Lighting / autocontrast / sharpness | Biến đổi ánh sáng, tương phản tự động và độ nét. | Mô phỏng thay đổi độ sáng và camera; cần cảnh giác vì có thể làm lệch màu chín/chưa, hư/hỏng. | [08_lighting_autocontrast](augmentation_examples/08_lighting_autocontrast/) |
-| Random erasing | Che một vùng nhỏ trong ảnh bằng màu trung bình/xám. | Tăng robustness khi object bị che khuất; với detection cần dùng thận trọng để không làm bbox mất ý nghĩa. | [09_random_erasing](augmentation_examples/09_random_erasing/) |
-| Mosaic | Ghép 4 ảnh vào một canvas, cập nhật bbox theo vị trí mới. | Tạo ảnh nhiều object, tăng mật độ object và cải thiện detection khi tập gốc thiếu ảnh nhiều đối tượng. | [10_mosaic](augmentation_examples/10_mosaic/) |
-| CutMix | Cắt một vùng từ ảnh khác và chèn vào ảnh hiện tại, đồng thời ghép label/bbox phù hợp. | Tăng đa dạng bối cảnh và số object trên ảnh; hữu ích cho detection nếu giữ bbox chính xác. | [11_cutmix](augmentation_examples/11_cutmix/) |
-| Targeted copy-paste | Cắt object từ ảnh khác và dán vào ảnh hiện tại. Có thể tự động ưu tiên class có tỉ lệ tăng cường cao, ví dụ class có scale > 1.5. | Bù đắp class thiếu recall, đặc biệt khi một class ít object hoặc detection F1 thấp. | [12_targeted_copy_paste](augmentation_examples/12_targeted_copy_paste/) |
-| Normalization | Pixel được đưa về dạng tensor, scale về [0,1], sau đó chuẩn hóa bằng mean/std. Ảnh minh họa là bản visualize lại tensor đã normalize. | Ổn định phân phối đầu vào, giúp tối ưu gradient và hội tụ tốt hơn. | [13_normalization_visualized](augmentation_examples/13_normalization_visualized/) |
-| Class-aware repeat / scale | Tăng tần suất lấy mẫu hoặc cường độ augmentation theo class dựa trên độ mất cân bằng trong `canbang.yaml`. | Không phải một biến đổi hình ảnh riêng lẻ, nhưng ảnh hưởng trực tiếp đến số lần mô hình thấy class khó. | Không có thư mục riêng |
-| Chia train/val/test | Train có thể dùng augmentation; val/test chỉ dùng resize/pad và normalization, không dùng random augmentation. | Đảm bảo metric val/test công bằng, không bị ảnh hưởng bởi biến đổi ngẫu nhiên. | Áp dụng trong pipeline |
+| Transformation type | Details | Vai trò trong phân loại |
+|---|---|---|
+| Kiểm tra ảnh gốc + YOLO bbox | Đọc ảnh gốc và vẽ bbox từ nhãn YOLO. Ảnh mẫu: [00_original_with_yolo_boxes](augmentation_examples/00_original_with_yolo_boxes/). | Dùng để kiểm tra chất lượng nhãn trước khi crop object. |
+| Resize + padding | Giữ tỉ lệ ảnh, resize vào khung cố định 416x416 hoặc 640x640, sau đó pad phần thừa. Ảnh mẫu: [01_resize_pad_416](augmentation_examples/01_resize_pad_416/). | Tránh méo hình quả xoài, giữ hình dạng tự nhiên cho classifier. |
+| Crop object chính | Crop quanh bbox object chính với margin nhỏ rồi resize/pad. Ảnh mẫu: [02_crop_primary_object](augmentation_examples/02_crop_primary_object/). | Giảm nhiễu nền, giúp mô hình tập trung vào quả xoài. |
+| Object-level crops từ ảnh nhiều object | Mỗi bbox hợp lệ trong ảnh nhiều object được tách thành một sample phân loại riêng. Ảnh mẫu: [10_object_level_crops_from_multi_object_images](augmentation_examples/10_object_level_crops_from_multi_object_images/). | Tận dụng thêm object vốn từng bị bỏ qua khi chỉ crop object chính. Đây là thay đổi quan trọng cho classification-only. |
+| Random affine nhẹ | Xoay, dịch chuyển và scale nhẹ quanh crop object. Ảnh mẫu: [03_random_affine](augmentation_examples/03_random_affine/). | Tăng khả năng chịu đựng với góc chụp và vị trí quả xoài, nhưng không làm biến dạng quá mạnh. |
+| Horizontal flip | Lật trái/phải với xác suất vừa phải. Ảnh mẫu: [04_horizontal_flip](augmentation_examples/04_horizontal_flip/). | Phù hợp với phân loại vì hướng trái/phải không làm đổi class. |
+| Vertical flip thấp | Lật trên/dưới với xác suất rất thấp. Ảnh mẫu: [05_vertical_flip](augmentation_examples/05_vertical_flip/). | Chỉ dùng rất nhẹ để tăng robustness; ảnh thật ít khi bị đảo ngược hoàn toàn. |
+| Rotate90 thấp | Xoay theo bội số 90 độ với xác suất thấp. Ảnh mẫu: [06_rotate90](augmentation_examples/06_rotate90/). | Chỉ phù hợp khi dữ liệu thực tế có ảnh xoay do camera hoặc upload. |
+| Color jitter rất nhẹ hoặc tắt | Hỗ trợ brightness, contrast, saturation, hue. Ảnh mẫu: [07_color_jitter](augmentation_examples/07_color_jitter/). | Màu sắc là tín hiệu chính của độ chín, nên chỉ dùng rất nhẹ trong ablation; run chính nên tắt hoặc gần như tắt. |
+| Lighting/autocontrast rất nhẹ hoặc tắt | Mô phỏng thay đổi ánh sáng/camera. Ảnh mẫu: [08_lighting_autocontrast](augmentation_examples/08_lighting_autocontrast/). | Có thể giúp chống lệch ánh sáng, nhưng dễ làm sai màu chín/chưa chín. |
+| Random erasing thận trọng | Che một vùng nhỏ trong crop. Ảnh mẫu: [09_random_erasing](augmentation_examples/09_random_erasing/). | Chỉ nên dùng trong thực nghiệm phụ; run chính nên tắt nếu vết/đốm trên vỏ là tín hiệu class. |
+| Normalization | Pixel được scale về tensor và chuẩn hóa bằng mean/std. Ảnh mẫu: [11_normalization_visualized](augmentation_examples/11_normalization_visualized/). | Ổn định phân phối đầu vào, giúp gradient và huấn luyện ổn định hơn. |
+| Val/test preprocessing | Val/test chỉ dùng crop object, resize/pad và normalization, không dùng augmentation ngẫu nhiên. | Đảm bảo metric phân loại công bằng và tái lập được. |
 
-## Cấu Hình Đang Được Ưu Tiên
+## Các Phép Đã Loại Bỏ Khỏi Nhánh Phân Loại
 
-Với dữ liệu xoài bị mất cân bằng và phân loại phụ thuộc mạnh vào màu sắc, các biến đổi màu như brightness, contrast, saturation, hue và lighting nên để rất nhẹ hoặc tắt trong run chính. Các biến đổi hình học và ghép ảnh nhiều object thường hữu ích hơn cho mục tiêu detection F1.
+Các phép dưới đây phù hợp hơn với detection hoặc multi-object training, nhưng không còn là khuyến nghị cho classification-only:
 
-Các hướng đang ưu tiên:
+- Mosaic: ghép nhiều ảnh/object vào một ảnh. Với phân loại crop đơn, cách này tạo nhãn hỗn hợp không còn rõ ràng.
+- CutMix: chèn vùng ảnh từ mẫu khác. Với xoài, vùng màu/vết bệnh bị trộn có thể làm sai tín hiệu độ chín.
+- Targeted copy-paste: dán object vào ảnh khác. Hữu ích cho detection/count, nhưng classifier chỉ cần crop object thật từ bbox.
+- Copy-paste nhiều object: không cần thiết khi mỗi bbox đã được chuyển thành một crop sample riêng.
+- Batch-mix/mixup mặc định: hiện bị tắt trong classification-only để giữ nhãn class rõ ràng. Nếu dùng, chỉ nên dùng như ablation riêng.
 
-1. Dùng resize/pad để giữ tỉ lệ thật của ảnh.
-2. Dùng mosaic, cutmix và targeted copy-paste ở xác suất vừa phải để tạo ảnh nhiều object.
-3. Tự động ưu tiên class khó bằng class-aware scale, rare-class repeat và targeted copy-paste.
-4. Hạn chế biến đổi màu khi màu sắc là dấu hiệu phân biệt class.
-5. Val/test chỉ dùng preprocessing tất định, không dùng augmentation ngẫu nhiên.
+## Logic Dữ Liệu Mới
 
-## Liên Hệ Với Mục Tiêu Mô Hình
+Trước đây, nếu một ảnh có nhiều bbox, dataset chỉ chọn object chính để crop. Điều này làm mất các object còn lại trong bài toán phân loại. Nhánh này thay đổi mặc định:
 
-- Macro F1 phân loại cần màu sắc, texture và độ chín được giữ ổn định.
-- Detection F1 cần bbox chính xác, object đa dạng về vị trí/kích thước và có đủ ảnh nhiều object.
-- Count head cần được thấy nhiều mẫu ảnh có 0, 1 và nhiều object; mosaic/cutmix/copy-paste giúp bổ sung trường hợp nhiều object.
-- Các biến đổi làm mất thông tin bbox hoặc làm sai màu quả xoài cần được dùng nhẹ hơn so với biến đổi hình học/ghép ảnh.
+1. Đọc toàn bộ bbox hợp lệ trong label YOLO.
+2. Với classification-only, mỗi bbox trở thành một `MangoSample` riêng.
+3. Crop theo bbox của chính sample đó, không phải luôn theo bbox lớn nhất.
+4. Label phân loại là class của bbox đang được crop.
+5. `class_counts`, `labels()` và rare-class repeat đều tính theo crop sample chính, không tính lặp toàn bộ object trong ảnh.
 
-## Danh Sách Thư Mục Ảnh Mẫu
+Điều này giúp tận dụng ảnh nhiều object mà không cần tạo ảnh synthetic bằng mosaic/cutmix/copy-paste.
 
-Mỗi thư mục con trong [augmentation_examples](augmentation_examples/) hiện có 3 ảnh minh họa:
+## Cấu Hình Khuyến Nghị
 
-- [00_original_with_yolo_boxes](augmentation_examples/00_original_with_yolo_boxes/)
-- [01_resize_pad_416](augmentation_examples/01_resize_pad_416/)
-- [02_crop_primary_object](augmentation_examples/02_crop_primary_object/)
-- [03_random_affine](augmentation_examples/03_random_affine/)
-- [04_horizontal_flip](augmentation_examples/04_horizontal_flip/)
-- [05_vertical_flip](augmentation_examples/05_vertical_flip/)
-- [06_rotate90](augmentation_examples/06_rotate90/)
-- [07_color_jitter](augmentation_examples/07_color_jitter/)
-- [08_lighting_autocontrast](augmentation_examples/08_lighting_autocontrast/)
-- [09_random_erasing](augmentation_examples/09_random_erasing/)
-- [10_mosaic](augmentation_examples/10_mosaic/)
-- [11_cutmix](augmentation_examples/11_cutmix/)
-- [12_targeted_copy_paste](augmentation_examples/12_targeted_copy_paste/)
-- [13_normalization_visualized](augmentation_examples/13_normalization_visualized/)
+Với dữ liệu xoài, nên ưu tiên các biến đổi giữ nguyên tín hiệu màu sắc:
+
+- `resize_mode=pad`
+- `crop_margin_ratio` khoảng `0.05` đến `0.10`
+- `brightness=0.0`
+- `contrast=0.0`
+- `saturation=0.0`
+- `hue=0.0`
+- `lighting_probability=0.0`
+- `random_erasing_probability=0.0`
+- `random_affine_degrees` khoảng `3` đến `6`
+- `random_affine_translate` khoảng `0.02` đến `0.04`
+- `random_affine_scale_min` khoảng `0.94` đến `0.97`
+- `horizontal_flip_probability=0.5`
+- `vertical_flip_probability` rất thấp, khoảng `0.0` đến `0.02`
+- `rotate90_probability` thấp, khoảng `0.0` đến `0.06`
+
+Trong code hiện tại, khi `model_type=vit_registers`, train sẽ tự tắt `batch_mix_probability`, `mosaic_probability`, `mixup_probability`, `cutmix_probability` và `copy_paste_probability` để tránh nhầm sang pipeline detection.
 
