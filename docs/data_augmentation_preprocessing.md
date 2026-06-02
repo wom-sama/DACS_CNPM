@@ -124,7 +124,7 @@ D:\DataAI\.venv\Scripts\python.exe -m trkh.training.train `
   --batch-size 64 --grad-accum-steps 1 --epochs 0 --scheduler-total-epochs 140 --patience 70 `
   --learning-rate 3e-4 --min-learning-rate 1e-6 --weight-decay 0.05 --warmup-epochs 8 `
   --grad-clip-norm 0.75 --max-nonfinite-grad-steps 4 `
-  --num-workers 2 --eval-num-workers 2 --train-image-cache-mb 0 --eval-image-cache-mb 0 `
+  --num-workers 8 --eval-num-workers 4 --train-image-cache-mb 0 --eval-image-cache-mb 0 `
   --class-weight-mode sqrt_inverse --focal-loss-gamma 2.0 --focal-loss-mix 0.20 `
   --label-smoothing 0.015 --ldam-scale 18.0 --best-metric macro_f1 `
   --resize-mode pad --crop-margin-ratio 0.08 `
@@ -137,3 +137,47 @@ D:\DataAI\.venv\Scripts\python.exe -m trkh.training.train `
 ```
 
 Nếu VRAM không đủ ở input 224, giảm `--batch-size 64` xuống `48` hoặc `32`. Không nên bật `--disable-cnn-stem` cho run chính; chỉ dùng flag đó cho ablation để chứng minh vai trò của hybrid CNN stem.
+
+## Benchmark Num Workers
+
+Trên máy local hiện tại:
+
+- GPU: NVIDIA GeForce RTX 4060 Laptop GPU, 8GB VRAM
+- CPU: Intel Core i7-12700H, 14 core / 20 thread
+- RAM: 16GB
+- Batch size benchmark: 64
+- Input: 224
+- Model: `vit_registers` + CNN stem
+
+Kết quả đo end-to-end gồm DataLoader wait, GPU transfer, forward, backward và optimizer step:
+
+| num_workers | mean batch seconds | data wait fraction | samples/second | Nhận xét |
+|---:|---:|---:|---:|---|
+| 0 | 1.2873 | 84.81% | 49.72 | GPU chờ dữ liệu rất nhiều. |
+| 2 | 0.6466 | 70.82% | 98.98 | Vẫn còn nghẽn DataLoader rõ rệt. |
+| 4 | 0.3735 | 50.05% | 171.33 | Tốt hơn nhưng GPU vẫn chờ khoảng nửa batch. |
+| 6 | 0.2222 | 14.88% | 287.96 | Gần đủ, nhưng vẫn còn chờ dữ liệu. |
+| 8 | 0.1855 | 0.18% | 344.97 | Tốt nhất trong thử nghiệm. |
+| 10 | 0.1863 | 0.24% | 343.60 | Không nhanh hơn 8. |
+| 12 | 0.1871 | 0.31% | 341.97 | Chậm hơn và startup nặng hơn. |
+
+Vì vậy lệnh train local hiện đặt `--num-workers 8`. Validation dùng `--eval-num-workers 4` để tránh giữ quá nhiều worker đồng thời, vì train workers persistent vẫn có thể còn sống trong lúc validate.
+
+Lệnh benchmark có thể chạy lại khi đổi máy:
+
+```powershell
+cd D:\DataAI\AIEx\TRKH
+$env:PYTHONPATH='D:\DataAI\AIEx\TRKH'
+$env:TRKH_AMP_DTYPE='bf16'
+$env:TRKH_ALLOW_WINDOWS_MULTIPROCESSING='1'
+$env:TRKH_ALLOW_WINDOWS_PIN_MEMORY='1'
+$env:TRKH_ALLOW_WINDOWS_PERSISTENT_WORKERS='1'
+
+D:\DataAI\.venv\Scripts\python.exe -m trkh.tools.benchmark_num_workers `
+  --data D:\DataAI\AIEx\dataset\data.yaml `
+  --class-name-mode raw --expected-num-classes 5 `
+  --workers 0,2,4,6,8,10,12 `
+  --batch-size 64 --image-size 224 `
+  --warmup-batches 2 --measure-batches 8 `
+  --torch-threads 6
+```

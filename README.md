@@ -113,7 +113,7 @@ D:\DataAI\.venv\Scripts\python.exe -m trkh.training.train `
   --batch-size 64 --grad-accum-steps 1 --epochs 0 --scheduler-total-epochs 140 --patience 70 `
   --learning-rate 3e-4 --min-learning-rate 1e-6 --weight-decay 0.05 --warmup-epochs 8 `
   --grad-clip-norm 0.75 --max-nonfinite-grad-steps 4 `
-  --num-workers 2 --eval-num-workers 2 --train-image-cache-mb 0 --eval-image-cache-mb 0 `
+  --num-workers 8 --eval-num-workers 4 --train-image-cache-mb 0 --eval-image-cache-mb 0 `
   --class-weight-mode sqrt_inverse --focal-loss-gamma 2.0 --focal-loss-mix 0.20 `
   --label-smoothing 0.015 --ldam-scale 18.0 --best-metric macro_f1 `
   --resize-mode pad --crop-margin-ratio 0.08 `
