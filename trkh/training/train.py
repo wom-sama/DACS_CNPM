@@ -463,6 +463,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--eval-adaptive-min-detections", type=int, default=1)
 
     parser.add_argument("--crop-margin-ratio", type=float, default=0.05)
+    parser.add_argument(
+        "--class-crop-margin-scale-threshold",
+        type=float,
+        default=1.5,
+        help="Tu dong mo rong crop cho class co augmentation/repeat scale >= nguong nay.",
+    )
+    parser.add_argument(
+        "--class-crop-margin-max-ratio",
+        type=float,
+        default=0.16,
+        help="Tran crop margin cho class duoc target tu dong; chi ap dung classification crop.",
+    )
     parser.add_argument("--resize-mode", choices=("pad", "crop"), default="pad")
     parser.add_argument("--train-scale-min", type=float, default=0.8)
     parser.add_argument("--brightness", "--color-jitter-brightness", type=float, default=0.2)
@@ -608,6 +620,12 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         raise ValueError("--eval-max-detections-per-image phai >= 0.")
     if args.full_image_detection and args.model_type not in {"detr_vit_registers", "vit_registers_hybrid"}:
         raise ValueError("--full-image-detection chi ho tro cac model detection DETR.")
+    if args.crop_margin_ratio < 0.0:
+        raise ValueError("--crop-margin-ratio phai >= 0.")
+    if args.class_crop_margin_scale_threshold < 1.0:
+        raise ValueError("--class-crop-margin-scale-threshold phai >= 1.")
+    if args.class_crop_margin_max_ratio < 0.0:
+        raise ValueError("--class-crop-margin-max-ratio phai >= 0.")
     if args.class_augmentation_power < 0.0:
         raise ValueError("--class-augmentation-power phai >= 0.")
     if args.class_augmentation_max_scale < 1.0:
@@ -806,6 +824,8 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
     )
     augmentation_config = AugmentationConfig(
         crop_margin_ratio=args.crop_margin_ratio,
+        class_crop_margin_scale_threshold=args.class_crop_margin_scale_threshold,
+        class_crop_margin_max_ratio=args.class_crop_margin_max_ratio,
         resize_mode=args.resize_mode,
         random_resized_crop_scale_min=args.train_scale_min,
         color_jitter_brightness=args.brightness,
@@ -2638,6 +2658,11 @@ def main() -> None:
             },
             flush=True,
         )
+    class_crop_margin_scales = (
+        [float(value) for value in balance_auto_summary.get("auto_repeat_factors", [])]
+        if balance_auto_summary.get("enabled")
+        else None
+    )
     set_seed(train_config.seed, deterministic=train_config.deterministic)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if device.type == "cuda":
@@ -2701,6 +2726,9 @@ def main() -> None:
         class_aware_augmentation=augmentation_config.class_aware_augmentation,
         class_augmentation_power=augmentation_config.class_augmentation_power,
         class_augmentation_max_scale=augmentation_config.class_augmentation_max_scale,
+        class_crop_margin_scale_threshold=augmentation_config.class_crop_margin_scale_threshold,
+        class_crop_margin_max_ratio=augmentation_config.class_crop_margin_max_ratio,
+        class_crop_margin_scales=class_crop_margin_scales,
     )
     val_dataset = MangoYOLOCropDataset.from_data_spec(
         data_spec=data_spec,
@@ -2711,6 +2739,9 @@ def main() -> None:
         classification_target=not detection_mode,
         classification_object_crops=classification_object_crops,
         class_aware_augmentation=False,
+        class_crop_margin_scale_threshold=augmentation_config.class_crop_margin_scale_threshold,
+        class_crop_margin_max_ratio=augmentation_config.class_crop_margin_max_ratio,
+        class_crop_margin_scales=class_crop_margin_scales,
     )
     test_dataset = None
     if data_spec.has_test_split:
@@ -2723,6 +2754,9 @@ def main() -> None:
             classification_target=not detection_mode,
             classification_object_crops=classification_object_crops,
             class_aware_augmentation=False,
+            class_crop_margin_scale_threshold=augmentation_config.class_crop_margin_scale_threshold,
+            class_crop_margin_max_ratio=augmentation_config.class_crop_margin_max_ratio,
+            class_crop_margin_scales=class_crop_margin_scales,
         )
     if len(train_dataset) == 0 or len(val_dataset) == 0:
         raise ValueError("Dataset train/val khong co sample hop le de huan luyen.")
@@ -2862,6 +2896,36 @@ def main() -> None:
         getattr(train_dataset, "class_augmentation_scales", []),
         rare_class_repeat_factors,
     )
+    class_crop_margin_summary = {
+        "enabled": False,
+        "base_ratio": float(augmentation_config.crop_margin_ratio),
+        "max_ratio": float(augmentation_config.class_crop_margin_max_ratio),
+        "scale_threshold": float(augmentation_config.class_crop_margin_scale_threshold),
+        "class_target_scales": class_target_scales,
+        "targeted_classes": [
+            int(index)
+            for index, value in enumerate(class_target_scales)
+            if float(value) >= float(augmentation_config.class_crop_margin_scale_threshold)
+            and float(augmentation_config.class_crop_margin_max_ratio)
+            > float(augmentation_config.crop_margin_ratio)
+        ],
+        "effective_margin_ratios": [
+            float(
+                min(
+                    float(augmentation_config.class_crop_margin_max_ratio),
+                    float(augmentation_config.crop_margin_ratio) * float(value),
+                )
+                if float(value) >= float(augmentation_config.class_crop_margin_scale_threshold)
+                and float(augmentation_config.class_crop_margin_max_ratio)
+                > float(augmentation_config.crop_margin_ratio)
+                else float(augmentation_config.crop_margin_ratio)
+            )
+            for value in class_target_scales
+        ],
+        "reason": "classification crop margin tu dong nham class co scale >= threshold",
+    }
+    class_crop_margin_summary["enabled"] = bool(class_crop_margin_summary["targeted_classes"])
+    print({"class_crop_margin": class_crop_margin_summary}, flush=True)
     if detection_mode:
         targeted_copy_paste_summary = {
             "enabled": bool(train_config.copy_paste_probability > 0.0),
@@ -3198,6 +3262,7 @@ def main() -> None:
         "total_class_counts": total_class_counts,
         "train_dataset_report": train_dataset_report,
         "rare_class_repeat": rare_class_repeat_summary,
+        "class_crop_margin": class_crop_margin_summary,
         "targeted_copy_paste": targeted_copy_paste_summary,
         "val_dataset_report": val_dataset_report,
         "test_dataset_report": test_dataset_report,

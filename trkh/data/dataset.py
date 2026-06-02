@@ -938,11 +938,14 @@ class MangoYOLOCropDataset(Dataset):
         class_augmentation_max_scale: float = 1.8,
         classification_target: bool = False,
         classification_object_crops: bool = True,
+        class_crop_margin_scale_threshold: float = 1.5,
+        class_crop_margin_max_ratio: Optional[float] = None,
+        class_crop_margin_scales: Optional[Sequence[float]] = None,
     ) -> None:
         self.images_dir = Path(images_dir)
         self.labels_dir = Path(labels_dir)
         self.transform = transform
-        self.crop_margin_ratio = crop_margin_ratio
+        self.crop_margin_ratio = max(0.0, float(crop_margin_ratio))
         self.crop_to_primary_object = bool(crop_to_primary_object)
         self.fallback_to_full_image = fallback_to_full_image
         self.num_classes = num_classes
@@ -953,6 +956,20 @@ class MangoYOLOCropDataset(Dataset):
         self.class_augmentation_max_scale = max(1.0, float(class_augmentation_max_scale))
         self.classification_target = bool(classification_target)
         self.classification_object_crops = bool(classification_object_crops)
+        self.class_crop_margin_scale_threshold = max(1.0, float(class_crop_margin_scale_threshold))
+        base_crop_margin_ratio = self.crop_margin_ratio
+        if class_crop_margin_max_ratio is None:
+            self.class_crop_margin_max_ratio = base_crop_margin_ratio
+        else:
+            self.class_crop_margin_max_ratio = max(
+                base_crop_margin_ratio,
+                max(0.0, float(class_crop_margin_max_ratio)),
+            )
+        self.class_crop_margin_scales = (
+            [max(1.0, float(value)) for value in class_crop_margin_scales]
+            if class_crop_margin_scales is not None
+            else []
+        )
         self._image_cache_enabled = False
         self._image_cache_max_bytes = 0
         self._image_cache_max_items = 0
@@ -1000,6 +1017,9 @@ class MangoYOLOCropDataset(Dataset):
         class_augmentation_max_scale: float = 1.8,
         classification_target: bool = False,
         classification_object_crops: bool = True,
+        class_crop_margin_scale_threshold: float = 1.5,
+        class_crop_margin_max_ratio: Optional[float] = None,
+        class_crop_margin_scales: Optional[Sequence[float]] = None,
     ) -> "MangoYOLOCropDataset":
         return cls(
             images_dir=data_spec.split_images_dir(split),
@@ -1015,6 +1035,9 @@ class MangoYOLOCropDataset(Dataset):
             class_augmentation_max_scale=class_augmentation_max_scale,
             classification_target=classification_target,
             classification_object_crops=classification_object_crops,
+            class_crop_margin_scale_threshold=class_crop_margin_scale_threshold,
+            class_crop_margin_max_ratio=class_crop_margin_max_ratio,
+            class_crop_margin_scales=class_crop_margin_scales,
         )
 
     @classmethod
@@ -1031,6 +1054,9 @@ class MangoYOLOCropDataset(Dataset):
         class_augmentation_max_scale: float = 1.8,
         classification_target: bool = False,
         classification_object_crops: bool = True,
+        class_crop_margin_scale_threshold: float = 1.5,
+        class_crop_margin_max_ratio: Optional[float] = None,
+        class_crop_margin_scales: Optional[Sequence[float]] = None,
         class_name_mode: Optional[str] = None,
         expected_num_classes: Optional[int] = None,
     ) -> "MangoYOLOCropDataset":
@@ -1051,6 +1077,9 @@ class MangoYOLOCropDataset(Dataset):
             class_augmentation_max_scale=class_augmentation_max_scale,
             classification_target=classification_target,
             classification_object_crops=classification_object_crops,
+            class_crop_margin_scale_threshold=class_crop_margin_scale_threshold,
+            class_crop_margin_max_ratio=class_crop_margin_max_ratio,
+            class_crop_margin_scales=class_crop_margin_scales,
         )
 
     def _index_image_paths_by_stem(self) -> Dict[str, Path]:
@@ -1271,6 +1300,55 @@ class MangoYOLOCropDataset(Dataset):
                 scale = max(scale, float(self.class_augmentation_scales[int(label)]))
         return float(scale)
 
+    def _crop_margin_scale_for_label(self, label: int) -> float:
+        label = int(label)
+        if 0 <= label < len(self.class_crop_margin_scales):
+            return float(self.class_crop_margin_scales[label])
+        if 0 <= label < len(self.class_augmentation_scales):
+            return float(self.class_augmentation_scales[label])
+        return 1.0
+
+    def _crop_margin_ratio_for_label(self, label: int) -> float:
+        base_margin = max(0.0, float(self.crop_margin_ratio))
+        if not self.classification_target:
+            return base_margin
+        if self.class_crop_margin_max_ratio <= base_margin:
+            return base_margin
+        class_scale = self._crop_margin_scale_for_label(label)
+        if class_scale < self.class_crop_margin_scale_threshold:
+            return base_margin
+        return float(min(self.class_crop_margin_max_ratio, base_margin * class_scale))
+
+    def _crop_margin_ratio_for_sample(self, sample: MangoSample) -> float:
+        primary_object = self._select_sample_primary_object(sample)
+        return self._crop_margin_ratio_for_label(int(primary_object.label))
+
+    def _class_crop_margin_report(self) -> Dict[str, object]:
+        num_classes = int(self.num_classes or 0)
+        scales = [
+            self._crop_margin_scale_for_label(class_index)
+            for class_index in range(max(0, num_classes))
+        ]
+        margins = [
+            self._crop_margin_ratio_for_label(class_index)
+            for class_index in range(max(0, num_classes))
+        ]
+        target_classes = [
+            int(class_index)
+            for class_index, scale in enumerate(scales)
+            if float(scale) >= float(self.class_crop_margin_scale_threshold)
+            and float(margins[class_index]) > float(self.crop_margin_ratio)
+        ]
+        return {
+            "enabled": bool(target_classes),
+            "base_ratio": float(self.crop_margin_ratio),
+            "max_ratio": float(self.class_crop_margin_max_ratio),
+            "scale_threshold": float(self.class_crop_margin_scale_threshold),
+            "class_scales": [float(value) for value in scales],
+            "effective_ratios": [float(value) for value in margins],
+            "target_classes": target_classes,
+        }
+
     def labels(self) -> List[int]:
         return [sample.primary_label for sample in self.samples]
 
@@ -1285,6 +1363,7 @@ class MangoYOLOCropDataset(Dataset):
         if self.num_classes is not None:
             report["class_counts"] = self.class_counts(self.num_classes)
             report["class_augmentation_scales"] = list(self.class_augmentation_scales)
+            report["class_crop_margin"] = self._class_crop_margin_report()
         report["class_aware_augmentation"] = bool(self.class_aware_augmentation)
         report["image_cache"] = self.image_cache_stats()
         return report
@@ -1385,8 +1464,9 @@ class MangoYOLOCropDataset(Dataset):
         x1, y1, x2, y2 = bbox_xywh_to_xyxy(primary_object.bbox, width=width, height=height)
         box_width = max(1.0, x2 - x1)
         box_height = max(1.0, y2 - y1)
-        margin_x = box_width * max(0.0, float(self.crop_margin_ratio))
-        margin_y = box_height * max(0.0, float(self.crop_margin_ratio))
+        crop_margin_ratio = self._crop_margin_ratio_for_sample(sample)
+        margin_x = box_width * max(0.0, float(crop_margin_ratio))
+        margin_y = box_height * max(0.0, float(crop_margin_ratio))
 
         left = max(0, int(math.floor(x1 - margin_x)))
         top = max(0, int(math.floor(y1 - margin_y)))

@@ -273,6 +273,8 @@ class TrainConfig:
 @dataclass
 class AugmentationConfig:
     crop_margin_ratio: float = 0.05
+    class_crop_margin_scale_threshold: float = 1.5
+    class_crop_margin_max_ratio: float = 0.16
     resize_mode: str = "pad"
     random_resized_crop_scale_min: float = 0.8
     color_jitter_brightness: float = 0.2

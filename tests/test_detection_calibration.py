@@ -169,6 +169,42 @@ class DetectionCalibrationTests(unittest.TestCase):
             )
             self.assertIn(3, repeated.labels())
 
+    def test_auto_class_crop_margin_targets_scaled_classes_only(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            images_dir = root / "images"
+            labels_dir = root / "labels"
+            images_dir.mkdir()
+            labels_dir.mkdir()
+            Image.new("RGB", (100, 100), color=(100, 180, 80)).save(images_dir / "common.jpg")
+            Image.new("RGB", (100, 100), color=(120, 180, 80)).save(images_dir / "rare.jpg")
+            (labels_dir / "common.txt").write_text("0 0.5 0.5 0.5 0.5\n", encoding="utf-8")
+            (labels_dir / "rare.txt").write_text("1 0.5 0.5 0.5 0.5\n", encoding="utf-8")
+
+            dataset = MangoYOLOCropDataset(
+                images_dir=images_dir,
+                labels_dir=labels_dir,
+                transform=None,
+                crop_margin_ratio=0.05,
+                crop_to_primary_object=True,
+                num_classes=2,
+                classification_target=True,
+                class_crop_margin_scale_threshold=1.5,
+                class_crop_margin_max_ratio=0.20,
+                class_crop_margin_scales=[1.0, 2.0],
+            )
+
+            common_image, common_label = dataset[0]
+            rare_image, rare_label = dataset[1]
+            self.assertEqual([common_label, rare_label], [0, 1])
+            self.assertGreater(rare_image.size[0], common_image.size[0])
+            self.assertGreater(rare_image.size[1], common_image.size[1])
+
+            crop_report = dataset.quality_report()["class_crop_margin"]
+            self.assertEqual(crop_report["target_classes"], [1])
+            self.assertAlmostEqual(crop_report["effective_ratios"][0], 0.05)
+            self.assertAlmostEqual(crop_report["effective_ratios"][1], 0.10)
+
     def test_objectness_loss_balances_positive_and_negative_queries(self):
         criterion = DETRSetCriterion(
             num_classes=4,

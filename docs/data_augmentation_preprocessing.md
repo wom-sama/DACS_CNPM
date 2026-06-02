@@ -14,6 +14,7 @@ Thư mục ảnh minh họa: [augmentation_examples](augmentation_examples/)
 | Resize + padding | Giữ tỉ lệ ảnh, resize vào khung cố định của run, hiện khuyến nghị là 224x224; ảnh minh họa được render ở 416x416 để dễ quan sát. Ảnh mẫu: [01_resize_pad_416](augmentation_examples/01_resize_pad_416/). | Tránh méo hình quả xoài, giữ hình dạng tự nhiên cho classifier. |
 | Crop object chính | Crop quanh bbox object chính với margin nhỏ rồi resize/pad. Ảnh mẫu: [02_crop_primary_object](augmentation_examples/02_crop_primary_object/). | Giảm nhiễu nền, giúp mô hình tập trung vào quả xoài. |
 | Object-level crops từ ảnh nhiều object | Mỗi bbox hợp lệ trong ảnh nhiều object được tách thành một sample phân loại riêng. Ảnh mẫu: [10_object_level_crops_from_multi_object_images](augmentation_examples/10_object_level_crops_from_multi_object_images/). | Tận dụng thêm object vốn từng bị bỏ qua khi chỉ crop object chính. Đây là thay đổi quan trọng cho classification-only. |
+| Auto rare-class crop margin | Class nào có `class_target_scale >= 1.5` sẽ được tự động crop rộng hơn, ví dụ margin gốc `0.08` có thể tăng tới trần `0.16`. | Tăng ngữ cảnh quanh object cho các class thiếu dữ liệu mà không hard-code class 1 và không tạo ảnh synthetic. |
 | Random affine nhẹ | Xoay, dịch chuyển và scale nhẹ quanh crop object. Ảnh mẫu: [03_random_affine](augmentation_examples/03_random_affine/). | Tăng khả năng chịu đựng với góc chụp và vị trí quả xoài, nhưng không làm biến dạng quá mạnh. |
 | Horizontal flip | Lật trái/phải với xác suất vừa phải. Ảnh mẫu: [04_horizontal_flip](augmentation_examples/04_horizontal_flip/). | Phù hợp với phân loại vì hướng trái/phải không làm đổi class. |
 | Vertical flip thấp | Lật trên/dưới với xác suất rất thấp. Ảnh mẫu: [05_vertical_flip](augmentation_examples/05_vertical_flip/). | Chỉ dùng rất nhẹ để tăng robustness; ảnh thật ít khi bị đảo ngược hoàn toàn. |
@@ -52,6 +53,8 @@ Với dữ liệu xoài, nên ưu tiên các biến đổi giữ nguyên tín hi
 
 - `resize_mode=pad`
 - `crop_margin_ratio` khoảng `0.05` đến `0.10`
+- `class_crop_margin_scale_threshold=1.5`
+- `class_crop_margin_max_ratio=0.16`
 - `brightness=0.0`
 - `contrast=0.0`
 - `saturation=0.0`
@@ -66,6 +69,8 @@ Với dữ liệu xoài, nên ưu tiên các biến đổi giữ nguyên tín hi
 - `rotate90_probability` thấp, khoảng `0.0` đến `0.06`
 
 Trong code hiện tại, khi `model_type=vit_registers`, train sẽ tự tắt `batch_mix_probability`, `mosaic_probability`, `mixup_probability`, `cutmix_probability` và `copy_paste_probability` để tránh nhầm sang pipeline detection.
+
+Với `canbang.yaml`, hệ thống đọc `auto_repeat_factors` và dùng cùng scale đó để xác định class cần được ưu tiên. Class có scale dưới `--class-crop-margin-scale-threshold` giữ margin gốc; class có scale bằng hoặc vượt ngưỡng được crop rộng hơn nhưng bị chặn bởi `--class-crop-margin-max-ratio`. Cách này tổng quát hơn việc nhắm riêng class 1.
 
 ## Hybrid CNN Stem Trong Nhánh Phân Loại
 
@@ -115,7 +120,7 @@ $env:TRKH_ALLOW_WINDOWS_PERSISTENT_WORKERS='1'
 D:\DataAI\.venv\Scripts\python.exe -m trkh.training.train `
   --data D:\DataAI\AIEx\dataset\data.yaml `
   --class-name-mode raw --expected-num-classes 5 `
-  --run-name mango_cls_224_cnnstem_vitreg_5cls_objectcrops_local_v1 `
+  --run-name mango_cls_224_cnnstem_vitreg_5cls_objectcrops_rarecrop_local_v3 `
   --output-dir runs --disable-resume --seed 42 `
   --model-type vit_registers --image-size 224 --patch-size 16 `
   --stem-channels 32 --head-pooling cls_register_mean `
@@ -128,10 +133,11 @@ D:\DataAI\.venv\Scripts\python.exe -m trkh.training.train `
   --class-weight-mode sqrt_inverse --focal-loss-gamma 2.0 --focal-loss-mix 0.20 `
   --label-smoothing 0.015 --ldam-scale 18.0 --best-metric macro_f1 `
   --resize-mode pad --crop-margin-ratio 0.08 `
+  --class-crop-margin-scale-threshold 1.5 --class-crop-margin-max-ratio 0.16 `
   --brightness 0.0 --contrast 0.0 --saturation 0.0 --hue 0.0 --lighting-probability 0.0 `
   --random-erasing-probability 0.0 `
-  --random-affine-degrees 4 --random-affine-translate 0.03 --random-affine-scale-min 0.95 `
-  --horizontal-flip-probability 0.5 --vertical-flip-probability 0.01 --rotate90-probability 0.03 `
+  --random-affine-degrees 3 --random-affine-translate 0.02 --random-affine-scale-min 0.96 `
+  --horizontal-flip-probability 0.5 --vertical-flip-probability 0.0 --rotate90-probability 0.02 `
   --batch-mix-probability 0.0 --mosaic-probability 0.0 --mixup-probability 0.0 `
   --cutmix-probability 0.0 --copy-paste-probability 0.0
 ```
