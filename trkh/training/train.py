@@ -31,6 +31,7 @@ from trkh.core.config import (
     to_serializable,
 )
 from trkh.data.dataset import (
+    ClassificationFolderDataset,
     MangoYOLOCropDataset,
     PseudoVideoAugmenter,
     RareClassRepeatDataset,
@@ -2645,6 +2646,11 @@ def main() -> None:
         class_name_mode=args.class_name_mode,
         expected_num_classes=args.expected_num_classes or None,
     )
+    if detection_mode and data_spec.data_format == "classification_folder":
+        raise ValueError(
+            "Dataset format=classification_folder chi phu hop classification-only. "
+            "Hay dung --model-type vit_registers/resnet50/mobilenet_v3_large/vit_b_16."
+        )
     balance_auto_summary = apply_balance_file_auto_adjustment(
         data_spec=data_spec,
         train_config=train_config,
@@ -2715,39 +2721,53 @@ def main() -> None:
         eval_transform = base_eval_transform
 
     crop_to_primary_object = not bool(args.full_image_detection)
-    train_dataset = MangoYOLOCropDataset.from_data_spec(
-        data_spec=data_spec,
-        split="train",
-        transform=train_transform,
-        crop_margin_ratio=augmentation_config.crop_margin_ratio,
-        crop_to_primary_object=crop_to_primary_object,
-        classification_target=not detection_mode,
-        classification_object_crops=classification_object_crops,
-        class_aware_augmentation=augmentation_config.class_aware_augmentation,
-        class_augmentation_power=augmentation_config.class_augmentation_power,
-        class_augmentation_max_scale=augmentation_config.class_augmentation_max_scale,
-        class_crop_margin_scale_threshold=augmentation_config.class_crop_margin_scale_threshold,
-        class_crop_margin_max_ratio=augmentation_config.class_crop_margin_max_ratio,
-        class_crop_margin_scales=class_crop_margin_scales,
-    )
-    val_dataset = MangoYOLOCropDataset.from_data_spec(
-        data_spec=data_spec,
-        split="val",
-        transform=eval_transform,
-        crop_margin_ratio=augmentation_config.crop_margin_ratio,
-        crop_to_primary_object=crop_to_primary_object,
-        classification_target=not detection_mode,
-        classification_object_crops=classification_object_crops,
-        class_aware_augmentation=False,
-        class_crop_margin_scale_threshold=augmentation_config.class_crop_margin_scale_threshold,
-        class_crop_margin_max_ratio=augmentation_config.class_crop_margin_max_ratio,
-        class_crop_margin_scales=class_crop_margin_scales,
-    )
-    test_dataset = None
-    if data_spec.has_test_split:
-        test_dataset = MangoYOLOCropDataset.from_data_spec(
+    if data_spec.data_format == "classification_folder":
+        train_dataset = ClassificationFolderDataset.from_data_spec(
             data_spec=data_spec,
-            split="test",
+            split="train",
+            transform=train_transform,
+            class_aware_augmentation=augmentation_config.class_aware_augmentation,
+            class_augmentation_power=augmentation_config.class_augmentation_power,
+            class_augmentation_max_scale=augmentation_config.class_augmentation_max_scale,
+            class_crop_margin_scales=class_crop_margin_scales,
+        )
+        val_dataset = ClassificationFolderDataset.from_data_spec(
+            data_spec=data_spec,
+            split="val",
+            transform=eval_transform,
+            class_aware_augmentation=False,
+            class_crop_margin_scales=class_crop_margin_scales,
+        )
+        test_dataset = None
+        if data_spec.has_test_split:
+            test_dataset = ClassificationFolderDataset.from_data_spec(
+                data_spec=data_spec,
+                split="test",
+                transform=eval_transform,
+                class_aware_augmentation=False,
+                class_crop_margin_scales=class_crop_margin_scales,
+            )
+        classification_object_crops = False
+        crop_to_primary_object = False
+    else:
+        train_dataset = MangoYOLOCropDataset.from_data_spec(
+            data_spec=data_spec,
+            split="train",
+            transform=train_transform,
+            crop_margin_ratio=augmentation_config.crop_margin_ratio,
+            crop_to_primary_object=crop_to_primary_object,
+            classification_target=not detection_mode,
+            classification_object_crops=classification_object_crops,
+            class_aware_augmentation=augmentation_config.class_aware_augmentation,
+            class_augmentation_power=augmentation_config.class_augmentation_power,
+            class_augmentation_max_scale=augmentation_config.class_augmentation_max_scale,
+            class_crop_margin_scale_threshold=augmentation_config.class_crop_margin_scale_threshold,
+            class_crop_margin_max_ratio=augmentation_config.class_crop_margin_max_ratio,
+            class_crop_margin_scales=class_crop_margin_scales,
+        )
+        val_dataset = MangoYOLOCropDataset.from_data_spec(
+            data_spec=data_spec,
+            split="val",
             transform=eval_transform,
             crop_margin_ratio=augmentation_config.crop_margin_ratio,
             crop_to_primary_object=crop_to_primary_object,
@@ -2758,6 +2778,21 @@ def main() -> None:
             class_crop_margin_max_ratio=augmentation_config.class_crop_margin_max_ratio,
             class_crop_margin_scales=class_crop_margin_scales,
         )
+        test_dataset = None
+        if data_spec.has_test_split:
+            test_dataset = MangoYOLOCropDataset.from_data_spec(
+                data_spec=data_spec,
+                split="test",
+                transform=eval_transform,
+                crop_margin_ratio=augmentation_config.crop_margin_ratio,
+                crop_to_primary_object=crop_to_primary_object,
+                classification_target=not detection_mode,
+                classification_object_crops=classification_object_crops,
+                class_aware_augmentation=False,
+                class_crop_margin_scale_threshold=augmentation_config.class_crop_margin_scale_threshold,
+                class_crop_margin_max_ratio=augmentation_config.class_crop_margin_max_ratio,
+                class_crop_margin_scales=class_crop_margin_scales,
+            )
     if len(train_dataset) == 0 or len(val_dataset) == 0:
         raise ValueError("Dataset train/val khong co sample hop le de huan luyen.")
 
@@ -3244,6 +3279,7 @@ def main() -> None:
 
     data_summary = {
         "data_yaml": str(data_spec.data_yaml),
+        "data_format": str(data_spec.data_format),
         "train_images": str(data_spec.train_images),
         "train_labels": str(data_spec.train_labels),
         "val_images": str(data_spec.val_images),

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import math
 import time
 from itertools import islice
@@ -19,7 +20,12 @@ except Exception:  # pragma: no cover - optional compiled torchvision op
     _torchvision_batched_nms = None
 
 from trkh.core.config import default_data_yaml, load_data_spec, to_serializable
-from trkh.data.dataset import MangoYOLOCropDataset, build_eval_transform, build_train_collate_fn
+from trkh.data.dataset import (
+    ClassificationFolderDataset,
+    MangoYOLOCropDataset,
+    build_eval_transform,
+    build_train_collate_fn,
+)
 from trkh.training.debug_and_optimization import TestTimeAugmentation
 from trkh.inference.inference import resolve_confidence_threshold
 from trkh.training.loss import HybridDetectionClassificationLoss, box_iou_from_xywh, generalized_iou
@@ -128,6 +134,67 @@ def _stack_image_masks_from_targets(targets) -> Optional[torch.Tensor]:
     if not masks:
         return None
     return torch.stack(masks, dim=0)
+
+
+def _dataset_sample_paths(dataset) -> List[str]:
+    sample_paths_fn = getattr(dataset, "sample_paths", None)
+    if callable(sample_paths_fn):
+        return [str(path) for path in sample_paths_fn()]
+    samples = getattr(dataset, "samples", None)
+    if samples is None:
+        return []
+    paths: List[str] = []
+    for sample in samples:
+        image_path = getattr(sample, "image_path", None)
+        paths.append("" if image_path is None else str(image_path))
+    return paths
+
+
+def _build_prediction_records(
+    *,
+    targets: torch.Tensor,
+    predictions: torch.Tensor,
+    probabilities: torch.Tensor,
+    class_names: Sequence[str],
+    sample_paths: Sequence[str],
+) -> List[Dict[str, object]]:
+    targets = targets.detach().cpu().to(dtype=torch.long).view(-1)
+    predictions = predictions.detach().cpu().to(dtype=torch.long).view(-1)
+    probabilities = probabilities.detach().cpu().to(dtype=torch.float32)
+    class_count = len(class_names)
+    record_count = min(int(targets.numel()), int(predictions.numel()), int(probabilities.shape[0]))
+    if sample_paths:
+        record_count = min(record_count, len(sample_paths))
+
+    records: List[Dict[str, object]] = []
+    for sample_index in range(record_count):
+        target_index = int(targets[sample_index].item())
+        prediction_index = int(predictions[sample_index].item())
+        row_probabilities = probabilities[sample_index]
+        top_k = max(1, min(5, class_count, int(row_probabilities.numel())))
+        top_values, top_indices = torch.topk(row_probabilities, k=top_k)
+        record: Dict[str, object] = {
+            "sample_index": int(sample_index),
+            "image_path": str(sample_paths[sample_index]) if sample_paths else "",
+            "target_index": target_index,
+            "target_name": str(class_names[target_index]) if 0 <= target_index < class_count else "",
+            "prediction_index": prediction_index,
+            "prediction_name": str(class_names[prediction_index]) if 0 <= prediction_index < class_count else "",
+            "confidence": float(row_probabilities[prediction_index].item())
+            if 0 <= prediction_index < int(row_probabilities.numel())
+            else 0.0,
+            "correct": int(target_index == prediction_index),
+        }
+        for rank, (score, class_index) in enumerate(zip(top_values.tolist(), top_indices.tolist()), start=1):
+            class_index = int(class_index)
+            record[f"top{rank}_index"] = class_index
+            record[f"top{rank}_name"] = str(class_names[class_index]) if 0 <= class_index < class_count else ""
+            record[f"top{rank}_probability"] = float(score)
+        for class_index, class_name in enumerate(class_names):
+            if class_index < int(row_probabilities.numel()):
+                record[f"prob_{class_index}_{class_name}"] = float(row_probabilities[class_index].item())
+        records.append(record)
+    return records
 
 
 def _pairwise_iou_xywh(boxes1: torch.Tensor, boxes2: torch.Tensor) -> torch.Tensor:
@@ -781,6 +848,7 @@ def evaluate_model(
     adaptive_min_detections: int = 1,
     require_foreground_argmax: bool = False,
     detection_score_mode: str = "foreground",
+    collect_prediction_records: bool = False,
 ) -> Dict[str, object]:
     eval_start = time.perf_counter()
     model.eval()
@@ -1092,6 +1160,14 @@ def evaluate_model(
         class_names=class_names,
         probabilities=probabilities,
     )
+    if bool(collect_prediction_records) and not detection_mode and targets.numel() and predictions.numel():
+        metrics["prediction_records"] = _build_prediction_records(
+            targets=targets,
+            predictions=predictions,
+            probabilities=probabilities,
+            class_names=class_names,
+            sample_paths=_dataset_sample_paths(getattr(dataloader, "dataset", None)),
+        )
     if detection_mode and targets.numel() and full_predictions.numel():
         metrics["foreground_classification"] = {
             "accuracy": metrics["accuracy"],
@@ -1251,7 +1327,24 @@ def save_evaluation_artifacts(
     output_dir: Path,
 ) -> None:
     ensure_dir(output_dir)
-    json_dump(output_dir / "metrics.json", to_serializable(metrics))
+    prediction_records = metrics.get("prediction_records", [])
+    metrics_payload = dict(metrics)
+    metrics_payload.pop("prediction_records", None)
+    json_dump(output_dir / "metrics.json", to_serializable(metrics_payload))
+    if isinstance(prediction_records, list) and prediction_records:
+        fieldnames: List[str] = []
+        for record in prediction_records:
+            if not isinstance(record, dict):
+                continue
+            for key in record.keys():
+                if key not in fieldnames:
+                    fieldnames.append(str(key))
+        with (output_dir / "predictions.csv").open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=fieldnames)
+            writer.writeheader()
+            for record in prediction_records:
+                if isinstance(record, dict):
+                    writer.writerow({key: record.get(key, "") for key in fieldnames})
     plot_confusion_matrix(
         metrics["confusion_matrix"],
         class_names,
@@ -1381,20 +1474,31 @@ def main() -> None:
     model.eval()
 
     image_size = int(args.override_image_size or checkpoint.get("model_config", {}).get("image_size", 224))
-    dataset = MangoYOLOCropDataset.from_data_spec(
-        data_spec=data_spec,
-        split=args.split,
-        transform=build_eval_transform(
-            image_size=image_size,
-            resize_mode=checkpoint.get("augmentation_config", {}).get("resize_mode", "pad"),
-        ),
-        crop_margin_ratio=float(
-            checkpoint.get("augmentation_config", {}).get("crop_margin_ratio", 0.05)
-        ),
-        crop_to_primary_object=crop_to_primary_object,
-        classification_target=not checkpoint_detection_mode,
-        classification_object_crops=classification_object_crops,
+    eval_transform = build_eval_transform(
+        image_size=image_size,
+        resize_mode=checkpoint.get("augmentation_config", {}).get("resize_mode", "pad"),
     )
+    if data_spec.data_format == "classification_folder":
+        if checkpoint_detection_mode:
+            raise ValueError("format=classification_folder khong ho tro evaluate checkpoint detection.")
+        dataset = ClassificationFolderDataset.from_data_spec(
+            data_spec=data_spec,
+            split=args.split,
+            transform=eval_transform,
+            class_aware_augmentation=False,
+        )
+    else:
+        dataset = MangoYOLOCropDataset.from_data_spec(
+            data_spec=data_spec,
+            split=args.split,
+            transform=eval_transform,
+            crop_margin_ratio=float(
+                checkpoint.get("augmentation_config", {}).get("crop_margin_ratio", 0.05)
+            ),
+            crop_to_primary_object=crop_to_primary_object,
+            classification_target=not checkpoint_detection_mode,
+            classification_object_crops=classification_object_crops,
+        )
     dataloader_kwargs, dataloader_summary = build_safe_dataloader_kwargs(
         requested_num_workers=args.num_workers,
         requested_pin_memory=device.type == "cuda",
@@ -1473,6 +1577,7 @@ def main() -> None:
         adaptive_count_source=args.adaptive_count_source,
         adaptive_count_margin=args.adaptive_count_margin,
         adaptive_min_detections=args.adaptive_min_detections,
+        collect_prediction_records=True,
     )
 
     output_dir = args.output_dir

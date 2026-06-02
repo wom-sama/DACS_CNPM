@@ -11,6 +11,7 @@ from PIL import Image
 import trkh.models.model as model_module
 from trkh.core.config import AugmentationConfig, ModelConfig, TrainConfig, load_data_spec
 from trkh.evaluation.evaluate import (
+    _build_prediction_records,
     _build_background_aware_classification_metrics,
     _build_detection_confidence_curve,
     _build_detection_confidence_curve_from_prepared,
@@ -20,8 +21,11 @@ from trkh.evaluation.evaluate import (
     _prepare_detection_records_for_confidence_curve,
     _resolve_adaptive_max_detections,
     _score_detection_queries,
+    save_evaluation_artifacts,
 )
+from trkh.evaluation.metrics import build_metrics
 from trkh.data.dataset import (
+    ClassificationFolderDataset,
     MangoYOLOCropDataset,
     RareClassRepeatDataset,
     _apply_copypaste_detection_batch,
@@ -128,6 +132,80 @@ class DetectionCalibrationTests(unittest.TestCase):
                 amp=False,
             )
             self.assertTrue(torch.isfinite(loss))
+
+    def test_classification_folder_data_spec_preserves_yaml_class_order(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            for split in ("train", "val", "test"):
+                for class_name in ("class_b", "class_a"):
+                    class_dir = root / split / class_name
+                    class_dir.mkdir(parents=True)
+                    Image.new("RGB", (32, 24), color=(120, 80, 40)).save(
+                        class_dir / f"{split}_{class_name}.jpg"
+                    )
+            (root / "data.yaml").write_text(
+                "\n".join(
+                    [
+                        "format: classification_folder",
+                        "path: .",
+                        "train: train",
+                        "val: val",
+                        "test: test",
+                        "nc: 2",
+                        "class_name_mode: raw",
+                        "names:",
+                        "  0: class_a",
+                        "  1: class_b",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            data_spec = load_data_spec(root / "data.yaml", class_name_mode="raw", expected_num_classes=2)
+            self.assertEqual(data_spec.data_format, "classification_folder")
+            self.assertEqual(data_spec.class_names, ["class_a", "class_b"])
+
+            dataset = ClassificationFolderDataset.from_data_spec(
+                data_spec,
+                split="train",
+                transform=build_eval_transform(image_size=32, resize_mode="pad"),
+            )
+            self.assertEqual(dataset.class_counts(data_spec.num_classes), [1, 1])
+            images, targets = build_train_collate_fn(num_classes=2, batch_mix_probability=0.0)(
+                [dataset[0], dataset[1]]
+            )
+            self.assertEqual(tuple(images.shape), (2, 3, 32, 32))
+            self.assertEqual(tuple(targets.shape), (2, 2))
+            self.assertEqual(int(targets.sum().item()), 2)
+
+    def test_save_evaluation_artifacts_writes_predictions_csv(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            class_names = ["class_a", "class_b"]
+            targets = torch.tensor([0, 1], dtype=torch.long)
+            predictions = torch.tensor([0, 0], dtype=torch.long)
+            probabilities = torch.tensor([[0.8, 0.2], [0.6, 0.4]], dtype=torch.float32)
+            metrics = build_metrics(
+                targets=targets,
+                predictions=predictions,
+                class_names=class_names,
+                probabilities=probabilities,
+            )
+            metrics["prediction_records"] = _build_prediction_records(
+                targets=targets,
+                predictions=predictions,
+                probabilities=probabilities,
+                class_names=class_names,
+                sample_paths=["a.jpg", "b.jpg"],
+            )
+            save_evaluation_artifacts(metrics, class_names, output_dir)
+            self.assertTrue((output_dir / "metrics.json").exists())
+            self.assertTrue((output_dir / "predictions.csv").exists())
+            with (output_dir / "predictions.csv").open(encoding="utf-8") as handle:
+                rows = list(csv.DictReader(handle))
+            self.assertEqual(len(rows), 2)
+            self.assertEqual(rows[0]["image_path"], "a.jpg")
+            self.assertEqual(rows[1]["correct"], "0")
 
     def test_classification_object_crops_expand_multi_object_images(self):
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -85,6 +85,7 @@ class DataSpec:
     val_labels: Path
     class_names: List[str]
     class_name_mode: str = "auto"
+    data_format: str = "yolo"
     balance: Optional[BalanceSpec] = None
     test_images: Optional[Path] = None
     test_labels: Optional[Path] = None
@@ -108,6 +109,8 @@ class DataSpec:
         raise ValueError(f"Split khong ho tro hoac chua duoc khai bao: {split}")
 
     def split_labels_dir(self, split: str) -> Path:
+        if self.data_format == "classification_folder":
+            return self.split_images_dir(split)
         split_name = str(split).strip().lower()
         if split_name == "train":
             return self.train_labels
@@ -374,6 +377,40 @@ def _images_to_labels(images_dir: Path) -> Path:
     return Path(*new_parts)
 
 
+def _normalize_data_format(value: object) -> str:
+    normalized = str(value or "yolo").strip().lower().replace("-", "_")
+    aliases = {
+        "image_folder": "classification_folder",
+        "imagefolder": "classification_folder",
+        "classification": "classification_folder",
+        "classification_dir": "classification_folder",
+        "classification_directory": "classification_folder",
+        "class_folder": "classification_folder",
+        "classfolder": "classification_folder",
+        "cls_folder": "classification_folder",
+        "cls_crops": "classification_folder",
+        "yolo_detection": "yolo",
+        "yolo_labels": "yolo",
+    }
+    normalized = aliases.get(normalized, normalized)
+    if normalized not in {"yolo", "classification_folder"}:
+        raise ValueError(
+            "format/data_format khong hop le trong data.yaml: "
+            f"{value!r}. Gia tri ho tro: yolo, classification_folder."
+        )
+    return normalized
+
+
+def _infer_class_names_from_split_dir(split_dir: Path) -> List[str]:
+    if not split_dir.exists():
+        return []
+    return [
+        path.name
+        for path in sorted(split_dir.iterdir(), key=lambda item: item.name.lower())
+        if path.is_dir()
+    ]
+
+
 def _optional_balance_yaml_path(data_yaml_path: Path, raw: Dict[str, Any]) -> Optional[Path]:
     explicit_value = raw.get("balance_yaml", raw.get("balance_file", raw.get("canbang_yaml")))
     if explicit_value is False:
@@ -466,18 +503,29 @@ def load_data_spec(
     expected_num_classes: Optional[int] = None,
 ) -> DataSpec:
     data_yaml_path = Path(data_yaml).resolve()
-    raw = yaml.safe_load(data_yaml_path.read_text(encoding="utf-8"))
+    raw = yaml.safe_load(data_yaml_path.read_text(encoding="utf-8")) or {}
+    data_format = _normalize_data_format(raw.get("format", raw.get("data_format", "yolo")))
     root = _resolve_path(data_yaml_path.parent, raw.get("path", data_yaml_path.parent))
-    train_images = _resolve_path(root, raw["train"])
-    val_images = _resolve_path(root, raw["val"])
+    train_images = _resolve_path(root, raw.get("train", "train"))
+    val_images = _resolve_path(root, raw.get("val", "val"))
     test_value = raw.get("test")
     test_images = _resolve_path(root, test_value) if test_value else None
     yaml_class_name_mode = raw.get("class_name_mode", raw.get("class_names_mode", "auto"))
     resolved_class_name_mode = _normalize_class_name_mode(
         class_name_mode if class_name_mode is not None else yaml_class_name_mode
     )
+    raw_names = raw.get("names")
+    if raw_names is None:
+        if data_format != "classification_folder":
+            raise KeyError("data.yaml thieu truong names.")
+        raw_names = _infer_class_names_from_split_dir(train_images)
+        if not raw_names:
+            raise ValueError(
+                "Khong the tu suy ra names cho classification_folder vi train dir khong co thu muc class: "
+                f"{train_images}"
+            )
     class_names = _resolve_project_class_names(
-        _normalize_names(raw["names"]),
+        _normalize_names(raw_names),
         mode=resolved_class_name_mode,
     )
     nc = int(raw.get("nc", len(class_names)))
@@ -496,14 +544,19 @@ def load_data_spec(
         data_yaml=data_yaml_path,
         root=root,
         train_images=train_images,
-        train_labels=_images_to_labels(train_images),
+        train_labels=train_images if data_format == "classification_folder" else _images_to_labels(train_images),
         val_images=val_images,
-        val_labels=_images_to_labels(val_images),
+        val_labels=val_images if data_format == "classification_folder" else _images_to_labels(val_images),
         class_names=class_names,
         class_name_mode=resolved_class_name_mode,
+        data_format=data_format,
         balance=balance_spec,
         test_images=test_images,
-        test_labels=_images_to_labels(test_images) if test_images is not None else None,
+        test_labels=(
+            test_images
+            if data_format == "classification_folder" and test_images is not None
+            else _images_to_labels(test_images) if test_images is not None else None
+        ),
     )
 
 

@@ -921,6 +921,310 @@ class MangoSample:
     primary_object_index: int = -1
 
 
+@dataclass
+class ClassificationFolderSample:
+    image_path: Path
+    label: int
+    class_name: str
+
+
+class ClassificationFolderDataset(Dataset):
+    def __init__(
+        self,
+        root_dir: Path,
+        class_names: Sequence[str],
+        transform: Optional[Callable] = None,
+        split: Optional[str] = None,
+        class_aware_augmentation: bool = False,
+        class_augmentation_power: float = 0.75,
+        class_augmentation_max_scale: float = 1.8,
+        class_crop_margin_scales: Optional[Sequence[float]] = None,
+    ) -> None:
+        self.root_dir = Path(root_dir)
+        self.images_dir = self.root_dir
+        self.labels_dir = self.root_dir
+        self.class_names = [str(name) for name in class_names]
+        self.num_classes = len(self.class_names)
+        self.transform = transform
+        self.split = str(split or "unknown")
+        self.classification_target = True
+        self.classification_object_crops = False
+        self.crop_to_primary_object = False
+        self.class_aware_augmentation = bool(class_aware_augmentation)
+        self.class_augmentation_power = max(0.0, float(class_augmentation_power))
+        self.class_augmentation_max_scale = max(1.0, float(class_augmentation_max_scale))
+        self.class_crop_margin_scales = (
+            [max(1.0, float(value)) for value in class_crop_margin_scales]
+            if class_crop_margin_scales is not None
+            else []
+        )
+        self._image_cache_enabled = False
+        self._image_cache_max_bytes = 0
+        self._image_cache_max_items = 0
+        self._image_cache_bytes = 0
+        self._image_cache_hits = 0
+        self._image_cache_misses = 0
+        self._image_cache: "OrderedDict[str, Image.Image]" = OrderedDict()
+        self.audit = self._init_audit()
+        self.samples = self._index_samples()
+        self.class_augmentation_scales = self._build_class_augmentation_scales()
+        logger.info(
+            "Classification folder dataset initialized: split=%s root=%s "
+            "classes=%s selected_samples=%s missing_class_dirs=%s class_aug=%s scales=%s",
+            self.split,
+            self.root_dir,
+            self.num_classes,
+            len(self.samples),
+            self.audit["missing_class_dir_count"],
+            self.class_aware_augmentation,
+            self.class_augmentation_scales,
+        )
+
+    @classmethod
+    def from_data_spec(
+        cls,
+        data_spec: DataSpec,
+        split: str,
+        transform: Optional[Callable] = None,
+        class_aware_augmentation: bool = False,
+        class_augmentation_power: float = 0.75,
+        class_augmentation_max_scale: float = 1.8,
+        class_crop_margin_scales: Optional[Sequence[float]] = None,
+    ) -> "ClassificationFolderDataset":
+        return cls(
+            root_dir=data_spec.split_images_dir(split),
+            class_names=data_spec.class_names,
+            transform=transform,
+            split=split,
+            class_aware_augmentation=class_aware_augmentation,
+            class_augmentation_power=class_augmentation_power,
+            class_augmentation_max_scale=class_augmentation_max_scale,
+            class_crop_margin_scales=class_crop_margin_scales,
+        )
+
+    def _init_audit(self) -> Dict[str, object]:
+        return {
+            "image_file_count": 0,
+            "label_file_count": 0,
+            "valid_object_count": 0,
+            "selected_sample_count": 0,
+            "single_object_image_count": 0,
+            "multi_object_image_count": 0,
+            "max_objects_per_image": 1,
+            "object_count_histogram": {"1": 0},
+            "ignored_object_count": 0,
+            "missing_image_count": 0,
+            "empty_label_count": 0,
+            "invalid_line_count": 0,
+            "invalid_bbox_count": 0,
+            "invalid_class_count": 0,
+            "missing_class_dir_count": 0,
+            "sample_missing_images": [],
+            "sample_empty_labels": [],
+            "sample_invalid_lines": [],
+            "sample_invalid_bboxes": [],
+            "sample_invalid_classes": [],
+            "sample_missing_class_dirs": [],
+        }
+
+    def _audit_append(self, key: str, value: object, limit: int = 10) -> None:
+        sample_list = self.audit[key]
+        if len(sample_list) < limit:
+            sample_list.append(value)
+
+    def _index_samples(self) -> List[ClassificationFolderSample]:
+        samples: List[ClassificationFolderSample] = []
+        if not self.root_dir.exists():
+            self.audit["missing_image_count"] += 1
+            self._audit_append("sample_missing_images", str(self.root_dir))
+            return samples
+
+        for class_index, class_name in enumerate(self.class_names):
+            class_dir = self.root_dir / class_name
+            if not class_dir.exists() or not class_dir.is_dir():
+                self.audit["missing_class_dir_count"] += 1
+                self._audit_append("sample_missing_class_dirs", class_name)
+                continue
+            image_paths = [
+                path
+                for path in sorted(class_dir.rglob("*"), key=lambda item: str(item).lower())
+                if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS
+            ]
+            self.audit["image_file_count"] += len(image_paths)
+            self.audit["valid_object_count"] += len(image_paths)
+            self.audit["selected_sample_count"] += len(image_paths)
+            self.audit["single_object_image_count"] += len(image_paths)
+            histogram = self.audit.get("object_count_histogram")
+            if isinstance(histogram, dict):
+                histogram["1"] = int(histogram.get("1", 0)) + len(image_paths)
+            for image_path in image_paths:
+                samples.append(
+                    ClassificationFolderSample(
+                        image_path=image_path,
+                        label=int(class_index),
+                        class_name=class_name,
+                    )
+                )
+        return samples
+
+    def __len__(self) -> int:
+        return len(self.samples)
+
+    def class_counts(self, num_classes: int) -> List[int]:
+        counts = [0 for _ in range(max(1, int(num_classes)))]
+        for sample in self.samples:
+            if 0 <= int(sample.label) < len(counts):
+                counts[int(sample.label)] += 1
+        return counts
+
+    def _build_class_augmentation_scales(self) -> List[float]:
+        if self.class_crop_margin_scales:
+            values = list(self.class_crop_margin_scales[: self.num_classes])
+            while len(values) < self.num_classes:
+                values.append(1.0)
+            return [max(1.0, float(value)) for value in values]
+        if not self.class_aware_augmentation or self.num_classes <= 0:
+            return [1.0 for _ in range(max(1, self.num_classes))]
+        counts = self.class_counts(self.num_classes)
+        positive_counts = [max(1, int(count)) for count in counts]
+        max_count = max(positive_counts) if positive_counts else 1
+        scales = []
+        for count in positive_counts:
+            scale = (float(max_count) / float(count)) ** self.class_augmentation_power
+            scales.append(float(min(self.class_augmentation_max_scale, max(1.0, scale))))
+        return scales
+
+    def _augmentation_scale_for_label(self, label: int) -> float:
+        label = int(label)
+        if 0 <= label < len(self.class_augmentation_scales):
+            return float(self.class_augmentation_scales[label])
+        return 1.0
+
+    def labels(self) -> List[int]:
+        return [int(sample.label) for sample in self.samples]
+
+    def bboxes(self) -> List[Tuple[float, float, float, float]]:
+        return [(0.5, 0.5, 1.0, 1.0) for _ in self.samples]
+
+    def sample_paths(self) -> List[Path]:
+        return [sample.image_path for sample in self.samples]
+
+    def quality_report(self) -> Dict[str, object]:
+        report = dict(self.audit)
+        report["data_format"] = "classification_folder"
+        report["classification_target"] = True
+        report["classification_object_crops"] = False
+        report["crop_to_primary_object"] = False
+        report["class_counts"] = self.class_counts(self.num_classes)
+        report["class_augmentation_scales"] = list(self.class_augmentation_scales)
+        report["class_aware_augmentation"] = bool(self.class_aware_augmentation)
+        report["image_cache"] = self.image_cache_stats()
+        return report
+
+    def enable_image_cache(
+        self,
+        max_megabytes: int = 256,
+        max_items: int = 0,
+    ) -> None:
+        self._image_cache_enabled = int(max_megabytes) > 0 or int(max_items) > 0
+        self._image_cache_max_bytes = max(0, int(max_megabytes)) * 1024 * 1024
+        self._image_cache_max_items = max(0, int(max_items))
+        if not self._image_cache_enabled:
+            self.clear_image_cache()
+        logger.info(
+            "Image cache configured: split=%s enabled=%s max_mb=%s max_items=%s",
+            self.split,
+            self._image_cache_enabled,
+            max_megabytes,
+            self._image_cache_max_items or None,
+        )
+
+    def clear_image_cache(self) -> None:
+        self._image_cache.clear()
+        self._image_cache_bytes = 0
+        self._image_cache_hits = 0
+        self._image_cache_misses = 0
+
+    @staticmethod
+    def _estimate_image_bytes(image: Image.Image) -> int:
+        bands = max(1, len(image.getbands()))
+        width, height = image.size
+        return max(1, int(width) * int(height) * bands)
+
+    def _put_image_cache(self, key: str, image: Image.Image) -> None:
+        if not self._image_cache_enabled:
+            return
+        if key in self._image_cache:
+            cached = self._image_cache.pop(key)
+            self._image_cache_bytes -= self._estimate_image_bytes(cached)
+
+        cached_image = image.copy()
+        self._image_cache[key] = cached_image
+        self._image_cache_bytes += self._estimate_image_bytes(cached_image)
+        self._image_cache.move_to_end(key)
+
+        while self._image_cache and (
+            (
+                self._image_cache_max_bytes > 0
+                and self._image_cache_bytes > self._image_cache_max_bytes
+            )
+            or (
+                self._image_cache_max_items > 0
+                and len(self._image_cache) > self._image_cache_max_items
+            )
+        ):
+            _, evicted = self._image_cache.popitem(last=False)
+            self._image_cache_bytes -= self._estimate_image_bytes(evicted)
+
+    def image_cache_stats(self) -> Dict[str, object]:
+        return {
+            "enabled": self._image_cache_enabled,
+            "items": len(self._image_cache),
+            "bytes": int(self._image_cache_bytes),
+            "max_bytes": int(self._image_cache_max_bytes),
+            "max_items": int(self._image_cache_max_items),
+            "hits": int(self._image_cache_hits),
+            "misses": int(self._image_cache_misses),
+        }
+
+    def _load_rgb_image(self, image_path: Path) -> Image.Image:
+        cache_key = str(image_path)
+        if self._image_cache_enabled:
+            cached = self._image_cache.get(cache_key)
+            if cached is not None:
+                self._image_cache_hits += 1
+                self._image_cache.move_to_end(cache_key)
+                return cached.copy()
+            self._image_cache_misses += 1
+
+        with Image.open(image_path) as img:
+            image = img.convert("RGB").copy()
+        self._put_image_cache(cache_key, image)
+        return image
+
+    def __getitem__(self, index: int):
+        sample = self.samples[int(index)]
+        image = self._load_rgb_image(sample.image_path)
+        augmentation_scale = self._augmentation_scale_for_label(sample.label)
+        if self.transform is not None:
+            target = {
+                "labels": torch.tensor([sample.label], dtype=torch.long),
+                "boxes": torch.tensor([[0.5, 0.5, 1.0, 1.0]], dtype=torch.float32),
+                "augmentation_scale": torch.tensor([augmentation_scale], dtype=torch.float32),
+            }
+            try:
+                transformed = self.transform(image, target=target)
+            except TypeError:
+                transformed = self.transform(image)
+            if isinstance(transformed, tuple) and len(transformed) == 2:
+                image_tensor = transformed[0]
+            else:
+                image_tensor = transformed
+        else:
+            image_tensor = image
+        return image_tensor, int(sample.label)
+
+
 class MangoYOLOCropDataset(Dataset):
     def __init__(
         self,
@@ -1801,7 +2105,11 @@ class RareClassRepeatDataset(Dataset):
         if samples is not None:
             sample = samples[int(sample_index)]
             if bool(getattr(self.dataset, "classification_target", False)):
-                return [int(getattr(sample, "primary_label"))]
+                if hasattr(sample, "primary_label"):
+                    return [int(getattr(sample, "primary_label"))]
+                if hasattr(sample, "label"):
+                    return [int(getattr(sample, "label"))]
+                return []
             objects = getattr(sample, "objects", [])
             return [int(getattr(obj, "label")) for obj in objects]
         labels_fn = getattr(self.dataset, "labels", None)
