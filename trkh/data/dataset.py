@@ -935,6 +935,7 @@ class MangoYOLOCropDataset(Dataset):
         class_aware_augmentation: bool = False,
         class_augmentation_power: float = 0.75,
         class_augmentation_max_scale: float = 1.8,
+        classification_target: bool = False,
     ) -> None:
         self.images_dir = Path(images_dir)
         self.labels_dir = Path(labels_dir)
@@ -948,6 +949,7 @@ class MangoYOLOCropDataset(Dataset):
         self.class_aware_augmentation = bool(class_aware_augmentation)
         self.class_augmentation_power = max(0.0, float(class_augmentation_power))
         self.class_augmentation_max_scale = max(1.0, float(class_augmentation_max_scale))
+        self.classification_target = bool(classification_target)
         self._image_cache_enabled = False
         self._image_cache_max_bytes = 0
         self._image_cache_max_items = 0
@@ -962,7 +964,8 @@ class MangoYOLOCropDataset(Dataset):
         logger.info(
             "Dataset initialized: split=%s images_dir=%s labels_dir=%s "
             "image_files=%s label_files=%s selected_samples=%s valid_objects=%s "
-            "missing_images=%s invalid_bboxes=%s invalid_classes=%s crop_primary=%s class_aug=%s scales=%s",
+            "missing_images=%s invalid_bboxes=%s invalid_classes=%s crop_primary=%s "
+            "classification_target=%s class_aug=%s scales=%s",
             self.split,
             self.images_dir,
             self.labels_dir,
@@ -974,6 +977,7 @@ class MangoYOLOCropDataset(Dataset):
             self.audit["invalid_bbox_count"],
             self.audit["invalid_class_count"],
             self.crop_to_primary_object,
+            self.classification_target,
             self.class_aware_augmentation,
             self.class_augmentation_scales,
         )
@@ -990,6 +994,7 @@ class MangoYOLOCropDataset(Dataset):
         class_aware_augmentation: bool = False,
         class_augmentation_power: float = 0.75,
         class_augmentation_max_scale: float = 1.8,
+        classification_target: bool = False,
     ) -> "MangoYOLOCropDataset":
         return cls(
             images_dir=data_spec.split_images_dir(split),
@@ -1003,6 +1008,7 @@ class MangoYOLOCropDataset(Dataset):
             class_aware_augmentation=class_aware_augmentation,
             class_augmentation_power=class_augmentation_power,
             class_augmentation_max_scale=class_augmentation_max_scale,
+            classification_target=classification_target,
         )
 
     @classmethod
@@ -1017,6 +1023,7 @@ class MangoYOLOCropDataset(Dataset):
         class_aware_augmentation: bool = False,
         class_augmentation_power: float = 0.75,
         class_augmentation_max_scale: float = 1.8,
+        classification_target: bool = False,
         class_name_mode: Optional[str] = None,
         expected_num_classes: Optional[int] = None,
     ) -> "MangoYOLOCropDataset":
@@ -1035,6 +1042,7 @@ class MangoYOLOCropDataset(Dataset):
             class_aware_augmentation=class_aware_augmentation,
             class_augmentation_power=class_augmentation_power,
             class_augmentation_max_scale=class_augmentation_max_scale,
+            classification_target=classification_target,
         )
 
     def _index_image_paths_by_stem(self) -> Dict[str, Path]:
@@ -1451,6 +1459,9 @@ class MangoYOLOCropDataset(Dataset):
         else:
             image_tensor = image
             transformed_target = target
+
+        if self.classification_target:
+            return image_tensor, int(sample.primary_label)
 
         target_metadata = {
             key: transformed_target[key]

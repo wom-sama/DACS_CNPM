@@ -1,0 +1,5 @@
+output_dir: D:\DataAI\AIEx\TRKH\docs\augmentation_examples
+data_yaml: D:\DataAI\AIEx\dataset\data.yaml
+image_size: 416
+sample_indices: [0, 1, 2, 3]
+class_names: ['Xoai_Song_Chua_KhoDap', 'Xoai_Song_ChuaNhe_CoNguyCo', 'Xoai_Chin_NgotThanh_DeDap', 'Xoai_ChinGia_NgotGat_KhongVanChuyen', 'Xoai_Hu_KhongAnDuoc']

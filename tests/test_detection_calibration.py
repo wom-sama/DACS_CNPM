@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 import torch
+from PIL import Image
 
 import trkh.models.model as model_module
 from trkh.core.config import AugmentationConfig, ModelConfig, TrainConfig, load_data_spec
@@ -21,14 +22,17 @@ from trkh.evaluation.evaluate import (
     _score_detection_queries,
 )
 from trkh.data.dataset import (
+    MangoYOLOCropDataset,
     RareClassRepeatDataset,
     _apply_copypaste_detection_batch,
     build_rare_class_repeat_factors,
+    build_eval_transform,
     build_train_collate_fn,
     build_train_transform,
 )
 from trkh.inference.inference import post_process_detections, resolve_detection_output_limit
 from trkh.training.loss import DETRSetCriterion
+from trkh.training.losses import LDAMFocalLoss
 from trkh.training.matcher import HungarianMatcher
 from trkh.models.model import create_model
 from trkh.training.train import (
@@ -46,12 +50,85 @@ from trkh.training.train import (
     _resolve_checkpoint_selection,
     _resolve_detection_stage,
     _save_interrupt_checkpoint,
+    _forward_train_loss,
     train_one_epoch,
 )
 from trkh.core.utils import append_csv_row, build_warmup_decay_scheduler, load_checkpoint, resolve_amp_dtype, save_checkpoint
 
 
 class DetectionCalibrationTests(unittest.TestCase):
+    def test_vit_registers_ignores_detection_only_model_config_keys(self):
+        model = create_model(
+            num_classes=5,
+            model_config=ModelConfig(
+                model_type="vit_registers",
+                image_size=64,
+                patch_size=16,
+                embed_dim=64,
+                depth=1,
+                num_heads=4,
+                num_registers=2,
+                num_queries=40,
+                quality_head=True,
+                count_head=True,
+                auxiliary_decoder_outputs=True,
+            ),
+        )
+        self.assertEqual(getattr(model, "model_type", ""), "vit_registers")
+        logits = model(torch.randn(2, 3, 64, 64))
+        self.assertEqual(tuple(logits.shape), (2, 5))
+
+    def test_classification_dataset_target_feeds_vit_registers_loss(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            images_dir = root / "images"
+            labels_dir = root / "labels"
+            images_dir.mkdir()
+            labels_dir.mkdir()
+            Image.new("RGB", (96, 96), color=(128, 200, 64)).save(images_dir / "sample.jpg")
+            (labels_dir / "sample.txt").write_text("1 0.5 0.5 0.6 0.6\n", encoding="utf-8")
+
+            dataset = MangoYOLOCropDataset(
+                images_dir=images_dir,
+                labels_dir=labels_dir,
+                transform=build_eval_transform(image_size=64, resize_mode="pad"),
+                crop_to_primary_object=True,
+                num_classes=5,
+                classification_target=True,
+            )
+            image, label = dataset[0]
+            self.assertEqual(label, 1)
+
+            images, targets = build_train_collate_fn(num_classes=5, batch_mix_probability=0.0)(
+                [(image, label), (image, label)]
+            )
+            self.assertEqual(tuple(targets.shape), (2, 5))
+            self.assertEqual(int(targets[:, 1].sum().item()), 2)
+
+            model = create_model(
+                num_classes=5,
+                model_config={
+                    "model_type": "vit_registers",
+                    "image_size": 64,
+                    "patch_size": 16,
+                    "embed_dim": 64,
+                    "depth": 1,
+                    "num_heads": 4,
+                    "num_registers": 2,
+                },
+            )
+            criterion = LDAMFocalLoss(class_counts=[1, 2, 1, 1, 1])
+            loss, *_ = _forward_train_loss(
+                model=model,
+                criterion=criterion,
+                images=images,
+                labels=None,
+                targets=targets,
+                device=torch.device("cpu"),
+                amp=False,
+            )
+            self.assertTrue(torch.isfinite(loss))
+
     def test_objectness_loss_balances_positive_and_negative_queries(self):
         criterion = DETRSetCriterion(
             num_classes=4,

@@ -853,6 +853,9 @@ def evaluate_model(
                 images = images.to(device, non_blocking=True)
                 if labels is not None:
                     labels = labels.to(device, non_blocking=True)
+                    metric_labels = labels.argmax(dim=1) if labels.ndim == 2 else labels
+                else:
+                    metric_labels = None
                 if target_boxes is not None:
                     target_boxes = target_boxes.to(device, non_blocking=True)
 
@@ -1033,7 +1036,9 @@ def evaluate_model(
                         )
                 else:
                     predictions = probabilities.argmax(dim=1)
-                    all_targets.append(labels.detach().cpu())
+                    if metric_labels is None:
+                        raise ValueError("Classification evaluation thieu label target.")
+                    all_targets.append(metric_labels.detach().cpu())
                     all_predictions.append(predictions.detach().cpu())
                     all_probabilities.append(probabilities.detach().cpu())
                     if metric_pred_boxes is not None and target_boxes is not None:
@@ -1341,6 +1346,8 @@ def main() -> None:
     class_names = list(checkpoint.get("class_names", data_spec.class_names))
     if len(class_names) != data_spec.num_classes:
         raise ValueError("So lop trong checkpoint khong khop data.yaml")
+    checkpoint_model_type = str(checkpoint.get("model_config", {}).get("model_type", "")).strip().lower()
+    checkpoint_detection_mode = checkpoint_model_type in DETECTION_MODEL_TYPES
     crop_to_primary_object = resolve_crop_to_primary_object(
         checkpoint,
         full_image_detection=args.full_image_detection,
@@ -1367,6 +1374,7 @@ def main() -> None:
             checkpoint.get("augmentation_config", {}).get("crop_margin_ratio", 0.05)
         ),
         crop_to_primary_object=crop_to_primary_object,
+        classification_target=not checkpoint_detection_mode,
     )
     dataloader_kwargs, dataloader_summary = build_safe_dataloader_kwargs(
         requested_num_workers=args.num_workers,
@@ -1403,7 +1411,7 @@ def main() -> None:
         explicit_threshold=args.confidence_threshold,
         disable_calibration=args.disable_calibration,
     )
-    if checkpoint.get("model_config", {}).get("model_type") in DETECTION_MODEL_TYPES:
+    if checkpoint_detection_mode:
         criterion = HybridDetectionClassificationLoss(
             num_classes=data_spec.num_classes,
             label_smoothing=float(checkpoint.get("train_config", {}).get("label_smoothing", 0.0)),

@@ -2662,6 +2662,7 @@ def main() -> None:
         transform=train_transform,
         crop_margin_ratio=augmentation_config.crop_margin_ratio,
         crop_to_primary_object=crop_to_primary_object,
+        classification_target=not detection_mode,
         class_aware_augmentation=augmentation_config.class_aware_augmentation,
         class_augmentation_power=augmentation_config.class_augmentation_power,
         class_augmentation_max_scale=augmentation_config.class_augmentation_max_scale,
@@ -2672,6 +2673,7 @@ def main() -> None:
         transform=eval_transform,
         crop_margin_ratio=augmentation_config.crop_margin_ratio,
         crop_to_primary_object=crop_to_primary_object,
+        classification_target=not detection_mode,
         class_aware_augmentation=False,
     )
     test_dataset = None
@@ -2682,6 +2684,7 @@ def main() -> None:
             transform=eval_transform,
             crop_margin_ratio=augmentation_config.crop_margin_ratio,
             crop_to_primary_object=crop_to_primary_object,
+            classification_target=not detection_mode,
             class_aware_augmentation=False,
         )
     if len(train_dataset) == 0 or len(val_dataset) == 0:
@@ -3140,6 +3143,7 @@ def main() -> None:
         "class_names": data_spec.class_names,
         "crop_to_primary_object": crop_to_primary_object,
         "full_image_detection": not crop_to_primary_object,
+        "classification_target": not detection_mode,
         "dataset_balance_auto_config": balance_auto_summary,
         "train_class_counts": train_class_counts,
         "val_class_counts": val_class_counts,

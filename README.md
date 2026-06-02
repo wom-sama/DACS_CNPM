@@ -87,7 +87,39 @@ D:\DataAI\.venv\Scripts\python.exe -m compileall train.py evaluate.py scripts tr
 D:\DataAI\.venv\Scripts\python.exe -m unittest discover -s tests -p "test_*.py" -v
 ```
 
-Current expected result: `40` tests passed.
+Current expected result: `42` tests passed.
+
+## Classification-Only Experiment
+
+Use this when the goal is to measure the classification ceiling without objectness, bbox, Hungarian matching, count head, quality head, or detection metrics. The key is `--model-type vit_registers` and not passing `--full-image-detection`; this makes the YOLO dataset return cropped primary-object labels for classification loss.
+
+```powershell
+cd D:\DataAI\AIEx\TRKH
+$env:PYTHONPATH='D:\DataAI\AIEx\TRKH'
+$env:TRKH_AMP_DTYPE='bf16'
+$env:OMP_NUM_THREADS='6'
+$env:TRKH_ALLOW_WINDOWS_MULTIPROCESSING='1'
+$env:TRKH_ALLOW_WINDOWS_PIN_MEMORY='1'
+$env:TRKH_ALLOW_WINDOWS_PERSISTENT_WORKERS='1'
+
+D:\DataAI\.venv\Scripts\python.exe -m trkh.training.train `
+  --data D:\DataAI\AIEx\dataset\data.yaml `
+  --class-name-mode raw --expected-num-classes 5 `
+  --run-name mango_cls_416_vitreg_5cls_imbalance_local_v1 `
+  --output-dir runs --disable-resume --seed 42 `
+  --model-type vit_registers --image-size 416 --patch-size 16 `
+  --embed-dim 256 --depth 8 --num-heads 8 --num-registers 4 --drop-path-rate 0.08 `
+  --batch-size 24 --grad-accum-steps 1 --epochs 0 --scheduler-total-epochs 120 --patience 60 `
+  --learning-rate 8e-5 --min-learning-rate 8e-7 --weight-decay 0.05 --warmup-epochs 5 `
+  --grad-clip-norm 0.75 --max-nonfinite-grad-steps 4 `
+  --num-workers 2 --eval-num-workers 2 --train-image-cache-mb 0 --eval-image-cache-mb 0 `
+  --class-weight-mode sqrt_inverse --focal-loss-gamma 2.0 --focal-loss-mix 0.25 `
+  --label-smoothing 0.02 --ldam-scale 20.0 --best-metric macro_f1 `
+  --resize-mode pad --brightness 0.0 --contrast 0.0 --saturation 0.0 --hue 0.0 `
+  --random-erasing-probability 0.0 --random-affine-degrees 4 --random-affine-translate 0.03 --random-affine-scale-min 0.94 `
+  --horizontal-flip-probability 0.5 --vertical-flip-probability 0.02 --rotate90-probability 0.06 --lighting-probability 0.0 `
+  --batch-mix-probability 0.0 --mosaic-probability 0.0 --mixup-probability 0.0 --cutmix-probability 0.0 --copy-paste-probability 0.0
+```
 
 ## Stage1-to-Stage2 Local Training Candidate
 

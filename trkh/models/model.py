@@ -1344,6 +1344,25 @@ def create_model(
     config.pop("timm_model_name", None)
 
     if model_type == "vit_registers":
+        for detector_only_key in (
+            "bbox_head_hidden_dim",
+            "num_queries",
+            "decoder_depth",
+            "decoder_num_heads",
+            "decoder_ffn_dim",
+            "decoder_dropout",
+            "decoder_memory_adapter",
+            "decoder_memory_adapter_dropout",
+            "quality_head",
+            "quality_prior_prob",
+            "auxiliary_decoder_outputs",
+            "query_denoising_noise",
+            "count_head",
+            "count_head_hidden_dim",
+            "count_head_dropout",
+            "count_head_prior",
+        ):
+            config.pop(detector_only_key, None)
         model = VisionTransformerWithRegisters(num_classes=num_classes, **config)
     elif model_type in {"detr_vit_registers", "vit_registers_hybrid"}:
         model = DETRVisionTransformerWithRegisters(
