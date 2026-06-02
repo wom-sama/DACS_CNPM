@@ -207,6 +207,80 @@ class DetectionCalibrationTests(unittest.TestCase):
             self.assertEqual(rows[0]["image_path"], "a.jpg")
             self.assertEqual(rows[1]["correct"], "0")
 
+    def test_save_evaluation_artifacts_writes_baseline_comparison_files(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            class_names = ["class_a", "class_b"]
+            targets = torch.tensor([0, 1], dtype=torch.long)
+            predictions = torch.tensor([0, 0], dtype=torch.long)
+            probabilities = torch.tensor([[0.8, 0.2], [0.6, 0.4]], dtype=torch.float32)
+            metrics = build_metrics(
+                targets=targets,
+                predictions=predictions,
+                class_names=class_names,
+                probabilities=probabilities,
+            )
+            metrics["loss"] = 0.5
+            metrics["prediction_records"] = _build_prediction_records(
+                targets=targets,
+                predictions=predictions,
+                probabilities=probabilities,
+                class_names=class_names,
+                sample_paths=["a.jpg", "b.jpg"],
+            )
+            save_evaluation_artifacts(
+                metrics,
+                class_names,
+                output_dir,
+                comparison_summary={
+                    "paper_name": "TRKH-Test",
+                    "family": "TRKH",
+                    "backend": "trkh",
+                    "model": "vit_registers",
+                    "pretrained": False,
+                    "test_size": 2,
+                    "test_loss": 0.5,
+                    "metrics": {
+                        "accuracy": 0.5,
+                        "macro_precision": 0.25,
+                        "macro_recall": 0.5,
+                        "macro_f1": 0.3333333333,
+                    },
+                    "ci95": {},
+                    "params": 123,
+                    "inference_time_ms_per_image": 1.0,
+                    "best_epoch": 1,
+                    "classes": class_names,
+                },
+                comparison_prediction_rows=[
+                    {
+                        "path": "a.jpg",
+                        "y_true": 0,
+                        "y_pred": 0,
+                        "true_name": "class_a",
+                        "pred_name": "class_a",
+                    },
+                    {
+                        "path": "b.jpg",
+                        "y_true": 1,
+                        "y_pred": 0,
+                        "true_name": "class_b",
+                        "pred_name": "class_a",
+                    },
+                ],
+            )
+            self.assertTrue((output_dir / "metrics.json").exists())
+            self.assertTrue((output_dir / "metrics_detailed.json").exists())
+            self.assertTrue((output_dir / "predictions.csv").exists())
+            self.assertTrue((output_dir / "predictions_detailed.csv").exists())
+            with (output_dir / "predictions.csv").open(encoding="utf-8") as handle:
+                rows = list(csv.DictReader(handle))
+            self.assertEqual(
+                list(rows[0].keys()),
+                ["path", "y_true", "y_pred", "true_name", "pred_name"],
+            )
+            self.assertEqual(rows[1]["pred_name"], "class_a")
+
     def test_classification_object_crops_expand_multi_object_images(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

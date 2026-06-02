@@ -197,6 +197,200 @@ def _build_prediction_records(
     return records
 
 
+def _classification_metric_summary(
+    targets: torch.Tensor,
+    predictions: torch.Tensor,
+    class_names: Sequence[str],
+) -> Dict[str, float]:
+    metrics = build_metrics(
+        targets=targets.to(dtype=torch.long).view(-1),
+        predictions=predictions.to(dtype=torch.long).view(-1),
+        class_names=class_names,
+    )
+    return {
+        "accuracy": float(metrics.get("accuracy", 0.0)),
+        "macro_precision": float(metrics.get("macro_precision", 0.0)),
+        "macro_recall": float(metrics.get("macro_recall", 0.0)),
+        "macro_f1": float(metrics.get("macro_f1", 0.0)),
+    }
+
+
+def _bootstrap_ci_from_labels(
+    targets: torch.Tensor,
+    predictions: torch.Tensor,
+    class_names: Sequence[str],
+    *,
+    seed: int = 42,
+    n_bootstrap: int = 1000,
+) -> Dict[str, List[float]]:
+    targets = targets.to(dtype=torch.long).view(-1).cpu()
+    predictions = predictions.to(dtype=torch.long).view(-1).cpu()
+    if int(targets.numel()) < 2 or int(predictions.numel()) < 2:
+        return {}
+
+    sample_count = min(int(targets.numel()), int(predictions.numel()))
+    targets = targets[:sample_count]
+    predictions = predictions[:sample_count]
+    generator = torch.Generator(device="cpu")
+    generator.manual_seed(int(seed))
+    values: Dict[str, List[float]] = {
+        "accuracy": [],
+        "macro_precision": [],
+        "macro_recall": [],
+        "macro_f1": [],
+    }
+    for _ in range(max(1, int(n_bootstrap))):
+        indices = torch.randint(0, sample_count, (sample_count,), generator=generator)
+        sampled = _classification_metric_summary(
+            targets=targets[indices],
+            predictions=predictions[indices],
+            class_names=class_names,
+        )
+        for key in values:
+            values[key].append(float(sampled[key]))
+
+    intervals: Dict[str, List[float]] = {}
+    for key, metric_values in values.items():
+        tensor = torch.tensor(metric_values, dtype=torch.float32)
+        intervals[key] = [
+            float(torch.quantile(tensor, 0.025).item()),
+            float(torch.quantile(tensor, 0.975).item()),
+        ]
+    return intervals
+
+
+def _comparison_class_names_for_data_spec(
+    data_spec,
+    split: str,
+    fallback_class_names: Sequence[str],
+) -> List[str]:
+    fallback = [str(name) for name in fallback_class_names]
+    if getattr(data_spec, "data_format", "yolo") != "classification_folder":
+        return fallback
+    split_dir = data_spec.split_images_dir(split)
+    if not split_dir.exists():
+        return fallback
+    folder_class_names = [
+        path.name
+        for path in sorted(split_dir.iterdir(), key=lambda item: item.name)
+        if path.is_dir()
+    ]
+    if len(folder_class_names) == len(fallback) and set(folder_class_names) == set(fallback):
+        return folder_class_names
+    return fallback
+
+
+def _record_class_name(
+    record: Dict[str, object],
+    *,
+    name_key: str,
+    index_key: str,
+    class_names: Sequence[str],
+) -> str:
+    value = record.get(name_key, "")
+    if isinstance(value, str) and value:
+        return value
+    try:
+        index = int(record.get(index_key, -1))
+    except (TypeError, ValueError):
+        index = -1
+    if 0 <= index < len(class_names):
+        return str(class_names[index])
+    return ""
+
+
+def _build_baseline_comparison_prediction_rows(
+    prediction_records: Sequence[Dict[str, object]],
+    *,
+    class_names: Sequence[str],
+    comparison_class_names: Sequence[str],
+) -> List[Dict[str, object]]:
+    class_to_index = {str(name): index for index, name in enumerate(comparison_class_names)}
+    rows: List[Dict[str, object]] = []
+    for record in prediction_records:
+        if not isinstance(record, dict):
+            continue
+        true_name = _record_class_name(
+            record,
+            name_key="target_name",
+            index_key="target_index",
+            class_names=class_names,
+        )
+        pred_name = _record_class_name(
+            record,
+            name_key="prediction_name",
+            index_key="prediction_index",
+            class_names=class_names,
+        )
+        if true_name not in class_to_index or pred_name not in class_to_index:
+            continue
+        rows.append(
+            {
+                "path": str(record.get("image_path", "")),
+                "y_true": int(class_to_index[true_name]),
+                "y_pred": int(class_to_index[pred_name]),
+                "true_name": true_name,
+                "pred_name": pred_name,
+            }
+        )
+    rows.sort(key=lambda item: str(item.get("path", "")))
+    return rows
+
+
+def _build_baseline_comparison_summary(
+    *,
+    rows: Sequence[Dict[str, object]],
+    comparison_class_names: Sequence[str],
+    metrics: Dict[str, object],
+    model: nn.Module,
+    checkpoint: Dict[str, object],
+    paper_name: str,
+    family: str,
+    seed: int,
+) -> Dict[str, object]:
+    targets = torch.tensor([int(row["y_true"]) for row in rows], dtype=torch.long)
+    predictions = torch.tensor([int(row["y_pred"]) for row in rows], dtype=torch.long)
+    metric_summary = _classification_metric_summary(
+        targets=targets,
+        predictions=predictions,
+        class_names=comparison_class_names,
+    ) if len(rows) else {
+        "accuracy": 0.0,
+        "macro_precision": 0.0,
+        "macro_recall": 0.0,
+        "macro_f1": 0.0,
+    }
+    timing = metrics.get("timing", {})
+    eval_loop_seconds = float(timing.get("eval_loop_seconds", 0.0)) if isinstance(timing, dict) else 0.0
+    model_config = checkpoint.get("model_config", {})
+    model_name = ""
+    if isinstance(model_config, dict):
+        model_name = str(model_config.get("model_type", "")).strip()
+    if not model_name:
+        model_name = str(checkpoint.get("model_type", "") or model.__class__.__name__)
+    best_epoch = checkpoint.get("best_epoch", checkpoint.get("epoch", ""))
+    return {
+        "paper_name": str(paper_name),
+        "family": str(family),
+        "backend": "trkh",
+        "model": model_name,
+        "pretrained": False,
+        "test_size": int(len(rows)),
+        "test_loss": float(metrics.get("loss", 0.0)),
+        "metrics": metric_summary,
+        "ci95": _bootstrap_ci_from_labels(
+            targets=targets,
+            predictions=predictions,
+            class_names=comparison_class_names,
+            seed=seed,
+        ) if len(rows) else {},
+        "params": int(sum(parameter.numel() for parameter in model.parameters())),
+        "inference_time_ms_per_image": float(eval_loop_seconds / max(1, len(rows)) * 1000.0),
+        "best_epoch": best_epoch,
+        "classes": [str(name) for name in comparison_class_names],
+    }
+
+
 def _pairwise_iou_xywh(boxes1: torch.Tensor, boxes2: torch.Tensor) -> torch.Tensor:
     if boxes1.numel() == 0 or boxes2.numel() == 0:
         return torch.zeros((boxes1.shape[0], boxes2.shape[0]), dtype=torch.float32)
@@ -1325,12 +1519,37 @@ def save_evaluation_artifacts(
     metrics: Dict[str, object],
     class_names: Sequence[str],
     output_dir: Path,
+    *,
+    comparison_summary: Optional[Dict[str, object]] = None,
+    comparison_prediction_rows: Optional[Sequence[Dict[str, object]]] = None,
 ) -> None:
     ensure_dir(output_dir)
     prediction_records = metrics.get("prediction_records", [])
     metrics_payload = dict(metrics)
     metrics_payload.pop("prediction_records", None)
-    json_dump(output_dir / "metrics.json", to_serializable(metrics_payload))
+    json_dump(
+        output_dir / ("metrics_detailed.json" if comparison_summary is not None else "metrics.json"),
+        to_serializable(metrics_payload),
+    )
+    if comparison_summary is not None:
+        json_dump(output_dir / "metrics.json", to_serializable(comparison_summary))
+    if comparison_prediction_rows is not None:
+        with (output_dir / "predictions.csv").open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(
+                handle,
+                fieldnames=["path", "y_true", "y_pred", "true_name", "pred_name"],
+            )
+            writer.writeheader()
+            for row in comparison_prediction_rows:
+                writer.writerow(
+                    {
+                        "path": row.get("path", ""),
+                        "y_true": row.get("y_true", ""),
+                        "y_pred": row.get("y_pred", ""),
+                        "true_name": row.get("true_name", ""),
+                        "pred_name": row.get("pred_name", ""),
+                    }
+                )
     if isinstance(prediction_records, list) and prediction_records:
         fieldnames: List[str] = []
         for record in prediction_records:
@@ -1339,7 +1558,10 @@ def save_evaluation_artifacts(
             for key in record.keys():
                 if key not in fieldnames:
                     fieldnames.append(str(key))
-        with (output_dir / "predictions.csv").open("w", newline="", encoding="utf-8") as handle:
+        predictions_path = output_dir / (
+            "predictions_detailed.csv" if comparison_prediction_rows is not None else "predictions.csv"
+        )
+        with predictions_path.open("w", newline="", encoding="utf-8") as handle:
             writer = csv.DictWriter(handle, fieldnames=fieldnames)
             writer.writeheader()
             for record in prediction_records:
@@ -1401,6 +1623,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--amp", action="store_true", default=False)
     parser.add_argument("--output-dir", type=Path, default=None)
+    parser.add_argument(
+        "--paper-name",
+        default="TRKH-ViTReg-224",
+        help="Ten hien thi trong metrics.json kieu baseline.",
+    )
+    parser.add_argument(
+        "--family",
+        default="TRKH",
+        help="Nhom model hien thi trong bang so sanh baseline.",
+    )
     parser.add_argument("--max-batches", type=int, default=0)
     parser.add_argument("--override-image-size", type=int, default=None)
     parser.add_argument("--tta", action="store_true", default=False)
@@ -1583,7 +1815,37 @@ def main() -> None:
     output_dir = args.output_dir
     if output_dir is None:
         output_dir = args.checkpoint.resolve().parent.parent / f"eval_{args.split}"
-    save_evaluation_artifacts(metrics, class_names, output_dir)
+    comparison_summary = None
+    comparison_prediction_rows = None
+    prediction_records = metrics.get("prediction_records", [])
+    if not checkpoint_detection_mode and isinstance(prediction_records, list) and prediction_records:
+        comparison_class_names = _comparison_class_names_for_data_spec(
+            data_spec,
+            args.split,
+            class_names,
+        )
+        comparison_prediction_rows = _build_baseline_comparison_prediction_rows(
+            prediction_records,
+            class_names=class_names,
+            comparison_class_names=comparison_class_names,
+        )
+        comparison_summary = _build_baseline_comparison_summary(
+            rows=comparison_prediction_rows,
+            comparison_class_names=comparison_class_names,
+            metrics=metrics,
+            model=model,
+            checkpoint=checkpoint,
+            paper_name=args.paper_name,
+            family=args.family,
+            seed=args.seed,
+        )
+    save_evaluation_artifacts(
+        metrics,
+        class_names,
+        output_dir,
+        comparison_summary=comparison_summary,
+        comparison_prediction_rows=comparison_prediction_rows,
+    )
 
     summary = {
         "split": args.split,
