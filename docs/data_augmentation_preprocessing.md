@@ -11,7 +11,7 @@ Thư mục ảnh minh họa: [augmentation_examples](augmentation_examples/)
 | Transformation type | Details | Vai trò trong phân loại |
 |---|---|---|
 | Kiểm tra ảnh gốc + YOLO bbox | Đọc ảnh gốc và vẽ bbox từ nhãn YOLO. Ảnh mẫu: [00_original_with_yolo_boxes](augmentation_examples/00_original_with_yolo_boxes/). | Dùng để kiểm tra chất lượng nhãn trước khi crop object. |
-| Resize + padding | Giữ tỉ lệ ảnh, resize vào khung cố định 416x416 hoặc 640x640, sau đó pad phần thừa. Ảnh mẫu: [01_resize_pad_416](augmentation_examples/01_resize_pad_416/). | Tránh méo hình quả xoài, giữ hình dạng tự nhiên cho classifier. |
+| Resize + padding | Giữ tỉ lệ ảnh, resize vào khung cố định của run, hiện khuyến nghị là 224x224; ảnh minh họa được render ở 416x416 để dễ quan sát. Ảnh mẫu: [01_resize_pad_416](augmentation_examples/01_resize_pad_416/). | Tránh méo hình quả xoài, giữ hình dạng tự nhiên cho classifier. |
 | Crop object chính | Crop quanh bbox object chính với margin nhỏ rồi resize/pad. Ảnh mẫu: [02_crop_primary_object](augmentation_examples/02_crop_primary_object/). | Giảm nhiễu nền, giúp mô hình tập trung vào quả xoài. |
 | Object-level crops từ ảnh nhiều object | Mỗi bbox hợp lệ trong ảnh nhiều object được tách thành một sample phân loại riêng. Ảnh mẫu: [10_object_level_crops_from_multi_object_images](augmentation_examples/10_object_level_crops_from_multi_object_images/). | Tận dụng thêm object vốn từng bị bỏ qua khi chỉ crop object chính. Đây là thay đổi quan trọng cho classification-only. |
 | Random affine nhẹ | Xoay, dịch chuyển và scale nhẹ quanh crop object. Ảnh mẫu: [03_random_affine](augmentation_examples/03_random_affine/). | Tăng khả năng chịu đựng với góc chụp và vị trí quả xoài, nhưng không làm biến dạng quá mạnh. |
@@ -67,3 +67,73 @@ Với dữ liệu xoài, nên ưu tiên các biến đổi giữ nguyên tín hi
 
 Trong code hiện tại, khi `model_type=vit_registers`, train sẽ tự tắt `batch_mix_probability`, `mosaic_probability`, `mixup_probability`, `cutmix_probability` và `copy_paste_probability` để tránh nhầm sang pipeline detection.
 
+## Hybrid CNN Stem Trong Nhánh Phân Loại
+
+Nhánh classification-only vẫn giữ phần hybrid CNN stem. Đây là thành phần quan trọng với tập dữ liệu nhỏ vì nó giúp mô hình học đặc trưng cục bộ trước khi đưa vào Transformer.
+
+Pipeline hiện tại:
+
+```text
+Object crop image
+-> CNN stem
+   Conv 3x3 + BatchNorm + GELU + MaxPool
+   Conv 3x3 + BatchNorm + GELU + MaxPool
+   Conv 3x3 + BatchNorm + GELU + MaxPool
+-> Patch embedding
+-> CLS token + register tokens + patch tokens
+-> Transformer encoder
+-> Mean(CLS + register tokens)
+-> Linear classifier
+-> Class logits
+```
+
+Điểm khác với mô hình ensemble CNN + ViT song song: mô hình hiện tại không chạy một nhánh ResNet riêng rồi concat với nhánh ViT. CNN stem nằm nối tiếp trước patch embedding. Vì vậy, ViT nhận feature map đã được lọc bởi CNN, không nhận trực tiếp pixel thô.
+
+## Nhược Điểm Và Cách Giảm
+
+| Nhược điểm | Cách giảm trong nhánh hiện tại |
+|---|---|
+| CNN stem downsample 8 lần, có thể mất chi tiết nhỏ trên vỏ xoài. | Run chính dùng 224 để so sánh công bằng với baseline cũ; giảm rủi ro mất chi tiết bằng object-level crop, crop margin hợp lý và không dùng augmentation làm mờ/méo màu. Nếu cần, chạy thêm ablation 416 sau. |
+| BatchNorm trong CNN stem có thể kém ổn nếu batch quá nhỏ. | Input 224 cho phép batch lớn hơn, ví dụ batch 64, giúp thống kê BatchNorm ổn hơn so với input lớn. |
+| Mô hình không có nhánh CNN global pooling riêng như ensemble ResNet+ViT. | Với dataset nhỏ, kiến trúc nối tiếp an toàn hơn và ít tham số hơn; nếu cần cho bài báo, chạy ablation sau với nhánh CNN fusion riêng thay vì thay ngay run chính. |
+| Input 224 có thể kém hơn 416/512 nếu class phụ thuộc vào vết rất nhỏ. | Xem 224 là run chính để so sánh; nếu per-class recall còn nghẽn ở class cần chi tiết vỏ, chạy thêm ablation 416 với cùng logic object crop. |
+| Biến đổi màu có thể phá tín hiệu độ chín. | Giữ brightness/contrast/saturation/hue/lighting bằng 0 trong run chính; chỉ dùng cho ablation riêng. |
+
+## Lệnh Train Khuyến Nghị Hiện Tại
+
+Lệnh dưới đây là cấu hình classification-only từ đầu đến cuối, không dùng pretrain, giữ CNN stem, dùng object-level crops, input 224 để so sánh trực tiếp với baseline `mango_hybrid_224`, và tắt toàn bộ batch composition không phù hợp với phân loại.
+
+```powershell
+cd D:\DataAI\AIEx\TRKH
+$env:PYTHONPATH='D:\DataAI\AIEx\TRKH'
+$env:TRKH_AMP_DTYPE='bf16'
+$env:OMP_NUM_THREADS='6'
+$env:TRKH_ALLOW_WINDOWS_MULTIPROCESSING='1'
+$env:TRKH_ALLOW_WINDOWS_PIN_MEMORY='1'
+$env:TRKH_ALLOW_WINDOWS_PERSISTENT_WORKERS='1'
+
+D:\DataAI\.venv\Scripts\python.exe -m trkh.training.train `
+  --data D:\DataAI\AIEx\dataset\data.yaml `
+  --class-name-mode raw --expected-num-classes 5 `
+  --run-name mango_cls_224_cnnstem_vitreg_5cls_objectcrops_local_v1 `
+  --output-dir runs --disable-resume --seed 42 `
+  --model-type vit_registers --image-size 224 --patch-size 16 `
+  --stem-channels 32 --head-pooling cls_register_mean `
+  --embed-dim 256 --depth 8 --num-heads 8 --num-registers 4 `
+  --dropout 0.10 --drop-path-rate 0.10 `
+  --batch-size 64 --grad-accum-steps 1 --epochs 0 --scheduler-total-epochs 140 --patience 70 `
+  --learning-rate 3e-4 --min-learning-rate 1e-6 --weight-decay 0.05 --warmup-epochs 8 `
+  --grad-clip-norm 0.75 --max-nonfinite-grad-steps 4 `
+  --num-workers 2 --eval-num-workers 2 --train-image-cache-mb 0 --eval-image-cache-mb 0 `
+  --class-weight-mode sqrt_inverse --focal-loss-gamma 2.0 --focal-loss-mix 0.20 `
+  --label-smoothing 0.015 --ldam-scale 18.0 --best-metric macro_f1 `
+  --resize-mode pad --crop-margin-ratio 0.08 `
+  --brightness 0.0 --contrast 0.0 --saturation 0.0 --hue 0.0 --lighting-probability 0.0 `
+  --random-erasing-probability 0.0 `
+  --random-affine-degrees 4 --random-affine-translate 0.03 --random-affine-scale-min 0.95 `
+  --horizontal-flip-probability 0.5 --vertical-flip-probability 0.01 --rotate90-probability 0.03 `
+  --batch-mix-probability 0.0 --mosaic-probability 0.0 --mixup-probability 0.0 `
+  --cutmix-probability 0.0 --copy-paste-probability 0.0
+```
+
+Nếu VRAM không đủ ở input 224, giảm `--batch-size 64` xuống `48` hoặc `32`. Không nên bật `--disable-cnn-stem` cho run chính; chỉ dùng flag đó cho ablation để chứng minh vai trò của hybrid CNN stem.
