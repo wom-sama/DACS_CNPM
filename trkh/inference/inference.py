@@ -6,7 +6,7 @@ from typing import Dict, List, Optional, Tuple
 
 import torch
 import torch.nn.functional as F
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 from torch import nn
 
 from trkh.core.config import IMAGENET_MEAN, IMAGENET_STD, to_serializable
@@ -32,6 +32,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--output-json", type=Path, default=None)
     parser.add_argument("--output-dir", type=Path, default=None)
+    parser.add_argument(
+        "--save-images",
+        action="store_true",
+        default=False,
+        help="Luu anh co overlay du doan vao output-dir khi dung --image-dir.",
+    )
     parser.add_argument("--override-image-size", type=int, default=None)
     parser.add_argument("--export-onnx", type=Path, default=None)
     parser.add_argument("--onnx-opset", type=int, default=17)
@@ -538,6 +544,92 @@ def predict(
     }
 
 
+def _class_color(class_index: int) -> Tuple[int, int, int]:
+    palette = [
+        (46, 125, 50),
+        (239, 108, 0),
+        (21, 101, 192),
+        (123, 31, 162),
+        (198, 40, 40),
+        (0, 121, 107),
+        (93, 64, 55),
+    ]
+    return palette[int(class_index) % len(palette)]
+
+
+def _text_size(draw: ImageDraw.ImageDraw, text: str, font) -> Tuple[int, int]:
+    bbox = draw.textbbox((0, 0), text, font=font)
+    return int(bbox[2] - bbox[0]), int(bbox[3] - bbox[1])
+
+
+def _draw_label_box(
+    draw: ImageDraw.ImageDraw,
+    xy: Tuple[int, int],
+    text: str,
+    fill: Tuple[int, int, int],
+    font,
+) -> None:
+    x, y = xy
+    text_width, text_height = _text_size(draw, text, font)
+    pad_x, pad_y = 8, 5
+    box = (x, y, x + text_width + pad_x * 2, y + text_height + pad_y * 2)
+    draw.rounded_rectangle(box, radius=4, fill=fill)
+    draw.text((x + pad_x, y + pad_y), text, fill=(255, 255, 255), font=font)
+
+
+def render_prediction_image(
+    image_path: Path,
+    result: Dict[str, object],
+    output_path: Path,
+) -> Path:
+    with Image.open(image_path) as handle:
+        image = handle.convert("RGB")
+
+    draw = ImageDraw.Draw(image, "RGBA")
+    font = ImageFont.load_default()
+    width, height = image.size
+
+    detections = result.get("detections")
+    if isinstance(detections, list):
+        for detection in detections:
+            if not isinstance(detection, dict):
+                continue
+            class_index = int(detection.get("class_index", 0) or 0)
+            color = _class_color(class_index)
+            bbox = detection.get("bbox", {})
+            xyxy = bbox.get("xyxy") if isinstance(bbox, dict) else None
+            if not isinstance(xyxy, list) or len(xyxy) != 4:
+                continue
+            x1, y1, x2, y2 = [int(round(float(value))) for value in xyxy]
+            x1 = max(0, min(width - 1, x1))
+            y1 = max(0, min(height - 1, y1))
+            x2 = max(0, min(width - 1, x2))
+            y2 = max(0, min(height - 1, y2))
+            if x2 <= x1 or y2 <= y1:
+                continue
+            draw.rectangle((x1, y1, x2, y2), outline=(*color, 255), width=3)
+            label = f"{detection.get('class_name', class_index)} {float(detection.get('probability', 0.0)):.3f}"
+            label_y = max(0, y1 - 22)
+            _draw_label_box(draw, (x1, label_y), label, (*color, 230), font)
+    else:
+        top_prediction = result.get("top_prediction", {})
+        if isinstance(top_prediction, dict):
+            class_index = int(top_prediction.get("class_index", 0) or 0)
+            color = _class_color(class_index)
+            status = str(result.get("prediction_status", "accepted"))
+            label = (
+                f"{top_prediction.get('class_name', class_index)} "
+                f"{float(top_prediction.get('probability', 0.0)):.3f}"
+            )
+            if status != "accepted":
+                label = f"{label} | {status}"
+            _draw_label_box(draw, (12, 12), label, (*color, 230), font)
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    image.save(output_path)
+    return output_path
+
+
 def export_onnx(
     model: nn.Module,
     checkpoint: Dict[str, object],
@@ -667,13 +759,22 @@ def main() -> None:
             nms_iou_threshold=args.nms_iou_threshold,
         )
         results.append(result)
-        json_dump(output_dir / f"{image_path.stem}.json", to_serializable(result))
+        relative_path = image_path.relative_to(args.image_dir)
+        json_output_path = output_dir / relative_path.with_suffix(".json")
+        json_dump(json_output_path, to_serializable(result))
+        if args.save_images:
+            render_prediction_image(
+                image_path=image_path,
+                result=result,
+                output_path=output_dir / relative_path,
+            )
 
     summary = {
         "checkpoint": str(args.checkpoint.resolve()),
         "image_dir": str(args.image_dir.resolve()),
         "images": len(image_paths),
         "output_dir": str(output_dir.resolve()),
+        "saved_images": bool(args.save_images),
         "results": results,
     }
     if args.output_json is not None:
