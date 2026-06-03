@@ -15,6 +15,7 @@ class _SoftTargetLossBase(nn.Module):
     ) -> None:
         super().__init__()
         self.register_buffer("weight", weight if weight is not None else None)
+        self.register_buffer("class_weight_multipliers", None)
         self.label_smoothing = float(max(0.0, label_smoothing))
 
     def _prepare_targets(self, logits: Tensor, targets: Tensor) -> tuple[Tensor, Tensor]:
@@ -36,13 +37,37 @@ class _SoftTargetLossBase(nn.Module):
 
     def _soft_cross_entropy(self, logits: Tensor, target_probs: Tensor) -> Tensor:
         log_probabilities = F.log_softmax(logits, dim=1)
-        if self.weight is None:
+        class_weights = self._effective_class_weights(logits)
+        if class_weights is None:
             return -(target_probs * log_probabilities).sum(dim=1)
 
-        class_weights = self.weight.to(device=logits.device, dtype=logits.dtype)
         weighted_targets = target_probs * class_weights.unsqueeze(0)
-        normalizer = weighted_targets.sum(dim=1).clamp(min=1e-12)
-        return -(weighted_targets * log_probabilities).sum(dim=1) / normalizer
+        return -(weighted_targets * log_probabilities).sum(dim=1)
+
+    def _effective_class_weights(self, logits: Tensor) -> Optional[Tensor]:
+        if self.weight is None and self.class_weight_multipliers is None:
+            return None
+
+        if self.weight is None:
+            class_weights = torch.ones(logits.size(1), device=logits.device, dtype=logits.dtype)
+        else:
+            class_weights = self.weight.to(device=logits.device, dtype=logits.dtype)
+
+        if self.class_weight_multipliers is not None:
+            multipliers = self.class_weight_multipliers.to(device=logits.device, dtype=logits.dtype)
+            if multipliers.numel() != logits.size(1):
+                raise ValueError("class weight multipliers phai co do dai bang num_classes.")
+            class_weights = class_weights * multipliers.clamp(min=0.0)
+        return class_weights
+
+    def set_class_weight_multipliers(self, multipliers: Optional[Tensor]) -> None:
+        if multipliers is None:
+            self.class_weight_multipliers = None
+            return
+        self.class_weight_multipliers = multipliers.detach().to(dtype=torch.float32).clone()
+
+    def reset_class_weight_multipliers(self) -> None:
+        self.set_class_weight_multipliers(None)
 
 
 class FocalCrossEntropyLoss(_SoftTargetLossBase):

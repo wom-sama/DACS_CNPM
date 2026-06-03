@@ -74,6 +74,7 @@ from trkh.core.utils import (
     plot_detection_training_metrics,
     plot_dataset_overview,
     plot_per_class_training_metrics,
+    plot_per_class_validation_metric,
     plot_train_val_final_test_metrics,
     plot_training_history,
     plot_validation_convergence,
@@ -1420,9 +1421,6 @@ def _resolve_rare_class_recall_guard(
     }
     if not train_config.rare_class_recall_guard:
         summary["reason"] = "disabled"
-        return summary
-    if not detection_mode:
-        summary["reason"] = "classification_only_model"
         return summary
     if str(stage_name).strip().lower() == "stage1_cls_only":
         summary["reason"] = "stage1_cls_only"
@@ -3213,7 +3211,15 @@ def main() -> None:
             max_margin=float(imbalance_summary["ldam_max_margin"]),
             scale=train_config.ldam_scale if train_config.use_ldam else 1.0,
         )
-        eval_criterion = criterion
+        eval_criterion = LDAMFocalLoss(
+            class_counts=train_class_counts,
+            weight=class_weights,
+            gamma=float(imbalance_summary["focal_loss_gamma"]),
+            focal_mix=float(imbalance_summary["focal_loss_mix"]),
+            label_smoothing=train_config.label_smoothing,
+            max_margin=float(imbalance_summary["ldam_max_margin"]),
+            scale=train_config.ldam_scale if train_config.use_ldam else 1.0,
+        )
     train_amp = bool(train_config.amp)
     if train_config.use_sam and train_amp:
         train_amp = False
@@ -3497,16 +3503,16 @@ def main() -> None:
                 if detection_mode:
                     _configure_detection_criterion(criterion, stage_config)
                     _configure_detection_criterion(eval_criterion, stage_config)
-                    if hasattr(criterion, "set_class_weight_multipliers"):
-                        criterion.set_class_weight_multipliers(
-                            torch.tensor(
-                                rare_class_recall_guard.get("multipliers", [1.0] * data_spec.num_classes),
-                                dtype=torch.float32,
-                                device=device,
-                            )
+                if hasattr(criterion, "set_class_weight_multipliers"):
+                    criterion.set_class_weight_multipliers(
+                        torch.tensor(
+                            rare_class_recall_guard.get("multipliers", [1.0] * data_spec.num_classes),
+                            dtype=torch.float32,
+                            device=device,
                         )
-                    if hasattr(eval_criterion, "reset_class_weight_multipliers"):
-                        eval_criterion.reset_class_weight_multipliers()
+                    )
+                if eval_criterion is not criterion and hasattr(eval_criterion, "reset_class_weight_multipliers"):
+                    eval_criterion.reset_class_weight_multipliers()
 
                 train_phase_start = time.time()
                 train_loss, train_artifact_stats, current_lr = train_one_epoch(
@@ -3738,6 +3744,7 @@ def main() -> None:
                     bg_prefix = f"val_bgaware_class_{class_index}"
                     row[f"{prefix}_precision"] = class_metrics.get("precision", 0.0)
                     row[f"{prefix}_recall"] = class_metrics.get("recall", 0.0)
+                    row[f"{prefix}_accuracy"] = class_metrics.get("recall", 0.0)
                     row[f"{prefix}_f1"] = class_metrics.get("f1", 0.0)
                     row[f"{prefix}_support"] = class_metrics.get("support", 0)
                     row[f"{bg_prefix}_precision"] = bg_metrics.get("precision", 0.0)
@@ -3748,6 +3755,7 @@ def main() -> None:
                         [
                             f"{prefix}_precision",
                             f"{prefix}_recall",
+                            f"{prefix}_accuracy",
                             f"{prefix}_f1",
                             f"{prefix}_support",
                             f"{bg_prefix}_precision",
@@ -4219,6 +4227,24 @@ def main() -> None:
         history_csv,
         data_spec.class_names,
         run_dir / "per_class_training_metrics.png",
+    )
+    plot_per_class_validation_metric(
+        history_csv,
+        data_spec.class_names,
+        run_dir / "per_class_val_f1.png",
+        metric="f1",
+        title="Per-Class Validation F1",
+        ylabel="F1",
+        target=0.97,
+    )
+    plot_per_class_validation_metric(
+        history_csv,
+        data_spec.class_names,
+        run_dir / "per_class_val_accuracy.png",
+        metric="accuracy",
+        title="Per-Class Validation Accuracy",
+        ylabel="Accuracy / TP-rate",
+        target=0.97,
     )
     plot_detection_training_metrics(history_csv, run_dir / "detection_training_metrics.png")
     plot_validation_convergence(history_csv, run_dir / "validation_convergence.png")

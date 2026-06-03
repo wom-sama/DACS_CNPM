@@ -41,7 +41,7 @@ from trkh.inference.inference import (
     resolve_detection_output_limit,
 )
 from trkh.training.loss import DETRSetCriterion
-from trkh.training.losses import LDAMFocalLoss
+from trkh.training.losses import FocalCrossEntropyLoss, LDAMFocalLoss
 from trkh.training.matcher import HungarianMatcher
 from trkh.models.model import create_model
 from trkh.training.train import (
@@ -66,6 +66,7 @@ from trkh.core.utils import (
     append_csv_row,
     build_warmup_decay_scheduler,
     load_checkpoint,
+    plot_per_class_validation_metric,
     plot_train_val_final_test_metrics,
     resolve_amp_dtype,
     save_checkpoint,
@@ -144,6 +145,50 @@ class DetectionCalibrationTests(unittest.TestCase):
                 amp=False,
             )
             self.assertTrue(torch.isfinite(loss))
+
+    def test_soft_target_class_weights_affect_hard_label_loss(self):
+        logits = torch.zeros(2, 2)
+        targets = torch.tensor([0, 1], dtype=torch.long)
+        unweighted = FocalCrossEntropyLoss(gamma=0.0, focal_mix=0.0)(logits, targets)
+        weighted = FocalCrossEntropyLoss(
+            weight=torch.tensor([1.0, 3.0]),
+            gamma=0.0,
+            focal_mix=0.0,
+        )(logits, targets)
+        criterion = FocalCrossEntropyLoss(
+            weight=torch.tensor([1.0, 3.0]),
+            gamma=0.0,
+            focal_mix=0.0,
+        )
+        criterion.set_class_weight_multipliers(torch.tensor([1.0, 2.0]))
+        boosted = criterion(logits, targets)
+
+        self.assertGreater(float(weighted.item()), float(unweighted.item()))
+        self.assertGreater(float(boosted.item()), float(weighted.item()))
+
+    def test_rare_class_recall_guard_activates_for_classification_only(self):
+        guard = _resolve_rare_class_recall_guard(
+            train_config=TrainConfig(
+                rare_class_recall_guard=True,
+                rare_class_recall_target=0.9,
+                rare_class_recall_guard_scale_threshold=1.5,
+                rare_class_recall_guard_max_multiplier=2.0,
+                rare_class_recall_guard_min_precision=0.5,
+            ),
+            detection_mode=False,
+            stage_name="classification",
+            previous_val_metrics={
+                "per_class": [
+                    {"class_index": 0, "precision": 0.95, "recall": 0.95, "support": 20},
+                    {"class_index": 1, "precision": 0.8, "recall": 0.72, "support": 10},
+                ]
+            },
+            class_target_scales=[1.0, 2.0],
+        )
+
+        self.assertTrue(guard["active"])
+        self.assertEqual(guard["active_class_count"], 1)
+        self.assertGreater(guard["multipliers"][1], 1.0)
 
     def test_classification_folder_data_spec_preserves_yaml_class_order(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -247,6 +292,67 @@ class DetectionCalibrationTests(unittest.TestCase):
 
             self.assertTrue(output_path.exists())
             self.assertGreater(output_path.stat().st_size, 0)
+
+    def test_plot_per_class_validation_metric_writes_f1_and_accuracy_png(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            history_path = root / "history.csv"
+            f1_path = root / "per_class_val_f1.png"
+            acc_path = root / "per_class_val_accuracy.png"
+            with history_path.open("w", newline="", encoding="utf-8") as handle:
+                writer = csv.DictWriter(
+                    handle,
+                    fieldnames=[
+                        "epoch",
+                        "val_class_0_f1",
+                        "val_class_0_recall",
+                        "val_class_1_f1",
+                        "val_class_1_recall",
+                    ],
+                )
+                writer.writeheader()
+                writer.writerow(
+                    {
+                        "epoch": 1,
+                        "val_class_0_f1": 0.91,
+                        "val_class_0_recall": 0.92,
+                        "val_class_1_f1": 0.74,
+                        "val_class_1_recall": 0.8,
+                    }
+                )
+                writer.writerow(
+                    {
+                        "epoch": 2,
+                        "val_class_0_f1": 0.94,
+                        "val_class_0_recall": 0.95,
+                        "val_class_1_f1": 0.79,
+                        "val_class_1_recall": 0.84,
+                    }
+                )
+
+            plot_per_class_validation_metric(
+                history_path,
+                ["class_a", "class_b"],
+                f1_path,
+                metric="f1",
+                title="Per-Class Validation F1",
+                ylabel="F1",
+                target=0.97,
+            )
+            plot_per_class_validation_metric(
+                history_path,
+                ["class_a", "class_b"],
+                acc_path,
+                metric="accuracy",
+                title="Per-Class Validation Accuracy",
+                ylabel="Accuracy / TP-rate",
+                target=0.97,
+            )
+
+            self.assertTrue(f1_path.exists())
+            self.assertGreater(f1_path.stat().st_size, 0)
+            self.assertTrue(acc_path.exists())
+            self.assertGreater(acc_path.stat().st_size, 0)
 
     def test_plot_train_val_final_test_metrics_writes_png(self):
         with tempfile.TemporaryDirectory() as tmpdir:

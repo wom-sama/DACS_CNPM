@@ -991,6 +991,91 @@ def plot_per_class_training_metrics(
     plt.close(figure)
 
 
+def plot_per_class_validation_metric(
+    history_csv: Path,
+    class_names: Sequence[str],
+    output_path: Path,
+    *,
+    metric: str,
+    title: str,
+    ylabel: str,
+    target: Optional[float] = None,
+) -> None:
+    if not history_csv.exists():
+        return
+
+    with history_csv.open("r", newline="", encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
+    if not rows:
+        return
+
+    epochs = [int(row["epoch"]) for row in rows if row.get("epoch")]
+    if not epochs:
+        return
+
+    metric_key = str(metric).strip().lower()
+    field_candidates: Dict[int, List[str]] = {}
+    if class_names:
+        class_indices = list(range(len(class_names)))
+    else:
+        class_indices = []
+        for field_name in rows[0].keys():
+            if not field_name.startswith("val_class_"):
+                continue
+            pieces = field_name.split("_")
+            if len(pieces) >= 4 and pieces[2].isdigit():
+                class_indices.append(int(pieces[2]))
+        class_indices = sorted(set(class_indices))
+
+    for class_index in class_indices:
+        if metric_key in {"accuracy", "acc"}:
+            # Per-class validation accuracy for single-label classification is TP / support,
+            # which is the same quantity as recall for that class.
+            field_candidates[class_index] = [
+                f"val_class_{class_index}_accuracy",
+                f"val_class_{class_index}_recall",
+            ]
+        else:
+            field_candidates[class_index] = [f"val_class_{class_index}_{metric_key}"]
+
+    plotted = False
+    figure, axis = plt.subplots(figsize=(12, 6.5))
+    for class_index in class_indices:
+        field_name = next(
+            (candidate for candidate in field_candidates[class_index] if candidate in rows[0]),
+            None,
+        )
+        if field_name is None:
+            continue
+        values = [_csv_float(row, field_name) for row in rows]
+        if not values:
+            continue
+        label = (
+            str(class_names[class_index])
+            if class_names and class_index < len(class_names)
+            else f"class_{class_index}"
+        )
+        axis.plot(epochs, values, label=label, linewidth=2.0)
+        plotted = True
+
+    if not plotted:
+        plt.close(figure)
+        return
+
+    if target is not None:
+        axis.axhline(float(target), color="black", linestyle=":", linewidth=1.2, alpha=0.65, label=f"target {target:g}")
+    axis.set_title(title)
+    axis.set_xlabel("Epoch")
+    axis.set_ylabel(ylabel)
+    axis.set_ylim(0.0, 1.02)
+    axis.grid(True, linestyle="--", linewidth=0.5, alpha=0.4)
+    axis.legend(fontsize=8)
+    figure.tight_layout()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    figure.savefig(output_path, dpi=200, bbox_inches="tight")
+    plt.close(figure)
+
+
 def plot_detection_training_metrics(history_csv: Path, output_path: Path) -> None:
     if not history_csv.exists():
         return
