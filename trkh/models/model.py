@@ -206,6 +206,8 @@ class VisionTransformerWithRegisters(nn.Module):
         in_channels: int = 3,
         use_cnn_stem: bool = True,
         stem_channels: int = 32,
+        cnn_feature_fusion: bool = False,
+        cnn_fusion_dropout: float = 0.1,
         num_classes: int = 4,
         embed_dim: int = 256,
         depth: int = 8,
@@ -227,6 +229,7 @@ class VisionTransformerWithRegisters(nn.Module):
         self.gradient_checkpointing = bool(gradient_checkpointing)
         self.embed_dim = int(embed_dim)
         self.head_pooling = str(head_pooling).strip().lower()
+        self.cnn_feature_fusion = bool(cnn_feature_fusion and use_cnn_stem)
         if self.head_pooling not in {"cls", "cls_register_mean"}:
             raise ValueError(f"Khong ho tro head_pooling={head_pooling!r}.")
 
@@ -281,9 +284,21 @@ class VisionTransformerWithRegisters(nn.Module):
         )
         self.norm = nn.LayerNorm(embed_dim)
         self.head = nn.Linear(embed_dim, num_classes)
+        if self.cnn_feature_fusion:
+            self.cnn_fusion_norm = nn.LayerNorm(embed_dim)
+            self.cnn_fusion_dropout = nn.Dropout(float(max(0.0, cnn_fusion_dropout)))
+            self.cnn_fusion_head = nn.Linear(embed_dim, num_classes)
+        else:
+            self.cnn_fusion_norm = nn.Identity()
+            self.cnn_fusion_dropout = nn.Identity()
+            self.cnn_fusion_head = None
 
         self.apply(self._init_weights)
         self._init_parameter_tensors()
+        if self.cnn_fusion_head is not None:
+            nn.init.zeros_(self.cnn_fusion_head.weight)
+            if self.cnn_fusion_head.bias is not None:
+                nn.init.zeros_(self.cnn_fusion_head.bias)
 
     def _init_parameter_tensors(self) -> None:
         nn.init.trunc_normal_(self.cls_token, std=0.02)
@@ -419,6 +434,7 @@ class VisionTransformerWithRegisters(nn.Module):
     ) -> Dict[str, Tensor]:
         input_spatial_size = tuple(int(value) for value in x.shape[-2:])
         x = self.stem(x)
+        stem_features = x
         batch_size = x.shape[0]
         grid_size = (
             x.shape[-2] // self.patch_embed.patch_size,
@@ -466,6 +482,8 @@ class VisionTransformerWithRegisters(nn.Module):
             "grid_size": grid_size,
             "pooled": self.pool_tokens_for_head(cls_out, reg_out),
         }
+        if self.cnn_feature_fusion:
+            features["cnn_pooled"] = F.adaptive_avg_pool2d(stem_features, output_size=1).flatten(1)
         if image_valid_mask is not None:
             key_padding_mask = self._build_patch_key_padding_mask(
                 image_valid_mask=image_valid_mask,
@@ -518,7 +536,12 @@ class VisionTransformerWithRegisters(nn.Module):
 
     def forward(self, x: Tensor) -> Tensor:
         features = self.forward_features(x)
-        return self.head(self.head_input_from_features(features))
+        logits = self.head(self.head_input_from_features(features))
+        if self.cnn_fusion_head is not None and "cnn_pooled" in features:
+            cnn_features = self.cnn_fusion_norm(features["cnn_pooled"])
+            cnn_features = self.cnn_fusion_dropout(cnn_features)
+            logits = logits + self.cnn_fusion_head(cnn_features)
+        return logits
 
 
 class MLP(nn.Module):
@@ -742,6 +765,8 @@ class DETRVisionTransformerWithRegisters(VisionTransformerWithRegisters):
         in_channels: int = 3,
         use_cnn_stem: bool = True,
         stem_channels: int = 32,
+        cnn_feature_fusion: bool = False,
+        cnn_fusion_dropout: float = 0.1,
         num_classes: int = 4,
         embed_dim: int = 256,
         depth: int = 8,
@@ -780,6 +805,8 @@ class DETRVisionTransformerWithRegisters(VisionTransformerWithRegisters):
             in_channels=in_channels,
             use_cnn_stem=use_cnn_stem,
             stem_channels=stem_channels,
+            cnn_feature_fusion=cnn_feature_fusion,
+            cnn_fusion_dropout=cnn_fusion_dropout,
             num_classes=num_classes,
             embed_dim=embed_dim,
             depth=depth,

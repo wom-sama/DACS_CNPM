@@ -27,6 +27,7 @@ from trkh.evaluation.evaluate import (
 from trkh.evaluation.metrics import build_metrics
 from trkh.data.dataset import (
     ClassificationFolderDataset,
+    HardSampleRepeatDataset,
     MangoYOLOCropDataset,
     RareClassRepeatDataset,
     _apply_copypaste_detection_batch,
@@ -94,6 +95,44 @@ class DetectionCalibrationTests(unittest.TestCase):
         self.assertEqual(getattr(model, "model_type", ""), "vit_registers")
         logits = model(torch.randn(2, 3, 64, 64))
         self.assertEqual(tuple(logits.shape), (2, 5))
+
+    def test_cnn_feature_fusion_can_extend_existing_vit_checkpoint(self):
+        base = create_model(
+            num_classes=3,
+            model_config=ModelConfig(
+                model_type="vit_registers",
+                image_size=64,
+                patch_size=16,
+                stem_channels=8,
+                embed_dim=32,
+                depth=1,
+                num_heads=4,
+                num_registers=2,
+            ),
+        )
+        fusion = create_model(
+            num_classes=3,
+            model_config=ModelConfig(
+                model_type="vit_registers",
+                image_size=64,
+                patch_size=16,
+                stem_channels=8,
+                cnn_feature_fusion=True,
+                embed_dim=32,
+                depth=1,
+                num_heads=4,
+                num_registers=2,
+            ),
+        )
+        missing, unexpected = fusion.load_flexible_state_dict(base.state_dict(), strict=False)
+        self.assertFalse(unexpected)
+        self.assertTrue(any(str(key).startswith("cnn_fusion_head.") for key in missing))
+
+        base.eval()
+        fusion.eval()
+        images = torch.randn(2, 3, 64, 64)
+        with torch.no_grad():
+            self.assertTrue(torch.allclose(base(images), fusion(images), atol=1e-6))
 
     def test_classification_dataset_target_feeds_vit_registers_loss(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -252,6 +291,24 @@ class DetectionCalibrationTests(unittest.TestCase):
             self.assertEqual(tuple(images.shape), (2, 3, 32, 32))
             self.assertEqual(tuple(targets.shape), (2, 2))
             self.assertEqual(int(targets.sum().item()), 2)
+
+    def test_hard_sample_repeat_dataset_repeats_manifest_paths(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            for class_name in ("class_a", "class_b"):
+                (root / class_name).mkdir(parents=True)
+            hard_image = root / "class_a" / "hard.jpg"
+            easy_image = root / "class_b" / "easy.jpg"
+            Image.new("RGB", (8, 8), color=(255, 0, 0)).save(hard_image)
+            Image.new("RGB", (8, 8), color=(0, 255, 0)).save(easy_image)
+
+            dataset = ClassificationFolderDataset(root, ["class_a", "class_b"])
+            repeated = HardSampleRepeatDataset(dataset, [hard_image], repeat_factor=3.0, seed=1)
+
+            self.assertEqual(len(dataset), 2)
+            self.assertEqual(len(repeated), 4)
+            self.assertEqual(repeated.labels().count(0), 3)
+            self.assertEqual(repeated.labels().count(1), 1)
 
     def test_save_evaluation_artifacts_writes_predictions_csv(self):
         with tempfile.TemporaryDirectory() as tmpdir:

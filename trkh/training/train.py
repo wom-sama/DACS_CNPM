@@ -5,6 +5,7 @@ import matplotlib
 matplotlib.use("Agg")
 
 import argparse
+import csv
 import gc
 import logging
 import math
@@ -32,6 +33,7 @@ from trkh.core.config import (
 )
 from trkh.data.dataset import (
     ClassificationFolderDataset,
+    HardSampleRepeatDataset,
     MangoYOLOCropDataset,
     PseudoVideoAugmenter,
     RareClassRepeatDataset,
@@ -183,6 +185,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--patch-size", type=int, default=16)
     parser.add_argument("--disable-cnn-stem", action="store_true", default=False)
     parser.add_argument("--stem-channels", type=int, default=32)
+    parser.add_argument(
+        "--cnn-feature-fusion",
+        action="store_true",
+        default=False,
+        help="Them nhanh global pooled CNN stem vao logits phan loai; mac dinh tat de giu hanh vi cu.",
+    )
+    parser.add_argument("--cnn-fusion-dropout", type=float, default=0.1)
     parser.add_argument("--embed-dim", type=int, default=256)
     parser.add_argument("--depth", type=int, default=8)
     parser.add_argument("--num-heads", type=int, default=8)
@@ -429,6 +438,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--rare-class-recall-guard-scale-threshold", type=float, default=1.5)
     parser.add_argument("--rare-class-recall-guard-max-multiplier", type=float, default=2.0)
     parser.add_argument("--rare-class-recall-guard-min-precision", type=float, default=0.35)
+    parser.add_argument(
+        "--hard-sample-manifest",
+        type=Path,
+        default=None,
+        help="Optional newline/CSV manifest of train image paths to repeat for hard-example fine-tuning.",
+    )
+    parser.add_argument("--hard-sample-repeat-factor", type=float, default=1.0)
     parser.add_argument("--bbox-l1-loss-weight", type=float, default=1.0)
     parser.add_argument("--bbox-giou-loss-weight", type=float, default=0.5)
     parser.add_argument("--background-loss-weight", type=float, default=0.3)
@@ -568,6 +584,8 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         raise ValueError("--eval-num-workers phai >= -1.")
     if args.train_image_cache_mb < -1 or args.eval_image_cache_mb < -1:
         raise ValueError("--train-image-cache-mb/--eval-image-cache-mb phai >= -1.")
+    if args.cnn_fusion_dropout < 0.0:
+        raise ValueError("--cnn-fusion-dropout phai >= 0.")
     if args.sam_rho < 0.0:
         raise ValueError("--sam-rho phai >= 0.")
     if args.ldam_max_margin < 0.0:
@@ -622,6 +640,8 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         raise ValueError("--rare-class-recall-guard-max-multiplier phai >= 1.")
     if not 0.0 <= args.rare_class_recall_guard_min_precision <= 1.0:
         raise ValueError("--rare-class-recall-guard-min-precision phai nam trong [0, 1].")
+    if args.hard_sample_repeat_factor < 1.0:
+        raise ValueError("--hard-sample-repeat-factor phai >= 1.")
     if args.background_loss_weight < 0.0 or args.cardinality_loss_weight < 0.0:
         raise ValueError("Detection loss weights phai >= 0.")
     if args.eval_detection_nms_iou_threshold < 0.0:
@@ -694,6 +714,8 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         patch_size=args.patch_size,
         use_cnn_stem=not args.disable_cnn_stem,
         stem_channels=args.stem_channels,
+        cnn_feature_fusion=bool(args.cnn_feature_fusion),
+        cnn_fusion_dropout=args.cnn_fusion_dropout,
         embed_dim=args.embed_dim,
         depth=args.depth,
         num_heads=args.num_heads,
@@ -810,6 +832,8 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         rare_class_recall_guard_scale_threshold=args.rare_class_recall_guard_scale_threshold,
         rare_class_recall_guard_max_multiplier=args.rare_class_recall_guard_max_multiplier,
         rare_class_recall_guard_min_precision=args.rare_class_recall_guard_min_precision,
+        hard_sample_manifest=str(args.hard_sample_manifest or ""),
+        hard_sample_repeat_factor=args.hard_sample_repeat_factor,
         bbox_l1_loss_weight=args.bbox_l1_loss_weight,
         bbox_giou_loss_weight=args.bbox_giou_loss_weight,
         background_loss_weight=args.background_loss_weight,
@@ -1562,13 +1586,17 @@ def _load_training_checkpoint(
         if not allow_added_detection_heads:
             raise
         missing_keys, unexpected_keys = load_model_state(model, checkpoint["model_state"], strict=False)
-        allowed_missing_prefixes = ("quality_head.",)
+        allowed_missing_prefixes = (
+            "quality_head.",
+            "cnn_fusion_norm.",
+            "cnn_fusion_head.",
+        )
         disallowed_missing = [
             key for key in missing_keys if not any(str(key).startswith(prefix) for prefix in allowed_missing_prefixes)
         ]
         if disallowed_missing or unexpected_keys:
             raise RuntimeError(
-                "Resume partial load chi cho phep them detection head moi. "
+                "Resume partial load chi cho phep them cac module mo rong da duoc khai bao. "
                 f"missing={missing_keys}, unexpected={unexpected_keys}"
             )
         print(
@@ -1576,7 +1604,7 @@ def _load_training_checkpoint(
                 "resume_partial_model_load": {
                     "allowed_missing_keys": list(missing_keys),
                     "unexpected_keys": list(unexpected_keys),
-                    "reason": "new_detection_heads_initialized_from_scratch",
+                    "reason": "allowed_architecture_extension_initialized_from_scratch",
                 }
             },
             flush=True,
@@ -2319,6 +2347,30 @@ def _dataset_overview_payload(dataset: MangoYOLOCropDataset) -> Dict[str, object
     }
 
 
+def _load_hard_sample_manifest(path_text: str) -> List[Path]:
+    if not str(path_text or "").strip():
+        return []
+    manifest_path = Path(path_text).expanduser()
+    if not manifest_path.exists():
+        raise FileNotFoundError(f"Missing hard sample manifest: {manifest_path}")
+    paths: List[Path] = []
+    with manifest_path.open("r", encoding="utf-8", newline="") as handle:
+        first_line = handle.readline()
+        handle.seek(0)
+        if "," in first_line and ("path" in first_line.lower() or "image" in first_line.lower()):
+            reader = csv.DictReader(handle)
+            for row in reader:
+                value = row.get("image_path") or row.get("path") or row.get("sample_path")
+                if value:
+                    paths.append(Path(value.strip()))
+        else:
+            for line in handle:
+                value = line.strip()
+                if value and not value.startswith("#"):
+                    paths.append(Path(value))
+    return paths
+
+
 def _build_eval_loader(
     dataset: MangoYOLOCropDataset,
     batch_size: int,
@@ -2944,6 +2996,46 @@ def main() -> None:
             "class_repeat_factors": rare_class_repeat_factors,
             "source": "canbang.yaml" if balance_auto_summary.get("enabled") else "train_class_counts",
         }
+    hard_sample_repeat_summary: Dict[str, object] = {
+        "enabled": False,
+        "manifest": str(train_config.hard_sample_manifest or ""),
+        "repeat_factor": float(train_config.hard_sample_repeat_factor),
+    }
+    hard_sample_paths = _load_hard_sample_manifest(str(train_config.hard_sample_manifest or ""))
+    if hard_sample_paths and float(train_config.hard_sample_repeat_factor) > 1.0:
+        if imbalance_summary["use_weighted_sampler"]:
+            hard_sample_repeat_summary.update(
+                {
+                    "skipped_reason": "strict_balanced_sampler_enabled",
+                    "manifest_paths": len(hard_sample_paths),
+                }
+            )
+            print(
+                {
+                    "hard_sample_repeat": hard_sample_repeat_summary,
+                    "reason": "strict balanced sampler da duoc bat, tranh oversample hai lan",
+                },
+                flush=True,
+            )
+        else:
+            train_dataset = HardSampleRepeatDataset(
+                train_dataset,
+                hard_sample_paths=hard_sample_paths,
+                repeat_factor=float(train_config.hard_sample_repeat_factor),
+                seed=train_config.seed,
+            )
+            hard_sample_repeat_summary = {
+                "enabled": True,
+                "manifest": str(train_config.hard_sample_manifest),
+                **train_dataset.repeat_summary(),
+            }
+            print(
+                {
+                    "hard_sample_repeat": hard_sample_repeat_summary,
+                    "reason": "lap lai hard train samples da mine tu train split, khong dung val/test de train",
+                },
+                flush=True,
+            )
     class_target_scales = _combine_class_target_scales(
         data_spec.num_classes,
         getattr(train_dataset, "class_augmentation_scales", []),
@@ -3324,6 +3416,7 @@ def main() -> None:
         "total_class_counts": total_class_counts,
         "train_dataset_report": train_dataset_report,
         "rare_class_repeat": rare_class_repeat_summary,
+        "hard_sample_repeat": hard_sample_repeat_summary,
         "class_crop_margin": class_crop_margin_summary,
         "targeted_copy_paste": targeted_copy_paste_summary,
         "val_dataset_report": val_dataset_report,

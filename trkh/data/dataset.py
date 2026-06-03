@@ -2167,6 +2167,101 @@ class RareClassRepeatDataset(Dataset):
         return report
 
 
+class HardSampleRepeatDataset(Dataset):
+    def __init__(
+        self,
+        dataset: Dataset,
+        hard_sample_paths: Sequence[Path | str],
+        repeat_factor: float = 2.0,
+        seed: int = 42,
+    ) -> None:
+        self.dataset = dataset
+        self.repeat_factor = max(1.0, float(repeat_factor))
+        self.seed = int(seed)
+        self.hard_sample_paths = {
+            str(Path(path).resolve()).lower()
+            for path in hard_sample_paths
+            if str(path).strip()
+        }
+        self.indices = self._build_indices()
+
+    def __len__(self) -> int:
+        return len(self.indices)
+
+    def __getattr__(self, name: str):
+        if name.startswith("__") and name.endswith("__"):
+            raise AttributeError(name)
+        dataset = self.__dict__.get("dataset")
+        if dataset is None:
+            raise AttributeError(name)
+        return getattr(dataset, name)
+
+    def __getitem__(self, index: int):
+        return self.dataset[self.indices[int(index)]]
+
+    def _sample_paths(self) -> List[str]:
+        sample_paths_fn = getattr(self.dataset, "sample_paths", None)
+        if callable(sample_paths_fn):
+            return [str(Path(path).resolve()).lower() for path in sample_paths_fn()]
+        samples = getattr(self.dataset, "samples", None)
+        if samples is None:
+            return []
+        paths: List[str] = []
+        for sample in samples:
+            image_path = getattr(sample, "image_path", None)
+            paths.append("" if image_path is None else str(Path(image_path).resolve()).lower())
+        return paths
+
+    def _build_indices(self) -> List[int]:
+        base_paths = self._sample_paths()
+        hard_indices = [
+            index
+            for index, sample_path in enumerate(base_paths)
+            if sample_path in self.hard_sample_paths
+        ]
+        repeated = list(range(len(self.dataset)))
+        if hard_indices:
+            generator = torch.Generator()
+            generator.manual_seed(self.seed)
+            extra_factor = max(0.0, self.repeat_factor - 1.0)
+            whole = int(math.floor(extra_factor))
+            fractional = extra_factor - float(whole)
+            for sample_index in hard_indices:
+                repeated.extend([sample_index] * whole)
+                if fractional > 0.0 and torch.rand(1, generator=generator).item() < fractional:
+                    repeated.append(sample_index)
+            order = torch.randperm(len(repeated), generator=generator).tolist()
+            repeated = [int(repeated[index]) for index in order]
+        return repeated
+
+    def labels(self) -> List[int]:
+        base_labels_fn = getattr(self.dataset, "labels", None)
+        if not callable(base_labels_fn):
+            return []
+        base_labels = [int(label) for label in base_labels_fn()]
+        return [base_labels[index] for index in self.indices if 0 <= int(index) < len(base_labels)]
+
+    def repeat_summary(self) -> Dict[str, object]:
+        base_len = len(self.dataset)
+        repeated_len = len(self.indices)
+        matched_count = max(0, repeated_len - base_len)
+        return {
+            "base_samples": int(base_len),
+            "effective_samples": int(repeated_len),
+            "effective_multiplier": float(repeated_len / max(1, base_len)),
+            "manifest_paths": int(len(self.hard_sample_paths)),
+            "extra_repeats": int(matched_count),
+            "repeat_factor": float(self.repeat_factor),
+        }
+
+    def quality_report(self) -> Dict[str, object]:
+        quality_fn = getattr(self.dataset, "quality_report", None)
+        report = quality_fn() if callable(quality_fn) else {}
+        report = dict(report)
+        report["hard_sample_repeat"] = self.repeat_summary()
+        return report
+
+
 class ResizePadToSquare:
     def __init__(
         self,

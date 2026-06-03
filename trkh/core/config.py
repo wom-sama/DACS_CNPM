@@ -131,6 +131,8 @@ class ModelConfig:
     in_channels: int = 3
     use_cnn_stem: bool = True
     stem_channels: int = 32
+    cnn_feature_fusion: bool = False
+    cnn_fusion_dropout: float = 0.1
     embed_dim: int = 256
     depth: int = 8
     num_heads: int = 8
@@ -250,6 +252,8 @@ class TrainConfig:
     rare_class_recall_guard_scale_threshold: float = 1.5
     rare_class_recall_guard_max_multiplier: float = 2.0
     rare_class_recall_guard_min_precision: float = 0.35
+    hard_sample_manifest: str = ""
+    hard_sample_repeat_factor: float = 1.0
     bbox_l1_loss_weight: float = 1.0
     bbox_giou_loss_weight: float = 0.5
     background_loss_weight: float = 0.3
