@@ -74,6 +74,7 @@ from trkh.core.utils import (
     plot_detection_training_metrics,
     plot_dataset_overview,
     plot_per_class_training_metrics,
+    plot_train_val_final_test_metrics,
     plot_training_history,
     plot_validation_convergence,
     save_checkpoint,
@@ -4354,6 +4355,12 @@ def main() -> None:
             ),
         )
         save_evaluation_artifacts(test_metrics, data_spec.class_names, run_dir / "final_test")
+        plot_train_val_final_test_metrics(
+            history_csv,
+            run_dir / "final_test" / "metrics.json",
+            run_dir / "train_val_final_test_curves.png",
+            data_spec.class_names,
+        )
         test_summary = {
             "macro_f1": float(test_metrics["macro_f1"]),
             "weighted_f1": float(test_metrics["weighted_f1"]),

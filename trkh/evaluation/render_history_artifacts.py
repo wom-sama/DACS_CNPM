@@ -15,6 +15,7 @@ from trkh.core.utils import (
     plot_all_training_metrics,
     plot_detection_training_metrics,
     plot_per_class_training_metrics,
+    plot_train_val_final_test_metrics,
     plot_training_history,
     plot_validation_convergence,
 )
@@ -171,6 +172,7 @@ def render_history_artifacts(
         run_dir / "per_class_training_metrics.png",
         run_dir / "detection_training_metrics.png",
         run_dir / "validation_convergence.png",
+        run_dir / "train_val_final_test_curves.png",
     ]
 
     plot_training_history(history_csv, outputs[0])
@@ -179,6 +181,12 @@ def render_history_artifacts(
     plot_per_class_training_metrics(history_csv, resolved_class_names, outputs[3])
     plot_detection_training_metrics(history_csv, outputs[4])
     plot_validation_convergence(history_csv, outputs[5])
+    plot_train_val_final_test_metrics(
+        history_csv,
+        run_dir / "final_test" / "metrics.json",
+        outputs[6],
+        resolved_class_names,
+    )
 
     generated = [path for path in outputs if path.exists()]
     if write_summary:

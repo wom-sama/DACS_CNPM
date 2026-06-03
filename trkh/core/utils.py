@@ -748,6 +748,133 @@ def plot_training_history(history_csv: Path, output_path: Path) -> None:
     plt.close(figure)
 
 
+def _metric_from_final_test(metrics: Dict[str, Any], key: str) -> Optional[float]:
+    value = metrics.get(key)
+    if isinstance(value, (int, float)) and math.isfinite(float(value)):
+        return float(value)
+    calibrated = metrics.get("calibrated")
+    if isinstance(calibrated, dict):
+        accepted_metrics = calibrated.get("accepted_metrics")
+        if isinstance(accepted_metrics, dict):
+            value = accepted_metrics.get(key)
+            if isinstance(value, (int, float)) and math.isfinite(float(value)):
+                return float(value)
+    return None
+
+
+def plot_train_val_final_test_metrics(
+    history_csv: Path,
+    final_test_metrics_json: Path,
+    output_path: Path,
+    class_names: Optional[Sequence[str]] = None,
+) -> None:
+    if not history_csv.exists():
+        return
+
+    with history_csv.open("r", newline="", encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
+    if not rows:
+        return
+
+    epochs = [int(row["epoch"]) for row in rows if row.get("epoch")]
+    if not epochs:
+        return
+
+    def series(name: str) -> List[float]:
+        return [_csv_float(row, name) for row in rows]
+
+    val_macro_f1 = series("val_macro_f1")
+    best_index = int(np.argmax(val_macro_f1)) if val_macro_f1 else len(epochs) - 1
+    best_epoch = epochs[best_index]
+    final_test_metrics: Dict[str, Any] = {}
+    if final_test_metrics_json.exists():
+        try:
+            with final_test_metrics_json.open("r", encoding="utf-8") as handle:
+                loaded = json.load(handle)
+            if isinstance(loaded, dict):
+                final_test_metrics = loaded
+        except (json.JSONDecodeError, OSError):
+            final_test_metrics = {}
+
+    figure, axes = plt.subplots(2, 2, figsize=(14, 9))
+    axes = axes.ravel()
+
+    axes[0].plot(epochs, series("train_loss"), label="train_loss", linewidth=2.0)
+    axes[0].plot(epochs, series("val_loss"), label="val_loss", linewidth=2.0)
+    axes[0].set_title("Train/Validation Loss")
+    axes[0].set_xlabel("Epoch")
+    axes[0].grid(True, linestyle="--", linewidth=0.5, alpha=0.4)
+    axes[0].legend()
+
+    metric_specs = [
+        ("val_accuracy", "test accuracy", "accuracy", "tab:blue"),
+        ("val_macro_f1", "test macro_f1", "macro_f1", "tab:green"),
+        ("val_weighted_f1", "test weighted_f1", "weighted_f1", "tab:orange"),
+    ]
+    for val_key, test_label, test_key, color in metric_specs:
+        values = series(val_key)
+        axes[1].plot(epochs, values, label=val_key, linewidth=2.0)
+        test_value = _metric_from_final_test(final_test_metrics, test_key)
+        if test_value is not None:
+            axes[1].scatter([best_epoch], [test_value], marker="*", s=150, color=color, label=test_label)
+    axes[1].axvline(best_epoch, color="black", linestyle=":", linewidth=1.2, alpha=0.6, label="best val epoch")
+    axes[1].set_title("Validation Curves + Final Test Marker")
+    axes[1].set_xlabel("Epoch")
+    axes[1].set_ylim(0.0, 1.02)
+    axes[1].grid(True, linestyle="--", linewidth=0.5, alpha=0.4)
+    axes[1].legend(fontsize=8)
+
+    class_indices = []
+    for field_name in rows[0].keys():
+        if field_name.startswith("val_class_") and field_name.endswith("_f1"):
+            index_text = field_name[len("val_class_") : -len("_f1")]
+            if index_text.isdigit():
+                class_indices.append(int(index_text))
+    class_indices = sorted(set(class_indices))
+    final_per_class = final_test_metrics.get("per_class")
+    final_class_f1 = {}
+    if isinstance(final_per_class, list):
+        for item in final_per_class:
+            if isinstance(item, dict):
+                index = item.get("class_index")
+                f1 = item.get("f1")
+                if isinstance(index, int) and isinstance(f1, (int, float)):
+                    final_class_f1[index] = float(f1)
+
+    for class_index in class_indices:
+        label = (
+            str(class_names[class_index])
+            if class_names is not None and class_index < len(class_names)
+            else f"class_{class_index}"
+        )
+        axes[2].plot(epochs, series(f"val_class_{class_index}_f1"), label=label, linewidth=1.6)
+        if class_index in final_class_f1:
+            axes[2].scatter([best_epoch], [final_class_f1[class_index]], marker="*", s=90)
+    axes[2].axvline(best_epoch, color="black", linestyle=":", linewidth=1.2, alpha=0.6)
+    axes[2].set_title("Per-Class Validation F1 + Final Test Markers")
+    axes[2].set_xlabel("Epoch")
+    axes[2].set_ylim(0.0, 1.02)
+    axes[2].grid(True, linestyle="--", linewidth=0.5, alpha=0.4)
+    axes[2].legend(fontsize=7)
+
+    axes[3].plot(epochs, series("learning_rate"), color="tab:purple", label="learning_rate", linewidth=2.0)
+    if "epoch_seconds" in rows[0]:
+        ax_right = axes[3].twinx()
+        ax_right.plot(epochs, series("epoch_seconds"), color="tab:red", alpha=0.55, label="epoch_seconds")
+        ax_right.set_ylabel("Seconds")
+    if any(_csv_float(row, "learning_rate") > 0.0 for row in rows):
+        axes[3].set_yscale("log")
+    axes[3].set_title("Learning Rate / Epoch Time")
+    axes[3].set_xlabel("Epoch")
+    axes[3].grid(True, linestyle="--", linewidth=0.5, alpha=0.4)
+    axes[3].legend(fontsize=8)
+
+    figure.tight_layout()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    figure.savefig(output_path, dpi=200, bbox_inches="tight")
+    plt.close(figure)
+
+
 def plot_all_training_metrics(history_csv: Path, output_path: Path) -> None:
     if not history_csv.exists():
         return

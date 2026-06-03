@@ -38,6 +38,12 @@ def parse_args() -> argparse.Namespace:
         default=False,
         help="Luu anh co overlay du doan vao output-dir khi dung --image-dir.",
     )
+    parser.add_argument(
+        "--overlay-top-k",
+        type=int,
+        default=1,
+        help="So nhan top-k ve len anh khi dung bai toan phan loai.",
+    )
     parser.add_argument("--override-image-size", type=int, default=None)
     parser.add_argument("--export-onnx", type=Path, default=None)
     parser.add_argument("--onnx-opset", type=int, default=17)
@@ -577,10 +583,41 @@ def _draw_label_box(
     draw.text((x + pad_x, y + pad_y), text, fill=(255, 255, 255), font=font)
 
 
+def _draw_prediction_list(
+    draw: ImageDraw.ImageDraw,
+    predictions: List[Dict[str, object]],
+    top_prediction: Dict[str, object],
+    status: str,
+    overlay_top_k: int,
+    font,
+) -> None:
+    overlay_top_k = max(1, int(overlay_top_k))
+    rows = predictions[:overlay_top_k] if predictions else [top_prediction]
+    x, y = 12, 12
+    row_gap = 4
+    for row_index, prediction in enumerate(rows):
+        if not isinstance(prediction, dict):
+            continue
+        class_index = int(prediction.get("class_index", 0) or 0)
+        color = _class_color(class_index)
+        prefix = "1" if row_index == 0 else str(row_index + 1)
+        label = (
+            f"{prefix}. {prediction.get('class_name', class_index)} "
+            f"{float(prediction.get('probability', 0.0)):.3f}"
+        )
+        if row_index == 0 and status != "accepted":
+            label = f"{label} | {status}"
+        fill_alpha = 235 if row_index == 0 else 205
+        _draw_label_box(draw, (x, y), label, (*color, fill_alpha), font)
+        _, text_height = _text_size(draw, label, font)
+        y += text_height + 10 + row_gap
+
+
 def render_prediction_image(
     image_path: Path,
     result: Dict[str, object],
     output_path: Path,
+    overlay_top_k: int = 1,
 ) -> Path:
     with Image.open(image_path) as handle:
         image = handle.convert("RGB")
@@ -614,16 +651,18 @@ def render_prediction_image(
     else:
         top_prediction = result.get("top_prediction", {})
         if isinstance(top_prediction, dict):
-            class_index = int(top_prediction.get("class_index", 0) or 0)
-            color = _class_color(class_index)
             status = str(result.get("prediction_status", "accepted"))
-            label = (
-                f"{top_prediction.get('class_name', class_index)} "
-                f"{float(top_prediction.get('probability', 0.0)):.3f}"
+            predictions = result.get("predictions", [])
+            if not isinstance(predictions, list):
+                predictions = []
+            _draw_prediction_list(
+                draw=draw,
+                predictions=predictions,
+                top_prediction=top_prediction,
+                status=status,
+                overlay_top_k=overlay_top_k,
+                font=font,
             )
-            if status != "accepted":
-                label = f"{label} | {status}"
-            _draw_label_box(draw, (12, 12), label, (*color, 230), font)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     image.save(output_path)
@@ -767,6 +806,7 @@ def main() -> None:
                 image_path=image_path,
                 result=result,
                 output_path=output_dir / relative_path,
+                overlay_top_k=args.overlay_top_k,
             )
 
     summary = {

@@ -1,4 +1,5 @@
 import csv
+import json
 import math
 import os
 import tempfile
@@ -34,7 +35,11 @@ from trkh.data.dataset import (
     build_train_collate_fn,
     build_train_transform,
 )
-from trkh.inference.inference import post_process_detections, resolve_detection_output_limit
+from trkh.inference.inference import (
+    post_process_detections,
+    render_prediction_image,
+    resolve_detection_output_limit,
+)
 from trkh.training.loss import DETRSetCriterion
 from trkh.training.losses import LDAMFocalLoss
 from trkh.training.matcher import HungarianMatcher
@@ -57,7 +62,14 @@ from trkh.training.train import (
     _forward_train_loss,
     train_one_epoch,
 )
-from trkh.core.utils import append_csv_row, build_warmup_decay_scheduler, load_checkpoint, resolve_amp_dtype, save_checkpoint
+from trkh.core.utils import (
+    append_csv_row,
+    build_warmup_decay_scheduler,
+    load_checkpoint,
+    plot_train_val_final_test_metrics,
+    resolve_amp_dtype,
+    save_checkpoint,
+)
 
 
 class DetectionCalibrationTests(unittest.TestCase):
@@ -206,6 +218,112 @@ class DetectionCalibrationTests(unittest.TestCase):
             self.assertEqual(len(rows), 2)
             self.assertEqual(rows[0]["image_path"], "a.jpg")
             self.assertEqual(rows[1]["correct"], "0")
+
+    def test_render_prediction_image_writes_classification_overlay(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            input_path = root / "input.jpg"
+            output_path = root / "overlay.jpg"
+            Image.new("RGB", (96, 72), color=(120, 180, 80)).save(input_path)
+            result = {
+                "top_prediction": {
+                    "class_index": 1,
+                    "class_name": "class_b",
+                    "probability": 0.72,
+                },
+                "predictions": [
+                    {"class_index": 1, "class_name": "class_b", "probability": 0.72},
+                    {"class_index": 0, "class_name": "class_a", "probability": 0.28},
+                ],
+                "prediction_status": "accepted",
+            }
+
+            render_prediction_image(
+                image_path=input_path,
+                result=result,
+                output_path=output_path,
+                overlay_top_k=2,
+            )
+
+            self.assertTrue(output_path.exists())
+            self.assertGreater(output_path.stat().st_size, 0)
+
+    def test_plot_train_val_final_test_metrics_writes_png(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            history_path = root / "history.csv"
+            output_path = root / "train_val_final_test_curves.png"
+            metrics_path = root / "final_test" / "metrics.json"
+            metrics_path.parent.mkdir(parents=True)
+            with history_path.open("w", newline="", encoding="utf-8") as handle:
+                writer = csv.DictWriter(
+                    handle,
+                    fieldnames=[
+                        "epoch",
+                        "learning_rate",
+                        "train_loss",
+                        "val_loss",
+                        "val_accuracy",
+                        "val_macro_f1",
+                        "val_weighted_f1",
+                        "val_class_0_f1",
+                        "val_class_1_f1",
+                        "epoch_seconds",
+                    ],
+                )
+                writer.writeheader()
+                writer.writerow(
+                    {
+                        "epoch": 1,
+                        "learning_rate": 1e-4,
+                        "train_loss": 1.2,
+                        "val_loss": 1.0,
+                        "val_accuracy": 0.6,
+                        "val_macro_f1": 0.55,
+                        "val_weighted_f1": 0.58,
+                        "val_class_0_f1": 0.7,
+                        "val_class_1_f1": 0.4,
+                        "epoch_seconds": 12.0,
+                    }
+                )
+                writer.writerow(
+                    {
+                        "epoch": 2,
+                        "learning_rate": 8e-5,
+                        "train_loss": 0.9,
+                        "val_loss": 0.8,
+                        "val_accuracy": 0.72,
+                        "val_macro_f1": 0.68,
+                        "val_weighted_f1": 0.7,
+                        "val_class_0_f1": 0.8,
+                        "val_class_1_f1": 0.56,
+                        "epoch_seconds": 11.0,
+                    }
+                )
+            metrics_path.write_text(
+                json.dumps(
+                    {
+                        "accuracy": 0.74,
+                        "macro_f1": 0.69,
+                        "weighted_f1": 0.71,
+                        "per_class": [
+                            {"class_index": 0, "f1": 0.81},
+                            {"class_index": 1, "f1": 0.58},
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            plot_train_val_final_test_metrics(
+                history_csv=history_path,
+                final_test_metrics_json=metrics_path,
+                output_path=output_path,
+                class_names=["class_a", "class_b"],
+            )
+
+            self.assertTrue(output_path.exists())
+            self.assertGreater(output_path.stat().st_size, 0)
 
     def test_save_evaluation_artifacts_writes_baseline_comparison_files(self):
         with tempfile.TemporaryDirectory() as tmpdir:
