@@ -403,7 +403,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--stage1-bbox-giou-loss-weight", type=float, default=0.0)
     parser.add_argument(
         "--best-metric",
-        choices=("composite", "macro_f1", "val_loss", "detection_f1", "macro_detection_hmean"),
+        choices=(
+            "composite",
+            "macro_f1",
+            "balanced_macro_f1",
+            "val_loss",
+            "detection_f1",
+            "macro_detection_hmean",
+        ),
         default="composite",
     )
     parser.add_argument("--cls-loss-weight", type=float, default=1.0)
@@ -1728,8 +1735,20 @@ def _resolve_checkpoint_selection(
     train_config: TrainConfig,
     metrics: Dict[str, object],
 ) -> Tuple[str, float, bool]:
+    best_metric = str(train_config.best_metric).strip().lower()
+    if best_metric == "balanced_macro_f1":
+        macro_f1 = float(metrics["macro_f1"])
+        per_class = metrics.get("per_class", [])
+        class_f1_values = [
+            float(item.get("f1", 0.0) or 0.0)
+            for item in per_class
+            if isinstance(item, dict) and item.get("f1") is not None
+        ] if isinstance(per_class, list) else []
+        class_gap = (max(class_f1_values) - min(class_f1_values)) if class_f1_values else 0.0
+        score = macro_f1 - 0.75 * max(0.0, class_gap - 0.05)
+        return "balanced_macro_f1_gap_penalty", score, True
+
     if model_config.model_type in DETECTION_MODEL_TYPES:
-        best_metric = str(train_config.best_metric).strip().lower()
         if best_metric == "val_loss":
             return "val_loss", float(metrics["loss"]), False
         if best_metric == "macro_f1":

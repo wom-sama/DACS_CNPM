@@ -190,6 +190,24 @@ class DetectionCalibrationTests(unittest.TestCase):
         self.assertEqual(guard["active_class_count"], 1)
         self.assertGreater(guard["multipliers"][1], 1.0)
 
+    def test_balanced_macro_f1_selection_penalizes_large_class_gap(self):
+        metric_name, score, higher_is_better = _resolve_checkpoint_selection(
+            model_config=ModelConfig(model_type="vit_registers"),
+            train_config=TrainConfig(best_metric="balanced_macro_f1"),
+            metrics={
+                "macro_f1": 0.92,
+                "per_class": [
+                    {"class_index": 0, "f1": 0.98},
+                    {"class_index": 1, "f1": 0.78},
+                    {"class_index": 2, "f1": 0.98},
+                ],
+            },
+        )
+
+        self.assertEqual(metric_name, "balanced_macro_f1_gap_penalty")
+        self.assertTrue(higher_is_better)
+        self.assertLess(score, 0.92)
+
     def test_classification_folder_data_spec_preserves_yaml_class_order(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
