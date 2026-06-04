@@ -27,7 +27,13 @@ from trkh.evaluation.evaluate import (
     save_evaluation_artifacts,
 )
 from trkh.evaluation.metrics import build_metrics
-from trkh.models.feature_hooks import build_attention_heatmap, build_attention_rollout_heatmap, resolve_feature_hook
+from trkh.models.feature_hooks import (
+    build_attention_heatmap,
+    build_attention_rollout_heatmap,
+    build_gradient_weighted_attention_rollout_heatmap,
+    resolve_feature_hook,
+    summarize_register_attention,
+)
 from trkh.data.dataset import (
     ClassificationFolderDataset,
     HardSampleRepeatDataset,
@@ -99,6 +105,32 @@ class DetectionCalibrationTests(unittest.TestCase):
         self.assertEqual(tuple(heatmap.shape), (8, 8))
         self.assertTrue(float(heatmap.min()) >= 0.0)
         self.assertTrue(float(heatmap.max()) <= 1.0)
+
+    def test_gradient_weighted_rollout_accepts_attention_gradients(self):
+        attention = torch.ones(1, 2, 6, 6, requires_grad=True)
+        attention = attention / attention.sum(dim=-1, keepdim=True)
+        attention.retain_grad()
+        attention[:, :, 0, 3].sum().backward()
+        heatmap = build_gradient_weighted_attention_rollout_heatmap(
+            attentions=[attention],
+            grid_size=(2, 2),
+            prefix_tokens=2,
+            output_size=(8, 8),
+            query_tokens="cls_register_mean",
+        )
+
+        self.assertEqual(tuple(heatmap.shape), (8, 8))
+        self.assertTrue(float(heatmap.max()) <= 1.0)
+        self.assertGreater(float(heatmap.max()), 0.0)
+
+    def test_register_attention_summary_reports_similarity(self):
+        attention = torch.zeros(1, 2, 6, 6)
+        attention[:, :, :, :] = 1.0 / 6.0
+        summary = summarize_register_attention([attention], prefix_tokens=2)
+
+        self.assertIn("register_to_patch_attention_mean", summary)
+        self.assertIn("cls_register_heatmap_similarity", summary)
+        self.assertGreaterEqual(summary["cls_register_heatmap_similarity"], 0.0)
 
     def test_heatmap_focus_reports_border_attention(self):
         heatmap = torch.zeros(20, 20).numpy()

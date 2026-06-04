@@ -177,6 +177,17 @@ def _normalize_heatmap(heatmap: Tensor) -> np.ndarray:
     return heatmap.detach().cpu().numpy()
 
 
+def _resolve_query_indices(query_tokens: str, prefix_tokens: int) -> list[int]:
+    query_tokens = str(query_tokens or "cls").strip().lower()
+    if query_tokens == "cls":
+        return [0]
+    if query_tokens in {"register", "registers"}:
+        return list(range(1, max(1, int(prefix_tokens)))) or [0]
+    if query_tokens in {"cls_register_mean", "cls_registers", "head"}:
+        return list(range(0, max(1, int(prefix_tokens))))
+    raise ValueError("query_tokens chi ho tro cls, registers, hoac cls_register_mean.")
+
+
 def build_attention_heatmap(
     attention: Tensor,
     grid_size: Tuple[int, int],
@@ -185,19 +196,7 @@ def build_attention_heatmap(
     output_size: Tuple[int, int],
     query_tokens: str = "cls",
 ) -> np.ndarray:
-    query_tokens = str(query_tokens or "cls").strip().lower()
-    if query_tokens == "cls":
-        query_indices = [0]
-    elif query_tokens in {"register", "registers"}:
-        query_indices = list(range(1, max(1, int(prefix_tokens))))
-        if not query_indices:
-            query_indices = [0]
-    elif query_tokens in {"cls_register_mean", "cls_registers", "head"}:
-        query_indices = list(range(0, max(1, int(prefix_tokens))))
-    else:
-        raise ValueError(
-            "query_tokens chi ho tro cls, registers, hoac cls_register_mean."
-        )
+    query_indices = _resolve_query_indices(query_tokens, prefix_tokens)
 
     query_to_patch = attention[:, query_indices, prefix_tokens:]
     if reduction == "max":
@@ -245,15 +244,7 @@ def build_attention_rollout_heatmap(
         fused = fused / fused.sum(dim=-1, keepdim=True).clamp(min=1e-8)
         rollout = fused @ rollout
 
-    query_tokens = str(query_tokens or "cls_register_mean").strip().lower()
-    if query_tokens == "cls":
-        query_indices = [0]
-    elif query_tokens in {"register", "registers"}:
-        query_indices = list(range(1, max(1, int(prefix_tokens)))) or [0]
-    elif query_tokens in {"cls_register_mean", "cls_registers", "head"}:
-        query_indices = list(range(0, max(1, int(prefix_tokens))))
-    else:
-        raise ValueError("query_tokens chi ho tro cls, registers, hoac cls_register_mean.")
+    query_indices = _resolve_query_indices(query_tokens, prefix_tokens)
 
     patch_relevance = rollout[query_indices, prefix_tokens:].mean(dim=0)
     heatmap = patch_relevance.reshape(grid_size[0], grid_size[1]).unsqueeze(0).unsqueeze(0)
@@ -264,6 +255,126 @@ def build_attention_rollout_heatmap(
         align_corners=False,
     )[0, 0]
     return _normalize_heatmap(heatmap)
+
+
+def build_gradient_weighted_attention_rollout_heatmap(
+    attentions: Union[Dict[int, Tensor], Sequence[Tensor]],
+    grid_size: Tuple[int, int],
+    prefix_tokens: int,
+    output_size: Tuple[int, int],
+    query_tokens: str = "cls_register_mean",
+    start_layer: int = 0,
+) -> np.ndarray:
+    if isinstance(attentions, dict):
+        ordered = [attentions[index] for index in sorted(attentions)]
+    else:
+        ordered = list(attentions)
+    if not ordered:
+        raise ValueError("Gradient-weighted rollout yeu cau it nhat mot attention map.")
+
+    start_layer = max(0, int(start_layer))
+    selected = ordered[start_layer:] or ordered
+    device = selected[0].device
+    num_tokens = int(selected[0].shape[-1])
+    rollout = torch.eye(num_tokens, device=device, dtype=selected[0].dtype)
+    for attention in selected:
+        if attention.ndim == 4:
+            attention_for_grad = attention[0]
+        elif attention.ndim == 3:
+            attention_for_grad = attention
+        else:
+            raise ValueError("Attention map phai co shape [heads,tokens,tokens] hoac [B,heads,tokens,tokens].")
+
+        gradient = attention.grad
+        if gradient is not None and gradient.ndim == 4:
+            gradient = gradient[0]
+        if gradient is None:
+            weighted = attention_for_grad
+        else:
+            weighted = torch.relu(gradient) * attention_for_grad
+            if float(weighted.detach().sum().abs().item()) <= 1e-12:
+                weighted = attention_for_grad
+
+        fused = weighted.mean(dim=0).clamp(min=0)
+        fused = fused + torch.eye(num_tokens, device=fused.device, dtype=fused.dtype)
+        fused = fused / fused.sum(dim=-1, keepdim=True).clamp(min=1e-8)
+        rollout = fused @ rollout
+
+    query_indices = _resolve_query_indices(query_tokens, prefix_tokens)
+    patch_relevance = rollout[query_indices, prefix_tokens:].mean(dim=0)
+    heatmap = patch_relevance.reshape(grid_size[0], grid_size[1]).unsqueeze(0).unsqueeze(0)
+    heatmap = F.interpolate(
+        heatmap,
+        size=(output_size[1], output_size[0]),
+        mode="bicubic",
+        align_corners=False,
+    )[0, 0]
+    return _normalize_heatmap(heatmap)
+
+
+def _entropy_1d(values: Tensor) -> float:
+    values = values.detach().float().clamp(min=0)
+    total = values.sum().clamp(min=1e-12)
+    probabilities = values / total
+    entropy = -(probabilities * torch.log(probabilities.clamp(min=1e-12))).sum()
+    return float((entropy / torch.log(torch.tensor(float(max(2, values.numel()))))).item())
+
+
+def summarize_register_attention(
+    attentions: Union[Dict[int, Tensor], Sequence[Tensor]],
+    prefix_tokens: int,
+) -> Dict[str, float]:
+    if isinstance(attentions, dict):
+        ordered = [attentions[index] for index in sorted(attentions)]
+    else:
+        ordered = list(attentions)
+    if not ordered:
+        return {}
+    attention = ordered[-1]
+    if attention.ndim == 4:
+        attention = attention[0]
+    if attention.ndim != 3:
+        return {}
+
+    prefix_tokens = int(prefix_tokens)
+    patch_attention = attention[:, :, prefix_tokens:]
+    if patch_attention.numel() == 0:
+        return {}
+
+    cls_patch = patch_attention[:, 0, :].mean(dim=0)
+    result: Dict[str, float] = {
+        "cls_to_patch_attention_mean": float(cls_patch.mean().item()),
+        "cls_attention_entropy": _entropy_1d(cls_patch),
+    }
+    if prefix_tokens > 1:
+        register_patch = patch_attention[:, 1:prefix_tokens, :].mean(dim=(0, 1))
+        similarity = F.cosine_similarity(
+            cls_patch.flatten().unsqueeze(0),
+            register_patch.flatten().unsqueeze(0),
+            dim=1,
+        )[0]
+        result.update(
+            {
+                "register_to_patch_attention_mean": float(register_patch.mean().item()),
+                "register_attention_entropy": _entropy_1d(register_patch),
+                "cls_register_heatmap_similarity": float(similarity.item()),
+                "register_to_cls_attention_mean": float(attention[:, 1:prefix_tokens, 0].mean().item()),
+                "register_to_register_attention_mean": float(
+                    attention[:, 1:prefix_tokens, 1:prefix_tokens].mean().item()
+                ),
+            }
+        )
+    else:
+        result.update(
+            {
+                "register_to_patch_attention_mean": 0.0,
+                "register_attention_entropy": 0.0,
+                "cls_register_heatmap_similarity": 0.0,
+                "register_to_cls_attention_mean": 0.0,
+                "register_to_register_attention_mean": 0.0,
+            }
+        )
+    return result
 
 
 def build_featuremap_heatmap(

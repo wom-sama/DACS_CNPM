@@ -16,6 +16,7 @@ from trkh.models.feature_hooks import (
     build_attention_heatmap,
     build_attention_rollout_heatmap,
     build_featuremap_heatmap,
+    build_gradient_weighted_attention_rollout_heatmap,
     build_gradcam_heatmap,
     count_attention_layers,
     extract_optional_token_features,
@@ -23,6 +24,7 @@ from trkh.models.feature_hooks import (
     resolve_attention_hook,
     resolve_attention_index,
     resolve_feature_hook,
+    summarize_register_attention,
 )
 from trkh.inference.inference import crop_with_yolo_bbox, load_model
 from trkh.models.model import extract_bbox_from_model_output
@@ -53,7 +55,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--top-k", type=int, default=3)
     parser.add_argument("--override-image-size", type=int, default=None)
     parser.add_argument("--output-dir", type=Path, default=None)
-    parser.add_argument("--method", choices=("attention", "rollout", "gradcam", "both", "all"), default="both")
+    parser.add_argument(
+        "--method",
+        choices=("attention", "rollout", "grad_rollout", "gradcam", "both", "all"),
+        default="both",
+    )
     parser.add_argument("--feature-source", choices=("auto", "patch_embed", "stem_last", "last_conv"), default="auto")
     parser.add_argument("--rollout-start-layer", type=int, default=0)
     parser.add_argument("--target-class", type=int, default=None)
@@ -234,6 +240,7 @@ def _capture_forward(
     attention_spec = resolve_attention_hook(model, layer_index)
     need_grad = method in ("gradcam", "both", "all")
     need_rollout = method in ("rollout", "all")
+    need_grad_rollout = method in ("grad_rollout", "all")
 
     with HookRecorder(feature_spec=feature_spec, attention_spec=attention_spec) as recorder:
         model.zero_grad(set_to_none=True)
@@ -246,6 +253,7 @@ def _capture_forward(
                 logits[:, selected_class].sum().backward()
 
     rollout_heatmap = None
+    register_attention_summary = None
     if need_rollout and hasattr(model, "forward_features"):
         with torch.no_grad():
             features = model.forward_features(tensor, return_attention=True)
@@ -263,6 +271,50 @@ def _capture_forward(
                 query_tokens=query_tokens,
                 start_layer=rollout_start_layer,
             )
+            register_attention_summary = summarize_register_attention(
+                attentions=attentions,
+                prefix_tokens=prefix_tokens,
+            )
+
+    grad_rollout_heatmap = None
+    if need_grad_rollout and hasattr(model, "forward_features"):
+        model.zero_grad(set_to_none=True)
+        with torch.enable_grad():
+            features = model.forward_features(tensor, return_attention=True)
+            attentions = features.get("attentions") if isinstance(features, dict) else None
+            grid_size = features.get("grid_size") if isinstance(features, dict) else None
+            prefix_tokens = attention_spec.prefix_tokens if attention_spec is not None else int(
+                1 + int(getattr(model, "num_registers", 0))
+            )
+            if attentions and grid_size is not None:
+                for attention in attentions.values() if isinstance(attentions, dict) else attentions:
+                    if torch.is_tensor(attention):
+                        attention.retain_grad()
+                if hasattr(model, "head_input_from_features") and hasattr(model, "head"):
+                    logits = model.head(model.head_input_from_features(features))
+                    if getattr(model, "cnn_fusion_head", None) is not None and "cnn_pooled" in features:
+                        cnn_features = model.cnn_fusion_norm(features["cnn_pooled"])
+                        cnn_features = model.cnn_fusion_dropout(cnn_features)
+                        logits = logits + model.cnn_fusion_head(cnn_features)
+                elif hasattr(model, "forward_heads"):
+                    logits, _ = extract_bbox_from_model_output(model.forward_heads(features))
+                else:
+                    logits, _ = extract_bbox_from_model_output(model(tensor))
+                selected_class = int(logits.argmax(dim=1)[0].item()) if target_class is None else int(target_class)
+                logits[:, selected_class].sum().backward()
+                grad_rollout_heatmap = build_gradient_weighted_attention_rollout_heatmap(
+                    attentions=attentions,
+                    grid_size=grid_size,
+                    prefix_tokens=prefix_tokens,
+                    output_size=crop_image.size,
+                    query_tokens=query_tokens,
+                    start_layer=rollout_start_layer,
+                )
+                if register_attention_summary is None:
+                    register_attention_summary = summarize_register_attention(
+                        attentions=attentions,
+                        prefix_tokens=prefix_tokens,
+                    )
 
     result: Dict[str, object] = {
         "probabilities": probabilities,
@@ -273,6 +325,10 @@ def _capture_forward(
     }
     if rollout_heatmap is not None:
         result["rollout_heatmap"] = rollout_heatmap
+    if grad_rollout_heatmap is not None:
+        result["grad_rollout_heatmap"] = grad_rollout_heatmap
+    if register_attention_summary:
+        result["register_attention"] = register_attention_summary
 
     if recorder.activations is not None and method in ("attention", "both", "all"):
         attention_grid_size = None
@@ -381,6 +437,16 @@ def analyze_tensor(
         )
         heatmap_focus["rollout"] = summarize_heatmap_focus(capture["rollout_heatmap"], crop_image)
 
+    if method in ("grad_rollout", "all") and "grad_rollout_heatmap" in capture:
+        result["files"]["grad_rollout"] = save_heatmap_visualizations(
+            crop_image=crop_image,
+            heatmap=capture["grad_rollout_heatmap"],
+            output_dir=output_dir,
+            alpha=alpha,
+            prefix="grad_rollout",
+        )
+        heatmap_focus["grad_rollout"] = summarize_heatmap_focus(capture["grad_rollout_heatmap"], crop_image)
+
     if method in ("gradcam", "both", "all") and "gradcam_heatmap" in capture:
         result["gradcam"] = {
             "predicted_class": capture["predicted_class"],
@@ -397,11 +463,15 @@ def analyze_tensor(
 
     if heatmap_focus:
         result["heatmap_focus"] = heatmap_focus
+    if "register_attention" in capture:
+        result["register_attention"] = capture["register_attention"]
 
     if method == "attention" and "attention" in result["files"]:
         result["files"]["crop"] = result["files"]["attention"]["crop"]
     elif method == "rollout" and "rollout" in result["files"]:
         result["files"]["crop"] = result["files"]["rollout"]["crop"]
+    elif method == "grad_rollout" and "grad_rollout" in result["files"]:
+        result["files"]["crop"] = result["files"]["grad_rollout"]["crop"]
     elif method == "gradcam" and "gradcam" in result["files"]:
         result["files"]["crop"] = result["files"]["gradcam"]["crop"]
     elif "attention" in result["files"]:

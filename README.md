@@ -86,7 +86,7 @@ D:\DataAI\.venv\Scripts\python.exe -m compileall train.py evaluate.py scripts tr
 D:\DataAI\.venv\Scripts\python.exe -m unittest discover -s tests -p "test_*.py" -v
 ```
 
-Current expected result: `66` tests passed for `tests/test_detection_calibration.py`; run the full suite before paper-final training.
+Current expected result: `68` tests passed for `tests/test_detection_calibration.py`; run the full suite before paper-final training.
 
 ## Classification-Only Experiment
 
@@ -108,28 +108,30 @@ $env:TRKH_ALLOW_WINDOWS_PERSISTENT_WORKERS='1'
 D:\DataAI\.venv\Scripts\python.exe -m trkh.training.train `
   --data D:\DataAI\AIEx\image_baseline_experiments\data\cls_crops_grouped_seqsafe_w3\data.yaml `
   --class-name-mode raw --expected-num-classes 5 `
-  --run-name mango_cls_224_clscrops_grouped_lossaware_v15 `
+  --run-name mango_cls_224_clscrops_grouped_ldam_sam_xaiv2_v16 `
   --output-dir runs --disable-resume --seed 42 `
   --model-type vit_registers --image-size 224 --patch-size 16 --stem-channels 32 `
-  --cnn-feature-fusion --cnn-fusion-dropout 0.26 `
-  --embed-dim 256 --depth 8 --num-heads 8 --num-registers 4 --head-pooling cls_register_mean `
-  --dropout 0.20 --attention-dropout 0.06 --drop-path-rate 0.20 `
-  --batch-size 64 --grad-accum-steps 1 --epochs 0 --scheduler-total-epochs 90 --patience 35 `
-  --learning-rate 3.5e-5 --min-learning-rate 5e-7 --warmup-epochs 3 `
-  --weight-decay 0.12 --grad-clip-norm 0.75 --max-nonfinite-grad-steps 8 `
+  --cnn-feature-fusion --cnn-fusion-dropout 0.30 `
+  --embed-dim 256 --depth 8 --num-heads 8 --num-registers 4 --register-positional-embedding `
+  --head-pooling cls_register_mean `
+  --dropout 0.24 --attention-dropout 0.08 --drop-path-rate 0.22 `
+  --batch-size 64 --grad-accum-steps 1 --epochs 0 --scheduler-total-epochs 80 --patience 30 `
+  --learning-rate 2.8e-5 --min-learning-rate 5e-7 --warmup-epochs 4 `
+  --weight-decay 0.16 --grad-clip-norm 0.60 --max-nonfinite-grad-steps 8 `
+  --sam --sam-rho 0.03 `
   --num-workers 4 --eval-num-workers 4 --train-image-cache-mb 0 --eval-image-cache-mb 0 `
   --best-metric loss_aware_fair_macro_f1 --fair-f1-gap-target 0.35 --fair-f1-gap-penalty 0.35 `
-  --fair-f1-min-weight 0.20 --fair-f1-loss-weight 0.10 `
-  --classification-loss balanced_softmax --balanced-softmax-tau 0.45 --disable-class-weights `
-  --focal-loss-gamma 2.0 --focal-loss-mix 0.05 --label-smoothing 0.02 `
+  --fair-f1-min-weight 0.20 --fair-f1-loss-weight 0.12 `
+  --classification-loss ldam_focal --disable-class-weights --ldam-max-margin 0.18 --ldam-scale 12.0 `
+  --focal-loss-gamma 1.5 --focal-loss-mix 0.03 --label-smoothing 0.04 `
   --metric-learning-loss-weight 0.006 --metric-learning-temperature 0.22 `
   --metric-learning-sources head,cnn `
   --foreground-consistency-loss-weight 0.015 --foreground-consistency-margin 0.07 `
-  --balance-auto-max-repeat-factor 1.6 `
-  --class-aware-augmentation --class-augmentation-power 0.35 --class-augmentation-max-scale 1.6 `
-  --rare-class-repeat --rare-class-repeat-power 0.35 --rare-class-repeat-max-factor 1.6 --rare-class-repeat-min-ratio 1.0 `
+  --balance-auto-max-repeat-factor 1.25 `
+  --class-aware-augmentation --class-augmentation-power 0.25 --class-augmentation-max-scale 1.25 `
+  --rare-class-repeat --rare-class-repeat-power 0.25 --rare-class-repeat-max-factor 1.25 --rare-class-repeat-min-ratio 1.0 `
   --disable-rare-class-recall-guard `
-  --resize-mode pad --brightness 0 --contrast 0 --saturation 0 --hue 0 `
+  --resize-mode pad --brightness 0.03 --contrast 0.03 --saturation 0.015 --hue 0 `
   --random-erasing-probability 0 --random-affine-degrees 2 --random-affine-translate 0.015 `
   --random-affine-scale-min 0.97 --horizontal-flip-probability 0.5 --vertical-flip-probability 0 `
   --rotate90-probability 0 --lighting-probability 0 `
@@ -145,16 +147,17 @@ Run this after a checkpoint is available to inspect fail cases, low-confidence c
 
 ```powershell
 D:\DataAI\.venv\Scripts\python.exe -m trkh.evaluation.xai_audit `
-  --checkpoint runs\mango_cls_224_clscrops_grouped_lossaware_v15\checkpoints\best.pt `
+  --checkpoint runs\mango_cls_224_clscrops_grouped_ldam_sam_xaiv2_v16\checkpoints\best.pt `
   --data D:\DataAI\AIEx\image_baseline_experiments\data\cls_crops_grouped_seqsafe_w3\data.yaml `
   --class-name-mode raw --expected-num-classes 5 --split test `
-  --output-dir runs\mango_cls_224_clscrops_grouped_lossaware_v15\xai_audit_test `
+  --output-dir runs\mango_cls_224_clscrops_grouped_ldam_sam_xaiv2_v16\xai_audit_test_v2 `
   --max-cases 32 --mistake-cases 12 --low-confidence-cases 8 --close-margin-cases 8 `
   --per-class-cases 2 --batch-size 64 --num-workers 4 `
-  --method all --feature-source stem_last --query-tokens cls_register_mean --rollout-start-layer 1 --top-k 5
+  --method all --feature-source stem_last --query-tokens cls_register_mean --rollout-start-layer 1 `
+  --robustness-probes --top-k 5
 ```
 
-The attention heatmap defaults to `cls_register_mean` because the classifier head also pools CLS plus register tokens. `--method all --feature-source stem_last` exports raw attention, attention rollout, and CNN-stem Grad-CAM plus foreground/background/border focus metrics.
+The attention heatmap defaults to `cls_register_mean` because the classifier head also pools CLS plus register tokens. `--method all --feature-source stem_last --robustness-probes` exports raw attention, attention rollout, gradient-weighted rollout, CNN-stem Grad-CAM, register diagnostics, robustness probes, `xai_metrics.json`, and `review_manifest.csv`.
 
 ## Build Grouped Split
 

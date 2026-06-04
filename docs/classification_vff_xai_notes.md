@@ -61,7 +61,7 @@ Da them co:
 - `--metric-learning-temperature`
 
 Khuyen nghi v12: xem `README.md`, run name `mango_cls_224_clscrops_vffsupcon_xai_v12`.
-Khuyen nghi hien tai: xem `README.md`, run name `mango_cls_224_clscrops_grouped_lossaware_v15`.
+Khuyen nghi hien tai: xem `README.md`, run name `mango_cls_224_clscrops_grouped_ldam_sam_xaiv2_v16`.
 
 ## Ket qua v13 full va chan doan moi
 
@@ -159,6 +159,46 @@ Huong v15:
 - Giam Balanced Softmax tau tu `0.70` xuong `0.45`.
 - Giam SupCon tu `0.012` xuong `0.006` va foreground consistency tu `0.025` xuong `0.015`.
 - Giu augmentation hinh hoc nhe, khong bat brightness/contrast/saturation/hue/cutmix/mosaic/copy-paste cho nhanh classification-only.
+
+## Ket qua v15 va XAI audit v2
+
+Run `runs/mango_cls_224_clscrops_grouped_lossaware_v15` da bi dung tai epoch `33`.
+
+- Best selection epoch: `21`.
+- Best validation macro F1 trong summary: `0.682987`.
+- Best metrics file: validation macro F1 `0.679967`, accuracy `0.750774`, class 1 F1 `0.278215`.
+- Final test: accuracy `0.725077`, macro F1 `0.637897`, weighted F1 `0.751239`, class 1 F1 `0.117647`.
+- Test confusion class 1: predicted class 1 qua nhieu. Cot pred `1` co `189` mau, trong do chi `15` dung class 1.
+- Val loss tot nhat o epoch `11`: `0.758571`; ve cuoi run train loss giam den `0.227` nhung val loss dao dong `0.97-1.07`, nen van overfit.
+
+XAI audit v2 da chay tai `runs/mango_cls_224_clscrops_grouped_lossaware_v15/xai_audit_test_v2`.
+
+- Da them `grad_rollout`, register diagnostics, robustness probes va review manifest.
+- Top confusions tren test: true `3` -> pred `2` (`96`), true `0` -> pred `1` (`88`), true `2` -> pred `1` (`53`), true `4` -> pred `1` (`31`).
+- Heatmap foreground mass van cao: attention `0.9636`, rollout `0.9635`, grad_rollout `0.9566`, Grad-CAM `0.9612`.
+- Background probe khong lam giam confidence dang ke: background blur drop `0.0056`, background gray drop `-0.0018`.
+- Object desaturate drop trung binh `0.5873`, nen model rat nhay voi mau/texture tren object. Dieu nay dung mot phan voi bai toan do chin, nhung cung giai thich vi sao ranh class 0/1/2 de sai confidence cao.
+- Register diagnostics: `cls_register_heatmap_similarity=0.9994`, `register_attention_entropy=0.9409`. Register dang gan nhu nhin giong CLS va kha phan tan, chua tao signal khac biet ro.
+- Review flags: `high_confidence_misclassification=17`, `object_color_sensitive=27`, `grad_rollout_border_attention=19`, `register_attention_diffuse=9`.
+
+Ket luan v15:
+
+- Loi chinh khong phai shortcut nen ro ret.
+- Can giam over-correction class 1, khong tang rare repeat/rare recall guard nua.
+- Can lam register tokens bot trung lap voi CLS: thu `--register-positional-embedding`.
+- Can giam overfit cuoi run: thu SAM nhe, weight decay/dropout/drop-path cao hon va scheduler ngan hon.
+- Can photometric jitter rat nhe, khong dung hue/cutmix/mosaic/copy-paste. Muc tieu la tang do ben mau nhe chu khong pha tin hieu mau.
+
+Huong v16:
+
+- Chuyen tu Balanced Softmax tau `0.45` sang `ldam_focal` nhe: `ldam_max_margin=0.18`, `ldam_scale=12`.
+- Tat class weights trong CE/LDAM de tranh nhan doi bias rare class.
+- Giam cap dynamic rare repeat/class-aware tu `1.6` xuong `1.25`.
+- Giu `--disable-rare-class-recall-guard`.
+- Bat `--register-positional-embedding`.
+- Bat `--sam --sam-rho 0.03`.
+- Giam LR `2.8e-5`, tang regularization: dropout `0.24`, drop-path `0.22`, weight decay `0.16`.
+- Audit sau train bat buoc dung `--method all --robustness-probes`, doc `xai_metrics.json` va `review_manifest.csv` truoc khi quyet dinh tiep.
 
 ## Huong XAI da tich hop
 
