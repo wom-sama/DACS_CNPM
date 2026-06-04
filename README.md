@@ -86,13 +86,13 @@ D:\DataAI\.venv\Scripts\python.exe -m compileall train.py evaluate.py scripts tr
 D:\DataAI\.venv\Scripts\python.exe -m unittest discover -s tests -p "test_*.py" -v
 ```
 
-Current expected result: `58` tests passed.
+Current expected result: `60` tests passed.
 
 ## Classification-Only Experiment
 
 Use this for the classification paper track. The key is `--model-type vit_registers` and not passing `--full-image-detection`. Keep all checkpoints scratch-only.
 
-For paper comparison against `image_baseline_experiments`, prefer the prebuilt classification-folder crop dataset at `D:\DataAI\AIEx\image_baseline_experiments\data\cls_crops`. This avoids spending train time on online YOLO crop extraction and keeps metrics comparable with baseline classifiers. Current recommended loss stack is Balanced Softmax for class-prior correction plus a small supervised contrastive term for similar-class separation. The checkpoint selector uses `fair_macro_f1`, so it penalizes a large per-class F1 gap instead of choosing only the highest average macro F1.
+For paper comparison against `image_baseline_experiments`, prefer the prebuilt classification-folder crop dataset at `D:\DataAI\AIEx\image_baseline_experiments\data\cls_crops`. This avoids spending train time on online YOLO crop extraction and keeps metrics comparable with baseline classifiers. Current recommended loss stack is Balanced Softmax for class-prior correction plus a small VFF-like supervised contrastive term over `head,cnn,patch,registers` embeddings for similar-class separation. The checkpoint selector uses `fair_macro_f1`, so it penalizes a large per-class F1 gap instead of choosing only the highest average macro F1.
 
 ```powershell
 cd D:\DataAI\AIEx\TRKH
@@ -106,20 +106,21 @@ $env:TRKH_ALLOW_WINDOWS_PERSISTENT_WORKERS='1'
 D:\DataAI\.venv\Scripts\python.exe -m trkh.training.train `
   --data D:\DataAI\AIEx\image_baseline_experiments\data\cls_crops\data.yaml `
   --class-name-mode raw --expected-num-classes 5 `
-  --run-name mango_cls_224_clscrops_balsoftmax_supcon_v11 `
+  --run-name mango_cls_224_clscrops_vffsupcon_xai_v12 `
   --output-dir runs --disable-resume --seed 42 `
   --model-type vit_registers --image-size 224 --patch-size 16 --stem-channels 32 `
-  --cnn-feature-fusion --cnn-fusion-dropout 0.10 `
+  --cnn-feature-fusion --cnn-fusion-dropout 0.20 `
   --embed-dim 256 --depth 8 --num-heads 8 --num-registers 4 --head-pooling cls_register_mean `
-  --dropout 0.10 --drop-path-rate 0.10 `
-  --batch-size 64 --grad-accum-steps 1 --epochs 0 --scheduler-total-epochs 90 --patience 100 `
+  --dropout 0.16 --attention-dropout 0.05 --drop-path-rate 0.16 `
+  --batch-size 64 --grad-accum-steps 1 --epochs 0 --scheduler-total-epochs 120 --patience 120 `
   --learning-rate 5e-5 --min-learning-rate 5e-7 --warmup-epochs 2 `
-  --weight-decay 0.07 --grad-clip-norm 0.75 --max-nonfinite-grad-steps 8 `
+  --weight-decay 0.10 --grad-clip-norm 0.75 --max-nonfinite-grad-steps 8 `
   --num-workers 4 --eval-num-workers 4 --train-image-cache-mb 0 --eval-image-cache-mb 0 `
-  --best-metric fair_macro_f1 --fair-f1-gap-target 0.05 --fair-f1-gap-penalty 1.2 --fair-f1-min-weight 0.35 `
-  --classification-loss balanced_softmax --balanced-softmax-tau 0.7 --disable-class-weights `
+  --best-metric fair_macro_f1 --fair-f1-gap-target 0.05 --fair-f1-gap-penalty 1.5 --fair-f1-min-weight 0.45 `
+  --classification-loss balanced_softmax --balanced-softmax-tau 0.75 --disable-class-weights `
   --focal-loss-gamma 2.0 --focal-loss-mix 0.20 --label-smoothing 0.005 `
-  --metric-learning-loss-weight 0.015 --metric-learning-temperature 0.16 `
+  --metric-learning-loss-weight 0.020 --metric-learning-temperature 0.16 `
+  --metric-learning-sources head,cnn,patch,registers `
   --class-aware-augmentation --class-augmentation-power 0.5 --class-augmentation-max-scale 2.0 `
   --rare-class-recall-target 0.88 --rare-class-recall-guard-scale-threshold 1.5 `
   --rare-class-recall-guard-max-multiplier 1.12 --rare-class-recall-guard-min-precision 0.65 `
@@ -132,6 +133,23 @@ D:\DataAI\.venv\Scripts\python.exe -m trkh.training.train `
 ```
 
 The `predictions_detailed.csv` artifact keeps the `data.yaml` class ID order. The shorter `predictions.csv` is baseline-compatible and may remap integer IDs to the comparison table class order; use the name columns or `metrics.json/classes` when reading it.
+
+## XAI Audit
+
+Run this after a checkpoint is available to inspect fail cases, low-confidence cases, and major confusion pairs. It is evaluation-only and does not create training data, so it does not violate the no-pretrain/no-leak rule.
+
+```powershell
+D:\DataAI\.venv\Scripts\python.exe -m trkh.evaluation.xai_audit `
+  --checkpoint runs\mango_cls_224_clscrops_vffsupcon_xai_v12\checkpoints\best.pt `
+  --data D:\DataAI\AIEx\image_baseline_experiments\data\cls_crops\data.yaml `
+  --class-name-mode raw --expected-num-classes 5 --split test `
+  --output-dir runs\mango_cls_224_clscrops_vffsupcon_xai_v12\xai_audit_test `
+  --max-cases 32 --mistake-cases 12 --low-confidence-cases 8 --close-margin-cases 8 `
+  --per-class-cases 2 --batch-size 64 --num-workers 0 `
+  --method both --query-tokens cls_register_mean --top-k 5
+```
+
+The attention heatmap defaults to `cls_register_mean` because the classifier head also pools CLS plus register tokens. This avoids a misleading CLS-only explanation for ViT-register checkpoints.
 
 The older online YOLO object-crop command is still useful for an ablation because it can include wider crop margins from original images:
 

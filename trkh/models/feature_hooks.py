@@ -161,12 +161,27 @@ def build_attention_heatmap(
     prefix_tokens: int,
     reduction: str,
     output_size: Tuple[int, int],
+    query_tokens: str = "cls",
 ) -> np.ndarray:
-    cls_to_patch = attention[:, 0, prefix_tokens:]
-    if reduction == "max":
-        patch_attention = cls_to_patch.max(dim=0).values
+    query_tokens = str(query_tokens or "cls").strip().lower()
+    if query_tokens == "cls":
+        query_indices = [0]
+    elif query_tokens in {"register", "registers"}:
+        query_indices = list(range(1, max(1, int(prefix_tokens))))
+        if not query_indices:
+            query_indices = [0]
+    elif query_tokens in {"cls_register_mean", "cls_registers", "head"}:
+        query_indices = list(range(0, max(1, int(prefix_tokens))))
     else:
-        patch_attention = cls_to_patch.mean(dim=0)
+        raise ValueError(
+            "query_tokens chi ho tro cls, registers, hoac cls_register_mean."
+        )
+
+    query_to_patch = attention[:, query_indices, prefix_tokens:]
+    if reduction == "max":
+        patch_attention = query_to_patch.flatten(0, 1).max(dim=0).values
+    else:
+        patch_attention = query_to_patch.mean(dim=(0, 1))
 
     heatmap = patch_attention.reshape(grid_size[0], grid_size[1]).unsqueeze(0).unsqueeze(0)
     heatmap = F.interpolate(

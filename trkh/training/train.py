@@ -15,7 +15,7 @@ from dataclasses import fields
 from functools import partial
 from itertools import count, islice
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Sequence, Tuple
+from typing import Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 import torch
 from torch import Tensor, nn, optim
@@ -384,6 +384,15 @@ def parse_args() -> argparse.Namespace:
         default=False,
         help="Tat anchor weighting theo tan suat class trong batch cho metric-learning.",
     )
+    parser.add_argument(
+        "--metric-learning-sources",
+        type=str,
+        default="head",
+        help=(
+            "Danh sach nguon embedding cho SupCon, cach nhau boi dau phay. "
+            "Ho tro head, cnn, patch, registers, all."
+        ),
+    )
     parser.add_argument("--batch-mix-probability", type=float, default=0.6)
     parser.add_argument("--mosaic-probability", type=float, default=0.25)
     parser.add_argument("--mosaic-min-split", type=float, default=0.35)
@@ -622,6 +631,20 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         raise ValueError("--metric-learning-loss-weight phai >= 0.")
     if args.metric_learning_temperature <= 0.0:
         raise ValueError("--metric-learning-temperature phai > 0.")
+    valid_metric_sources = {"head", "cnn", "patch", "registers", "all"}
+    requested_metric_sources = [
+        item.strip().lower()
+        for item in str(args.metric_learning_sources or "head").replace(";", ",").split(",")
+        if item.strip()
+    ]
+    if not requested_metric_sources:
+        requested_metric_sources = ["head"]
+    invalid_metric_sources = sorted(set(requested_metric_sources) - valid_metric_sources)
+    if invalid_metric_sources:
+        raise ValueError(
+            "--metric-learning-sources chi ho tro head, cnn, patch, registers, all; "
+            f"khong hop le: {invalid_metric_sources}"
+        )
     if not 0.0 <= args.fair_f1_gap_target <= 1.0:
         raise ValueError("--fair-f1-gap-target phai nam trong [0, 1].")
     if args.fair_f1_gap_penalty < 0.0:
@@ -832,6 +855,7 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         metric_learning_loss_weight=args.metric_learning_loss_weight,
         metric_learning_temperature=args.metric_learning_temperature,
         metric_learning_class_balanced=not args.disable_metric_learning_class_balanced,
+        metric_learning_sources=",".join(requested_metric_sources),
         fair_f1_gap_target=args.fair_f1_gap_target,
         fair_f1_gap_penalty=args.fair_f1_gap_penalty,
         fair_f1_min_weight=args.fair_f1_min_weight,
@@ -1900,6 +1924,70 @@ def _classification_target_indices(targets, logits: Tensor) -> Optional[Tensor]:
     return None
 
 
+def _parse_metric_learning_sources(sources: Union[str, Sequence[str]]) -> List[str]:
+    if isinstance(sources, str):
+        items = [
+            item.strip().lower()
+            for item in sources.replace(";", ",").split(",")
+            if item.strip()
+        ]
+    else:
+        items = [str(item).strip().lower() for item in sources if str(item).strip()]
+    if not items:
+        items = ["head"]
+    if "all" in items:
+        items = ["head", "cnn", "patch", "registers"]
+
+    allowed = {"head", "cnn", "patch", "registers"}
+    ordered: List[str] = []
+    for item in items:
+        if item not in allowed:
+            raise ValueError(
+                "metric_learning_sources chi ho tro head, cnn, patch, registers, all."
+            )
+        if item not in ordered:
+            ordered.append(item)
+    return ordered
+
+
+def _metric_learning_loss_from_features(
+    *,
+    model: nn.Module,
+    features: Dict[str, Tensor],
+    targets: Tensor,
+    criterion: nn.Module,
+    sources: Union[str, Sequence[str]],
+) -> Tuple[Tensor, List[str]]:
+    source_losses: List[Tensor] = []
+    used_sources: List[str] = []
+    for source in _parse_metric_learning_sources(sources):
+        embedding: Optional[Tensor]
+        if source == "head":
+            embedding = extract_head_input_from_features(model, features)
+        elif source == "cnn":
+            embedding = features.get("cnn_pooled")
+            if embedding is not None and hasattr(model, "cnn_fusion_norm"):
+                embedding = model.cnn_fusion_norm(embedding)
+        elif source == "patch":
+            patches = features.get("patches")
+            embedding = patches.mean(dim=1) if torch.is_tensor(patches) and patches.ndim == 3 else None
+        elif source == "registers":
+            registers = features.get("registers")
+            embedding = registers.mean(dim=1) if torch.is_tensor(registers) and registers.ndim == 3 else None
+        else:  # pragma: no cover - guarded by parser.
+            embedding = None
+
+        if embedding is None or not torch.is_tensor(embedding) or embedding.ndim != 2:
+            continue
+        source_losses.append(criterion(embedding, targets))
+        used_sources.append(source)
+
+    if not source_losses:
+        zero = next(iter(features.values())).sum() * 0.0
+        return zero, used_sources
+    return torch.stack(source_losses).mean(), used_sources
+
+
 def _stack_image_masks_from_targets(targets) -> Optional[Tensor]:
     if not _is_detection_targets(targets):
         return None
@@ -1925,6 +2013,7 @@ def _forward_train_loss(
     debug_bbox: bool = False,
     metric_learning_criterion: Optional[nn.Module] = None,
     metric_learning_loss_weight: float = 0.0,
+    metric_learning_sources: Union[str, Sequence[str]] = "head",
 ) -> Tuple[Tensor, Optional[Dict[str, Tensor]], Tensor, Dict[str, float], Optional[Tensor]]:
     with autocast_context(device, amp):
         image_valid_mask = _stack_image_masks_from_targets(targets)
@@ -1942,8 +2031,13 @@ def _forward_train_loss(
             ):
                 target_indices = _classification_target_indices(targets, logits)
                 if target_indices is not None:
-                    embeddings = extract_head_input_from_features(model, features)
-                    metric_learning_loss = metric_learning_criterion(embeddings, target_indices)
+                    metric_learning_loss, _ = _metric_learning_loss_from_features(
+                        model=model,
+                        features=features,
+                        targets=target_indices,
+                        criterion=metric_learning_criterion,
+                        sources=metric_learning_sources,
+                    )
                     loss = loss + float(metric_learning_loss_weight) * metric_learning_loss
             loss_details = {
                 "loss": float(loss.detach().cpu().item()),
@@ -2060,6 +2154,7 @@ def train_one_epoch(
     epoch_index: int,
     metric_learning_criterion: Optional[nn.Module] = None,
     metric_learning_loss_weight: float = 0.0,
+    metric_learning_sources: Union[str, Sequence[str]] = "head",
     use_sam: bool = False,
     grad_accum_steps: int = 1,
     max_nonfinite_grad_steps: int = 8,
@@ -2132,6 +2227,7 @@ def train_one_epoch(
                 criterion=criterion,
                 metric_learning_criterion=metric_learning_criterion,
                 metric_learning_loss_weight=metric_learning_loss_weight,
+                metric_learning_sources=metric_learning_sources,
                 images=images,
                 labels=labels,
                 targets=targets,
@@ -2218,6 +2314,7 @@ def train_one_epoch(
                             criterion=criterion,
                             metric_learning_criterion=metric_learning_criterion,
                             metric_learning_loss_weight=metric_learning_loss_weight,
+                            metric_learning_sources=metric_learning_sources,
                             images=replay_images,
                             labels=replay_labels,
                             targets=replay_targets,
@@ -3473,9 +3570,9 @@ def main() -> None:
                     "loss_weight": float(train_config.metric_learning_loss_weight),
                     "temperature": float(train_config.metric_learning_temperature),
                     "class_balanced": bool(train_config.metric_learning_class_balanced),
-                    "embedding": "vit_register_cls_register_mean",
+                    "sources": _parse_metric_learning_sources(train_config.metric_learning_sources),
                 },
-                "reason": "tang separation embedding cho cac lop co dac trung tuong dong ma khong dung pretrain",
+                "reason": "VFF-like cosine CSCL tren nhieu muc feature, khong dung pretrain",
             },
             flush=True,
         )
@@ -3788,6 +3885,7 @@ def main() -> None:
                     epoch_index=int(epoch),
                     metric_learning_criterion=metric_learning_criterion,
                     metric_learning_loss_weight=train_config.metric_learning_loss_weight,
+                    metric_learning_sources=train_config.metric_learning_sources,
                     use_sam=train_config.use_sam,
                     grad_accum_steps=train_config.grad_accum_steps,
                     max_nonfinite_grad_steps=train_config.max_nonfinite_grad_steps,

@@ -25,6 +25,7 @@ from trkh.evaluation.evaluate import (
     save_evaluation_artifacts,
 )
 from trkh.evaluation.metrics import build_metrics
+from trkh.models.feature_hooks import build_attention_heatmap
 from trkh.data.dataset import (
     ClassificationFolderDataset,
     HardSampleRepeatDataset,
@@ -66,6 +67,8 @@ from trkh.training.train import (
     _resolve_detection_stage,
     _save_interrupt_checkpoint,
     _forward_train_loss,
+    _metric_learning_loss_from_features,
+    _parse_metric_learning_sources,
     train_one_epoch,
 )
 from trkh.core.utils import (
@@ -1941,6 +1944,59 @@ dataset_balance:
         self.assertIn("train_seconds", reader.fieldnames or [])
         self.assertEqual(rows[0]["train_seconds"], "")
         self.assertEqual(rows[1]["train_seconds"], "12.5")
+
+    def test_attention_heatmap_can_pool_cls_and_register_queries(self):
+        attention = torch.zeros(1, 4, 8)
+        attention[0, 0, 4:] = torch.tensor([1.0, 0.0, 0.0, 0.0])
+        attention[0, 1, 4:] = torch.tensor([0.0, 1.0, 0.0, 0.0])
+        attention[0, 2, 4:] = torch.tensor([0.0, 0.0, 1.0, 0.0])
+        attention[0, 3, 4:] = torch.tensor([0.0, 0.0, 0.0, 1.0])
+
+        cls_heatmap = build_attention_heatmap(
+            attention=attention,
+            grid_size=(2, 2),
+            prefix_tokens=4,
+            reduction="mean",
+            output_size=(2, 2),
+            query_tokens="cls",
+        )
+        pooled_heatmap = build_attention_heatmap(
+            attention=attention,
+            grid_size=(2, 2),
+            prefix_tokens=4,
+            reduction="mean",
+            output_size=(2, 2),
+            query_tokens="cls_register_mean",
+        )
+
+        self.assertEqual(cls_heatmap.shape, (2, 2))
+        self.assertEqual(pooled_heatmap.shape, (2, 2))
+        self.assertFalse(bool((torch.tensor(cls_heatmap) == torch.tensor(pooled_heatmap)).all().item()))
+
+    def test_metric_learning_multisource_loss_is_finite(self):
+        class _FakeModel(torch.nn.Module):
+            cnn_fusion_norm = torch.nn.Identity()
+
+        criterion = SupervisedContrastiveLoss(temperature=0.2, class_balanced=True)
+        targets = torch.tensor([0, 0, 1, 1], dtype=torch.long)
+        features = {
+            "pooled": torch.randn(4, 8, requires_grad=True),
+            "cnn_pooled": torch.randn(4, 8, requires_grad=True),
+            "patches": torch.randn(4, 3, 8, requires_grad=True),
+            "registers": torch.randn(4, 2, 8, requires_grad=True),
+        }
+
+        self.assertEqual(_parse_metric_learning_sources("all"), ["head", "cnn", "patch", "registers"])
+        loss, used_sources = _metric_learning_loss_from_features(
+            model=_FakeModel(),
+            features=features,
+            targets=targets,
+            criterion=criterion,
+            sources="head,cnn,patch,registers",
+        )
+
+        self.assertTrue(torch.isfinite(loss).item())
+        self.assertEqual(used_sources, ["head", "cnn", "patch", "registers"])
 
 
 if __name__ == "__main__":

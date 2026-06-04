@@ -41,6 +41,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--crop-margin", type=float, default=0.05)
     parser.add_argument("--layer", type=int, default=-1, help="Layer attention, ho tro index am.")
     parser.add_argument("--head-reduction", choices=("mean", "max"), default="mean")
+    parser.add_argument(
+        "--query-tokens",
+        choices=("cls", "registers", "cls_register_mean"),
+        default="cls_register_mean",
+        help="Token query dung de tong hop attention heatmap.",
+    )
     parser.add_argument("--alpha", type=float, default=0.45)
     parser.add_argument("--top-k", type=int, default=3)
     parser.add_argument("--override-image-size", type=int, default=None)
@@ -143,6 +149,7 @@ def _capture_forward(
     crop_image: Image.Image,
     layer_index: int,
     head_reduction: str,
+    query_tokens: str,
     method: str,
     target_class: Optional[int],
 ) -> Dict[str, object]:
@@ -177,6 +184,7 @@ def _capture_forward(
                 prefix_tokens=attention_spec.prefix_tokens,
                 reduction=head_reduction,
                 output_size=crop_image.size,
+                query_tokens=query_tokens,
             )
             result["attention_source"] = attention_spec.source
         else:
@@ -208,6 +216,7 @@ def analyze_tensor(
     output_dir: Path,
     method: str = "both",
     target_class: Optional[int] = None,
+    query_tokens: str = "cls_register_mean",
 ) -> Dict[str, object]:
     capture = _capture_forward(
         model=model,
@@ -215,6 +224,7 @@ def analyze_tensor(
         crop_image=crop_image,
         layer_index=layer_index,
         head_reduction=head_reduction,
+        query_tokens=query_tokens,
         method=method,
         target_class=target_class,
     )
@@ -223,6 +233,7 @@ def analyze_tensor(
     result: Dict[str, object] = {
         "layer_index": layer_index,
         "head_reduction": head_reduction,
+        "query_tokens": query_tokens,
         "method": method,
         "feature_source": capture["feature_source"],
         "files": {},
@@ -305,6 +316,7 @@ def main() -> None:
         tensor=tensor,
         layer_index=layer_index,
         head_reduction=args.head_reduction,
+        query_tokens=args.query_tokens,
         alpha=args.alpha,
         top_k=args.top_k,
         output_dir=output_dir,

@@ -213,6 +213,7 @@ class TrainConfig:
     metric_learning_loss_weight: float = 0.0
     metric_learning_temperature: float = 0.12
     metric_learning_class_balanced: bool = True
+    metric_learning_sources: str = "head"
     fair_f1_gap_target: float = 0.05
     fair_f1_gap_penalty: float = 1.5
     fair_f1_min_weight: float = 0.25
