@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Dict, Iterable, Optional, Tuple
 
 import matplotlib.pyplot as plt
+import numpy as np
 import torch
 import torch.nn.functional as F
 from PIL import Image
@@ -13,6 +14,7 @@ from trkh.data.dataset import build_eval_transform
 from trkh.models.feature_hooks import (
     HookRecorder,
     build_attention_heatmap,
+    build_attention_rollout_heatmap,
     build_featuremap_heatmap,
     build_gradcam_heatmap,
     count_attention_layers,
@@ -51,7 +53,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--top-k", type=int, default=3)
     parser.add_argument("--override-image-size", type=int, default=None)
     parser.add_argument("--output-dir", type=Path, default=None)
-    parser.add_argument("--method", choices=("attention", "gradcam", "both"), default="both")
+    parser.add_argument("--method", choices=("attention", "rollout", "gradcam", "both", "all"), default="both")
+    parser.add_argument("--feature-source", choices=("auto", "patch_embed", "stem_last", "last_conv"), default="auto")
+    parser.add_argument("--rollout-start-layer", type=int, default=0)
     parser.add_argument("--target-class", type=int, default=None)
     return parser.parse_args()
 
@@ -143,6 +147,77 @@ def build_top_predictions(
     return predictions
 
 
+def _pseudo_foreground_mask_from_crop(crop_image: Image.Image, margin: float = 0.08) -> np.ndarray:
+    rgb = np.asarray(crop_image.convert("RGB"), dtype=np.float32) / 255.0
+    gray = rgb.mean(axis=2)
+    median_rgb = np.median(rgb.reshape(-1, 3), axis=0).reshape(1, 1, 3)
+    median_gray = float(np.median(gray))
+    color_delta = np.abs(rgb - median_rgb).mean(axis=2)
+    intensity_delta = np.abs(gray - median_gray)
+    edge_delta = np.zeros_like(gray)
+    edge_delta[:, 1:] = np.maximum(edge_delta[:, 1:], np.abs(gray[:, 1:] - gray[:, :-1]))
+    edge_delta[1:, :] = np.maximum(edge_delta[1:, :], np.abs(gray[1:, :] - gray[:-1, :]))
+    mask = (color_delta + intensity_delta + 0.5 * edge_delta) > max(0.0, float(margin))
+
+    height, width = gray.shape
+    yy = np.linspace(-1.0, 1.0, height, dtype=np.float32).reshape(height, 1)
+    xx = np.linspace(-1.0, 1.0, width, dtype=np.float32).reshape(1, width)
+    central_ellipse = ((xx / 0.82) ** 2 + (yy / 0.92) ** 2) <= 1.0
+    mask = np.logical_or(mask, central_ellipse)
+    if float(mask.mean()) < 0.08:
+        mask = ((xx / 0.78) ** 2 + (yy / 0.90) ** 2) <= 1.0
+    return mask
+
+
+def summarize_heatmap_focus(
+    heatmap,
+    crop_image: Image.Image,
+    *,
+    foreground_margin: float = 0.08,
+) -> Dict[str, float]:
+    heat = np.asarray(heatmap, dtype=np.float64)
+    heat = np.maximum(heat, 0.0)
+    total = float(heat.sum())
+    if total <= 1e-12:
+        return {
+            "foreground_mass": 0.0,
+            "background_mass": 1.0,
+            "border_mass": 0.0,
+            "entropy": 0.0,
+            "peak_x": 0.0,
+            "peak_y": 0.0,
+        }
+    mass = heat / total
+    foreground = _pseudo_foreground_mask_from_crop(crop_image, margin=foreground_margin)
+    if foreground.shape != heat.shape:
+        foreground = np.asarray(
+            Image.fromarray((foreground.astype(np.uint8) * 255)).resize(
+                (heat.shape[1], heat.shape[0]),
+                Image.Resampling.NEAREST,
+            ),
+            dtype=np.uint8,
+        ) > 0
+    height, width = heat.shape
+    border_px = max(1, int(round(min(height, width) * 0.08)))
+    border = np.zeros_like(foreground, dtype=bool)
+    border[:border_px, :] = True
+    border[-border_px:, :] = True
+    border[:, :border_px] = True
+    border[:, -border_px:] = True
+    peak_flat = int(np.argmax(heat))
+    peak_y, peak_x = divmod(peak_flat, max(1, width))
+    entropy = float(-(mass * np.log(mass + 1e-12)).sum() / np.log(max(2, mass.size)))
+    foreground_mass = float(mass[foreground].sum())
+    return {
+        "foreground_mass": foreground_mass,
+        "background_mass": float(max(0.0, 1.0 - foreground_mass)),
+        "border_mass": float(mass[border].sum()),
+        "entropy": entropy,
+        "peak_x": float(peak_x / max(1, width - 1)),
+        "peak_y": float(peak_y / max(1, height - 1)),
+    }
+
+
 def _capture_forward(
     model,
     tensor: torch.Tensor,
@@ -152,10 +227,13 @@ def _capture_forward(
     query_tokens: str,
     method: str,
     target_class: Optional[int],
+    feature_source: str = "auto",
+    rollout_start_layer: int = 0,
 ) -> Dict[str, object]:
-    feature_spec = resolve_feature_hook(model)
+    feature_spec = resolve_feature_hook(model, feature_source=feature_source)
     attention_spec = resolve_attention_hook(model, layer_index)
-    need_grad = method in ("gradcam", "both")
+    need_grad = method in ("gradcam", "both", "all")
+    need_rollout = method in ("rollout", "all")
 
     with HookRecorder(feature_spec=feature_spec, attention_spec=attention_spec) as recorder:
         model.zero_grad(set_to_none=True)
@@ -167,6 +245,25 @@ def _capture_forward(
             if need_grad:
                 logits[:, selected_class].sum().backward()
 
+    rollout_heatmap = None
+    if need_rollout and hasattr(model, "forward_features"):
+        with torch.no_grad():
+            features = model.forward_features(tensor, return_attention=True)
+        attentions = features.get("attentions") if isinstance(features, dict) else None
+        grid_size = features.get("grid_size") if isinstance(features, dict) else None
+        prefix_tokens = attention_spec.prefix_tokens if attention_spec is not None else int(
+            1 + int(getattr(model, "num_registers", 0))
+        )
+        if attentions and grid_size is not None:
+            rollout_heatmap = build_attention_rollout_heatmap(
+                attentions=attentions,
+                grid_size=grid_size,
+                prefix_tokens=prefix_tokens,
+                output_size=crop_image.size,
+                query_tokens=query_tokens,
+                start_layer=rollout_start_layer,
+            )
+
     result: Dict[str, object] = {
         "probabilities": probabilities,
         "predicted_class": predicted_class,
@@ -174,19 +271,29 @@ def _capture_forward(
         "feature_source": feature_spec.source,
         "grid_size": list(recorder.grid_size) if recorder.grid_size is not None else None,
     }
+    if rollout_heatmap is not None:
+        result["rollout_heatmap"] = rollout_heatmap
 
-    if recorder.activations is not None and method in ("attention", "both"):
-        if attention_spec is not None and recorder.qkv_output is not None and recorder.grid_size is not None:
+    if recorder.activations is not None and method in ("attention", "both", "all"):
+        attention_grid_size = None
+        if attention_spec is not None and recorder.qkv_output is not None:
+            num_tokens = int(recorder.qkv_output.shape[1])
+            patch_tokens = max(0, num_tokens - int(attention_spec.prefix_tokens))
+            side = int(round(patch_tokens ** 0.5))
+            if side * side == patch_tokens:
+                attention_grid_size = (side, side)
+        if attention_spec is not None and recorder.qkv_output is not None and attention_grid_size is not None:
             attention = reconstruct_attention(recorder.qkv_output, attention_spec)[0].detach().cpu()
             result["attention_heatmap"] = build_attention_heatmap(
                 attention=attention,
-                grid_size=recorder.grid_size,
+                grid_size=attention_grid_size,
                 prefix_tokens=attention_spec.prefix_tokens,
                 reduction=head_reduction,
                 output_size=crop_image.size,
                 query_tokens=query_tokens,
             )
             result["attention_source"] = attention_spec.source
+            result["attention_grid_size"] = list(attention_grid_size)
         else:
             result["attention_heatmap"] = build_featuremap_heatmap(
                 recorder.activations.detach(),
@@ -195,7 +302,7 @@ def _capture_forward(
             )
             result["attention_source"] = "feature_map_fallback"
 
-    if recorder.activations is not None and recorder.gradients is not None and method in ("gradcam", "both"):
+    if recorder.activations is not None and recorder.gradients is not None and method in ("gradcam", "both", "all"):
         result["gradcam_heatmap"] = build_gradcam_heatmap(
             activations=recorder.activations.detach(),
             gradients=recorder.gradients,
@@ -217,6 +324,8 @@ def analyze_tensor(
     method: str = "both",
     target_class: Optional[int] = None,
     query_tokens: str = "cls_register_mean",
+    feature_source: str = "auto",
+    rollout_start_layer: int = 0,
 ) -> Dict[str, object]:
     capture = _capture_forward(
         model=model,
@@ -227,6 +336,8 @@ def analyze_tensor(
         query_tokens=query_tokens,
         method=method,
         target_class=target_class,
+        feature_source=feature_source,
+        rollout_start_layer=rollout_start_layer,
     )
     optional_token_features = extract_optional_token_features(model, tensor)
 
@@ -236,6 +347,7 @@ def analyze_tensor(
         "query_tokens": query_tokens,
         "method": method,
         "feature_source": capture["feature_source"],
+        "rollout_start_layer": int(rollout_start_layer),
         "files": {},
         "predictions": build_top_predictions(capture["probabilities"], class_names, top_k),
     }
@@ -246,7 +358,9 @@ def analyze_tensor(
         if artifact_stats:
             result["artifact_stats"] = artifact_stats
 
-    if method in ("attention", "both") and "attention_heatmap" in capture:
+    heatmap_focus: Dict[str, Dict[str, float]] = {}
+
+    if method in ("attention", "both", "all") and "attention_heatmap" in capture:
         result["attention_source"] = capture.get("attention_source")
         result["files"]["attention"] = save_heatmap_visualizations(
             crop_image=crop_image,
@@ -255,8 +369,19 @@ def analyze_tensor(
             alpha=alpha,
             prefix="attention",
         )
+        heatmap_focus["attention"] = summarize_heatmap_focus(capture["attention_heatmap"], crop_image)
 
-    if method in ("gradcam", "both") and "gradcam_heatmap" in capture:
+    if method in ("rollout", "all") and "rollout_heatmap" in capture:
+        result["files"]["rollout"] = save_heatmap_visualizations(
+            crop_image=crop_image,
+            heatmap=capture["rollout_heatmap"],
+            output_dir=output_dir,
+            alpha=alpha,
+            prefix="rollout",
+        )
+        heatmap_focus["rollout"] = summarize_heatmap_focus(capture["rollout_heatmap"], crop_image)
+
+    if method in ("gradcam", "both", "all") and "gradcam_heatmap" in capture:
         result["gradcam"] = {
             "predicted_class": capture["predicted_class"],
             "selected_class": capture["selected_class"],
@@ -268,13 +393,21 @@ def analyze_tensor(
             alpha=alpha,
             prefix="gradcam",
         )
+        heatmap_focus["gradcam"] = summarize_heatmap_focus(capture["gradcam_heatmap"], crop_image)
+
+    if heatmap_focus:
+        result["heatmap_focus"] = heatmap_focus
 
     if method == "attention" and "attention" in result["files"]:
         result["files"]["crop"] = result["files"]["attention"]["crop"]
+    elif method == "rollout" and "rollout" in result["files"]:
+        result["files"]["crop"] = result["files"]["rollout"]["crop"]
     elif method == "gradcam" and "gradcam" in result["files"]:
         result["files"]["crop"] = result["files"]["gradcam"]["crop"]
     elif "attention" in result["files"]:
         result["files"]["crop"] = result["files"]["attention"]["crop"]
+    elif "rollout" in result["files"]:
+        result["files"]["crop"] = result["files"]["rollout"]["crop"]
     elif "gradcam" in result["files"]:
         result["files"]["crop"] = result["files"]["gradcam"]["crop"]
     return result
@@ -322,6 +455,8 @@ def main() -> None:
         output_dir=output_dir,
         method=args.method,
         target_class=args.target_class,
+        feature_source=args.feature_source,
+        rollout_start_layer=args.rollout_start_layer,
     )
     result["image_path"] = str(args.image.resolve())
     result["checkpoint"] = str(args.checkpoint.resolve())

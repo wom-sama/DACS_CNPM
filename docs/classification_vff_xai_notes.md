@@ -61,7 +61,57 @@ Da them co:
 - `--metric-learning-temperature`
 
 Khuyen nghi v12: xem `README.md`, run name `mango_cls_224_clscrops_vffsupcon_xai_v12`.
-Khuyen nghi hien tai: xem `README.md`, run name `mango_cls_224_clscrops_vffsupcon_fgcap_v13_full`.
+Khuyen nghi hien tai: xem `README.md`, run name `mango_cls_224_clscrops_vffsupcon_fgcap_v14_regfair`.
+
+## Ket qua v13 full va chan doan moi
+
+Run `runs/mango_cls_224_clscrops_vffsupcon_fgcap_v13_full` bi dung tai epoch `59`.
+
+- Best validation epoch: `51`.
+- Best validation macro F1: `0.889011`.
+- Best validation class 1 F1: `0.654275`.
+- Final test macro F1: `0.879163`.
+- Final test class 1 F1: `0.575758`.
+- `high_norm_patch_fraction` ve `0.0` tu khoang epoch 30, nen register token/patch norm da on hon v11/v12.
+
+Nhan xet: v13 sua duoc van de high-norm patch, nhung chua giai quyet duoc class 1. Sau epoch 51, train loss tiep tuc giam trong khi val loss dao dong/tang, nen run co overfit cuoi chu ky. Cac loi class 1 tren test chu yeu la `1 -> 0` va mot phan `1 -> 4`, khong phai loi threshold don gian vi nhieu mau sai co confidence rat cao.
+
+## XAI audit v2
+
+Da bo sung:
+
+- Attention Rollout cho ViT/register tokens.
+- Grad-CAM tai `stem_last` de nhin texture/vet cuc bo cua CNN stem.
+- Dinh luong `foreground_mass`, `background_mass`, `border_mass`, `entropy` cho tung heatmap.
+
+Audit `runs/mango_cls_224_clscrops_vffsupcon_fgcap_v13_full/xai_audit_test_v2` tren 30 case:
+
+- Attention foreground/background trung binh: `0.9757 / 0.0243`.
+- Grad-CAM foreground/background trung binh: `0.9799 / 0.0201`.
+- Rollout foreground/background trung binh: `0.9795 / 0.0205`.
+- Border mass van khoang `0.1569-0.1913`, nen van can canh giac voi crop sat ria, tay/nen, va object phu.
+
+Ket luan XAI: model khong con chu y nen mot cach tong quat. Loi lon hon la crop nhieu object, tay/nen nam trong vung trung tam, va ranh gioi nhan giua class 1 voi class 0/4. Vi du high-confidence `1 -> 0` co object phu ben phai mang vet den dai, khien model co ly do hinh anh de chon lop khac.
+
+## Leak audit cls_crops
+
+Tool moi `trkh.tools.audit_classification_split` cho ket qua tren `cls_crops`:
+
+- Exact SHA1 duplicate across splits: `0`.
+- Same source stem across splits: `0`.
+- Same average-hash bucket across splits: `397` bucket / `969` file.
+- Same-class near numeric image ID across splits, window `3`: `33333` pair / `14383` file.
+
+Ket luan leak: khong co hard duplicate leak, nhung co rui ro sequence leakage cao do nhieu `Image_N` lien tiep cung class bi chia qua train/val/test. Neu viet bai bao, can tao split grouped/sequence-safe hoac it nhat bao cao audit nay; neu khong, val/test co the lac quan hon thuc te.
+
+## Huong v14
+
+V14 tren split hien tai chi nen xem la cai tien de so sanh voi baseline cung split. Cac thay doi:
+
+- Tang regularization nhe: dropout/drop-path/weight-decay cao hon v13 va scheduler ngan hon de giam overfit sau epoch 51.
+- Tang fairness selector: `fair-f1-gap-penalty=1.8`, `fair-f1-min-weight=0.50`.
+- Tang rare-class exposure dong o muc vua phai: cap `2.0`, khong quay lai muc raw `2.63` de tranh precision sap.
+- Tang nhe metric learning va foreground consistency, nhung van khong dung pretrain hay du lieu ngoai.
 
 ## Huong XAI da tich hop
 

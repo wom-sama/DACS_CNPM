@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 import csv
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence
 
@@ -47,7 +47,9 @@ def parse_args() -> argparse.Namespace:
         choices=("cls", "registers", "cls_register_mean"),
         default="cls_register_mean",
     )
-    parser.add_argument("--method", choices=("attention", "gradcam", "both"), default="both")
+    parser.add_argument("--method", choices=("attention", "rollout", "gradcam", "both", "all"), default="both")
+    parser.add_argument("--feature-source", choices=("auto", "patch_embed", "stem_last", "last_conv"), default="auto")
+    parser.add_argument("--rollout-start-layer", type=int, default=0)
     parser.add_argument("--alpha", type=float, default=0.45)
     parser.add_argument("--top-k", type=int, default=5)
     parser.add_argument("--disable-amp", action="store_true", default=False)
@@ -290,6 +292,21 @@ def _write_markdown(
     cases: Sequence[Dict[str, object]],
     confusion_pairs: Sequence[Dict[str, int]],
 ) -> None:
+    focus_values: Dict[str, Dict[str, List[float]]] = defaultdict(lambda: defaultdict(list))
+    for case in cases:
+        viz = case.get("viz", {})
+        if not isinstance(viz, dict):
+            continue
+        focus = viz.get("heatmap_focus", {})
+        if not isinstance(focus, dict):
+            continue
+        for method_name, metrics in focus.items():
+            if not isinstance(metrics, dict):
+                continue
+            for metric_name in ("foreground_mass", "background_mass", "border_mass", "entropy"):
+                if metric_name in metrics:
+                    focus_values[str(method_name)][metric_name].append(float(metrics[metric_name]))
+
     lines = [
         "# XAI audit",
         "",
@@ -307,6 +324,22 @@ def _write_markdown(
         lines.append(
             f"| {pair['target_index']} | {pair['prediction_index']} | {pair['count']} |"
         )
+    if focus_values:
+        lines.extend(["", "## Heatmap Focus Summary", "", "| Method | Foreground mass | Background mass | Border mass | Entropy |", "|---|---:|---:|---:|---:|"])
+        for method_name, values in sorted(focus_values.items()):
+            def mean_metric(key: str) -> float:
+                metric_values = values.get(key, [])
+                return sum(metric_values) / max(1, len(metric_values))
+
+            lines.append(
+                "| {method} | {fg:.4f} | {bg:.4f} | {border:.4f} | {entropy:.4f} |".format(
+                    method=method_name,
+                    fg=mean_metric("foreground_mass"),
+                    bg=mean_metric("background_mass"),
+                    border=mean_metric("border_mass"),
+                    entropy=mean_metric("entropy"),
+                )
+            )
     lines.extend(["", "## Selected cases", "", "| Case | Reason | True | Pred | Conf | Margin |", "|---|---|---|---|---:|---:|"])
     for case in cases:
         case_dir = Path(str(case.get("case_dir", ""))).name
@@ -381,6 +414,8 @@ def main() -> None:
             method=args.method,
             target_class=int(case["prediction_index"]),
             query_tokens=args.query_tokens,
+            feature_source=args.feature_source,
+            rollout_start_layer=args.rollout_start_layer,
         )
         enriched = dict(case)
         enriched["case_dir"] = str(case_dir.resolve())
@@ -399,6 +434,8 @@ def main() -> None:
         "layer_index": layer_index,
         "query_tokens": args.query_tokens,
         "method": args.method,
+        "feature_source": args.feature_source,
+        "rollout_start_layer": int(args.rollout_start_layer),
         "class_names": list(class_names),
         "confusion_pairs": pairs,
         "cases": enriched_cases,

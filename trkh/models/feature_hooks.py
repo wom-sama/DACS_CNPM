@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import torch
@@ -87,21 +87,43 @@ def resolve_attention_index(model: nn.Module, layer_index: int) -> Optional[int]
     return resolved
 
 
-def resolve_feature_hook(model: nn.Module) -> FeatureHookSpec:
-    if hasattr(model, "patch_embed") and hasattr(model.patch_embed, "proj"):
-        return FeatureHookSpec(module=model.patch_embed.proj, source="patch_embed.proj")
+def _last_conv_in_module(module: nn.Module) -> Tuple[Optional[nn.Module], Optional[str]]:
+    last_conv = None
+    last_name = None
+    for name, child in module.named_modules():
+        if isinstance(child, nn.Conv2d):
+            last_conv = child
+            last_name = name
+    return last_conv, last_name
+
+
+def resolve_feature_hook(model: nn.Module, feature_source: str = "auto") -> FeatureHookSpec:
+    feature_source = str(feature_source or "auto").strip().lower()
+    backbone = getattr(model, "frame_model", model)
+    if feature_source not in {"auto", "patch_embed", "patch_embed.proj", "stem_last", "last_conv"}:
+        raise ValueError("feature_source chi ho tro auto, patch_embed, stem_last, last_conv.")
+
+    if feature_source in {"auto", "patch_embed", "patch_embed.proj"}:
+        if hasattr(backbone, "patch_embed") and hasattr(backbone.patch_embed, "proj"):
+            return FeatureHookSpec(module=backbone.patch_embed.proj, source="patch_embed.proj")
+        if feature_source in {"patch_embed", "patch_embed.proj"}:
+            raise TypeError("Khong tim thay patch_embed.proj de hook Grad-CAM.")
+
+    if feature_source == "stem_last":
+        stem = getattr(backbone, "stem", None)
+        if stem is None:
+            raise TypeError("Model khong co CNN stem de hook stem_last.")
+        stem_conv, stem_name = _last_conv_in_module(stem)
+        if stem_conv is None or stem_name is None:
+            raise TypeError("Khong tim thay Conv2d trong CNN stem.")
+        return FeatureHookSpec(module=stem_conv, source=f"stem.{stem_name}")
 
     if hasattr(model, "layer4"):
         layer4 = model.layer4
         if len(layer4) > 0 and hasattr(layer4[-1], "conv3"):
             return FeatureHookSpec(module=layer4[-1].conv3, source="layer4[-1].conv3")
 
-    last_conv = None
-    last_name = None
-    for name, module in model.named_modules():
-        if isinstance(module, nn.Conv2d):
-            last_conv = module
-            last_name = name
+    last_conv, last_name = _last_conv_in_module(backbone)
     if last_conv is None or last_name is None:
         raise TypeError("Khong tim thay Conv2d phu hop de trich xuat feature map.")
     return FeatureHookSpec(module=last_conv, source=last_name)
@@ -184,6 +206,57 @@ def build_attention_heatmap(
         patch_attention = query_to_patch.mean(dim=(0, 1))
 
     heatmap = patch_attention.reshape(grid_size[0], grid_size[1]).unsqueeze(0).unsqueeze(0)
+    heatmap = F.interpolate(
+        heatmap,
+        size=(output_size[1], output_size[0]),
+        mode="bicubic",
+        align_corners=False,
+    )[0, 0]
+    return _normalize_heatmap(heatmap)
+
+
+def build_attention_rollout_heatmap(
+    attentions: Union[Dict[int, Tensor], Sequence[Tensor]],
+    grid_size: Tuple[int, int],
+    prefix_tokens: int,
+    output_size: Tuple[int, int],
+    query_tokens: str = "cls_register_mean",
+    start_layer: int = 0,
+) -> np.ndarray:
+    if isinstance(attentions, dict):
+        ordered = [attentions[index] for index in sorted(attentions)]
+    else:
+        ordered = list(attentions)
+    if not ordered:
+        raise ValueError("Attention rollout yeu cau it nhat mot attention map.")
+
+    start_layer = max(0, int(start_layer))
+    selected = ordered[start_layer:] or ordered
+    device = selected[0].device
+    num_tokens = int(selected[0].shape[-1])
+    rollout = torch.eye(num_tokens, device=device, dtype=selected[0].dtype)
+    for attention in selected:
+        if attention.ndim == 4:
+            attention = attention[0]
+        if attention.ndim != 3:
+            raise ValueError("Attention map phai co shape [heads, tokens, tokens] hoac [B, heads, tokens, tokens].")
+        fused = attention.mean(dim=0)
+        fused = fused + torch.eye(num_tokens, device=fused.device, dtype=fused.dtype)
+        fused = fused / fused.sum(dim=-1, keepdim=True).clamp(min=1e-8)
+        rollout = fused @ rollout
+
+    query_tokens = str(query_tokens or "cls_register_mean").strip().lower()
+    if query_tokens == "cls":
+        query_indices = [0]
+    elif query_tokens in {"register", "registers"}:
+        query_indices = list(range(1, max(1, int(prefix_tokens)))) or [0]
+    elif query_tokens in {"cls_register_mean", "cls_registers", "head"}:
+        query_indices = list(range(0, max(1, int(prefix_tokens))))
+    else:
+        raise ValueError("query_tokens chi ho tro cls, registers, hoac cls_register_mean.")
+
+    patch_relevance = rollout[query_indices, prefix_tokens:].mean(dim=0)
+    heatmap = patch_relevance.reshape(grid_size[0], grid_size[1]).unsqueeze(0).unsqueeze(0)
     heatmap = F.interpolate(
         heatmap,
         size=(output_size[1], output_size[0]),

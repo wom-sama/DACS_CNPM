@@ -7,10 +7,12 @@ import unittest
 from pathlib import Path
 
 import torch
+from torch import nn
 from PIL import Image
 
 import trkh.models.model as model_module
 from trkh.core.config import AugmentationConfig, ModelConfig, TrainConfig, load_data_spec
+from trkh.evaluation.attention_viz import summarize_heatmap_focus
 from trkh.evaluation.evaluate import (
     _build_prediction_records,
     _build_background_aware_classification_metrics,
@@ -25,7 +27,7 @@ from trkh.evaluation.evaluate import (
     save_evaluation_artifacts,
 )
 from trkh.evaluation.metrics import build_metrics
-from trkh.models.feature_hooks import build_attention_heatmap
+from trkh.models.feature_hooks import build_attention_heatmap, build_attention_rollout_heatmap, resolve_feature_hook
 from trkh.data.dataset import (
     ClassificationFolderDataset,
     HardSampleRepeatDataset,
@@ -85,6 +87,48 @@ from trkh.core.utils import (
 
 
 class DetectionCalibrationTests(unittest.TestCase):
+    def test_attention_rollout_heatmap_has_requested_output_size(self):
+        attention = torch.eye(6).unsqueeze(0).repeat(2, 1, 1)
+        heatmap = build_attention_rollout_heatmap(
+            attentions=[attention, attention],
+            grid_size=(2, 2),
+            prefix_tokens=2,
+            output_size=(8, 8),
+            query_tokens="cls_register_mean",
+        )
+        self.assertEqual(tuple(heatmap.shape), (8, 8))
+        self.assertTrue(float(heatmap.min()) >= 0.0)
+        self.assertTrue(float(heatmap.max()) <= 1.0)
+
+    def test_heatmap_focus_reports_border_attention(self):
+        heatmap = torch.zeros(20, 20).numpy()
+        heatmap[:2, :] = 1.0
+        crop = Image.new("RGB", (20, 20), color=(128, 180, 64))
+        summary = summarize_heatmap_focus(heatmap, crop)
+        self.assertGreater(summary["border_mass"], 0.9)
+        self.assertGreaterEqual(summary["background_mass"], 0.0)
+
+    def test_resolve_feature_hook_can_target_stem_last(self):
+        class PatchEmbed(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.proj = nn.Conv2d(3, 8, kernel_size=16, stride=16)
+
+        class ToyModel(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.stem = nn.Sequential(
+                    nn.Conv2d(3, 4, kernel_size=3, padding=1),
+                    nn.ReLU(),
+                    nn.Sequential(nn.Conv2d(4, 8, kernel_size=3, padding=1)),
+                )
+                self.patch_embed = PatchEmbed()
+
+        model = ToyModel()
+        spec = resolve_feature_hook(model, feature_source="stem_last")
+        self.assertIs(spec.module, model.stem[2][0])
+        self.assertTrue(spec.source.startswith("stem."))
+
     def test_vit_registers_ignores_detection_only_model_config_keys(self):
         model = create_model(
             num_classes=5,
