@@ -214,6 +214,9 @@ class TrainConfig:
     metric_learning_temperature: float = 0.12
     metric_learning_class_balanced: bool = True
     metric_learning_sources: str = "head"
+    foreground_consistency_loss_weight: float = 0.0
+    foreground_consistency_margin: float = 0.08
+    balance_auto_max_repeat_factor: float = 0.0
     fair_f1_gap_target: float = 0.05
     fair_f1_gap_penalty: float = 1.5
     fair_f1_min_weight: float = 0.25

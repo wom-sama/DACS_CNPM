@@ -67,7 +67,9 @@ from trkh.training.train import (
     _resolve_detection_stage,
     _save_interrupt_checkpoint,
     _forward_train_loss,
+    _foreground_consistency_loss_from_features,
     _metric_learning_loss_from_features,
+    _pseudo_foreground_mask_from_normalized_images,
     _parse_metric_learning_sources,
     train_one_epoch,
 )
@@ -1274,6 +1276,86 @@ dataset_balance:
         self.assertTrue(augmentation_config.rare_class_repeat)
         self.assertFalse(augmentation_config.class_aware_photometric_augmentation)
         self.assertTrue(train_config.auto_tune_imbalance)
+
+    def test_canbang_yaml_auto_repeat_respects_user_cap(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            data_yaml_path = temp_path / "data.yaml"
+            data_yaml_path.write_text(
+                f"""
+path: {temp_path.as_posix()}
+train: images/train
+val: images/val
+nc: 3
+names:
+  0: class_a
+  1: class_b
+  2: class_c
+""",
+                encoding="utf-8",
+            )
+            (temp_path / "canbang.yaml").write_text(
+                """
+dataset_balance:
+  version_note: "Giu nguyen class ID goc, khong gop nhan"
+  total_pairs: 1000
+  train_ratio_config: 0.7
+  val_ratio_config: 0.2
+  test_ratio_config: 0.1
+  classes:
+    "0":
+      count: 450
+      ratio: 0.45
+      percent: 45.0
+    "1":
+      count: 50
+      ratio: 0.05
+      percent: 5.0
+    "2":
+      count: 500
+      ratio: 0.50
+      percent: 50.0
+""",
+                encoding="utf-8",
+            )
+
+            spec = load_data_spec(data_yaml_path)
+            train_config = TrainConfig(
+                auto_tune_imbalance=False,
+                balance_auto_max_repeat_factor=1.8,
+            )
+            augmentation_config = AugmentationConfig()
+            summary = apply_balance_file_auto_adjustment(
+                data_spec=spec,
+                train_config=train_config,
+                augmentation_config=augmentation_config,
+            )
+
+        self.assertTrue(summary["enabled"])
+        self.assertGreater(summary["raw_auto_repeat_factors"][1], 1.8)
+        self.assertLessEqual(max(summary["auto_repeat_factors"]), 1.8)
+        self.assertEqual(augmentation_config.rare_class_repeat_max_factor, 1.8)
+        self.assertEqual(augmentation_config.class_augmentation_max_scale, 1.8)
+
+    def test_foreground_consistency_loss_is_finite_and_backpropagates(self):
+        torch.manual_seed(13)
+        images = torch.zeros((2, 3, 32, 32), dtype=torch.float32)
+        images[:, :, 8:24, 8:24] = 1.0
+        patches = torch.randn((2, 16, 8), dtype=torch.float32, requires_grad=True)
+        features = {"patches": patches, "grid_size": (4, 4)}
+
+        mask = _pseudo_foreground_mask_from_normalized_images(images, margin=0.02)
+        loss = _foreground_consistency_loss_from_features(
+            images=images,
+            features=features,
+            margin=0.02,
+        )
+        loss.backward()
+
+        self.assertEqual(tuple(mask.shape), (2, 1, 32, 32))
+        self.assertTrue(torch.isfinite(loss))
+        self.assertIsNotNone(patches.grad)
+        self.assertTrue(torch.isfinite(patches.grad).all())
 
     def test_detection_mosaic_collate_creates_multi_object_targets(self):
         torch.manual_seed(7)

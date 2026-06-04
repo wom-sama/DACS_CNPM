@@ -86,13 +86,13 @@ D:\DataAI\.venv\Scripts\python.exe -m compileall train.py evaluate.py scripts tr
 D:\DataAI\.venv\Scripts\python.exe -m unittest discover -s tests -p "test_*.py" -v
 ```
 
-Current expected result: `60` tests passed.
+Current expected result: `62` tests passed.
 
 ## Classification-Only Experiment
 
 Use this for the classification paper track. The key is `--model-type vit_registers` and not passing `--full-image-detection`. Keep all checkpoints scratch-only.
 
-For paper comparison against `image_baseline_experiments`, prefer the prebuilt classification-folder crop dataset at `D:\DataAI\AIEx\image_baseline_experiments\data\cls_crops`. This avoids spending train time on online YOLO crop extraction and keeps metrics comparable with baseline classifiers. Current recommended loss stack is Balanced Softmax for class-prior correction plus a small VFF-like supervised contrastive term over `head,cnn,patch,registers` embeddings for similar-class separation. The checkpoint selector uses `fair_macro_f1`, so it penalizes a large per-class F1 gap instead of choosing only the highest average macro F1.
+For paper comparison against `image_baseline_experiments`, prefer the prebuilt classification-folder crop dataset at `D:\DataAI\AIEx\image_baseline_experiments\data\cls_crops`. This avoids spending train time on online YOLO crop extraction and keeps metrics comparable with baseline classifiers. Current recommended loss stack is Balanced Softmax for class-prior correction, a small VFF-like supervised contrastive term over `head,cnn` embeddings, a capped rare-class repeat factor from `canbang.yaml`, and a light foreground-consistency loss that discourages patch-token energy on crop borders/background. The checkpoint selector uses `fair_macro_f1`, so it penalizes a large per-class F1 gap instead of choosing only the highest average macro F1.
 
 ```powershell
 cd D:\DataAI\AIEx\TRKH
@@ -106,7 +106,7 @@ $env:TRKH_ALLOW_WINDOWS_PERSISTENT_WORKERS='1'
 D:\DataAI\.venv\Scripts\python.exe -m trkh.training.train `
   --data D:\DataAI\AIEx\image_baseline_experiments\data\cls_crops\data.yaml `
   --class-name-mode raw --expected-num-classes 5 `
-  --run-name mango_cls_224_clscrops_vffsupcon_xai_v12 `
+  --run-name mango_cls_224_clscrops_vffsupcon_fgcap_v13_full `
   --output-dir runs --disable-resume --seed 42 `
   --model-type vit_registers --image-size 224 --patch-size 16 --stem-channels 32 `
   --cnn-feature-fusion --cnn-fusion-dropout 0.20 `
@@ -117,13 +117,16 @@ D:\DataAI\.venv\Scripts\python.exe -m trkh.training.train `
   --weight-decay 0.10 --grad-clip-norm 0.75 --max-nonfinite-grad-steps 8 `
   --num-workers 4 --eval-num-workers 4 --train-image-cache-mb 0 --eval-image-cache-mb 0 `
   --best-metric fair_macro_f1 --fair-f1-gap-target 0.05 --fair-f1-gap-penalty 1.5 --fair-f1-min-weight 0.45 `
-  --classification-loss balanced_softmax --balanced-softmax-tau 0.75 --disable-class-weights `
-  --focal-loss-gamma 2.0 --focal-loss-mix 0.20 --label-smoothing 0.005 `
-  --metric-learning-loss-weight 0.020 --metric-learning-temperature 0.16 `
-  --metric-learning-sources head,cnn,patch,registers `
-  --class-aware-augmentation --class-augmentation-power 0.5 --class-augmentation-max-scale 2.0 `
-  --rare-class-recall-target 0.88 --rare-class-recall-guard-scale-threshold 1.5 `
-  --rare-class-recall-guard-max-multiplier 1.12 --rare-class-recall-guard-min-precision 0.65 `
+  --classification-loss balanced_softmax --balanced-softmax-tau 0.65 --disable-class-weights `
+  --focal-loss-gamma 2.0 --focal-loss-mix 0.10 --label-smoothing 0.01 `
+  --metric-learning-loss-weight 0.010 --metric-learning-temperature 0.18 `
+  --metric-learning-sources head,cnn `
+  --foreground-consistency-loss-weight 0.020 --foreground-consistency-margin 0.06 `
+  --balance-auto-max-repeat-factor 1.8 `
+  --class-aware-augmentation --class-augmentation-power 0.45 --class-augmentation-max-scale 1.8 `
+  --rare-class-repeat --rare-class-repeat-power 0.45 --rare-class-repeat-max-factor 1.8 --rare-class-repeat-min-ratio 1.0 `
+  --rare-class-recall-target 0.78 --rare-class-recall-guard-scale-threshold 1.5 `
+  --rare-class-recall-guard-max-multiplier 1.06 --rare-class-recall-guard-min-precision 0.62 `
   --resize-mode pad --brightness 0 --contrast 0 --saturation 0 --hue 0 `
   --random-erasing-probability 0 --random-affine-degrees 2 --random-affine-translate 0.015 `
   --random-affine-scale-min 0.97 --horizontal-flip-probability 0.5 --vertical-flip-probability 0 `
@@ -140,10 +143,10 @@ Run this after a checkpoint is available to inspect fail cases, low-confidence c
 
 ```powershell
 D:\DataAI\.venv\Scripts\python.exe -m trkh.evaluation.xai_audit `
-  --checkpoint runs\mango_cls_224_clscrops_vffsupcon_xai_v12\checkpoints\best.pt `
+  --checkpoint runs\mango_cls_224_clscrops_vffsupcon_fgcap_v13_full\checkpoints\best.pt `
   --data D:\DataAI\AIEx\image_baseline_experiments\data\cls_crops\data.yaml `
   --class-name-mode raw --expected-num-classes 5 --split test `
-  --output-dir runs\mango_cls_224_clscrops_vffsupcon_xai_v12\xai_audit_test `
+  --output-dir runs\mango_cls_224_clscrops_vffsupcon_fgcap_v13_full\xai_audit_test `
   --max-cases 32 --mistake-cases 12 --low-confidence-cases 8 --close-margin-cases 8 `
   --per-class-cases 2 --batch-size 64 --num-workers 0 `
   --method both --query-tokens cls_register_mean --top-k 5

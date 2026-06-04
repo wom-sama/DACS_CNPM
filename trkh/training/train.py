@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 import torch
+import torch.nn.functional as F
 from torch import Tensor, nn, optim
 from torch.amp import GradScaler
 from torch.utils.data import DataLoader
@@ -25,6 +26,8 @@ from tqdm import tqdm
 
 from trkh.core.config import (
     AugmentationConfig,
+    IMAGENET_MEAN,
+    IMAGENET_STD,
     ModelConfig,
     TrainConfig,
     default_data_yaml,
@@ -393,6 +396,30 @@ def parse_args() -> argparse.Namespace:
             "Ho tro head, cnn, patch, registers, all."
         ),
     )
+    parser.add_argument(
+        "--foreground-consistency-loss-weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Trong so loss phat patch-token energy nam ngoai pseudo foreground. "
+            "Dung cho classification crop de giam hoc nen/ria anh; 0 de tat."
+        ),
+    )
+    parser.add_argument(
+        "--foreground-consistency-margin",
+        type=float,
+        default=0.08,
+        help="Nguong mem tao pseudo foreground tu anh da normalize; lon hon se mask chat hon.",
+    )
+    parser.add_argument(
+        "--balance-auto-max-repeat-factor",
+        type=float,
+        default=0.0,
+        help=(
+            "Tran auto repeat/augmentation factor lay tu canbang.yaml. "
+            "Dat <=0 de giu auto goc; dung 1.6-2.0 khi class hiem qua giong class khac."
+        ),
+    )
     parser.add_argument("--batch-mix-probability", type=float, default=0.6)
     parser.add_argument("--mosaic-probability", type=float, default=0.25)
     parser.add_argument("--mosaic-min-split", type=float, default=0.35)
@@ -645,6 +672,12 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
             "--metric-learning-sources chi ho tro head, cnn, patch, registers, all; "
             f"khong hop le: {invalid_metric_sources}"
         )
+    if args.foreground_consistency_loss_weight < 0.0:
+        raise ValueError("--foreground-consistency-loss-weight phai >= 0.")
+    if args.foreground_consistency_margin < 0.0:
+        raise ValueError("--foreground-consistency-margin phai >= 0.")
+    if 0.0 < args.balance_auto_max_repeat_factor < 1.0:
+        raise ValueError("--balance-auto-max-repeat-factor phai >= 1 hoac <= 0 de tat cap.")
     if not 0.0 <= args.fair_f1_gap_target <= 1.0:
         raise ValueError("--fair-f1-gap-target phai nam trong [0, 1].")
     if args.fair_f1_gap_penalty < 0.0:
@@ -856,6 +889,9 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         metric_learning_temperature=args.metric_learning_temperature,
         metric_learning_class_balanced=not args.disable_metric_learning_class_balanced,
         metric_learning_sources=",".join(requested_metric_sources),
+        foreground_consistency_loss_weight=args.foreground_consistency_loss_weight,
+        foreground_consistency_margin=args.foreground_consistency_margin,
+        balance_auto_max_repeat_factor=args.balance_auto_max_repeat_factor,
         fair_f1_gap_target=args.fair_f1_gap_target,
         fair_f1_gap_penalty=args.fair_f1_gap_penalty,
         fair_f1_min_weight=args.fair_f1_min_weight,
@@ -1032,7 +1068,13 @@ def apply_balance_file_auto_adjustment(
 
     balance_counts = balance_spec.class_counts(data_spec.num_classes)
     balance_ratios = balance_spec.class_ratios(data_spec.num_classes)
-    repeat_factors = balance_spec.auto_repeat_factors(data_spec.num_classes)
+    raw_repeat_factors = balance_spec.auto_repeat_factors(data_spec.num_classes)
+    cap = float(getattr(train_config, "balance_auto_max_repeat_factor", 0.0) or 0.0)
+    repeat_factors = (
+        [min(float(factor), cap) for factor in raw_repeat_factors]
+        if cap >= 1.0
+        else list(raw_repeat_factors)
+    )
     max_repeat_factor = max(repeat_factors, default=1.0)
     min_positive_ratio = min((ratio for ratio in balance_ratios if ratio > 0.0), default=0.0)
     max_ratio = max(balance_ratios, default=0.0)
@@ -1055,6 +1097,8 @@ def apply_balance_file_auto_adjustment(
         "class_counts": balance_counts,
         "class_ratios": balance_ratios,
         "auto_repeat_factors": repeat_factors,
+        "raw_auto_repeat_factors": raw_repeat_factors,
+        "max_repeat_factor_cap": float(cap),
         "max_repeat_factor": float(max_repeat_factor),
         "min_positive_ratio": float(min_positive_ratio),
         "max_ratio": float(max_ratio),
@@ -1988,6 +2032,86 @@ def _metric_learning_loss_from_features(
     return torch.stack(source_losses).mean(), used_sources
 
 
+def _pseudo_foreground_mask_from_normalized_images(
+    images: Tensor,
+    *,
+    margin: float = 0.08,
+) -> Tensor:
+    if images.ndim != 4 or images.size(1) != 3:
+        raise ValueError("foreground mask yeu cau images co shape [B, 3, H, W].")
+    device = images.device
+    dtype = images.dtype
+    mean = torch.tensor(IMAGENET_MEAN, device=device, dtype=dtype).view(1, 3, 1, 1)
+    std = torch.tensor(IMAGENET_STD, device=device, dtype=dtype).view(1, 3, 1, 1)
+    rgb = (images * std + mean).clamp(0.0, 1.0)
+    gray = rgb.mean(dim=1, keepdim=True)
+    batch_size = int(gray.size(0))
+    flattened_rgb = rgb.flatten(2)
+    flattened_gray = gray.flatten(2)
+    median_rgb = flattened_rgb.median(dim=2).values.view(batch_size, 3, 1, 1)
+    median_gray = flattened_gray.median(dim=2).values.view(batch_size, 1, 1, 1)
+
+    color_delta = (rgb - median_rgb).abs().mean(dim=1, keepdim=True)
+    intensity_delta = (gray - median_gray).abs()
+    edge_delta = torch.zeros_like(gray)
+    edge_delta[:, :, :, 1:] = torch.maximum(
+        edge_delta[:, :, :, 1:],
+        (gray[:, :, :, 1:] - gray[:, :, :, :-1]).abs(),
+    )
+    edge_delta[:, :, 1:, :] = torch.maximum(
+        edge_delta[:, :, 1:, :],
+        (gray[:, :, 1:, :] - gray[:, :, :-1, :]).abs(),
+    )
+    foreground_score = color_delta + intensity_delta + 0.5 * edge_delta
+    threshold = float(max(0.0, margin))
+    mask = foreground_score > threshold
+    height, width = int(images.size(-2)), int(images.size(-1))
+    y = torch.linspace(-1.0, 1.0, height, device=device, dtype=dtype).view(1, 1, height, 1)
+    x = torch.linspace(-1.0, 1.0, width, device=device, dtype=dtype).view(1, 1, 1, width)
+    central_ellipse = ((x / 0.82).pow(2) + (y / 0.92).pow(2)) <= 1.0
+    mask = mask | central_ellipse
+
+    # If a crop is almost uniform, keep a central ellipse instead of returning an empty mask.
+    area = mask.flatten(1).float().mean(dim=1)
+    if bool((area < 0.08).any().item()):
+        ellipse = ((x / 0.78).pow(2) + (y / 0.90).pow(2)) <= 1.0
+        mask = torch.where((area < 0.08).view(batch_size, 1, 1, 1), ellipse, mask)
+    return mask.to(dtype=torch.float32)
+
+
+def _foreground_consistency_loss_from_features(
+    *,
+    images: Tensor,
+    features: Dict[str, Tensor],
+    margin: float = 0.08,
+) -> Tensor:
+    patches = features.get("patches")
+    if not torch.is_tensor(patches) or patches.ndim != 3:
+        return images.sum() * 0.0
+    grid_size = features.get("grid_size")
+    if not isinstance(grid_size, tuple) or len(grid_size) != 2:
+        grid_side = int(round(math.sqrt(float(patches.size(1)))))
+        grid_size = (grid_side, grid_side)
+    grid_h, grid_w = int(grid_size[0]), int(grid_size[1])
+    if grid_h <= 0 or grid_w <= 0 or grid_h * grid_w != int(patches.size(1)):
+        return patches.sum() * 0.0
+
+    with torch.no_grad():
+        foreground = _pseudo_foreground_mask_from_normalized_images(images.detach(), margin=margin)
+        patch_mask = F.interpolate(foreground, size=(grid_h, grid_w), mode="area")
+        patch_mask = patch_mask.flatten(1).clamp(0.0, 1.0)
+        background_mask = 1.0 - patch_mask
+
+    patch_energy = patches.float().pow(2).mean(dim=-1)
+    patch_energy = patch_energy / patch_energy.sum(dim=1, keepdim=True).clamp(min=1e-6)
+    background_energy = (patch_energy * background_mask).sum(dim=1)
+    foreground_mass = patch_mask.mean(dim=1)
+    valid = foreground_mass > 0.05
+    if not bool(valid.any().item()):
+        return patches.sum() * 0.0
+    return background_energy[valid].mean().to(dtype=patches.dtype)
+
+
 def _stack_image_masks_from_targets(targets) -> Optional[Tensor]:
     if not _is_detection_targets(targets):
         return None
@@ -2014,6 +2138,8 @@ def _forward_train_loss(
     metric_learning_criterion: Optional[nn.Module] = None,
     metric_learning_loss_weight: float = 0.0,
     metric_learning_sources: Union[str, Sequence[str]] = "head",
+    foreground_consistency_loss_weight: float = 0.0,
+    foreground_consistency_margin: float = 0.08,
 ) -> Tuple[Tensor, Optional[Dict[str, Tensor]], Tensor, Dict[str, float], Optional[Tensor]]:
     with autocast_context(device, amp):
         image_valid_mask = _stack_image_masks_from_targets(targets)
@@ -2024,6 +2150,7 @@ def _forward_train_loss(
         else:
             loss = criterion(logits, targets)
             metric_learning_loss = logits.sum() * 0.0
+            foreground_consistency_loss = logits.sum() * 0.0
             if (
                 metric_learning_criterion is not None
                 and float(metric_learning_loss_weight) > 0.0
@@ -2039,10 +2166,27 @@ def _forward_train_loss(
                         sources=metric_learning_sources,
                     )
                     loss = loss + float(metric_learning_loss_weight) * metric_learning_loss
+            if features is not None and float(foreground_consistency_loss_weight) > 0.0:
+                foreground_consistency_loss = _foreground_consistency_loss_from_features(
+                    images=images,
+                    features=features,
+                    margin=foreground_consistency_margin,
+                )
+                loss = loss + float(foreground_consistency_loss_weight) * foreground_consistency_loss
             loss_details = {
                 "loss": float(loss.detach().cpu().item()),
-                "cls_loss": float((loss - float(metric_learning_loss_weight) * metric_learning_loss).detach().cpu().item()),
+                "cls_loss": float(
+                    (
+                        loss
+                        - float(metric_learning_loss_weight) * metric_learning_loss
+                        - float(foreground_consistency_loss_weight) * foreground_consistency_loss
+                    )
+                    .detach()
+                    .cpu()
+                    .item()
+                ),
                 "metric_learning_loss": float(metric_learning_loss.detach().cpu().item()),
+                "foreground_consistency_loss": float(foreground_consistency_loss.detach().cpu().item()),
                 "objectness_loss": 0.0,
                 "bbox_l1_loss": 0.0,
                 "bbox_giou_loss": 0.0,
@@ -2155,6 +2299,8 @@ def train_one_epoch(
     metric_learning_criterion: Optional[nn.Module] = None,
     metric_learning_loss_weight: float = 0.0,
     metric_learning_sources: Union[str, Sequence[str]] = "head",
+    foreground_consistency_loss_weight: float = 0.0,
+    foreground_consistency_margin: float = 0.08,
     use_sam: bool = False,
     grad_accum_steps: int = 1,
     max_nonfinite_grad_steps: int = 8,
@@ -2179,6 +2325,7 @@ def train_one_epoch(
     train_loss_components = {
         "cls_loss": 0.0,
         "metric_learning_loss": 0.0,
+        "foreground_consistency_loss": 0.0,
         "objectness_loss": 0.0,
         "bbox_l1_loss": 0.0,
         "bbox_giou_loss": 0.0,
@@ -2228,6 +2375,8 @@ def train_one_epoch(
                 metric_learning_criterion=metric_learning_criterion,
                 metric_learning_loss_weight=metric_learning_loss_weight,
                 metric_learning_sources=metric_learning_sources,
+                foreground_consistency_loss_weight=foreground_consistency_loss_weight,
+                foreground_consistency_margin=foreground_consistency_margin,
                 images=images,
                 labels=labels,
                 targets=targets,
@@ -2315,6 +2464,8 @@ def train_one_epoch(
                             metric_learning_criterion=metric_learning_criterion,
                             metric_learning_loss_weight=metric_learning_loss_weight,
                             metric_learning_sources=metric_learning_sources,
+                            foreground_consistency_loss_weight=foreground_consistency_loss_weight,
+                            foreground_consistency_margin=foreground_consistency_margin,
                             images=replay_images,
                             labels=replay_labels,
                             targets=replay_targets,
@@ -3886,6 +4037,8 @@ def main() -> None:
                     metric_learning_criterion=metric_learning_criterion,
                     metric_learning_loss_weight=train_config.metric_learning_loss_weight,
                     metric_learning_sources=train_config.metric_learning_sources,
+                    foreground_consistency_loss_weight=train_config.foreground_consistency_loss_weight,
+                    foreground_consistency_margin=train_config.foreground_consistency_margin,
                     use_sam=train_config.use_sam,
                     grad_accum_steps=train_config.grad_accum_steps,
                     max_nonfinite_grad_steps=train_config.max_nonfinite_grad_steps,
@@ -3987,6 +4140,10 @@ def main() -> None:
                     "train_loss": train_loss,
                     "train_cls_loss": train_artifact_stats.get("cls_loss", 0.0),
                     "train_metric_learning_loss": train_artifact_stats.get("metric_learning_loss", 0.0),
+                    "train_foreground_consistency_loss": train_artifact_stats.get(
+                        "foreground_consistency_loss",
+                        0.0,
+                    ),
                     "train_objectness_loss": train_artifact_stats.get("objectness_loss", 0.0),
                     "train_bbox_l1_loss": train_artifact_stats.get("bbox_l1_loss", 0.0),
                     "train_bbox_giou_loss": train_artifact_stats.get("bbox_giou_loss", 0.0),
@@ -4354,6 +4511,7 @@ def main() -> None:
                         "train_loss",
                         "train_cls_loss",
                         "train_metric_learning_loss",
+                        "train_foreground_consistency_loss",
                         "train_objectness_loss",
                         "train_bbox_l1_loss",
                         "train_bbox_giou_loss",
