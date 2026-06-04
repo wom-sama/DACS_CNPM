@@ -92,9 +92,9 @@ Current expected result: `62` tests passed.
 
 Use this for the classification paper track. The key is `--model-type vit_registers` and not passing `--full-image-detection`. Keep all checkpoints scratch-only.
 
-For paper comparison against `image_baseline_experiments`, prefer the prebuilt classification-folder crop dataset at `D:\DataAI\AIEx\image_baseline_experiments\data\cls_crops`. This avoids spending train time on online YOLO crop extraction and keeps metrics comparable with baseline classifiers. Current recommended loss stack is Balanced Softmax for class-prior correction, a small VFF-like supervised contrastive term over `head,cnn` embeddings, a capped rare-class repeat factor from `canbang.yaml`, and a light foreground-consistency loss that discourages patch-token energy on crop borders/background. The checkpoint selector uses `fair_macro_f1`, so it penalizes a large per-class F1 gap instead of choosing only the highest average macro F1.
+For paper-grade evaluation, prefer the grouped/sequence-safe classification-folder crop dataset at `D:\DataAI\AIEx\image_baseline_experiments\data\cls_crops_grouped_seqsafe_w3`. It is rebuilt from the same `cls_crops` images without adding data, but keeps same-source crops, byte-identical duplicates, and same-class near-neighbor `Image_N` sequences in one split. Current recommended loss stack is Balanced Softmax for class-prior correction, a small VFF-like supervised contrastive term over `head,cnn` embeddings, a capped rare-class repeat factor from `canbang.yaml`, and a light foreground-consistency loss that discourages patch-token energy on crop borders/background. The checkpoint selector uses `fair_macro_f1`, so it penalizes a large per-class F1 gap instead of choosing only the highest average macro F1.
 
-Leak-audit note: `cls_crops` has no exact cross-split duplicate and no same `Image_N_boxK` source-stem across splits, but it does contain many same-class near-neighbor `Image_N` IDs across train/val/test. Treat current metrics as comparable with existing baselines, not final publication evidence, until a grouped/sequence-safe split is used.
+Leak-audit note: raw `cls_crops` has no exact cross-split duplicate and no same `Image_N_boxK` source-stem across splits, but it does contain many same-class near-neighbor `Image_N` IDs across train/val/test. Use `cls_crops_grouped_seqsafe_w3` for final claims, and rerun any baseline models on the same grouped split for fair comparison.
 
 ```powershell
 cd D:\DataAI\AIEx\TRKH
@@ -106,7 +106,7 @@ $env:TRKH_ALLOW_WINDOWS_PIN_MEMORY='1'
 $env:TRKH_ALLOW_WINDOWS_PERSISTENT_WORKERS='1'
 
 D:\DataAI\.venv\Scripts\python.exe -m trkh.training.train `
-  --data D:\DataAI\AIEx\image_baseline_experiments\data\cls_crops\data.yaml `
+  --data D:\DataAI\AIEx\image_baseline_experiments\data\cls_crops_grouped_seqsafe_w3\data.yaml `
   --class-name-mode raw --expected-num-classes 5 `
   --run-name mango_cls_224_clscrops_vffsupcon_fgcap_v14_regfair `
   --output-dir runs --disable-resume --seed 42 `
@@ -146,7 +146,7 @@ Run this after a checkpoint is available to inspect fail cases, low-confidence c
 ```powershell
 D:\DataAI\.venv\Scripts\python.exe -m trkh.evaluation.xai_audit `
   --checkpoint runs\mango_cls_224_clscrops_vffsupcon_fgcap_v14_regfair\checkpoints\best.pt `
-  --data D:\DataAI\AIEx\image_baseline_experiments\data\cls_crops\data.yaml `
+  --data D:\DataAI\AIEx\image_baseline_experiments\data\cls_crops_grouped_seqsafe_w3\data.yaml `
   --class-name-mode raw --expected-num-classes 5 --split test `
   --output-dir runs\mango_cls_224_clscrops_vffsupcon_fgcap_v14_regfair\xai_audit_test `
   --max-cases 32 --mistake-cases 12 --low-confidence-cases 8 --close-margin-cases 8 `
@@ -156,13 +156,28 @@ D:\DataAI\.venv\Scripts\python.exe -m trkh.evaluation.xai_audit `
 
 The attention heatmap defaults to `cls_register_mean` because the classifier head also pools CLS plus register tokens. `--method all --feature-source stem_last` exports raw attention, attention rollout, and CNN-stem Grad-CAM plus foreground/background/border focus metrics.
 
+## Build Grouped Split
+
+Use this to rebuild the grouped split from raw `cls_crops`:
+
+```powershell
+D:\DataAI\.venv\Scripts\python.exe -m trkh.tools.build_classification_grouped_split `
+  --data D:\DataAI\AIEx\image_baseline_experiments\data\cls_crops\data.yaml `
+  --class-name-mode raw --expected-num-classes 5 `
+  --output-dir D:\DataAI\AIEx\image_baseline_experiments\data\cls_crops_grouped_seqsafe_w3 `
+  --near-id-window 3 --train-ratio 0.70 --val-ratio 0.20 `
+  --seed 42 --link-mode hardlink --overwrite
+```
+
+The split uses hardlinks by default to save disk space on the same drive; if hardlinking fails, the tool falls back to copying.
+
 ## Split Leak Audit
 
 Run this before publishing metrics from a classification folder split:
 
 ```powershell
 D:\DataAI\.venv\Scripts\python.exe -m trkh.tools.audit_classification_split `
-  --data D:\DataAI\AIEx\image_baseline_experiments\data\cls_crops\data.yaml `
+  --data D:\DataAI\AIEx\image_baseline_experiments\data\cls_crops_grouped_seqsafe_w3\data.yaml `
   --class-name-mode raw --expected-num-classes 5 `
   --output-dir runs\dataset_leak_audit_cls_crops `
   --near-id-window 3 --max-examples 50

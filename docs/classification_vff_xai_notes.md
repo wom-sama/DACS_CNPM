@@ -106,7 +106,19 @@ Ket luan leak: khong co hard duplicate leak, nhung co rui ro sequence leakage ca
 
 ## Huong v14
 
-V14 tren split hien tai chi nen xem la cai tien de so sanh voi baseline cung split. Cac thay doi:
+V14 nen chay tren split moi `D:\DataAI\AIEx\image_baseline_experiments\data\cls_crops_grouped_seqsafe_w3` de phuc vu bai bao. Split nay duoc tao tu cung anh `cls_crops`, khong them du lieu va khong dung pretrain.
+
+Audit split moi:
+
+- Total images: `16149`.
+- Target split counts: train `11304`, val `3230`, test `1615`.
+- Class 1 counts: train `464`, val `133`, test `66`.
+- Exact SHA1 duplicate across splits: `0`.
+- Same source stem across splits: `0`.
+- Same-class near numeric image ID across splits, window `3`: `0`.
+- Average-hash overlap con `166` bucket, chi la tin hieu mem vi nhieu crop xoai nhin tuong tu nhau.
+
+Cac thay doi cau hinh v14:
 
 - Tang regularization nhe: dropout/drop-path/weight-decay cao hon v13 va scheduler ngan hon de giam overfit sau epoch 51.
 - Tang fairness selector: `fair-f1-gap-penalty=1.8`, `fair-f1-min-weight=0.50`.
