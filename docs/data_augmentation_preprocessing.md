@@ -154,36 +154,38 @@ Trên máy local hiện tại:
 - Batch size benchmark: 64
 - Input: 224
 - Model: `vit_registers` + CNN stem
+- Dataset benchmark: `D:\DataAI\AIEx\image_baseline_experiments\data\cls_crops`
 
-Kết quả đo end-to-end gồm DataLoader wait, GPU transfer, forward, backward và optimizer step:
+Kết quả đo end-to-end gồm DataLoader wait, GPU transfer, forward, backward và optimizer step. Với dataset `cls_crops`, từ 4 worker trở lên DataLoader gần như không còn là nút nghẽn; thời gian chủ yếu nằm ở phần compute của mô hình.
 
-| num_workers | mean batch seconds | data wait fraction | samples/second | Nhận xét |
-|---:|---:|---:|---:|---|
-| 0 | 1.2873 | 84.81% | 49.72 | GPU chờ dữ liệu rất nhiều. |
-| 2 | 0.6466 | 70.82% | 98.98 | Vẫn còn nghẽn DataLoader rõ rệt. |
-| 4 | 0.3735 | 50.05% | 171.33 | Tốt hơn nhưng GPU vẫn chờ khoảng nửa batch. |
-| 6 | 0.2222 | 14.88% | 287.96 | Gần đủ, nhưng vẫn còn chờ dữ liệu. |
-| 8 | 0.1855 | 0.18% | 344.97 | Tốt nhất trong thử nghiệm. |
-| 10 | 0.1863 | 0.24% | 343.60 | Không nhanh hơn 8. |
-| 12 | 0.1871 | 0.31% | 341.97 | Chậm hơn và startup nặng hơn. |
+| num_workers | mean batch seconds | data wait fraction | samples/second | total seconds including startup | Nhận xét |
+|---:|---:|---:|---:|---:|---|
+| 4 | 0.1843 | 0.14% | 347.29 | 17.55 | Tốt nhất trong phép đo, startup thấp nhất. |
+| 6 | 0.1843 | 0.14% | 347.23 | 21.76 | Gần bằng 4 nhưng startup cao hơn. |
+| 8 | 0.1845 | 0.15% | 346.81 | 27.27 | Không nhanh hơn 4 trên `cls_crops`. |
+| 10 | 0.1850 | 0.19% | 346.02 | 32.61 | Chậm hơn nhẹ, startup cao. |
+| 12 | 0.1858 | 0.17% | 344.51 | 38.33 | Không có lợi. |
+| 14 | 0.1851 | 0.19% | 345.75 | 43.79 | Không có lợi. |
+| 16 | 0.1857 | 0.23% | 344.65 | 49.72 | Startup nặng nhất, không tăng throughput. |
 
-Vì vậy lệnh train local hiện đặt `--num-workers 8`. Validation dùng `--eval-num-workers 4` để tránh giữ quá nhiều worker đồng thời, vì train workers persistent vẫn có thể còn sống trong lúc validate.
+Vì vậy lệnh train local hiện đặt `--num-workers 4 --eval-num-workers 4`. Khi dùng `cls_crops`, tăng lên 6/8/10/12/14/16 không cải thiện throughput và chỉ làm startup worker nặng hơn. Nếu đổi lại sang dataset YOLO crop online hoặc bật augmentation nặng hơn, cần benchmark lại.
 
-Lệnh benchmark có thể chạy lại khi đổi máy:
+Lệnh benchmark có thể chạy lại khi đổi máy hoặc đổi dataset:
 
 ```powershell
 cd D:\DataAI\AIEx\TRKH
 $env:PYTHONPATH='D:\DataAI\AIEx\TRKH'
 $env:TRKH_AMP_DTYPE='bf16'
+$env:OMP_NUM_THREADS='6'
 $env:TRKH_ALLOW_WINDOWS_MULTIPROCESSING='1'
 $env:TRKH_ALLOW_WINDOWS_PIN_MEMORY='1'
 $env:TRKH_ALLOW_WINDOWS_PERSISTENT_WORKERS='1'
 
 D:\DataAI\.venv\Scripts\python.exe -m trkh.tools.benchmark_num_workers `
-  --data D:\DataAI\AIEx\dataset\data.yaml `
+  --data D:\DataAI\AIEx\image_baseline_experiments\data\cls_crops\data.yaml `
   --class-name-mode raw --expected-num-classes 5 `
-  --workers 0,2,4,6,8,10,12 `
+  --workers 4,6,8,10,12,14,16 `
   --batch-size 64 --image-size 224 `
-  --warmup-batches 2 --measure-batches 8 `
+  --warmup-batches 3 --measure-batches 20 `
   --torch-threads 6
 ```
