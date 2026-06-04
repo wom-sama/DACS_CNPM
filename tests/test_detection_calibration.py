@@ -42,7 +42,12 @@ from trkh.inference.inference import (
     resolve_detection_output_limit,
 )
 from trkh.training.loss import DETRSetCriterion
-from trkh.training.losses import FocalCrossEntropyLoss, LDAMFocalLoss
+from trkh.training.losses import (
+    BalancedSoftmaxFocalLoss,
+    FocalCrossEntropyLoss,
+    LDAMFocalLoss,
+    SupervisedContrastiveLoss,
+)
 from trkh.training.matcher import HungarianMatcher
 from trkh.models.model import create_model
 from trkh.training.train import (
@@ -246,6 +251,62 @@ class DetectionCalibrationTests(unittest.TestCase):
         self.assertEqual(metric_name, "balanced_macro_f1_gap_penalty")
         self.assertTrue(higher_is_better)
         self.assertLess(score, 0.92)
+
+    def test_fair_macro_f1_selection_uses_min_class_and_gap(self):
+        metric_name, score, higher_is_better = _resolve_checkpoint_selection(
+            model_config=ModelConfig(model_type="vit_registers"),
+            train_config=TrainConfig(
+                best_metric="fair_macro_f1",
+                fair_f1_gap_target=0.05,
+                fair_f1_gap_penalty=1.5,
+                fair_f1_min_weight=0.25,
+            ),
+            metrics={
+                "macro_f1": 0.92,
+                "per_class": [
+                    {"class_index": 0, "f1": 0.98},
+                    {"class_index": 1, "f1": 0.78},
+                    {"class_index": 2, "f1": 0.98},
+                ],
+            },
+        )
+
+        self.assertEqual(metric_name, "fair_macro_f1_min_class_gap_penalty")
+        self.assertTrue(higher_is_better)
+        self.assertLess(score, 0.92)
+
+    def test_supervised_contrastive_loss_is_finite_with_positive_pairs(self):
+        criterion = SupervisedContrastiveLoss(temperature=0.2)
+        embeddings = torch.tensor(
+            [
+                [1.0, 0.0],
+                [0.9, 0.1],
+                [0.0, 1.0],
+                [0.1, 0.9],
+            ]
+        )
+        targets = torch.tensor([0, 0, 1, 1])
+        loss = criterion(embeddings, targets)
+
+        self.assertTrue(torch.isfinite(loss))
+        self.assertGreater(float(loss.item()), 0.0)
+
+    def test_balanced_softmax_loss_is_finite_and_backpropagates(self):
+        logits = torch.zeros(4, 3, requires_grad=True)
+        targets = torch.tensor([0, 1, 2, 2], dtype=torch.long)
+        criterion = BalancedSoftmaxFocalLoss(
+            class_counts=[2, 1, 6],
+            gamma=1.5,
+            focal_mix=0.2,
+            label_smoothing=0.01,
+            prior_tau=1.0,
+        )
+        loss = criterion(logits, targets)
+        loss.backward()
+
+        self.assertTrue(torch.isfinite(loss))
+        self.assertIsNotNone(logits.grad)
+        self.assertTrue(torch.isfinite(logits.grad).all())
 
     def test_classification_folder_data_spec_preserves_yaml_class_order(self):
         with tempfile.TemporaryDirectory() as tmpdir:

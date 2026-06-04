@@ -4,14 +4,19 @@ import argparse
 import os
 import time
 from pathlib import Path
-from typing import List
+from typing import List, Union
 
 import torch
 from torch.utils.data import DataLoader
 
 from trkh.core.config import load_data_spec
 from trkh.core.utils import autocast_context, build_safe_dataloader_kwargs, set_seed
-from trkh.data.dataset import MangoYOLOCropDataset, build_train_collate_fn, build_train_transform
+from trkh.data.dataset import (
+    ClassificationFolderDataset,
+    MangoYOLOCropDataset,
+    build_train_collate_fn,
+    build_train_transform,
+)
 from trkh.models.model import create_model
 from trkh.training.losses import FocalCrossEntropyLoss
 
@@ -54,7 +59,11 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def benchmark_worker_count(args: argparse.Namespace, dataset: MangoYOLOCropDataset, worker_count: int) -> dict:
+def benchmark_worker_count(
+    args: argparse.Namespace,
+    dataset: Union[MangoYOLOCropDataset, ClassificationFolderDataset],
+    worker_count: int,
+) -> dict:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     pin_memory = device.type == "cuda" and not args.disable_pin_memory
     dataloader_kwargs, dataloader_summary = build_safe_dataloader_kwargs(
@@ -185,18 +194,30 @@ def main() -> None:
         randaugment_num_ops=0,
         randaugment_magnitude=0,
     )
-    dataset = MangoYOLOCropDataset.from_data_spec(
-        data_spec=data_spec,
-        split="train",
-        transform=transform,
-        crop_margin_ratio=0.08,
-        crop_to_primary_object=True,
-        classification_target=True,
-        classification_object_crops=True,
-        class_aware_augmentation=True,
-        class_augmentation_power=0.5,
-        class_augmentation_max_scale=3.0,
-    )
+    if data_spec.data_format == "classification_folder":
+        dataset = ClassificationFolderDataset.from_data_spec(
+            data_spec=data_spec,
+            split="train",
+            transform=transform,
+            class_aware_augmentation=True,
+            class_augmentation_power=0.5,
+            class_augmentation_max_scale=3.0,
+        )
+    else:
+        dataset = MangoYOLOCropDataset.from_data_spec(
+            data_spec=data_spec,
+            split="train",
+            transform=transform,
+            crop_margin_ratio=0.08,
+            crop_to_primary_object=True,
+            classification_target=True,
+            classification_object_crops=True,
+            class_aware_augmentation=True,
+            class_augmentation_power=0.5,
+            class_augmentation_max_scale=3.0,
+        )
+    if len(dataset) == 0:
+        raise ValueError("Dataset benchmark khong co sample hop le.")
     print(
         {
             "device": "cuda" if torch.cuda.is_available() else "cpu",

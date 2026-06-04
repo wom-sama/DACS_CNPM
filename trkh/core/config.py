@@ -208,6 +208,14 @@ class TrainConfig:
     use_ldam: bool = True
     ldam_max_margin: float = 0.5
     ldam_scale: float = 30.0
+    classification_loss: str = "ldam_focal"
+    balanced_softmax_tau: float = 1.0
+    metric_learning_loss_weight: float = 0.0
+    metric_learning_temperature: float = 0.12
+    metric_learning_class_balanced: bool = True
+    fair_f1_gap_target: float = 0.05
+    fair_f1_gap_penalty: float = 1.5
+    fair_f1_min_weight: float = 0.25
     use_sam: bool = False
     sam_rho: float = 0.05
     sam_adaptive: bool = False

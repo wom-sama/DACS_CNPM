@@ -140,3 +140,100 @@ class LDAMFocalLoss(_SoftTargetLossBase):
         focal_loss = focal_term * ce_loss
         mixed = (1.0 - self.focal_mix) * ce_loss + self.focal_mix * focal_loss
         return mixed.mean()
+
+
+class BalancedSoftmaxFocalLoss(_SoftTargetLossBase):
+    def __init__(
+        self,
+        class_counts: Sequence[int],
+        weight: Optional[Tensor] = None,
+        gamma: float = 2.0,
+        focal_mix: float = 0.0,
+        label_smoothing: float = 0.0,
+        prior_tau: float = 1.0,
+    ) -> None:
+        super().__init__(weight=weight, label_smoothing=label_smoothing)
+        if not class_counts:
+            raise ValueError("BalancedSoftmaxFocalLoss yeu cau class_counts khong rong.")
+        counts = torch.tensor([max(1, int(count)) for count in class_counts], dtype=torch.float32)
+        priors = counts / counts.sum().clamp(min=1.0)
+        self.register_buffer("log_priors", torch.log(priors.clamp(min=1e-12)))
+        self.gamma = float(max(0.0, gamma))
+        self.focal_mix = float(min(max(focal_mix, 0.0), 1.0))
+        self.prior_tau = float(max(0.0, prior_tau))
+
+    def _adjust_logits(self, logits: Tensor) -> Tensor:
+        if logits.ndim != 2:
+            raise ValueError("BalancedSoftmaxFocalLoss yeu cau logits co shape [batch, num_classes].")
+        log_priors = self.log_priors.to(device=logits.device, dtype=logits.dtype)
+        if log_priors.numel() != logits.size(1):
+            raise ValueError("So class cua BalancedSoftmaxFocalLoss khong khop logits.")
+        return logits + float(self.prior_tau) * log_priors.unsqueeze(0)
+
+    def forward(self, logits: Tensor, targets: Tensor) -> Tensor:
+        _, target_probs = self._prepare_targets(logits, targets)
+        adjusted_logits = self._adjust_logits(logits)
+        ce_loss = self._soft_cross_entropy(adjusted_logits, target_probs)
+        if self.focal_mix <= 0.0 or self.gamma <= 0.0:
+            return ce_loss.mean()
+
+        probabilities = torch.softmax(adjusted_logits, dim=1)
+        target_probabilities = (probabilities * target_probs).sum(dim=1).clamp(min=0.0, max=1.0)
+        focal_term = (1.0 - target_probabilities).pow(self.gamma)
+        focal_loss = focal_term * ce_loss
+        mixed = (1.0 - self.focal_mix) * ce_loss + self.focal_mix * focal_loss
+        return mixed.mean()
+
+
+class SupervisedContrastiveLoss(nn.Module):
+    def __init__(
+        self,
+        temperature: float = 0.12,
+        class_balanced: bool = True,
+    ) -> None:
+        super().__init__()
+        self.temperature = float(max(1e-6, temperature))
+        self.class_balanced = bool(class_balanced)
+
+    def forward(self, embeddings: Tensor, targets: Tensor) -> Tensor:
+        if embeddings.ndim != 2:
+            raise ValueError("SupervisedContrastiveLoss yeu cau embeddings co shape [batch, dim].")
+        if targets.ndim != 1:
+            raise ValueError("SupervisedContrastiveLoss yeu cau targets co shape [batch].")
+        if embeddings.size(0) != targets.size(0):
+            raise ValueError("So sample cua embeddings va targets khong khop.")
+        if embeddings.size(0) < 2:
+            return embeddings.sum() * 0.0
+
+        device = embeddings.device
+        targets = targets.to(device=device, dtype=torch.long)
+        features = F.normalize(embeddings.float(), dim=1)
+        logits = torch.matmul(features, features.T) / self.temperature
+        logits = logits - logits.max(dim=1, keepdim=True).values.detach()
+
+        batch_size = embeddings.size(0)
+        self_mask = torch.eye(batch_size, device=device, dtype=torch.bool)
+        positive_mask = targets.unsqueeze(0).eq(targets.unsqueeze(1)) & ~self_mask
+        valid_anchor_mask = positive_mask.any(dim=1)
+        if not bool(valid_anchor_mask.any().item()):
+            return embeddings.sum() * 0.0
+
+        logits_mask = ~self_mask
+        exp_logits = torch.exp(logits) * logits_mask.to(dtype=logits.dtype)
+        log_prob = logits - torch.log(exp_logits.sum(dim=1, keepdim=True).clamp(min=1e-12))
+        positive_count = positive_mask.sum(dim=1).clamp(min=1).to(dtype=log_prob.dtype)
+        per_anchor_loss = -(
+            positive_mask.to(dtype=log_prob.dtype) * log_prob
+        ).sum(dim=1) / positive_count
+
+        valid_losses = per_anchor_loss[valid_anchor_mask]
+        if not self.class_balanced:
+            return valid_losses.mean()
+
+        class_counts = torch.bincount(targets, minlength=int(targets.max().item()) + 1).to(
+            device=device,
+            dtype=valid_losses.dtype,
+        )
+        anchor_weights = 1.0 / torch.sqrt(class_counts[targets[valid_anchor_mask]].clamp(min=1.0))
+        anchor_weights = anchor_weights / anchor_weights.mean().clamp(min=1e-12)
+        return (valid_losses * anchor_weights).mean()

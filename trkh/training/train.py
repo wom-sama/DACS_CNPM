@@ -50,7 +50,7 @@ from trkh.training.debug_and_optimization import (
 )
 from trkh.evaluation.evaluate import DETECTION_SCORE_MODES, evaluate_model, save_evaluation_artifacts
 from trkh.training.loss import HybridDetectionClassificationLoss
-from trkh.training.losses import LDAMFocalLoss
+from trkh.training.losses import BalancedSoftmaxFocalLoss, LDAMFocalLoss, SupervisedContrastiveLoss
 from trkh.models.model import (
     build_model_from_checkpoint,
     create_model,
@@ -364,6 +364,26 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--disable-ldam", action="store_true", default=False)
     parser.add_argument("--ldam-max-margin", type=float, default=0.5)
     parser.add_argument("--ldam-scale", type=float, default=30.0)
+    parser.add_argument(
+        "--classification-loss",
+        choices=("ldam_focal", "balanced_softmax"),
+        default="ldam_focal",
+        help="Loss cho classification-only. balanced_softmax dung thong ke class de giam lech prior.",
+    )
+    parser.add_argument("--balanced-softmax-tau", type=float, default=1.0)
+    parser.add_argument(
+        "--metric-learning-loss-weight",
+        type=float,
+        default=0.0,
+        help="Trong so Supervised Contrastive Loss tren embedding phan loai; 0 de tat.",
+    )
+    parser.add_argument("--metric-learning-temperature", type=float, default=0.12)
+    parser.add_argument(
+        "--disable-metric-learning-class-balanced",
+        action="store_true",
+        default=False,
+        help="Tat anchor weighting theo tan suat class trong batch cho metric-learning.",
+    )
     parser.add_argument("--batch-mix-probability", type=float, default=0.6)
     parser.add_argument("--mosaic-probability", type=float, default=0.25)
     parser.add_argument("--mosaic-min-split", type=float, default=0.35)
@@ -416,12 +436,16 @@ def parse_args() -> argparse.Namespace:
             "composite",
             "macro_f1",
             "balanced_macro_f1",
+            "fair_macro_f1",
             "val_loss",
             "detection_f1",
             "macro_detection_hmean",
         ),
         default="composite",
     )
+    parser.add_argument("--fair-f1-gap-target", type=float, default=0.05)
+    parser.add_argument("--fair-f1-gap-penalty", type=float, default=1.5)
+    parser.add_argument("--fair-f1-min-weight", type=float, default=0.25)
     parser.add_argument("--cls-loss-weight", type=float, default=1.0)
     parser.add_argument("--disable-classification-overfit-guard", action="store_true", default=False)
     parser.add_argument("--classification-guard-macro-f1-threshold", type=float, default=0.985)
@@ -592,6 +616,18 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         raise ValueError("--ldam-max-margin phai >= 0.")
     if args.ldam_scale < 1.0:
         raise ValueError("--ldam-scale phai >= 1.")
+    if args.balanced_softmax_tau < 0.0:
+        raise ValueError("--balanced-softmax-tau phai >= 0.")
+    if args.metric_learning_loss_weight < 0.0:
+        raise ValueError("--metric-learning-loss-weight phai >= 0.")
+    if args.metric_learning_temperature <= 0.0:
+        raise ValueError("--metric-learning-temperature phai > 0.")
+    if not 0.0 <= args.fair_f1_gap_target <= 1.0:
+        raise ValueError("--fair-f1-gap-target phai nam trong [0, 1].")
+    if args.fair_f1_gap_penalty < 0.0:
+        raise ValueError("--fair-f1-gap-penalty phai >= 0.")
+    if args.fair_f1_min_weight < 0.0:
+        raise ValueError("--fair-f1-min-weight phai >= 0.")
     if args.cls_loss_weight < 0.0 or args.bbox_l1_loss_weight < 0.0 or args.bbox_giou_loss_weight < 0.0:
         raise ValueError("Loss weights phai >= 0.")
     if args.stage1_epochs < 0:
@@ -791,6 +827,14 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         use_ldam=not args.disable_ldam,
         ldam_max_margin=args.ldam_max_margin,
         ldam_scale=args.ldam_scale,
+        classification_loss=args.classification_loss,
+        balanced_softmax_tau=args.balanced_softmax_tau,
+        metric_learning_loss_weight=args.metric_learning_loss_weight,
+        metric_learning_temperature=args.metric_learning_temperature,
+        metric_learning_class_balanced=not args.disable_metric_learning_class_balanced,
+        fair_f1_gap_target=args.fair_f1_gap_target,
+        fair_f1_gap_penalty=args.fair_f1_gap_penalty,
+        fair_f1_min_weight=args.fair_f1_min_weight,
         batch_mix_probability=args.batch_mix_probability,
         mosaic_probability=args.mosaic_probability,
         mosaic_min_split=args.mosaic_min_split,
@@ -1764,7 +1808,7 @@ def _resolve_checkpoint_selection(
     metrics: Dict[str, object],
 ) -> Tuple[str, float, bool]:
     best_metric = str(train_config.best_metric).strip().lower()
-    if best_metric == "balanced_macro_f1":
+    if best_metric in {"balanced_macro_f1", "fair_macro_f1"}:
         macro_f1 = float(metrics["macro_f1"])
         per_class = metrics.get("per_class", [])
         class_f1_values = [
@@ -1773,6 +1817,15 @@ def _resolve_checkpoint_selection(
             if isinstance(item, dict) and item.get("f1") is not None
         ] if isinstance(per_class, list) else []
         class_gap = (max(class_f1_values) - min(class_f1_values)) if class_f1_values else 0.0
+        if best_metric == "fair_macro_f1":
+            min_class_f1 = min(class_f1_values) if class_f1_values else macro_f1
+            score = (
+                macro_f1
+                + float(train_config.fair_f1_min_weight) * min_class_f1
+                - float(train_config.fair_f1_gap_penalty)
+                * max(0.0, class_gap - float(train_config.fair_f1_gap_target))
+            )
+            return "fair_macro_f1_min_class_gap_penalty", score, True
         score = macro_f1 - 0.75 * max(0.0, class_gap - 0.05)
         return "balanced_macro_f1_gap_penalty", score, True
 
@@ -1822,9 +1875,29 @@ def _forward_model_outputs(
         return features, outputs
     if hasattr(model, "forward_features") and hasattr(model, "head") and hasattr(model, "num_registers"):
         features = model.forward_features(images, image_valid_mask=image_valid_mask)
-        logits = model.head(extract_head_input_from_features(model, features))
+        logits = _classification_logits_from_features(model, features)
         return features, logits
     return None, model(images)
+
+
+def _classification_logits_from_features(model: nn.Module, features: Dict[str, Tensor]) -> Tensor:
+    logits = model.head(extract_head_input_from_features(model, features))
+    fusion_head = getattr(model, "cnn_fusion_head", None)
+    if fusion_head is not None and "cnn_pooled" in features:
+        cnn_features = model.cnn_fusion_norm(features["cnn_pooled"])
+        cnn_features = model.cnn_fusion_dropout(cnn_features)
+        logits = logits + fusion_head(cnn_features)
+    return logits
+
+
+def _classification_target_indices(targets, logits: Tensor) -> Optional[Tensor]:
+    if not torch.is_tensor(targets):
+        return None
+    if targets.ndim == 1:
+        return targets.to(device=logits.device, dtype=torch.long)
+    if targets.ndim == 2 and targets.size(1) == logits.size(1):
+        return targets.to(device=logits.device, dtype=logits.dtype).argmax(dim=1).to(dtype=torch.long)
+    return None
 
 
 def _stack_image_masks_from_targets(targets) -> Optional[Tensor]:
@@ -1850,6 +1923,8 @@ def _forward_train_loss(
     device: torch.device,
     amp: bool,
     debug_bbox: bool = False,
+    metric_learning_criterion: Optional[nn.Module] = None,
+    metric_learning_loss_weight: float = 0.0,
 ) -> Tuple[Tensor, Optional[Dict[str, Tensor]], Tensor, Dict[str, float], Optional[Tensor]]:
     with autocast_context(device, amp):
         image_valid_mask = _stack_image_masks_from_targets(targets)
@@ -1859,9 +1934,21 @@ def _forward_train_loss(
             loss, loss_details = criterion(outputs, targets, return_details=True, debug_bbox=debug_bbox)
         else:
             loss = criterion(logits, targets)
+            metric_learning_loss = logits.sum() * 0.0
+            if (
+                metric_learning_criterion is not None
+                and float(metric_learning_loss_weight) > 0.0
+                and features is not None
+            ):
+                target_indices = _classification_target_indices(targets, logits)
+                if target_indices is not None:
+                    embeddings = extract_head_input_from_features(model, features)
+                    metric_learning_loss = metric_learning_criterion(embeddings, target_indices)
+                    loss = loss + float(metric_learning_loss_weight) * metric_learning_loss
             loss_details = {
                 "loss": float(loss.detach().cpu().item()),
-                "cls_loss": float(loss.detach().cpu().item()),
+                "cls_loss": float((loss - float(metric_learning_loss_weight) * metric_learning_loss).detach().cpu().item()),
+                "metric_learning_loss": float(metric_learning_loss.detach().cpu().item()),
                 "objectness_loss": 0.0,
                 "bbox_l1_loss": 0.0,
                 "bbox_giou_loss": 0.0,
@@ -1971,6 +2058,8 @@ def train_one_epoch(
     amp: bool,
     grad_clip_norm: float,
     epoch_index: int,
+    metric_learning_criterion: Optional[nn.Module] = None,
+    metric_learning_loss_weight: float = 0.0,
     use_sam: bool = False,
     grad_accum_steps: int = 1,
     max_nonfinite_grad_steps: int = 8,
@@ -1994,6 +2083,7 @@ def train_one_epoch(
     }
     train_loss_components = {
         "cls_loss": 0.0,
+        "metric_learning_loss": 0.0,
         "objectness_loss": 0.0,
         "bbox_l1_loss": 0.0,
         "bbox_giou_loss": 0.0,
@@ -2040,6 +2130,8 @@ def train_one_epoch(
             loss, features, _, loss_details, _ = _forward_train_loss(
                 model=model,
                 criterion=criterion,
+                metric_learning_criterion=metric_learning_criterion,
+                metric_learning_loss_weight=metric_learning_loss_weight,
                 images=images,
                 labels=labels,
                 targets=targets,
@@ -2124,6 +2216,8 @@ def train_one_epoch(
                         replay_loss, _, _ = _forward_train_loss(
                             model=model,
                             criterion=criterion,
+                            metric_learning_criterion=metric_learning_criterion,
+                            metric_learning_loss_weight=metric_learning_loss_weight,
                             images=replay_images,
                             labels=replay_labels,
                             targets=replay_targets,
@@ -3313,23 +3407,77 @@ def main() -> None:
             count_objectness_consistency_weight=train_config.count_objectness_consistency_weight,
         )
     else:
-        criterion = LDAMFocalLoss(
-            class_counts=train_class_counts,
-            weight=class_weights,
-            gamma=float(imbalance_summary["focal_loss_gamma"]),
-            focal_mix=float(imbalance_summary["focal_loss_mix"]),
-            label_smoothing=train_config.label_smoothing,
-            max_margin=float(imbalance_summary["ldam_max_margin"]),
-            scale=train_config.ldam_scale if train_config.use_ldam else 1.0,
+        classification_loss_name = str(train_config.classification_loss).strip().lower()
+        if classification_loss_name == "balanced_softmax":
+            criterion = BalancedSoftmaxFocalLoss(
+                class_counts=train_class_counts,
+                weight=class_weights,
+                gamma=float(imbalance_summary["focal_loss_gamma"]),
+                focal_mix=float(imbalance_summary["focal_loss_mix"]),
+                label_smoothing=train_config.label_smoothing,
+                prior_tau=train_config.balanced_softmax_tau,
+            )
+            eval_criterion = BalancedSoftmaxFocalLoss(
+                class_counts=train_class_counts,
+                weight=class_weights,
+                gamma=float(imbalance_summary["focal_loss_gamma"]),
+                focal_mix=float(imbalance_summary["focal_loss_mix"]),
+                label_smoothing=train_config.label_smoothing,
+                prior_tau=train_config.balanced_softmax_tau,
+            )
+        else:
+            criterion = LDAMFocalLoss(
+                class_counts=train_class_counts,
+                weight=class_weights,
+                gamma=float(imbalance_summary["focal_loss_gamma"]),
+                focal_mix=float(imbalance_summary["focal_loss_mix"]),
+                label_smoothing=train_config.label_smoothing,
+                max_margin=float(imbalance_summary["ldam_max_margin"]),
+                scale=train_config.ldam_scale if train_config.use_ldam else 1.0,
+            )
+            eval_criterion = LDAMFocalLoss(
+                class_counts=train_class_counts,
+                weight=class_weights,
+                gamma=float(imbalance_summary["focal_loss_gamma"]),
+                focal_mix=float(imbalance_summary["focal_loss_mix"]),
+                label_smoothing=train_config.label_smoothing,
+                max_margin=float(imbalance_summary["ldam_max_margin"]),
+                scale=train_config.ldam_scale if train_config.use_ldam else 1.0,
+            )
+        print(
+            {
+                "classification_loss": {
+                    "type": classification_loss_name,
+                    "balanced_softmax_tau": (
+                        float(train_config.balanced_softmax_tau)
+                        if classification_loss_name == "balanced_softmax"
+                        else None
+                    ),
+                    "class_weights": bool(class_weights is not None),
+                    "focal_loss_gamma": float(imbalance_summary["focal_loss_gamma"]),
+                    "focal_loss_mix": float(imbalance_summary["focal_loss_mix"]),
+                }
+            },
+            flush=True,
         )
-        eval_criterion = LDAMFocalLoss(
-            class_counts=train_class_counts,
-            weight=class_weights,
-            gamma=float(imbalance_summary["focal_loss_gamma"]),
-            focal_mix=float(imbalance_summary["focal_loss_mix"]),
-            label_smoothing=train_config.label_smoothing,
-            max_margin=float(imbalance_summary["ldam_max_margin"]),
-            scale=train_config.ldam_scale if train_config.use_ldam else 1.0,
+    metric_learning_criterion: Optional[nn.Module] = None
+    if (not detection_mode) and float(train_config.metric_learning_loss_weight) > 0.0:
+        metric_learning_criterion = SupervisedContrastiveLoss(
+            temperature=train_config.metric_learning_temperature,
+            class_balanced=train_config.metric_learning_class_balanced,
+        ).to(device)
+        print(
+            {
+                "metric_learning": {
+                    "type": "supervised_contrastive",
+                    "loss_weight": float(train_config.metric_learning_loss_weight),
+                    "temperature": float(train_config.metric_learning_temperature),
+                    "class_balanced": bool(train_config.metric_learning_class_balanced),
+                    "embedding": "vit_register_cls_register_mean",
+                },
+                "reason": "tang separation embedding cho cac lop co dac trung tuong dong ma khong dung pretrain",
+            },
+            flush=True,
         )
     train_amp = bool(train_config.amp)
     if train_config.use_sam and train_amp:
@@ -3638,6 +3786,8 @@ def main() -> None:
                     amp=train_amp,
                     grad_clip_norm=train_config.grad_clip_norm,
                     epoch_index=int(epoch),
+                    metric_learning_criterion=metric_learning_criterion,
+                    metric_learning_loss_weight=train_config.metric_learning_loss_weight,
                     use_sam=train_config.use_sam,
                     grad_accum_steps=train_config.grad_accum_steps,
                     max_nonfinite_grad_steps=train_config.max_nonfinite_grad_steps,
@@ -3738,6 +3888,7 @@ def main() -> None:
                     "train_stage": stage_config["stage_name"],
                     "train_loss": train_loss,
                     "train_cls_loss": train_artifact_stats.get("cls_loss", 0.0),
+                    "train_metric_learning_loss": train_artifact_stats.get("metric_learning_loss", 0.0),
                     "train_objectness_loss": train_artifact_stats.get("objectness_loss", 0.0),
                     "train_bbox_l1_loss": train_artifact_stats.get("bbox_l1_loss", 0.0),
                     "train_bbox_giou_loss": train_artifact_stats.get("bbox_giou_loss", 0.0),
@@ -4104,6 +4255,7 @@ def main() -> None:
                         "train_stage",
                         "train_loss",
                         "train_cls_loss",
+                        "train_metric_learning_loss",
                         "train_objectness_loss",
                         "train_bbox_l1_loss",
                         "train_bbox_giou_loss",

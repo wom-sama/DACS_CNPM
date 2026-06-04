@@ -86,11 +86,54 @@ D:\DataAI\.venv\Scripts\python.exe -m compileall train.py evaluate.py scripts tr
 D:\DataAI\.venv\Scripts\python.exe -m unittest discover -s tests -p "test_*.py" -v
 ```
 
-Current expected result: `43` tests passed.
+Current expected result: `58` tests passed.
 
 ## Classification-Only Experiment
 
-Use this for the classification paper track. The key is `--model-type vit_registers` and not passing `--full-image-detection`. In classification mode the dataset now turns every valid bbox into an object-level crop sample by default, so multi-object images are used without mosaic/cutmix/copy-paste.
+Use this for the classification paper track. The key is `--model-type vit_registers` and not passing `--full-image-detection`. Keep all checkpoints scratch-only.
+
+For paper comparison against `image_baseline_experiments`, prefer the prebuilt classification-folder crop dataset at `D:\DataAI\AIEx\image_baseline_experiments\data\cls_crops`. This avoids spending train time on online YOLO crop extraction and keeps metrics comparable with baseline classifiers. Current recommended loss stack is Balanced Softmax for class-prior correction plus a small supervised contrastive term for similar-class separation. The checkpoint selector uses `fair_macro_f1`, so it penalizes a large per-class F1 gap instead of choosing only the highest average macro F1.
+
+```powershell
+cd D:\DataAI\AIEx\TRKH
+$env:PYTHONPATH='D:\DataAI\AIEx\TRKH'
+$env:TRKH_AMP_DTYPE='bf16'
+$env:OMP_NUM_THREADS='6'
+$env:TRKH_ALLOW_WINDOWS_MULTIPROCESSING='1'
+$env:TRKH_ALLOW_WINDOWS_PIN_MEMORY='1'
+$env:TRKH_ALLOW_WINDOWS_PERSISTENT_WORKERS='1'
+
+D:\DataAI\.venv\Scripts\python.exe -m trkh.training.train `
+  --data D:\DataAI\AIEx\image_baseline_experiments\data\cls_crops\data.yaml `
+  --class-name-mode raw --expected-num-classes 5 `
+  --run-name mango_cls_224_clscrops_balsoftmax_supcon_v11 `
+  --output-dir runs --disable-resume --seed 42 `
+  --model-type vit_registers --image-size 224 --patch-size 16 --stem-channels 32 `
+  --cnn-feature-fusion --cnn-fusion-dropout 0.10 `
+  --embed-dim 256 --depth 8 --num-heads 8 --num-registers 4 --head-pooling cls_register_mean `
+  --dropout 0.10 --drop-path-rate 0.10 `
+  --batch-size 64 --grad-accum-steps 1 --epochs 0 --scheduler-total-epochs 90 --patience 100 `
+  --learning-rate 5e-5 --min-learning-rate 5e-7 --warmup-epochs 2 `
+  --weight-decay 0.07 --grad-clip-norm 0.75 --max-nonfinite-grad-steps 8 `
+  --num-workers 4 --eval-num-workers 4 --train-image-cache-mb 0 --eval-image-cache-mb 0 `
+  --best-metric fair_macro_f1 --fair-f1-gap-target 0.05 --fair-f1-gap-penalty 1.2 --fair-f1-min-weight 0.35 `
+  --classification-loss balanced_softmax --balanced-softmax-tau 0.7 --disable-class-weights `
+  --focal-loss-gamma 2.0 --focal-loss-mix 0.20 --label-smoothing 0.005 `
+  --metric-learning-loss-weight 0.015 --metric-learning-temperature 0.16 `
+  --class-aware-augmentation --class-augmentation-power 0.5 --class-augmentation-max-scale 2.0 `
+  --rare-class-recall-target 0.88 --rare-class-recall-guard-scale-threshold 1.5 `
+  --rare-class-recall-guard-max-multiplier 1.12 --rare-class-recall-guard-min-precision 0.65 `
+  --resize-mode pad --brightness 0 --contrast 0 --saturation 0 --hue 0 `
+  --random-erasing-probability 0 --random-affine-degrees 2 --random-affine-translate 0.015 `
+  --random-affine-scale-min 0.97 --horizontal-flip-probability 0.5 --vertical-flip-probability 0 `
+  --rotate90-probability 0 --lighting-probability 0 `
+  --batch-mix-probability 0 --mosaic-probability 0 --mixup-probability 0 `
+  --cutmix-probability 0 --copy-paste-probability 0 --targeted-copy-paste-probability 0
+```
+
+The `predictions_detailed.csv` artifact keeps the `data.yaml` class ID order. The shorter `predictions.csv` is baseline-compatible and may remap integer IDs to the comparison table class order; use the name columns or `metrics.json/classes` when reading it.
+
+The older online YOLO object-crop command is still useful for an ablation because it can include wider crop margins from original images:
 
 ```powershell
 cd D:\DataAI\AIEx\TRKH
