@@ -105,6 +105,49 @@ class HybridConvStem(nn.Module):
         return self.blocks(x)
 
 
+class FineGrainedPatchPooling(nn.Module):
+    def __init__(
+        self,
+        dim: int,
+        dropout: float = 0.1,
+    ) -> None:
+        super().__init__()
+        self.patch_norm = nn.LayerNorm(dim)
+        self.context_norm = nn.LayerNorm(dim)
+        hidden_dim = max(32, int(dim))
+        self.score = nn.Sequential(
+            nn.Linear(dim * 2, hidden_dim),
+            nn.GELU(),
+            nn.Dropout(float(max(0.0, dropout))),
+            nn.Linear(hidden_dim, 1),
+        )
+        self.fusion = nn.Sequential(
+            nn.LayerNorm(dim * 2),
+            nn.Linear(dim * 2, dim),
+            nn.GELU(),
+            nn.Dropout(float(max(0.0, dropout))),
+            nn.Linear(dim, dim),
+        )
+
+    def zero_init_residual(self) -> None:
+        final_linear = self.fusion[-1]
+        if isinstance(final_linear, nn.Linear):
+            nn.init.zeros_(final_linear.weight)
+            if final_linear.bias is not None:
+                nn.init.zeros_(final_linear.bias)
+
+    def forward(self, global_feature: Tensor, patch_tokens: Tensor) -> Tensor:
+        if patch_tokens.ndim != 3 or patch_tokens.size(1) == 0:
+            return global_feature
+        normalized_patches = self.patch_norm(patch_tokens)
+        context = self.context_norm(global_feature).unsqueeze(1).expand_as(normalized_patches)
+        scores = self.score(torch.cat((normalized_patches, context), dim=-1)).squeeze(-1)
+        attention = torch.softmax(scores, dim=1)
+        patch_feature = torch.bmm(attention.unsqueeze(1), patch_tokens).squeeze(1)
+        residual = self.fusion(torch.cat((global_feature, patch_feature), dim=-1))
+        return global_feature + residual
+
+
 class MultiHeadSelfAttention(nn.Module):
     def __init__(
         self,
@@ -218,6 +261,8 @@ class VisionTransformerWithRegisters(nn.Module):
         attention_dropout: float = 0.0,
         drop_path_rate: float = 0.1,
         register_positional_embedding: bool = False,
+        fine_grained_pooling: bool = False,
+        fine_grained_pooling_dropout: float = 0.1,
         gradient_checkpointing: bool = False,
         head_pooling: str = "cls_register_mean",
     ) -> None:
@@ -230,6 +275,7 @@ class VisionTransformerWithRegisters(nn.Module):
         self.embed_dim = int(embed_dim)
         self.head_pooling = str(head_pooling).strip().lower()
         self.cnn_feature_fusion = bool(cnn_feature_fusion and use_cnn_stem)
+        self.fine_grained_pooling = bool(fine_grained_pooling)
         if self.head_pooling not in {"cls", "cls_register_mean"}:
             raise ValueError(f"Khong ho tro head_pooling={head_pooling!r}.")
 
@@ -283,6 +329,13 @@ class VisionTransformerWithRegisters(nn.Module):
             ]
         )
         self.norm = nn.LayerNorm(embed_dim)
+        if self.fine_grained_pooling:
+            self.fine_grained_pool = FineGrainedPatchPooling(
+                dim=embed_dim,
+                dropout=fine_grained_pooling_dropout,
+            )
+        else:
+            self.fine_grained_pool = None
         self.head = nn.Linear(embed_dim, num_classes)
         if self.cnn_feature_fusion:
             self.cnn_fusion_norm = nn.LayerNorm(embed_dim)
@@ -295,6 +348,8 @@ class VisionTransformerWithRegisters(nn.Module):
 
         self.apply(self._init_weights)
         self._init_parameter_tensors()
+        if self.fine_grained_pool is not None:
+            self.fine_grained_pool.zero_init_residual()
         if self.cnn_fusion_head is not None:
             nn.init.zeros_(self.cnn_fusion_head.weight)
             if self.cnn_fusion_head.bias is not None:
@@ -531,8 +586,12 @@ class VisionTransformerWithRegisters(nn.Module):
 
     def head_input_from_features(self, features: Dict[str, Tensor]) -> Tensor:
         if "pooled" in features:
-            return features["pooled"]
-        return self.pool_tokens_for_head(features["cls"], features["registers"])
+            pooled = features["pooled"]
+        else:
+            pooled = self.pool_tokens_for_head(features["cls"], features["registers"])
+        if self.fine_grained_pool is not None and "patches" in features:
+            pooled = self.fine_grained_pool(pooled, features["patches"])
+        return pooled
 
     def forward(self, x: Tensor) -> Tensor:
         features = self.forward_features(x)

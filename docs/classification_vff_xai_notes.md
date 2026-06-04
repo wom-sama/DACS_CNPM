@@ -61,7 +61,7 @@ Da them co:
 - `--metric-learning-temperature`
 
 Khuyen nghi v12: xem `README.md`, run name `mango_cls_224_clscrops_vffsupcon_xai_v12`.
-Khuyen nghi hien tai: xem `README.md`, run name `mango_cls_224_clscrops_grouped_ldam_sam_xaiv2_v16`.
+Khuyen nghi hien tai: xem `README.md`, run name `mango_cls_224_clscrops_grouped_fgpool_midprior_norepeat_v18_full`.
 
 ## Ket qua v13 full va chan doan moi
 
@@ -200,6 +200,89 @@ Huong v16:
 - Giam LR `2.8e-5`, tang regularization: dropout `0.24`, drop-path `0.22`, weight decay `0.16`.
 - Audit sau train bat buoc dung `--method all --robustness-probes`, doc `xai_metrics.json` va `review_manifest.csv` truoc khi quyet dinh tiep.
 
+## Ket qua v16c va huong v17
+
+Run `runs/mango_cls_224_clscrops_grouped_ldam_xaiv2_fast_v16c` da hoan thanh den early stopping tai epoch `62`.
+
+- Dataset: `cls_crops_grouped_seqsafe_w3`, khong dung pretrain va khong them du lieu.
+- Best epoch: `32`, best validation macro F1 `0.686863`, selection metric `0.496424`.
+- Final test: accuracy `0.749226`, macro F1 `0.655481`, weighted F1 `0.773473`.
+- Final test class 1: precision `0.065476`, recall `0.166667`, F1 `0.094017`.
+- Test confusion class 1: true class 1 co `66` mau, chi `11` duoc doan dung; nhieu mau class 0/2/4 bi day sang pred class 1.
+- Val loss tang ve cuoi run trong khi train loss tiep tuc giam, nen v16c van overfit muon.
+
+XAI audit da xuat tai `runs/mango_cls_224_clscrops_grouped_ldam_xaiv2_fast_v16c/xai_audit_test_v2`.
+
+- Top confusion tren test: true `0` -> pred `1` (`79`), true `3` -> pred `2` (`77`), true `4` -> pred `1` (`56`), true `2` -> pred `1` (`38`), true `1` -> pred `2` (`28`).
+- Heatmap foreground mass cao: attention `0.9866`, grad rollout `0.9899`, rollout `0.9861`, Grad-CAM `0.9796`.
+- Background probe gan nhu khong lam giam confidence: background blur drop `-0.0004`, background gray drop `-0.0015`.
+- Object desaturate drop `0.0926`, cho thay tin hieu mau/texture tren object van quan trong nhung khong qua cuc doan nhu v15.
+- Review flags dang chu y: near top-2 tie `22`, object color sensitive `18`, Grad-CAM border attention `15`.
+- Register diagnostics: `cls_register_heatmap_similarity=0.99998`, `register_attention_entropy=0.9058`. Register token da on dinh nhung van nhin gan giong CLS, chua tao nguon bang chung doc lap ro.
+
+Chan doan:
+
+- Loi chinh cua v16c khong phai shortcut nen. XAI cho thay foreground focus cao va background perturbation khong anh huong dang ke.
+- Class 1 khong chi thieu recall; no la ranh gioi fine-grained voi class 0/2/4 va dang bi over-correction, lam precision sap rat manh.
+- LDAM + rare repeat/class-aware cap nhe van khong giai quyet duoc, va SAM lam toc do train giam nhieu so voi loi ich quan sat duoc.
+- Vi grouped split kho hon raw split, muc macro F1 `0.65-0.69` la canh bao that, khong nen so truc tiep voi cac run raw `cls_crops` truoc day.
+
+Huong v17:
+
+- Bo SAM de lay lai toc do train va giam chi phi lap.
+- Bo rare-class repeat trong lenh chinh, dung `--weighted-sampler` de kich hoat strict balanced batch thay cho repeat mau le. Cach nay giup moi batch co ti le lop on dinh hon cho SupCon ma khong nhan doi oversampling.
+- Doi `ldam_focal` sang `balanced_softmax` tau thap `0.30`, tat class weights, focal mix rat nhe `0.02`.
+- Giam metric-learning loss xuong `0.005`, chi dung nguon `head,cnn`.
+- Tang regularization vua phai: dropout `0.28`, attention dropout `0.10`, drop-path `0.25`, weight decay `0.20`, scheduler `70` epoch, patience `22`.
+- Giu foreground consistency nhe `0.012` va random erasing `0.03` de giam border/crop-edge cue nhung khong pha tin hieu mau.
+- Benchmark local cho thay `batch-size=64`, train `num-workers=6`, eval `num-workers=4` la diem tot nhat hien tai khi bat cac bien moi truong multiprocessing tren Windows.
+
+## Ket qua v17 va probe v18
+
+Run `runs/mango_cls_224_clscrops_grouped_strictbal_bsoftmax_xaiv2_v17` bi dung tai epoch `21`.
+
+- Best epoch: `8`, best validation macro F1 `0.666079`, validation loss `0.988528`.
+- Final test: accuracy `0.658204`, macro F1 `0.596498`, weighted F1 `0.699739`.
+- Final test class 1: precision `0.093407`, recall `0.515152`, F1 `0.158140`.
+- Best validation confusion cho thay pred class 1 bi day qua cao: `523` mau duoc doan la class 1 trong khi support class 1 chi `133`.
+- Test confusion class 1 cung bi qua muc: `364` mau pred class 1 trong khi true class 1 chi `66`.
+
+XAI audit `runs/mango_cls_224_clscrops_grouped_strictbal_bsoftmax_xaiv2_v17/xai_audit_test_v2`:
+
+- Top confusion: true `0` -> pred `1` (`159`), true `2` -> pred `1` (`87`), true `4` -> pred `1` (`72`), true `2` -> pred `3` (`70`), true `3` -> pred `2` (`60`).
+- Foreground mass van cao: attention `0.9780`, grad rollout `0.9720`, Grad-CAM `0.9780`, rollout `0.9792`.
+- Border mass con dang chu y: grad rollout `0.2660`, attention `0.2210`.
+- Review flags: `register_attention_diffuse=45/45`, `object_color_sensitive=39/45`, `high_confidence_misclassification=27/45`.
+
+Chan doan v17:
+
+- Loi chinh la over-correction class 1, khong phai shortcut nen tong quat.
+- Strict balanced sampler lam prior trong batch gan uniform; Balanced Softmax lai tiep tuc sua theo prior dataset, nen class hiem bi day qua manh.
+- Khong nen lap lai cau hinh `--weighted-sampler` + `--classification-loss balanced_softmax` tren grouped split, tru khi chi lam ablation.
+
+Da them trong code:
+
+- `--fine-grained-pooling`.
+- `--fine-grained-pooling-dropout`.
+- Khoi `FineGrainedPatchPooling`: attention-pooling patch tokens theo global CLS feature roi residual-fuse vao classifier head. Lop fuse cuoi duoc zero-init, nen co the bat khoi nay khi resume checkpoint cu ma logit ban dau khong doi. Day la khoi chung, khong hard-code class 1.
+
+Probe v18 scratch-only, moi probe `8` epoch, validation full, khong final test:
+
+| Run | Cau hinh chinh | Best macro F1 | Val loss | Class 1 F1 | Nhan xet |
+| --- | --- | ---: | ---: | ---: | --- |
+| `mango_cls_224_clscrops_grouped_fgpool_softprior_v18_probe8` | random sampler, BalancedSoftmax tau `0.08`, repeat cap `1.10` | `0.649387` | `0.826592` | `0.085561` | under-predict class 1 |
+| `mango_cls_224_clscrops_grouped_fgpool_midprior_norepeat_v18b_probe8` | random sampler, BalancedSoftmax tau `0.18`, no repeat | `0.669946` | `0.783026` | `0.133829` | on dinh nhat, pred class 1 `136` gan support `133` |
+| `mango_cls_224_clscrops_grouped_fgpool_strict_ce_v18c_probe8` | strict balanced sampler, CE/label smoothing, no prior | `0.667974` | `0.923003` | `0.225397` | tang recall class 1 nhung pred class 1 `497`, val loss xau |
+
+Huong v18 hien tai:
+
+- Chon v18b lam lenh full vi val loss tot nhat, macro F1 tot nhat trong probe ngan, va khong sap vao loi over-predict class 1 nhu v17/v18c.
+- Khong dung strict balanced sampler trong lenh chinh.
+- Khong dung rare-class repeat; dat `--balance-auto-max-repeat-factor 1.0` de chan auto repeat tu `canbang.yaml`.
+- Dung Balanced Softmax tau vua phai `0.18`, metric-learning rat nhe `0.002`, foreground consistency nhe `0.008`.
+- Dung `head-pooling cls`; register tokens van co trong transformer nhu context/sink tokens, nhung khong trung binh truc tiep vao classifier head.
+- Class 1 van la nut that fine-grained that su. V18b chua dat muc dot pha, nhung la huong on dinh hon de chay full truoc khi them co che phuc tap tiep.
+
 ## Huong XAI da tich hop
 
 Da them `trkh.evaluation.xai_audit`:
@@ -215,7 +298,7 @@ Da sua attention heatmap de ho tro:
 - `--query-tokens registers`
 - `--query-tokens cls_register_mean`
 
-Mac dinh audit dung `cls_register_mean` de khop voi `head_pooling=cls_register_mean`.
+Audit can dung query token khop voi head pooling cua run. V17 dung `cls_register_mean`; v18 hien khuyen nghi dung `cls`.
 
 ## Danh gia cac huong XAI tiep theo
 
@@ -229,11 +312,12 @@ Mac dinh audit dung `cls_register_mean` de khop voi `head_pooling=cls_register_m
 
 ```powershell
 D:\DataAI\.venv\Scripts\python.exe -m trkh.evaluation.xai_audit `
-  --checkpoint runs\mango_cls_224_clscrops_balsoftmax_supcon_v11\checkpoints\best.pt `
-  --data D:\DataAI\AIEx\image_baseline_experiments\data\cls_crops\data.yaml `
+  --checkpoint runs\mango_cls_224_clscrops_grouped_fgpool_midprior_norepeat_v18_full\checkpoints\best.pt `
+  --data D:\DataAI\AIEx\image_baseline_experiments\data\cls_crops_grouped_seqsafe_w3\data.yaml `
   --class-name-mode raw --expected-num-classes 5 --split test `
-  --output-dir runs\mango_cls_224_clscrops_balsoftmax_supcon_v11\xai_audit_test_v2 `
-  --max-cases 16 --mistake-cases 5 --low-confidence-cases 3 --close-margin-cases 3 `
-  --per-class-cases 2 --batch-size 64 --num-workers 0 `
-  --method both --query-tokens cls_register_mean --top-k 5
+  --output-dir runs\mango_cls_224_clscrops_grouped_fgpool_midprior_norepeat_v18_full\xai_audit_test_v2 `
+  --max-cases 56 --mistake-cases 24 --low-confidence-cases 8 --close-margin-cases 12 `
+  --per-class-cases 2 --batch-size 64 --num-workers 4 `
+  --method all --query-tokens cls --feature-source stem_last --rollout-start-layer 1 `
+  --robustness-probes --review-high-confidence 0.45 --top-k 5
 ```

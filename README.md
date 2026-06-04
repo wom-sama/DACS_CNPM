@@ -86,13 +86,13 @@ D:\DataAI\.venv\Scripts\python.exe -m compileall train.py evaluate.py scripts tr
 D:\DataAI\.venv\Scripts\python.exe -m unittest discover -s tests -p "test_*.py" -v
 ```
 
-Current expected result: `68` tests passed for `tests/test_detection_calibration.py`; run the full suite before paper-final training.
+Current expected result: `69` tests passed for `tests/test_detection_calibration.py`; run the full suite before paper-final training.
 
 ## Classification-Only Experiment
 
 Use this for the classification paper track. The key is `--model-type vit_registers` and not passing `--full-image-detection`. Keep all checkpoints scratch-only.
 
-For paper-grade evaluation, prefer the grouped/sequence-safe classification-folder crop dataset at `D:\DataAI\AIEx\image_baseline_experiments\data\cls_crops_grouped_seqsafe_w3`. It is rebuilt from the same `cls_crops` images without adding data, but keeps same-source crops, byte-identical duplicates, and same-class near-neighbor `Image_N` sequences in one split. Current recommended loss stack is Balanced Softmax for class-prior correction, a small VFF-like supervised contrastive term over `head,cnn` embeddings, a capped rare-class repeat factor from `canbang.yaml`, and a light foreground-consistency loss that discourages patch-token energy on crop borders/background. The checkpoint selector uses `loss_aware_fair_macro_f1`, so it does not choose a late overfit checkpoint only because the rarest class F1 improved slightly.
+For paper-grade evaluation, prefer the grouped/sequence-safe classification-folder crop dataset at `D:\DataAI\AIEx\image_baseline_experiments\data\cls_crops_grouped_seqsafe_w3`. It is rebuilt from the same `cls_crops` images without adding data, but keeps same-source crops, byte-identical duplicates, and same-class near-neighbor `Image_N` sequences in one split. Current recommendation after the v17/v18 probes is random class sampling with a soft Balanced Softmax prior, fine-grained patch pooling, a very small VFF-like supervised contrastive term over `head,cnn` embeddings, and a light foreground-consistency loss that discourages patch-token energy on crop borders/background. Do not combine strict balanced batches with Balanced Softmax on this split; v17 over-corrected class 1 and produced many class-1 false positives. The checkpoint selector uses `loss_aware_fair_macro_f1`, so it does not choose a late overfit checkpoint only because the rarest class F1 improved slightly.
 
 Leak-audit note: raw `cls_crops` has no exact cross-split duplicate and no same `Image_N_boxK` source-stem across splits, but it does contain many same-class near-neighbor `Image_N` IDs across train/val/test. Use `cls_crops_grouped_seqsafe_w3` for final claims, and rerun any baseline models on the same grouped split for fair comparison.
 
@@ -100,7 +100,7 @@ Leak-audit note: raw `cls_crops` has no exact cross-split duplicate and no same 
 cd D:\DataAI\AIEx\TRKH
 $env:PYTHONPATH='D:\DataAI\AIEx\TRKH'
 $env:TRKH_AMP_DTYPE='bf16'
-$env:OMP_NUM_THREADS='6'
+$env:OMP_NUM_THREADS='4'
 $env:TRKH_ALLOW_WINDOWS_MULTIPROCESSING='1'
 $env:TRKH_ALLOW_WINDOWS_PIN_MEMORY='1'
 $env:TRKH_ALLOW_WINDOWS_PERSISTENT_WORKERS='1'
@@ -108,36 +108,36 @@ $env:TRKH_ALLOW_WINDOWS_PERSISTENT_WORKERS='1'
 D:\DataAI\.venv\Scripts\python.exe -m trkh.training.train `
   --data D:\DataAI\AIEx\image_baseline_experiments\data\cls_crops_grouped_seqsafe_w3\data.yaml `
   --class-name-mode raw --expected-num-classes 5 `
-  --run-name mango_cls_224_clscrops_grouped_ldam_sam_xaiv2_v16 `
-  --output-dir runs --disable-resume --seed 42 `
+  --run-name mango_cls_224_clscrops_grouped_fgpool_midprior_norepeat_v18_full `
+  --output-dir runs --disable-resume --seed 44 `
   --model-type vit_registers --image-size 224 --patch-size 16 --stem-channels 32 `
-  --cnn-feature-fusion --cnn-fusion-dropout 0.30 `
+  --cnn-feature-fusion --cnn-fusion-dropout 0.26 `
+  --fine-grained-pooling --fine-grained-pooling-dropout 0.12 `
   --embed-dim 256 --depth 8 --num-heads 8 --num-registers 4 --register-positional-embedding `
-  --head-pooling cls_register_mean `
-  --dropout 0.24 --attention-dropout 0.08 --drop-path-rate 0.22 `
-  --batch-size 64 --grad-accum-steps 1 --epochs 0 --scheduler-total-epochs 80 --patience 30 `
-  --learning-rate 2.8e-5 --min-learning-rate 5e-7 --warmup-epochs 4 `
-  --weight-decay 0.16 --grad-clip-norm 0.60 --max-nonfinite-grad-steps 8 `
-  --sam --sam-rho 0.03 `
-  --num-workers 4 --eval-num-workers 4 --train-image-cache-mb 0 --eval-image-cache-mb 0 `
-  --best-metric loss_aware_fair_macro_f1 --fair-f1-gap-target 0.35 --fair-f1-gap-penalty 0.35 `
-  --fair-f1-min-weight 0.20 --fair-f1-loss-weight 0.12 `
-  --classification-loss ldam_focal --disable-class-weights --ldam-max-margin 0.18 --ldam-scale 12.0 `
-  --focal-loss-gamma 1.5 --focal-loss-mix 0.03 --label-smoothing 0.04 `
-  --metric-learning-loss-weight 0.006 --metric-learning-temperature 0.22 `
+  --head-pooling cls `
+  --dropout 0.22 --attention-dropout 0.08 --drop-path-rate 0.18 `
+  --batch-size 64 --grad-accum-steps 1 --epochs 0 --scheduler-total-epochs 70 --patience 24 `
+  --learning-rate 2.0e-5 --min-learning-rate 5e-7 --warmup-epochs 3 `
+  --weight-decay 0.18 --grad-clip-norm 0.60 --max-nonfinite-grad-steps 8 `
+  --num-workers 6 --eval-num-workers 4 --train-image-cache-mb 0 --eval-image-cache-mb 0 `
+  --best-metric loss_aware_fair_macro_f1 --fair-f1-gap-target 0.35 --fair-f1-gap-penalty 0.25 `
+  --fair-f1-min-weight 0.18 --fair-f1-loss-weight 0.12 `
+  --classification-loss balanced_softmax --balanced-softmax-tau 0.18 --disable-class-weights `
+  --focal-loss-gamma 1.0 --focal-loss-mix 0.0 --label-smoothing 0.05 `
+  --metric-learning-loss-weight 0.002 --metric-learning-temperature 0.28 `
   --metric-learning-sources head,cnn `
-  --foreground-consistency-loss-weight 0.015 --foreground-consistency-margin 0.07 `
-  --balance-auto-max-repeat-factor 1.25 `
-  --class-aware-augmentation --class-augmentation-power 0.25 --class-augmentation-max-scale 1.25 `
-  --rare-class-repeat --rare-class-repeat-power 0.25 --rare-class-repeat-max-factor 1.25 --rare-class-repeat-min-ratio 1.0 `
+  --foreground-consistency-loss-weight 0.008 --foreground-consistency-margin 0.07 `
+  --balance-auto-max-repeat-factor 1.0 `
   --disable-rare-class-recall-guard `
   --resize-mode pad --brightness 0.03 --contrast 0.03 --saturation 0.015 --hue 0 `
-  --random-erasing-probability 0 --random-affine-degrees 2 --random-affine-translate 0.015 `
+  --random-erasing-probability 0.02 --random-affine-degrees 2 --random-affine-translate 0.015 `
   --random-affine-scale-min 0.97 --horizontal-flip-probability 0.5 --vertical-flip-probability 0 `
   --rotate90-probability 0 --lighting-probability 0 `
   --batch-mix-probability 0 --mosaic-probability 0 --mixup-probability 0 `
   --cutmix-probability 0 --copy-paste-probability 0 --targeted-copy-paste-probability 0
 ```
+
+This v18 command intentionally does not use SAM, strict balanced sampling, or rare-class repeat. `--balance-auto-max-repeat-factor 1.0` is intentional: it neutralizes the `canbang.yaml` auto-repeat path so class-1 correction is controlled only by the soft Balanced Softmax prior. On the current Windows machine, the measured loader sweet spot is `batch-size=64`, `num-workers=6`, `eval-num-workers=4` when the three `TRKH_ALLOW_WINDOWS_*` environment variables above are enabled.
 
 The `predictions_detailed.csv` artifact keeps the `data.yaml` class ID order. The shorter `predictions.csv` is baseline-compatible and may remap integer IDs to the comparison table class order; use the name columns or `metrics.json/classes` when reading it.
 
@@ -147,17 +147,19 @@ Run this after a checkpoint is available to inspect fail cases, low-confidence c
 
 ```powershell
 D:\DataAI\.venv\Scripts\python.exe -m trkh.evaluation.xai_audit `
-  --checkpoint runs\mango_cls_224_clscrops_grouped_ldam_sam_xaiv2_v16\checkpoints\best.pt `
+  --checkpoint runs\mango_cls_224_clscrops_grouped_fgpool_midprior_norepeat_v18_full\checkpoints\best.pt `
   --data D:\DataAI\AIEx\image_baseline_experiments\data\cls_crops_grouped_seqsafe_w3\data.yaml `
   --class-name-mode raw --expected-num-classes 5 --split test `
-  --output-dir runs\mango_cls_224_clscrops_grouped_ldam_sam_xaiv2_v16\xai_audit_test_v2 `
-  --max-cases 32 --mistake-cases 12 --low-confidence-cases 8 --close-margin-cases 8 `
+  --output-dir runs\mango_cls_224_clscrops_grouped_fgpool_midprior_norepeat_v18_full\xai_audit_test_v2 `
+  --max-cases 56 --mistake-cases 24 --low-confidence-cases 8 --close-margin-cases 12 `
   --per-class-cases 2 --batch-size 64 --num-workers 4 `
-  --method all --feature-source stem_last --query-tokens cls_register_mean --rollout-start-layer 1 `
-  --robustness-probes --top-k 5
+  --method all --feature-source stem_last --query-tokens cls --rollout-start-layer 1 `
+  --robustness-probes --review-high-confidence 0.45 `
+  --review-background-threshold 0.12 --review-border-threshold 0.25 `
+  --shortcut-drop-threshold 0.15 --top-k 5
 ```
 
-The attention heatmap defaults to `cls_register_mean` because the classifier head also pools CLS plus register tokens. `--method all --feature-source stem_last --robustness-probes` exports raw attention, attention rollout, gradient-weighted rollout, CNN-stem Grad-CAM, register diagnostics, robustness probes, `xai_metrics.json`, and `review_manifest.csv`.
+The v18 attention heatmap uses `--query-tokens cls` because the classifier head pools CLS while register tokens act as context/sink tokens. `--method all --feature-source stem_last --robustness-probes` exports raw attention, attention rollout, gradient-weighted rollout, CNN-stem Grad-CAM, register diagnostics, robustness probes, `xai_metrics.json`, and `review_manifest.csv`.
 
 ## Build Grouped Split
 

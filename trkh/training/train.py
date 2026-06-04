@@ -195,6 +195,16 @@ def parse_args() -> argparse.Namespace:
         help="Them nhanh global pooled CNN stem vao logits phan loai; mac dinh tat de giu hanh vi cu.",
     )
     parser.add_argument("--cnn-fusion-dropout", type=float, default=0.1)
+    parser.add_argument(
+        "--fine-grained-pooling",
+        action="store_true",
+        default=False,
+        help=(
+            "Them attention pooling tren patch tokens cho classification-only fine-grained; "
+            "mac dinh tat va khoi tao residual-zero."
+        ),
+    )
+    parser.add_argument("--fine-grained-pooling-dropout", type=float, default=0.1)
     parser.add_argument("--embed-dim", type=int, default=256)
     parser.add_argument("--depth", type=int, default=8)
     parser.add_argument("--num-heads", type=int, default=8)
@@ -653,6 +663,8 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         raise ValueError("--train-image-cache-mb/--eval-image-cache-mb phai >= -1.")
     if args.cnn_fusion_dropout < 0.0:
         raise ValueError("--cnn-fusion-dropout phai >= 0.")
+    if args.fine_grained_pooling_dropout < 0.0:
+        raise ValueError("--fine-grained-pooling-dropout phai >= 0.")
     if args.sam_rho < 0.0:
         raise ValueError("--sam-rho phai >= 0.")
     if args.ldam_max_margin < 0.0:
@@ -817,6 +829,8 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         stem_channels=args.stem_channels,
         cnn_feature_fusion=bool(args.cnn_feature_fusion),
         cnn_fusion_dropout=args.cnn_fusion_dropout,
+        fine_grained_pooling=bool(args.fine_grained_pooling),
+        fine_grained_pooling_dropout=args.fine_grained_pooling_dropout,
         embed_dim=args.embed_dim,
         depth=args.depth,
         num_heads=args.num_heads,

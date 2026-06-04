@@ -220,6 +220,45 @@ class DetectionCalibrationTests(unittest.TestCase):
         with torch.no_grad():
             self.assertTrue(torch.allclose(base(images), fusion(images), atol=1e-6))
 
+    def test_fine_grained_pooling_can_extend_existing_vit_checkpoint(self):
+        base = create_model(
+            num_classes=3,
+            model_config=ModelConfig(
+                model_type="vit_registers",
+                image_size=64,
+                patch_size=16,
+                stem_channels=8,
+                embed_dim=32,
+                depth=1,
+                num_heads=4,
+                num_registers=2,
+            ),
+        )
+        fine_grained = create_model(
+            num_classes=3,
+            model_config=ModelConfig(
+                model_type="vit_registers",
+                image_size=64,
+                patch_size=16,
+                stem_channels=8,
+                embed_dim=32,
+                depth=1,
+                num_heads=4,
+                num_registers=2,
+                fine_grained_pooling=True,
+                fine_grained_pooling_dropout=0.0,
+            ),
+        )
+        missing, unexpected = fine_grained.load_flexible_state_dict(base.state_dict(), strict=False)
+        self.assertFalse(unexpected)
+        self.assertTrue(any(str(key).startswith("fine_grained_pool.") for key in missing))
+
+        base.eval()
+        fine_grained.eval()
+        images = torch.randn(2, 3, 64, 64)
+        with torch.no_grad():
+            self.assertTrue(torch.allclose(base(images), fine_grained(images), atol=1e-6))
+
     def test_classification_dataset_target_feeds_vit_registers_loss(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

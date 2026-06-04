@@ -133,6 +133,8 @@ class ModelConfig:
     stem_channels: int = 32
     cnn_feature_fusion: bool = False
     cnn_fusion_dropout: float = 0.1
+    fine_grained_pooling: bool = False
+    fine_grained_pooling_dropout: float = 0.1
     embed_dim: int = 256
     depth: int = 8
     num_heads: int = 8
