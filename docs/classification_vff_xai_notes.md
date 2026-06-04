@@ -61,7 +61,7 @@ Da them co:
 - `--metric-learning-temperature`
 
 Khuyen nghi v12: xem `README.md`, run name `mango_cls_224_clscrops_vffsupcon_xai_v12`.
-Khuyen nghi hien tai: xem `README.md`, run name `mango_cls_224_clscrops_vffsupcon_fgcap_v14_regfair`.
+Khuyen nghi hien tai: xem `README.md`, run name `mango_cls_224_clscrops_grouped_lossaware_v15`.
 
 ## Ket qua v13 full va chan doan moi
 
@@ -124,6 +124,41 @@ Cac thay doi cau hinh v14:
 - Tang fairness selector: `fair-f1-gap-penalty=1.8`, `fair-f1-min-weight=0.50`.
 - Tang rare-class exposure dong o muc vua phai: cap `2.0`, khong quay lai muc raw `2.63` de tranh precision sap.
 - Tang nhe metric learning va foreground consistency, nhung van khong dung pretrain hay du lieu ngoai.
+
+## Ket qua v14 grouped va dieu chinh v15
+
+Run `runs/mango_cls_224_clscrops_vffsupcon_fgcap_v14_regfair` da bi dung tai epoch `32`.
+
+- Dataset: `cls_crops_grouped_seqsafe_w3`, khong dung pretrain va khong them du lieu.
+- Best theo `fair_macro_f1`: epoch `29`.
+- Best validation macro F1 ghi trong summary: `0.682289`.
+- Checkpoint best epoch `29`: validation macro F1 `0.656542`, class 1 F1 `0.263852`, val loss `1.251230`.
+- Final test: accuracy `0.734985`, macro F1 `0.645249`, class 1 F1 `0.162679`, val/test loss van cao.
+- XAI audit test: attention foreground mass `0.9747`, rollout foreground mass `0.9670`, Grad-CAM foreground mass `0.8755`; van con border/background signal nhe nhung khong phai loi chinh.
+- Top confusion test cua XAI: true `3` -> pred `2`, true `0` -> pred `1`, true `1` -> pred `2`.
+
+Chan doan:
+
+- Split grouped/sequence-safe kho hon raw `cls_crops` nen diem giam la hop ly, khong nen so truc tiep voi v11/v13 raw split.
+- `fair_macro_f1` v14 qua gat voi class gap va min-class, nen co the chon epoch muon co `val_loss` xau.
+- Class 1 dang bi over-correction: nhieu mau class 0 bi day sang class 1 voi confidence cao. Vi vay khong nen tiep tuc tang repeat/recall guard cho rare class.
+- `train_loss` giam trong khi `val_loss` tang ve sau, nen can checkpoint selector co penalty theo `val_loss` va giam cac loss phu gay co cum qua manh.
+
+Da them trong code:
+
+- `--best-metric loss_aware_fair_macro_f1`.
+- `--fair-f1-loss-weight`.
+- Selector moi: `macro_f1 + min_weight * min_class_f1 - gap_penalty * max(0, gap - gap_target) - loss_weight * val_loss`.
+
+Huong v15:
+
+- Dung `loss_aware_fair_macro_f1` de tranh chon checkpoint overfit.
+- De xuat hien tai: `fair_f1_loss_weight=0.10`; tren history v14 no chon epoch `13` thay vi epoch `29`, trong khi khong qua nang ve epoch rat som.
+- Giam rare-class repeat/class-aware cap tu `2.0` xuong `1.6`.
+- Tat `rare_class_recall_guard` trong lenh khuyen nghi vi no dang day class 1 qua manh khi precision thap.
+- Giam Balanced Softmax tau tu `0.70` xuong `0.45`.
+- Giam SupCon tu `0.012` xuong `0.006` va foreground consistency tu `0.025` xuong `0.015`.
+- Giu augmentation hinh hoc nhe, khong bat brightness/contrast/saturation/hue/cutmix/mosaic/copy-paste cho nhanh classification-only.
 
 ## Huong XAI da tich hop
 

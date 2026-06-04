@@ -473,6 +473,7 @@ def parse_args() -> argparse.Namespace:
             "macro_f1",
             "balanced_macro_f1",
             "fair_macro_f1",
+            "loss_aware_fair_macro_f1",
             "val_loss",
             "detection_f1",
             "macro_detection_hmean",
@@ -482,6 +483,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--fair-f1-gap-target", type=float, default=0.05)
     parser.add_argument("--fair-f1-gap-penalty", type=float, default=1.5)
     parser.add_argument("--fair-f1-min-weight", type=float, default=0.25)
+    parser.add_argument(
+        "--fair-f1-loss-weight",
+        type=float,
+        default=0.0,
+        help="Trong loss_aware_fair_macro_f1, tru bot val_loss * weight de tranh chon checkpoint overfit.",
+    )
     parser.add_argument("--cls-loss-weight", type=float, default=1.0)
     parser.add_argument("--disable-classification-overfit-guard", action="store_true", default=False)
     parser.add_argument("--classification-guard-macro-f1-threshold", type=float, default=0.985)
@@ -684,6 +691,8 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         raise ValueError("--fair-f1-gap-penalty phai >= 0.")
     if args.fair_f1_min_weight < 0.0:
         raise ValueError("--fair-f1-min-weight phai >= 0.")
+    if args.fair_f1_loss_weight < 0.0:
+        raise ValueError("--fair-f1-loss-weight phai >= 0.")
     if args.cls_loss_weight < 0.0 or args.bbox_l1_loss_weight < 0.0 or args.bbox_giou_loss_weight < 0.0:
         raise ValueError("Loss weights phai >= 0.")
     if args.stage1_epochs < 0:
@@ -895,6 +904,7 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         fair_f1_gap_target=args.fair_f1_gap_target,
         fair_f1_gap_penalty=args.fair_f1_gap_penalty,
         fair_f1_min_weight=args.fair_f1_min_weight,
+        fair_f1_loss_weight=args.fair_f1_loss_weight,
         batch_mix_probability=args.batch_mix_probability,
         mosaic_probability=args.mosaic_probability,
         mosaic_min_split=args.mosaic_min_split,
@@ -1876,7 +1886,7 @@ def _resolve_checkpoint_selection(
     metrics: Dict[str, object],
 ) -> Tuple[str, float, bool]:
     best_metric = str(train_config.best_metric).strip().lower()
-    if best_metric in {"balanced_macro_f1", "fair_macro_f1"}:
+    if best_metric in {"balanced_macro_f1", "fair_macro_f1", "loss_aware_fair_macro_f1"}:
         macro_f1 = float(metrics["macro_f1"])
         per_class = metrics.get("per_class", [])
         class_f1_values = [
@@ -1885,7 +1895,7 @@ def _resolve_checkpoint_selection(
             if isinstance(item, dict) and item.get("f1") is not None
         ] if isinstance(per_class, list) else []
         class_gap = (max(class_f1_values) - min(class_f1_values)) if class_f1_values else 0.0
-        if best_metric == "fair_macro_f1":
+        if best_metric in {"fair_macro_f1", "loss_aware_fair_macro_f1"}:
             min_class_f1 = min(class_f1_values) if class_f1_values else macro_f1
             score = (
                 macro_f1
@@ -1893,6 +1903,9 @@ def _resolve_checkpoint_selection(
                 - float(train_config.fair_f1_gap_penalty)
                 * max(0.0, class_gap - float(train_config.fair_f1_gap_target))
             )
+            if best_metric == "loss_aware_fair_macro_f1":
+                score -= float(train_config.fair_f1_loss_weight) * float(metrics.get("loss", 0.0) or 0.0)
+                return "loss_aware_fair_macro_f1_min_class_gap_loss_penalty", score, True
             return "fair_macro_f1_min_class_gap_penalty", score, True
         score = macro_f1 - 0.75 * max(0.0, class_gap - 0.05)
         return "balanced_macro_f1_gap_penalty", score, True

@@ -324,6 +324,52 @@ class DetectionCalibrationTests(unittest.TestCase):
         self.assertTrue(higher_is_better)
         self.assertLess(score, 0.92)
 
+    def test_loss_aware_fair_macro_f1_penalizes_overfit_checkpoint(self):
+        train_config = TrainConfig(
+            best_metric="loss_aware_fair_macro_f1",
+            fair_f1_gap_target=0.35,
+            fair_f1_gap_penalty=0.35,
+            fair_f1_min_weight=0.20,
+            fair_f1_loss_weight=0.20,
+        )
+        model_config = ModelConfig(model_type="vit_registers")
+        stable_name, stable_score, stable_higher = _resolve_checkpoint_selection(
+            model_config=model_config,
+            train_config=train_config,
+            metrics={
+                "macro_f1": 0.682,
+                "loss": 0.715,
+                "per_class": [
+                    {"class_index": 0, "f1": 0.80},
+                    {"class_index": 1, "f1": 0.19},
+                    {"class_index": 2, "f1": 0.76},
+                    {"class_index": 3, "f1": 0.82},
+                    {"class_index": 4, "f1": 0.84},
+                ],
+            },
+        )
+        overfit_name, overfit_score, overfit_higher = _resolve_checkpoint_selection(
+            model_config=model_config,
+            train_config=train_config,
+            metrics={
+                "macro_f1": 0.657,
+                "loss": 1.251,
+                "per_class": [
+                    {"class_index": 0, "f1": 0.79},
+                    {"class_index": 1, "f1": 0.26},
+                    {"class_index": 2, "f1": 0.74},
+                    {"class_index": 3, "f1": 0.71},
+                    {"class_index": 4, "f1": 0.77},
+                ],
+            },
+        )
+
+        self.assertEqual(stable_name, "loss_aware_fair_macro_f1_min_class_gap_loss_penalty")
+        self.assertEqual(overfit_name, stable_name)
+        self.assertTrue(stable_higher)
+        self.assertTrue(overfit_higher)
+        self.assertGreater(stable_score, overfit_score)
+
     def test_supervised_contrastive_loss_is_finite_with_positive_pairs(self):
         criterion = SupervisedContrastiveLoss(temperature=0.2)
         embeddings = torch.tensor(

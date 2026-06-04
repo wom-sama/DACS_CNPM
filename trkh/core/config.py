@@ -220,6 +220,7 @@ class TrainConfig:
     fair_f1_gap_target: float = 0.05
     fair_f1_gap_penalty: float = 1.5
     fair_f1_min_weight: float = 0.25
+    fair_f1_loss_weight: float = 0.0
     use_sam: bool = False
     sam_rho: float = 0.05
     sam_adaptive: bool = False
