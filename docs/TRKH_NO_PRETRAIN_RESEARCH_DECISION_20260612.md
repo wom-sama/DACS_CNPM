@@ -110,6 +110,7 @@ Audit trong `history.csv`:
 - `train_attention_view_fraction`
 - `train_attention_crop_fraction`
 - `train_attention_drop_fraction`
+- `train_attention_drop_area_fraction`
 
 ## Cau hinh thu dau tien
 
@@ -125,7 +126,14 @@ Audit trong `history.csv`:
 --attention-crop-min-area-ratio 0.25
 --attention-view-foreground-weight 0.40
 --attention-drop-blur-kernel 15
+--attention-drop-dilation-kernel 5
+--attention-drop-min-area-ratio 0.06
+--attention-drop-max-area-ratio 0.16
 ```
+
+Smoke audit cho thay threshold-only drop chi blur `0.78%-2.19%` dien tich.
+Bounded drop dam bao khoang cau hinh, de attention dropping tao du ap luc hoc
+cue phu ma khong che qua nhieu anh mot phan.
 
 Chi phi forward ky vong khoang `1.6x` neu view fraction dat `0.60`, thap hon
 WS-DAN goc `3x`. Smoke phai kiem tra GPU utilization, batch time, view fraction

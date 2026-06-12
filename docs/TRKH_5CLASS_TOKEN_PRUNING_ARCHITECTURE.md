@@ -218,3 +218,37 @@ Architecture trace sau train co them:
 - `01b_illumination_normalized.png`;
 - `01c_foreground_mask_overlay.png`;
 - `foreground_mask_fraction` trong `shapes.json`.
+
+## V8 Attention-Guided Views (2026-06-12)
+
+V8 tai su dung attention cua fine-grained patch pooling sau token pruning. Patch
+score duoc scatter ve grid goc bang `patch_indices`, tron voi foreground prior,
+roi noi suy thanh score map cung kich thuoc anh.
+
+Nhanh crop:
+
+- input: anh `[B, 3, H, W]` va score map `[B, 1, H, W]`;
+- lay bounding box cua vung score vuot threshold;
+- them padding va dam bao dien tich crop toi thieu;
+- resize ve `[B_selected, 3, H, W]`.
+
+Nhanh drop:
+
+- lay vung attention cao, dilation va gioi han dien tich trong khoang cau hinh;
+- mac dinh blur `6%-16%` dien tich thay vi xoa bang mau hang;
+- buoc model giu dung class khi cue chinh hoac cue nen dang duoc su dung bi lam mo.
+
+Moi sample chi co toi da mot view phu. Raw batch van di qua nhanh chinh; cac view
+duoc chon gom lai thanh mot batch nho va forward them mot lan. Loss ket hop:
+
+`total_loss += attention_view_loss_weight * CE(attention_view, label)`
+
+Co warm-up theo epoch; full v8 bat tu epoch 2. Architecture trace tu dong them:
+
+- `06_attention_view_score.png`;
+- `07_attention_crop.png`;
+- `08_attention_drop.png`;
+- `attention_drop_area_fraction` trong `shapes.json`.
+
+History ghi view/crop/drop sample fraction va dien tich drop thuc te. Chi phi
+forward ty le voi so sample duoc chon, khong co ba full forward nhu WS-DAN goc.

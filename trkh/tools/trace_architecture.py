@@ -8,6 +8,7 @@ from typing import Dict, List, Sequence, Tuple
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 from PIL import Image, ImageDraw
 
 from trkh.core.config import IMAGENET_MEAN, IMAGENET_STD, ModelConfig, load_data_spec, project_dir, to_serializable
@@ -18,7 +19,16 @@ from trkh.data.dataset import (
     _pseudo_foreground_mask_array,
     build_eval_transform,
 )
-from trkh.models.model import build_model_from_checkpoint, create_model
+from trkh.models.model import (
+    build_model_from_checkpoint,
+    classification_logits_from_features,
+    create_model,
+)
+from trkh.training.train import (
+    _attention_crop_single,
+    _attention_guided_score_map,
+    _bounded_attention_drop_mask,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -182,11 +192,15 @@ def main() -> None:
     checkpoint_path = Path(args.checkpoint).resolve() if args.checkpoint is not None else None
     checkpoint = None
     augmentation_config: Dict[str, object] = {}
+    train_config: Dict[str, object] = {}
     if checkpoint_path is not None:
         checkpoint = load_checkpoint(checkpoint_path, map_location="cpu")
         raw_augmentation_config = checkpoint.get("augmentation_config", {})
         if isinstance(raw_augmentation_config, dict):
             augmentation_config = raw_augmentation_config
+        raw_train_config = checkpoint.get("train_config", {})
+        if isinstance(raw_train_config, dict):
+            train_config = raw_train_config
 
     transform = build_eval_transform(
         image_size=int(args.image_size),
@@ -265,10 +279,56 @@ def main() -> None:
             illumination_image,
             margin=float(augmentation_config.get("background_suppression_margin", 0.08) or 0.08),
         )
+        model_input = tensor.unsqueeze(0).to(device)
         with torch.inference_mode():
             features = model.forward_features(
-                tensor.unsqueeze(0).to(device),
+                model_input,
                 return_trace=True,
+            )
+            classification_logits_from_features(model, features)
+            attention_score = _attention_guided_score_map(
+                images=model_input,
+                features=features,
+                foreground_weight=float(
+                    train_config.get("attention_view_foreground_weight", 0.40) or 0.40
+                ),
+            )
+            attention_crop = _attention_crop_single(
+                model_input[0],
+                attention_score[0],
+                threshold=float(train_config.get("attention_crop_threshold", 0.55) or 0.55),
+                padding_ratio=float(
+                    train_config.get("attention_crop_padding_ratio", 0.08) or 0.08
+                ),
+                min_area_ratio=float(
+                    train_config.get("attention_crop_min_area_ratio", 0.25) or 0.25
+                ),
+            )
+            blur_kernel = int(train_config.get("attention_drop_blur_kernel", 15) or 15)
+            blurred = F.avg_pool2d(
+                model_input,
+                kernel_size=blur_kernel,
+                stride=1,
+                padding=blur_kernel // 2,
+            )
+            attention_drop_mask = _bounded_attention_drop_mask(
+                attention_score,
+                threshold=float(
+                    train_config.get("attention_drop_threshold", 0.72) or 0.72
+                ),
+                dilation_kernel=int(
+                    train_config.get("attention_drop_dilation_kernel", 5) or 5
+                ),
+                min_area_ratio=float(
+                    train_config.get("attention_drop_min_area_ratio", 0.06) or 0.06
+                ),
+                max_area_ratio=float(
+                    train_config.get("attention_drop_max_area_ratio", 0.16) or 0.16
+                ),
+            ).to(dtype=model_input.dtype)
+            attention_drop = (
+                model_input * (1.0 - attention_drop_mask)
+                + blurred * attention_drop_mask
             )
         trace = features["trace"]
         grid_size = tuple(int(value) for value in features["grid_size"])
@@ -290,6 +350,11 @@ def main() -> None:
             _heatmap_image(detail_map[0, 0], input_image.size).save(class_dir / "04_detail_map.png")
         foreground_prior = trace["foreground_prior"][0].view(grid_size)
         _heatmap_image(foreground_prior, input_image.size).save(class_dir / "05_foreground_prior.png")
+        _heatmap_image(attention_score[0, 0], input_image.size).save(
+            class_dir / "06_attention_view_score.png"
+        )
+        _tensor_to_image(attention_crop).save(class_dir / "07_attention_crop.png")
+        _tensor_to_image(attention_drop[0]).save(class_dir / "08_attention_drop.png")
 
         block_shapes = trace["block_token_shapes"]
         block_indices = trace["block_patch_indices"]
@@ -321,6 +386,9 @@ def main() -> None:
             "label_from_dataset": int(label),
             "source_image": str(sample.image_path.resolve()),
             "foreground_mask_fraction": float(foreground_mask.mean()),
+            "attention_drop_area_fraction": float(
+                attention_drop_mask.float().mean().item()
+            ),
             "input_shape": _shape_list(trace["input_shape"]),
             "stem_shape": _shape_list(trace["stem_shape"]),
             "patch_embedding_shape": _shape_list(trace["patch_embedding_shape"]),
@@ -370,6 +438,9 @@ def main() -> None:
         "- `03_patch_embedding_norm.png`: norm patch token truoc transformer.",
         "- `04_detail_map.png`: local color/high-frequency/edge map.",
         "- `05_foreground_prior.png`: prior dung cung attention khi xep hang token.",
+        "- `06_attention_view_score.png`: score learned patch attention tron foreground prior.",
+        "- `07_attention_crop.png`: crop salient dung lam view phu khi train.",
+        "- `08_attention_drop.png`: vung salient bi blur de ep model tim dau hieu phu.",
         "- `block_XX_token_norm.png`: norm token sau tung transformer block; o da prune de trong.",
         "- `prune_XX_after_layer_Y.png`: patch xanh duoc giu, patch toi bi loai.",
         "- `shapes.json`: shape va patch index chi tiet.",

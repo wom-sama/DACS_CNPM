@@ -256,6 +256,9 @@ class TrainConfig:
     attention_crop_min_area_ratio: float = 0.20
     attention_view_foreground_weight: float = 0.35
     attention_drop_blur_kernel: int = 15
+    attention_drop_dilation_kernel: int = 5
+    attention_drop_min_area_ratio: float = 0.06
+    attention_drop_max_area_ratio: float = 0.16
     register_diversity_loss_weight: float = 0.0
     pairwise_margin_loss_weight: float = 0.0
     ordinal_maturity_loss_weight: float = 0.0

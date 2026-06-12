@@ -607,6 +607,24 @@ def parse_args() -> argparse.Namespace:
         help="Kernel le de blur vung salient trong attention-drop.",
     )
     parser.add_argument(
+        "--attention-drop-dilation-kernel",
+        type=int,
+        default=5,
+        help="Kernel le de noi rong vung salient truoc khi ap dung gioi han dien tich.",
+    )
+    parser.add_argument(
+        "--attention-drop-min-area-ratio",
+        type=float,
+        default=0.06,
+        help="Ty le dien tich anh toi thieu bi blur trong mot attention-drop view.",
+    )
+    parser.add_argument(
+        "--attention-drop-max-area-ratio",
+        type=float,
+        default=0.16,
+        help="Ty le dien tich anh toi da bi blur trong mot attention-drop view.",
+    )
+    parser.add_argument(
         "--register-diversity-loss-weight",
         type=float,
         default=0.0,
@@ -995,6 +1013,19 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         raise ValueError("--attention-view-foreground-weight phai nam trong [0, 1].")
     if args.attention_drop_blur_kernel < 1 or args.attention_drop_blur_kernel % 2 == 0:
         raise ValueError("--attention-drop-blur-kernel phai la so le >= 1.")
+    if (
+        args.attention_drop_dilation_kernel < 1
+        or args.attention_drop_dilation_kernel % 2 == 0
+    ):
+        raise ValueError("--attention-drop-dilation-kernel phai la so le >= 1.")
+    if not 0.0 < args.attention_drop_min_area_ratio <= 1.0:
+        raise ValueError("--attention-drop-min-area-ratio phai nam trong (0, 1].")
+    if not 0.0 < args.attention_drop_max_area_ratio <= 1.0:
+        raise ValueError("--attention-drop-max-area-ratio phai nam trong (0, 1].")
+    if args.attention_drop_min_area_ratio > args.attention_drop_max_area_ratio:
+        raise ValueError(
+            "--attention-drop-min-area-ratio phai <= --attention-drop-max-area-ratio."
+        )
     if args.sam and args.attention_view_loss_weight > 0.0:
         raise ValueError(
             "Attention-guided views chua ho tro SAM vi hai SAM forward can cung view."
@@ -1323,6 +1354,9 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         attention_crop_min_area_ratio=args.attention_crop_min_area_ratio,
         attention_view_foreground_weight=args.attention_view_foreground_weight,
         attention_drop_blur_kernel=args.attention_drop_blur_kernel,
+        attention_drop_dilation_kernel=args.attention_drop_dilation_kernel,
+        attention_drop_min_area_ratio=args.attention_drop_min_area_ratio,
+        attention_drop_max_area_ratio=args.attention_drop_max_area_ratio,
         register_diversity_loss_weight=args.register_diversity_loss_weight,
         pairwise_margin_loss_weight=args.pairwise_margin_loss_weight,
         ordinal_maturity_loss_weight=args.ordinal_maturity_loss_weight,
@@ -2798,6 +2832,60 @@ def _attention_crop_single(
     ).squeeze(0)
 
 
+def _bounded_attention_drop_mask(
+    score_map: Tensor,
+    *,
+    threshold: float,
+    dilation_kernel: int,
+    min_area_ratio: float,
+    max_area_ratio: float,
+) -> Tensor:
+    if score_map.ndim != 4 or score_map.size(1) != 1:
+        raise ValueError("score_map cho attention drop phai co shape [B, 1, H, W].")
+
+    batch_size = int(score_map.size(0))
+    flat_scores = score_map.detach().float().flatten(1)
+    pixel_count = int(flat_scores.size(1))
+    if batch_size == 0 or pixel_count == 0:
+        return torch.zeros_like(score_map)
+
+    min_count = max(1, int(math.ceil(pixel_count * float(min_area_ratio))))
+    max_count = max(min_count, int(math.floor(pixel_count * float(max_area_ratio))))
+    max_count = min(pixel_count, max_count)
+    cutoffs = (
+        float(threshold)
+        * flat_scores.amax(dim=1, keepdim=True)
+    )
+    masks = (flat_scores >= cutoffs).view_as(score_map)
+
+    dilation_kernel = max(1, int(dilation_kernel))
+    if dilation_kernel > 1:
+        masks = F.max_pool2d(
+            masks.to(dtype=score_map.dtype),
+            kernel_size=dilation_kernel,
+            stride=1,
+            padding=dilation_kernel // 2,
+        ) > 0
+
+    bounded_masks: List[Tensor] = []
+    for sample_index in range(batch_size):
+        sample_mask = masks[sample_index].flatten()
+        selected_count = int(sample_mask.sum().item())
+        if selected_count < min_count or selected_count > max_count:
+            target_count = min_count if selected_count < min_count else max_count
+            top_indices = torch.topk(
+                flat_scores[sample_index],
+                k=target_count,
+                largest=True,
+                sorted=False,
+            ).indices
+            sample_mask = torch.zeros_like(sample_mask, dtype=torch.bool)
+            sample_mask.scatter_(0, top_indices, True)
+        bounded_masks.append(sample_mask.view(1, score_map.size(-2), score_map.size(-1)))
+
+    return torch.stack(bounded_masks, dim=0).to(dtype=score_map.dtype)
+
+
 def _build_attention_guided_views(
     *,
     images: Tensor,
@@ -2810,6 +2898,9 @@ def _build_attention_guided_views(
     crop_min_area_ratio: float,
     foreground_weight: float,
     drop_blur_kernel: int,
+    drop_dilation_kernel: int = 5,
+    drop_min_area_ratio: float = 0.06,
+    drop_max_area_ratio: float = 0.16,
 ) -> Tuple[Optional[Tensor], Tensor, Dict[str, float]]:
     batch_size = int(images.size(0))
     empty_indices = torch.zeros((0,), device=images.device, dtype=torch.long)
@@ -2818,6 +2909,7 @@ def _build_attention_guided_views(
             "attention_view_fraction": 0.0,
             "attention_crop_fraction": 0.0,
             "attention_drop_fraction": 0.0,
+            "attention_drop_area_fraction": 0.0,
         }
 
     with torch.no_grad():
@@ -2839,6 +2931,7 @@ def _build_attention_guided_views(
                 "attention_view_fraction": 0.0,
                 "attention_crop_fraction": 0.0,
                 "attention_drop_fraction": 0.0,
+                "attention_drop_area_fraction": 0.0,
             }
 
         blur_kernel = max(1, int(drop_blur_kernel))
@@ -2849,6 +2942,7 @@ def _build_attention_guided_views(
             padding=blur_kernel // 2,
         )
         views: List[Tensor] = []
+        drop_area_fractions: List[float] = []
         for sample_index in selected_indices.tolist():
             if bool(crop_mask[sample_index].item()):
                 view = _attention_crop_single(
@@ -2860,9 +2954,14 @@ def _build_attention_guided_views(
                 )
             else:
                 score = score_maps[sample_index : sample_index + 1]
-                cutoff = float(drop_threshold) * float(score.max().item())
-                salient = (score >= cutoff).to(dtype=images.dtype)
-                salient = F.max_pool2d(salient, kernel_size=5, stride=1, padding=2)
+                salient = _bounded_attention_drop_mask(
+                    score,
+                    threshold=drop_threshold,
+                    dilation_kernel=drop_dilation_kernel,
+                    min_area_ratio=drop_min_area_ratio,
+                    max_area_ratio=drop_max_area_ratio,
+                ).to(dtype=images.dtype)
+                drop_area_fractions.append(float(salient.float().mean().item()))
                 view = (
                     images[sample_index : sample_index + 1] * (1.0 - salient)
                     + blurred[sample_index : sample_index + 1] * salient
@@ -2873,6 +2972,11 @@ def _build_attention_guided_views(
             "attention_view_fraction": float(selected.float().mean().item()),
             "attention_crop_fraction": float(crop_mask.float().mean().item()),
             "attention_drop_fraction": float(drop_mask.float().mean().item()),
+            "attention_drop_area_fraction": (
+                float(sum(drop_area_fractions) / len(drop_area_fractions))
+                if drop_area_fractions
+                else 0.0
+            ),
         }
 
 
@@ -3225,6 +3329,9 @@ def _forward_train_loss(
     attention_crop_min_area_ratio: float = 0.20,
     attention_view_foreground_weight: float = 0.35,
     attention_drop_blur_kernel: int = 15,
+    attention_drop_dilation_kernel: int = 5,
+    attention_drop_min_area_ratio: float = 0.06,
+    attention_drop_max_area_ratio: float = 0.16,
     epoch_index: int = 0,
     register_diversity_loss_weight: float = 0.0,
     pairwise_margin_loss_weight: float = 0.0,
@@ -3252,6 +3359,7 @@ def _forward_train_loss(
                 "attention_view_fraction": 0.0,
                 "attention_crop_fraction": 0.0,
                 "attention_drop_fraction": 0.0,
+                "attention_drop_area_fraction": 0.0,
             }
             register_diversity_loss = logits.sum() * 0.0
             pairwise_margin_loss = logits.sum() * 0.0
@@ -3297,6 +3405,9 @@ def _forward_train_loss(
                         crop_min_area_ratio=attention_crop_min_area_ratio,
                         foreground_weight=attention_view_foreground_weight,
                         drop_blur_kernel=attention_drop_blur_kernel,
+                        drop_dilation_kernel=attention_drop_dilation_kernel,
+                        drop_min_area_ratio=attention_drop_min_area_ratio,
+                        drop_max_area_ratio=attention_drop_max_area_ratio,
                     )
                 )
                 if attention_views is not None and selected_indices.numel() > 0:
@@ -3555,6 +3666,9 @@ def train_one_epoch(
     attention_crop_min_area_ratio: float = 0.20,
     attention_view_foreground_weight: float = 0.35,
     attention_drop_blur_kernel: int = 15,
+    attention_drop_dilation_kernel: int = 5,
+    attention_drop_min_area_ratio: float = 0.06,
+    attention_drop_max_area_ratio: float = 0.16,
     register_diversity_loss_weight: float = 0.0,
     pairwise_margin_loss_weight: float = 0.0,
     ordinal_maturity_loss_weight: float = 0.0,
@@ -3594,6 +3708,7 @@ def train_one_epoch(
         "attention_view_fraction": 0.0,
         "attention_crop_fraction": 0.0,
         "attention_drop_fraction": 0.0,
+        "attention_drop_area_fraction": 0.0,
         "register_diversity_loss": 0.0,
         "pairwise_margin_loss": 0.0,
         "ordinal_maturity_loss": 0.0,
@@ -3673,6 +3788,9 @@ def train_one_epoch(
                 attention_crop_min_area_ratio=attention_crop_min_area_ratio,
                 attention_view_foreground_weight=attention_view_foreground_weight,
                 attention_drop_blur_kernel=attention_drop_blur_kernel,
+                attention_drop_dilation_kernel=attention_drop_dilation_kernel,
+                attention_drop_min_area_ratio=attention_drop_min_area_ratio,
+                attention_drop_max_area_ratio=attention_drop_max_area_ratio,
                 epoch_index=epoch_index,
                 register_diversity_loss_weight=register_diversity_loss_weight,
                 pairwise_margin_loss_weight=pairwise_margin_loss_weight,
@@ -3795,6 +3913,9 @@ def train_one_epoch(
                             attention_crop_min_area_ratio=attention_crop_min_area_ratio,
                             attention_view_foreground_weight=attention_view_foreground_weight,
                             attention_drop_blur_kernel=attention_drop_blur_kernel,
+                            attention_drop_dilation_kernel=attention_drop_dilation_kernel,
+                            attention_drop_min_area_ratio=attention_drop_min_area_ratio,
+                            attention_drop_max_area_ratio=attention_drop_max_area_ratio,
                             epoch_index=epoch_index,
                             register_diversity_loss_weight=register_diversity_loss_weight,
                             pairwise_margin_loss_weight=pairwise_margin_loss_weight,
@@ -5652,6 +5773,9 @@ def main() -> None:
                     attention_crop_min_area_ratio=train_config.attention_crop_min_area_ratio,
                     attention_view_foreground_weight=train_config.attention_view_foreground_weight,
                     attention_drop_blur_kernel=train_config.attention_drop_blur_kernel,
+                    attention_drop_dilation_kernel=train_config.attention_drop_dilation_kernel,
+                    attention_drop_min_area_ratio=train_config.attention_drop_min_area_ratio,
+                    attention_drop_max_area_ratio=train_config.attention_drop_max_area_ratio,
                     register_diversity_loss_weight=train_config.register_diversity_loss_weight,
                     pairwise_margin_loss_weight=train_config.pairwise_margin_loss_weight,
                     ordinal_maturity_loss_weight=train_config.ordinal_maturity_loss_weight,
@@ -5782,6 +5906,10 @@ def main() -> None:
                     ),
                     "train_attention_drop_fraction": train_artifact_stats.get(
                         "attention_drop_fraction",
+                        0.0,
+                    ),
+                    "train_attention_drop_area_fraction": train_artifact_stats.get(
+                        "attention_drop_area_fraction",
                         0.0,
                     ),
                     "train_register_diversity_loss": train_artifact_stats.get(
@@ -6180,6 +6308,7 @@ def main() -> None:
                         "train_attention_view_fraction",
                         "train_attention_crop_fraction",
                         "train_attention_drop_fraction",
+                        "train_attention_drop_area_fraction",
                         "train_register_diversity_loss",
                         "train_pairwise_margin_loss",
                         "train_ordinal_maturity_loss",

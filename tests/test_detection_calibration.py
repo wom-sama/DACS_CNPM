@@ -93,6 +93,7 @@ from trkh.training.train import (
     _resolve_detection_stage,
     _save_interrupt_checkpoint,
     _build_attention_guided_views,
+    _bounded_attention_drop_mask,
     _forward_train_loss,
     _foreground_consistency_loss_from_features,
     _metric_learning_loss_from_features,
@@ -629,6 +630,25 @@ class DetectionCalibrationTests(unittest.TestCase):
         self.assertEqual(drop_stats["attention_drop_fraction"], 1.0)
         self.assertFalse(torch.allclose(crop_views, images))
         self.assertFalse(torch.allclose(drop_views, images))
+        self.assertGreaterEqual(drop_stats["attention_drop_area_fraction"], 0.06)
+        self.assertLessEqual(drop_stats["attention_drop_area_fraction"], 0.16)
+
+    def test_attention_drop_mask_enforces_area_bounds(self):
+        score = torch.zeros(2, 1, 20, 20)
+        score[0, 0, 10, 10] = 1.0
+        score[1, 0] = 1.0
+
+        mask = _bounded_attention_drop_mask(
+            score,
+            threshold=0.70,
+            dilation_kernel=5,
+            min_area_ratio=0.06,
+            max_area_ratio=0.16,
+        )
+        fractions = mask.float().flatten(1).mean(dim=1)
+
+        self.assertTrue(torch.all(fractions >= 0.06))
+        self.assertTrue(torch.all(fractions <= 0.16))
 
     def test_attention_view_loss_is_finite_and_backpropagates(self):
         model = create_model(

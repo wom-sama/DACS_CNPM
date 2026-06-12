@@ -74,14 +74,22 @@
 - [x] Them history audit cho attention view loss va crop/drop fraction.
 - [x] Compile va 12 unit/regression test attention/token/foreground/pairwise/ordinal pass.
 - [x] Ghi context recovery tai `docs/TRKH_CONTEXT_CHECKPOINT_20260612.md`.
+- [x] Them bounded attention dropping voi dien tich cau hinh `6%-16%`.
+- [x] Ghi `train_attention_drop_area_fraction` va dung train config trong architecture trace.
+- [x] Chay full test suite sau bounded drop: `101 passed`.
+- [x] Chay preflight attention v8 voi batch `32`, grad accumulation `2`, workers `4/2`.
+- [x] Chay smoke 10 train/4 val batch; exit code `0`, peak reserved VRAM `5136 MiB`.
+- [x] Theo doi GPU moi giay: train sau warm-up dat `74%-91%`, khong co deadlock.
+- [x] Xuat score/crop/drop 1 mau moi class tai smoke v8 architecture trace.
+- [x] Ghi audit tai `docs/TRKH_5CLASS_ATTENTION_V8_SMOKE_AUDIT_20260612.md`.
 
 ## Can tiep tuc
 
 - [x] Chay full test suite: `100 passed` voi pytest 8.4.2.
 - [x] Them `pytest==8.4.2` vao requirements de moi truong moi chay duoc test suite.
-- [ ] Chay preflight dataset/config/leak cho attention-view run.
-- [ ] Chay smoke attention crop/drop gioi han 1-2 train/val batch.
-- [ ] Xuat anh audit original/score-map/crop/drop cho 1 mau moi class.
+- [x] Chay preflight dataset/config/leak cho attention-view run.
+- [x] Chay smoke attention crop/drop gioi han va smoke throughput 10 batch.
+- [x] Xuat anh audit original/score-map/crop/drop cho 1 mau moi class.
 - [ ] Chi chay full 30 epoch neu smoke throughput/GPU utilization on dinh; patience `3`.
 - [ ] Sau full run, xuat class-1 confusion va XAI/background audit roi so sanh v4/top-5 TTA.
 - [ ] Neu attention-view khong vuot v4, audit nhan train-only va thu ELR warm-up; khong bat ELR tren test.
