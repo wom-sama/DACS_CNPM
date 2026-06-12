@@ -114,7 +114,15 @@
 - [x] Chay probe v10 120 train batch x 4 epoch, full val: best val macro F1 `0.8862`, class 1 F1 `0.6784`; test macro F1 `0.8923`, class 1 F1 `0.6792`.
 - [x] Khong full-train v10 vi chua dat gate class-1 val F1 `>=0.70`; ghi audit tai `docs/TRKH_5CLASS_ELR_V10_AUDIT_20260612.md`.
 - [x] Xuat v10 test detailed predictions va class-1 confusion audit tai `runs/probe_mango_cls_256_5class_surface_detail_elr_v10_120b_6e_20260612/class1_confusion_audit_test`.
-- [ ] Huong tiep theo co do dot pha hon: label-boundary audit train-only, boundary-aware loss/sample weighting, hoac local surface/color pair comparator cho bien `0/1`, `1/2`, `2/3`.
+- [x] Them train-only boundary sample weighting v11 voi `SampleWeightDataset`, per-sample loss va launcher `scripts/run_trkh_5class_boundary_weight_v11.ps1`.
+- [x] Tao manifest v11 tu train-only predictions: `459` weighted samples, `skipped_non_train_rows=0`, pairs `0-1=233`, `1-2=70`, `2-3=98`, `4-rest=58`.
+- [x] Chay probe v11 120 train batch x 4 epoch, full val: best val macro F1 `0.8856`, class 1 F1 `0.6745`; test macro F1 `0.8923`, class 1 F1 `0.6792`; reject full train.
+- [x] Them in-batch boundary contrastive v12 voi max-pairs gioi han, khong tao offline pair dataset; flags `--boundary-contrastive-*`.
+- [x] Chay smoke v12: `train_boundary_contrastive_loss=0.8235`, `terms=143.0`, trace completed.
+- [x] Chay probe v12 120 train batch x 6 epoch, full val: best val macro F1 `0.8866`, class 1 F1 `0.6864`; test macro F1 `0.8943`, class 1 F1 `0.6879`; reject full train vi chua qua gate `0.70`.
+- [x] Xuat v12 test detailed predictions va class-1 confusion audit tai `runs/probe_mango_cls_256_5class_boundary_contrastive_v12_120b_6e_20260612/class1_confusion_audit_test`.
+- [x] Ghi audit v11/v12 tai `docs/TRKH_5CLASS_BOUNDARY_CONTRASTIVE_V12_AUDIT_20260612.md`.
+- [ ] Huong tiep theo co do dot pha hon: validation-only boundary calibration, label-boundary audit train-only, local surface/color comparator branch cho bien `0/1`, `1/2`, `2/3`, hoac PMG-lite local patch branch.
 - [ ] Neu tiep tuc ELR, chi thu ablation nho hon/lon hon (`0.03`, `0.20`) sau label audit; khong full train neu class-1 val F1 chua qua `0.70`.
 - [x] Chay preflight khong train truoc smoke 2026-06-11.
 - [x] Chay smoke TRKH voi `--max-train-batches 1 --max-val-batches 1 --skip-final-test`.

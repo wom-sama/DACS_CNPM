@@ -82,18 +82,20 @@ class FocalCrossEntropyLoss(_SoftTargetLossBase):
         self.gamma = float(max(0.0, gamma))
         self.focal_mix = float(min(max(focal_mix, 0.0), 1.0))
 
-    def forward(self, logits: Tensor, targets: Tensor) -> Tensor:
+    def per_sample_loss(self, logits: Tensor, targets: Tensor) -> Tensor:
         _, target_probs = self._prepare_targets(logits, targets)
         ce_loss = self._soft_cross_entropy(logits, target_probs)
         if self.focal_mix <= 0.0 or self.gamma <= 0.0:
-            return ce_loss.mean()
+            return ce_loss
 
         probabilities = torch.softmax(logits, dim=1)
         target_probabilities = (probabilities * target_probs).sum(dim=1).clamp(min=0.0, max=1.0)
         focal_term = (1.0 - target_probabilities).pow(self.gamma)
         focal_loss = focal_term * ce_loss
-        mixed = (1.0 - self.focal_mix) * ce_loss + self.focal_mix * focal_loss
-        return mixed.mean()
+        return (1.0 - self.focal_mix) * ce_loss + self.focal_mix * focal_loss
+
+    def forward(self, logits: Tensor, targets: Tensor) -> Tensor:
+        return self.per_sample_loss(logits, targets).mean()
 
 
 class LDAMFocalLoss(_SoftTargetLossBase):
@@ -127,19 +129,21 @@ class LDAMFocalLoss(_SoftTargetLossBase):
         adjusted_logits = logits - hard_target_mask * target_margins
         return adjusted_logits * self.scale
 
-    def forward(self, logits: Tensor, targets: Tensor) -> Tensor:
+    def per_sample_loss(self, logits: Tensor, targets: Tensor) -> Tensor:
         hard_targets, target_probs = self._prepare_targets(logits, targets)
         adjusted_logits = self._apply_ldam_margin(logits, hard_targets)
         ce_loss = self._soft_cross_entropy(adjusted_logits, target_probs)
         if self.focal_mix <= 0.0 or self.gamma <= 0.0:
-            return ce_loss.mean()
+            return ce_loss
 
         probabilities = torch.softmax(adjusted_logits, dim=1)
         target_probabilities = (probabilities * target_probs).sum(dim=1).clamp(min=0.0, max=1.0)
         focal_term = (1.0 - target_probabilities).pow(self.gamma)
         focal_loss = focal_term * ce_loss
-        mixed = (1.0 - self.focal_mix) * ce_loss + self.focal_mix * focal_loss
-        return mixed.mean()
+        return (1.0 - self.focal_mix) * ce_loss + self.focal_mix * focal_loss
+
+    def forward(self, logits: Tensor, targets: Tensor) -> Tensor:
+        return self.per_sample_loss(logits, targets).mean()
 
 
 class BalancedSoftmaxFocalLoss(_SoftTargetLossBase):
@@ -170,19 +174,21 @@ class BalancedSoftmaxFocalLoss(_SoftTargetLossBase):
             raise ValueError("So class cua BalancedSoftmaxFocalLoss khong khop logits.")
         return logits + float(self.prior_tau) * log_priors.unsqueeze(0)
 
-    def forward(self, logits: Tensor, targets: Tensor) -> Tensor:
+    def per_sample_loss(self, logits: Tensor, targets: Tensor) -> Tensor:
         _, target_probs = self._prepare_targets(logits, targets)
         adjusted_logits = self._adjust_logits(logits)
         ce_loss = self._soft_cross_entropy(adjusted_logits, target_probs)
         if self.focal_mix <= 0.0 or self.gamma <= 0.0:
-            return ce_loss.mean()
+            return ce_loss
 
         probabilities = torch.softmax(adjusted_logits, dim=1)
         target_probabilities = (probabilities * target_probs).sum(dim=1).clamp(min=0.0, max=1.0)
         focal_term = (1.0 - target_probabilities).pow(self.gamma)
         focal_loss = focal_term * ce_loss
-        mixed = (1.0 - self.focal_mix) * ce_loss + self.focal_mix * focal_loss
-        return mixed.mean()
+        return (1.0 - self.focal_mix) * ce_loss + self.focal_mix * focal_loss
+
+    def forward(self, logits: Tensor, targets: Tensor) -> Tensor:
+        return self.per_sample_loss(logits, targets).mean()
 
 
 class SupervisedContrastiveLoss(nn.Module):

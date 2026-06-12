@@ -958,6 +958,11 @@ class TrainBatchCollator:
                     [int(sample[2]["sample_index"]) for sample in batch],
                     dtype=torch.long,
                 )
+            if "sample_weight" in batch[0][2]:
+                metadata["sample_weight"] = torch.as_tensor(
+                    [float(sample[2]["sample_weight"]) for sample in batch],
+                    dtype=torch.float32,
+                )
             if metadata:
                 return images, labels, metadata
 
@@ -2417,6 +2422,104 @@ class HardSampleRepeatDataset(Dataset):
         report = dict(report)
         report["hard_sample_repeat"] = self.repeat_summary()
         return report
+
+
+class SampleWeightDataset(Dataset):
+    def __init__(
+        self,
+        dataset: Dataset,
+        sample_weights_by_path: Mapping[str, float],
+        *,
+        default_weight: float = 1.0,
+        max_weight: float = 5.0,
+    ) -> None:
+        self.dataset = dataset
+        self.default_weight = max(0.0, float(default_weight))
+        self.max_weight = max(self.default_weight, float(max_weight))
+        self.sample_weights_by_path = {
+            str(Path(path).resolve()).lower(): float(
+                min(self.max_weight, max(0.0, weight))
+            )
+            for path, weight in sample_weights_by_path.items()
+            if str(path).strip()
+        }
+        self._sample_paths = self._collect_sample_paths()
+
+    def __len__(self) -> int:
+        return len(self.dataset)
+
+    def __getattr__(self, name: str):
+        if name.startswith("__") and name.endswith("__"):
+            raise AttributeError(name)
+        dataset = self.__dict__.get("dataset")
+        if dataset is None:
+            raise AttributeError(name)
+        return getattr(dataset, name)
+
+    def _collect_sample_paths(self) -> List[Path]:
+        sample_paths_fn = getattr(self.dataset, "sample_paths", None)
+        if callable(sample_paths_fn):
+            return list(sample_paths_fn())
+        samples = getattr(self.dataset, "samples", None)
+        if samples is None:
+            return []
+        return [
+            Path(getattr(sample, "image_path"))
+            for sample in samples
+            if getattr(sample, "image_path", None) is not None
+        ]
+
+    def sample_paths(self) -> List[Path]:
+        return list(self._sample_paths)
+
+    def sample_weight_summary(self) -> Dict[str, object]:
+        weights = [
+            self.sample_weights_by_path.get(
+                str(Path(path).resolve()).lower(),
+                self.default_weight,
+            )
+            for path in self._sample_paths
+        ]
+        matched = sum(
+            1
+            for path in self._sample_paths
+            if str(Path(path).resolve()).lower() in self.sample_weights_by_path
+        )
+        weight_tensor = torch.tensor(weights, dtype=torch.float32) if weights else torch.tensor([])
+        return {
+            "enabled": True,
+            "samples": int(len(self._sample_paths)),
+            "weighted_paths": int(len(self.sample_weights_by_path)),
+            "matched_samples": int(matched),
+            "default_weight": float(self.default_weight),
+            "max_weight": float(self.max_weight),
+            "mean_weight": float(weight_tensor.mean().item()) if weight_tensor.numel() else 0.0,
+            "max_observed_weight": float(weight_tensor.max().item()) if weight_tensor.numel() else 0.0,
+        }
+
+    def quality_report(self) -> Dict[str, object]:
+        quality_fn = getattr(self.dataset, "quality_report", None)
+        report = quality_fn() if callable(quality_fn) else {}
+        report = dict(report)
+        report["sample_weights"] = self.sample_weight_summary()
+        return report
+
+    def __getitem__(self, index: int):
+        item = self.dataset[int(index)]
+        sample_path = self._sample_paths[int(index)]
+        key = str(Path(sample_path).resolve()).lower()
+        sample_weight = torch.tensor(
+            float(self.sample_weights_by_path.get(key, self.default_weight)),
+            dtype=torch.float32,
+        )
+        if len(item) == 2:
+            image, label = item
+            return image, label, {"sample_weight": sample_weight}
+        if len(item) >= 3 and isinstance(item[2], dict):
+            metadata = dict(item[2])
+            metadata["sample_weight"] = sample_weight
+            return item[0], item[1], metadata
+        return item
 
 
 class TeacherProbabilityDataset(Dataset):

@@ -22,6 +22,15 @@ param(
     [double]$ElrLossWeight = 0.0,
     [double]$ElrBeta = 0.70,
     [int]$ElrStartEpoch = 2,
+    [double]$BoundaryContrastiveLossWeight = 0.0,
+    [string]$BoundaryContrastivePairs = "0-1,1-2,2-3,4-rest",
+    [string]$BoundaryContrastiveSources = "head,patch",
+    [double]$BoundaryContrastiveMargin = 0.12,
+    [double]$BoundaryContrastiveTemperature = 0.20,
+    [int]$BoundaryContrastiveMaxPairs = 128,
+    [string]$SampleWeightManifest = "",
+    [double]$SampleWeightFactor = 1.0,
+    [double]$SampleWeightMax = 5.0,
     [switch]$PreflightOnly,
     [switch]$Smoke,
     [bool]$TraceArchitecture = $true
@@ -62,6 +71,9 @@ if (-not (Test-Path -LiteralPath $DataYaml)) {
 if (-not [string]::IsNullOrWhiteSpace($ResumeCheckpoint) -and -not (Test-Path -LiteralPath $ResumeCheckpoint)) {
     throw "Khong tim thay resume checkpoint: $ResumeCheckpoint"
 }
+if (-not [string]::IsNullOrWhiteSpace($SampleWeightManifest) -and -not (Test-Path -LiteralPath $SampleWeightManifest)) {
+    throw "Khong tim thay sample weight manifest: $SampleWeightManifest"
+}
 
 $SplitCounts = Get-ChildItem -Recurse -File "D:\DataAI\AIEx\newdataset\class_f" |
     Where-Object { $_.Extension -match '^\.(jpg|jpeg|png|bmp|webp)$' } |
@@ -99,6 +111,15 @@ if ($PreflightOnly) {
         elr_loss_weight = $ElrLossWeight
         elr_beta = $ElrBeta
         elr_start_epoch = $ElrStartEpoch
+        boundary_contrastive_loss_weight = $BoundaryContrastiveLossWeight
+        boundary_contrastive_pairs = $BoundaryContrastivePairs
+        boundary_contrastive_sources = $BoundaryContrastiveSources
+        boundary_contrastive_margin = $BoundaryContrastiveMargin
+        boundary_contrastive_temperature = $BoundaryContrastiveTemperature
+        boundary_contrastive_max_pairs = $BoundaryContrastiveMaxPairs
+        sample_weight_manifest = $SampleWeightManifest
+        sample_weight_factor = $SampleWeightFactor
+        sample_weight_max = $SampleWeightMax
     } | ConvertTo-Json -Depth 5
     exit 0
 }
@@ -205,6 +226,12 @@ try {
         "--metric-learning-loss-weight", "0.04",
         "--metric-learning-temperature", "0.16",
         "--metric-learning-sources", "head,patch",
+        "--boundary-contrastive-loss-weight", "$BoundaryContrastiveLossWeight",
+        "--boundary-contrastive-pairs", "$BoundaryContrastivePairs",
+        "--boundary-contrastive-sources", "$BoundaryContrastiveSources",
+        "--boundary-contrastive-margin", "$BoundaryContrastiveMargin",
+        "--boundary-contrastive-temperature", "$BoundaryContrastiveTemperature",
+        "--boundary-contrastive-max-pairs", "$BoundaryContrastiveMaxPairs",
         "--foreground-consistency-loss-weight", "0.025",
         "--foreground-consistency-margin", "0.07",
         "--attention-view-loss-weight", "$AttentionViewLossWeight",
@@ -224,6 +251,8 @@ try {
         "--elr-loss-weight", "$ElrLossWeight",
         "--elr-beta", "$ElrBeta",
         "--elr-start-epoch", "$ElrStartEpoch",
+        "--sample-weight-factor", "$SampleWeightFactor",
+        "--sample-weight-max", "$SampleWeightMax",
         "--register-diversity-loss-weight", "0.0",
         "--pairwise-margin-loss-weight", "0.04",
         "--hard-sample-manifest", "runs\mango_cls_256_5class_defectstat_v3_30e\hard_mining_train_only\hard_samples_train_only.csv",
@@ -280,6 +309,12 @@ try {
     if ($MaxValBatches -gt 0) {
         $TrainArgs += @("--max-val-batches", "$MaxValBatches")
     }
+    if (-not [string]::IsNullOrWhiteSpace($SampleWeightManifest)) {
+        if (-not (Test-Path -LiteralPath $SampleWeightManifest)) {
+            throw "Khong tim thay sample weight manifest: $SampleWeightManifest"
+        }
+        $TrainArgs += @("--sample-weight-manifest", $SampleWeightManifest)
+    }
     if ($Smoke) {
         $TrainArgs += @("--skip-final-test")
     }
@@ -313,6 +348,15 @@ try {
         elr_loss_weight = $ElrLossWeight
         elr_beta = $ElrBeta
         elr_start_epoch = $ElrStartEpoch
+        boundary_contrastive_loss_weight = $BoundaryContrastiveLossWeight
+        boundary_contrastive_pairs = $BoundaryContrastivePairs
+        boundary_contrastive_sources = $BoundaryContrastiveSources
+        boundary_contrastive_margin = $BoundaryContrastiveMargin
+        boundary_contrastive_temperature = $BoundaryContrastiveTemperature
+        boundary_contrastive_max_pairs = $BoundaryContrastiveMaxPairs
+        sample_weight_manifest = $SampleWeightManifest
+        sample_weight_factor = $SampleWeightFactor
+        sample_weight_max = $SampleWeightMax
         train_args = $TrainArgs
     } | ConvertTo-Json -Depth 6 |
         Set-Content -Path (Join-Path $RunDir "launcher_args.json")

@@ -49,6 +49,7 @@ from trkh.data.dataset import (
     IndexedSampleDataset,
     MangoYOLOCropDataset,
     RareClassRepeatDataset,
+    SampleWeightDataset,
     StrictBalancedBatchSampler,
     _apply_copypaste_detection_batch,
     _pseudo_foreground_mask_array,
@@ -95,7 +96,10 @@ from trkh.training.train import (
     _save_interrupt_checkpoint,
     _build_attention_guided_views,
     _attention_guided_score_map,
+    _classification_loss_with_sample_weights,
     _early_learning_regularization_loss,
+    _boundary_contrastive_loss_from_features,
+    _parse_boundary_contrastive_pairs,
     _bounded_attention_drop_mask,
     _forward_train_loss,
     _foreground_consistency_loss_from_features,
@@ -1151,6 +1155,43 @@ class DetectionCalibrationTests(unittest.TestCase):
 
         self.assertTrue(torch.isfinite(loss))
         self.assertGreater(float(loss.item()), 0.0)
+
+    def test_boundary_contrastive_loss_is_finite_and_pair_limited(self):
+        pairs = _parse_boundary_contrastive_pairs("0-1,1-2,4-rest", num_classes=5)
+        self.assertEqual(pairs, [(0, 1), (1, 2), (-1, 4)])
+        embeddings = torch.tensor(
+            [
+                [1.0, 0.0],
+                [0.9, 0.1],
+                [0.2, 0.8],
+                [0.1, 0.9],
+                [0.0, 1.0],
+                [0.1, 0.8],
+            ],
+            dtype=torch.float32,
+        )
+        features = {
+            "pooled": embeddings,
+            "patches": embeddings.unsqueeze(1),
+        }
+        targets = torch.tensor([0, 0, 1, 1, 2, 2], dtype=torch.long)
+        loss, stats = _boundary_contrastive_loss_from_features(
+            model=nn.Module(),
+            features=features,
+            targets=targets,
+            pairs="0-1,1-2",
+            sources="head,patch",
+            margin=0.12,
+            temperature=0.20,
+            max_pairs=2,
+            num_classes=5,
+        )
+
+        self.assertTrue(torch.isfinite(loss))
+        self.assertGreater(float(loss.item()), 0.0)
+        self.assertEqual(stats["used_sources"], ["head", "patch"])
+        self.assertGreater(int(stats["terms"]), 0)
+        self.assertLessEqual(int(stats["terms"]), 16)
 
     def test_balanced_softmax_loss_is_finite_and_backpropagates(self):
         logits = torch.zeros(4, 3, requires_grad=True)
@@ -3149,6 +3190,50 @@ dataset_balance:
         self.assertEqual(float(target_state[1].sum().item()), 0.0)
         loss.backward()
         self.assertIsNotNone(logits.grad)
+
+    def test_sample_weight_dataset_and_weighted_loss(self):
+        class _TinyDataset(torch.utils.data.Dataset):
+            def __init__(self, root: Path):
+                self.paths = [root / "a.jpg", root / "b.jpg"]
+                for path in self.paths:
+                    Image.new("RGB", (8, 8), color=(128, 128, 128)).save(path)
+
+            def __len__(self):
+                return len(self.paths)
+
+            def sample_paths(self):
+                return list(self.paths)
+
+            def __getitem__(self, index):
+                return torch.zeros(3, 8, 8), int(index)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            dataset = _TinyDataset(root)
+            wrapped = SampleWeightDataset(
+                dataset,
+                {str(dataset.paths[1]): 2.5},
+                default_weight=1.0,
+                max_weight=3.0,
+            )
+            collate = build_train_collate_fn(num_classes=2, batch_mix_probability=0.0)
+            _, labels, metadata = collate([wrapped[0], wrapped[1]])
+
+        self.assertTrue(torch.equal(labels, torch.tensor([0, 1], dtype=torch.long)))
+        self.assertIn("sample_weight", metadata)
+        self.assertTrue(torch.allclose(metadata["sample_weight"], torch.tensor([1.0, 2.5])))
+
+        logits = torch.tensor([[2.0, -1.0], [2.0, -1.0]], requires_grad=True)
+        criterion = FocalCrossEntropyLoss(gamma=0.0, focal_mix=0.0)
+        unweighted = criterion(logits, labels)
+        weighted, mean_weight = _classification_loss_with_sample_weights(
+            criterion,
+            logits,
+            labels,
+            metadata["sample_weight"],
+        )
+        self.assertGreater(float(weighted.item()), float(unweighted.item()))
+        self.assertTrue(torch.allclose(mean_weight, torch.tensor(1.75)))
 
 if __name__ == "__main__":
     unittest.main()

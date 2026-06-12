@@ -14,6 +14,7 @@ import os
 import subprocess
 import sys
 import time
+from collections import Counter
 from dataclasses import fields
 from functools import partial
 from itertools import count, islice
@@ -44,6 +45,7 @@ from trkh.data.dataset import (
     MangoYOLOCropDataset,
     PseudoVideoAugmenter,
     RareClassRepeatDataset,
+    SampleWeightDataset,
     StrictBalancedBatchSampler,
     TeacherProbabilityDataset,
     build_rare_class_repeat_factors,
@@ -565,6 +567,35 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--boundary-contrastive-loss-weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Trong so contrastive loss chi tren cac cap class de nham nhu 0-1,1-2,2-3,4-rest; "
+            "0 de tat. Loss chay in-batch va khong tao pair dataset."
+        ),
+    )
+    parser.add_argument(
+        "--boundary-contrastive-pairs",
+        type=str,
+        default="0-1,1-2,2-3,4-rest",
+        help="Danh sach cap class cho boundary contrastive, dung cu phap 0-1 hoac 4-rest.",
+    )
+    parser.add_argument(
+        "--boundary-contrastive-sources",
+        type=str,
+        default="head,patch",
+        help="Nguon embedding cho boundary contrastive: head, cnn, patch, registers, all.",
+    )
+    parser.add_argument("--boundary-contrastive-margin", type=float, default=0.12)
+    parser.add_argument("--boundary-contrastive-temperature", type=float, default=0.20)
+    parser.add_argument(
+        "--boundary-contrastive-max-pairs",
+        type=int,
+        default=128,
+        help="So anchor-loss toi da moi source/pair; lay hard terms de chi phi on dinh.",
+    )
+    parser.add_argument(
         "--foreground-consistency-loss-weight",
         type=float,
         default=0.0,
@@ -705,6 +736,27 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=2,
         help="Epoch bat dau cong ELR loss; target history van duoc cap nhat tu dau.",
+    )
+    parser.add_argument(
+        "--sample-weight-manifest",
+        type=Path,
+        default=None,
+        help=(
+            "CSV train-only co cot image_path/path va tuy chon sample_weight; "
+            "dung de tang loss cho hard boundary samples ma khong tang class 1 toan cuc."
+        ),
+    )
+    parser.add_argument(
+        "--sample-weight-factor",
+        type=float,
+        default=1.0,
+        help="Weight mac dinh cho dong manifest khong co cot sample_weight.",
+    )
+    parser.add_argument(
+        "--sample-weight-max",
+        type=float,
+        default=5.0,
+        help="Tran sample weight de tranh batch loss bi mot mau chi phoi.",
     )
     parser.add_argument(
         "--balance-auto-max-repeat-factor",
@@ -1017,6 +1069,31 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
             "--metric-learning-sources chi ho tro head, cnn, patch, registers, all; "
             f"khong hop le: {invalid_metric_sources}"
         )
+    if args.boundary_contrastive_loss_weight < 0.0:
+        raise ValueError("--boundary-contrastive-loss-weight phai >= 0.")
+    if args.boundary_contrastive_margin < 0.0:
+        raise ValueError("--boundary-contrastive-margin phai >= 0.")
+    if args.boundary_contrastive_temperature <= 0.0:
+        raise ValueError("--boundary-contrastive-temperature phai > 0.")
+    if args.boundary_contrastive_max_pairs < 1:
+        raise ValueError("--boundary-contrastive-max-pairs phai >= 1.")
+    requested_boundary_sources = [
+        item.strip().lower()
+        for item in str(args.boundary_contrastive_sources or "head").replace(";", ",").split(",")
+        if item.strip()
+    ]
+    if not requested_boundary_sources:
+        requested_boundary_sources = ["head"]
+    invalid_boundary_sources = sorted(set(requested_boundary_sources) - valid_metric_sources)
+    if invalid_boundary_sources:
+        raise ValueError(
+            "--boundary-contrastive-sources chi ho tro head, cnn, patch, registers, all; "
+            f"khong hop le: {invalid_boundary_sources}"
+        )
+    _parse_boundary_contrastive_pairs(
+        args.boundary_contrastive_pairs,
+        int(args.expected_num_classes or 0),
+    )
     if args.foreground_consistency_loss_weight < 0.0:
         raise ValueError("--foreground-consistency-loss-weight phai >= 0.")
     if args.foreground_consistency_margin < 0.0:
@@ -1192,6 +1269,16 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         raise ValueError("--elr-beta phai nam trong [0, 1).")
     if args.elr_start_epoch < 0:
         raise ValueError("--elr-start-epoch phai >= 0.")
+    if args.sample_weight_factor <= 0.0:
+        raise ValueError("--sample-weight-factor phai > 0.")
+    if args.sample_weight_max <= 0.0:
+        raise ValueError("--sample-weight-max phai > 0.")
+    if args.sample_weight_max < args.sample_weight_factor:
+        raise ValueError("--sample-weight-max phai >= --sample-weight-factor.")
+    if args.sample_weight_manifest is not None and not args.sample_weight_manifest.is_file():
+        raise FileNotFoundError(
+            f"Khong tim thay sample weight manifest: {args.sample_weight_manifest}"
+        )
     if (
         args.pretrained_distillation
         and args.distillation_teacher_checkpoint is None
@@ -1380,6 +1467,12 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         metric_learning_temperature=args.metric_learning_temperature,
         metric_learning_class_balanced=not args.disable_metric_learning_class_balanced,
         metric_learning_sources=",".join(requested_metric_sources),
+        boundary_contrastive_loss_weight=args.boundary_contrastive_loss_weight,
+        boundary_contrastive_pairs=args.boundary_contrastive_pairs,
+        boundary_contrastive_sources=",".join(requested_boundary_sources),
+        boundary_contrastive_margin=args.boundary_contrastive_margin,
+        boundary_contrastive_temperature=args.boundary_contrastive_temperature,
+        boundary_contrastive_max_pairs=args.boundary_contrastive_max_pairs,
         foreground_consistency_loss_weight=args.foreground_consistency_loss_weight,
         foreground_consistency_margin=args.foreground_consistency_margin,
         attention_view_loss_weight=args.attention_view_loss_weight,
@@ -1415,6 +1508,9 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         elr_loss_weight=args.elr_loss_weight,
         elr_beta=args.elr_beta,
         elr_start_epoch=args.elr_start_epoch,
+        sample_weight_manifest=str(args.sample_weight_manifest or ""),
+        sample_weight_factor=args.sample_weight_factor,
+        sample_weight_max=args.sample_weight_max,
         balance_auto_max_repeat_factor=args.balance_auto_max_repeat_factor,
         fair_f1_gap_target=args.fair_f1_gap_target,
         fair_f1_gap_penalty=args.fair_f1_gap_penalty,
@@ -2549,6 +2645,58 @@ def _parse_metric_learning_sources(sources: Union[str, Sequence[str]]) -> List[s
     return ordered
 
 
+def _parse_boundary_contrastive_pairs(pairs: str, num_classes: int = 0) -> List[Tuple[int, int]]:
+    parsed: List[Tuple[int, int]] = []
+    for raw_item in str(pairs or "").replace(";", ",").split(","):
+        item = raw_item.strip().lower().replace(":", "-")
+        if not item:
+            continue
+        if "-" not in item:
+            raise ValueError(f"boundary contrastive pair khong hop le: {raw_item!r}")
+        left_text, right_text = [part.strip() for part in item.split("-", 1)]
+        if right_text in {"rest", "others", "other"}:
+            pair = (-1, int(left_text))
+        elif left_text in {"rest", "others", "other"}:
+            pair = (-1, int(right_text))
+        else:
+            pair = (int(left_text), int(right_text))
+        for class_index in pair:
+            if class_index < 0:
+                continue
+            if int(num_classes) > 0 and class_index >= int(num_classes):
+                raise ValueError(
+                    "boundary contrastive pair nam ngoai khoang class: "
+                    f"pair={raw_item!r}, num_classes={num_classes}"
+                )
+        if pair not in parsed:
+            parsed.append(pair)
+    if not parsed:
+        raise ValueError("--boundary-contrastive-pairs khong duoc rong khi loss weight > 0.")
+    return parsed
+
+
+def _embedding_from_features_source(
+    *,
+    model: nn.Module,
+    features: Dict[str, Tensor],
+    source: str,
+) -> Optional[Tensor]:
+    if source == "head":
+        return extract_head_input_from_features(model, features)
+    if source == "cnn":
+        embedding = features.get("cnn_pooled")
+        if embedding is not None and hasattr(model, "cnn_fusion_norm"):
+            embedding = model.cnn_fusion_norm(embedding)
+        return embedding if torch.is_tensor(embedding) else None
+    if source == "patch":
+        patches = features.get("patches")
+        return patches.mean(dim=1) if torch.is_tensor(patches) and patches.ndim == 3 else None
+    if source == "registers":
+        registers = features.get("registers")
+        return registers.mean(dim=1) if torch.is_tensor(registers) and registers.ndim == 3 else None
+    return None
+
+
 def _metric_learning_loss_from_features(
     *,
     model: nn.Module,
@@ -2560,21 +2708,11 @@ def _metric_learning_loss_from_features(
     source_losses: List[Tensor] = []
     used_sources: List[str] = []
     for source in _parse_metric_learning_sources(sources):
-        embedding: Optional[Tensor]
-        if source == "head":
-            embedding = extract_head_input_from_features(model, features)
-        elif source == "cnn":
-            embedding = features.get("cnn_pooled")
-            if embedding is not None and hasattr(model, "cnn_fusion_norm"):
-                embedding = model.cnn_fusion_norm(embedding)
-        elif source == "patch":
-            patches = features.get("patches")
-            embedding = patches.mean(dim=1) if torch.is_tensor(patches) and patches.ndim == 3 else None
-        elif source == "registers":
-            registers = features.get("registers")
-            embedding = registers.mean(dim=1) if torch.is_tensor(registers) and registers.ndim == 3 else None
-        else:  # pragma: no cover - guarded by parser.
-            embedding = None
+        embedding = _embedding_from_features_source(
+            model=model,
+            features=features,
+            source=source,
+        )
 
         if embedding is None or not torch.is_tensor(embedding) or embedding.ndim != 2:
             continue
@@ -2585,6 +2723,120 @@ def _metric_learning_loss_from_features(
         zero = next(iter(features.values())).sum() * 0.0
         return zero, used_sources
     return torch.stack(source_losses).mean(), used_sources
+
+
+def _boundary_contrastive_loss_for_embedding(
+    embeddings: Tensor,
+    targets: Tensor,
+    *,
+    pairs: Sequence[Tuple[int, int]],
+    margin: float,
+    temperature: float,
+    max_pairs: int,
+) -> Tuple[Tensor, int]:
+    if embeddings.ndim != 2:
+        raise ValueError("boundary contrastive embeddings phai co shape [batch, dim].")
+    if targets.ndim != 1:
+        raise ValueError("boundary contrastive targets phai co shape [batch].")
+    if embeddings.size(0) != targets.size(0):
+        raise ValueError("So sample cua embeddings va targets khong khop.")
+    if embeddings.size(0) < 3:
+        return embeddings.sum() * 0.0, 0
+
+    device = embeddings.device
+    target_indices = targets.to(device=device, dtype=torch.long).view(-1)
+    normalized = F.normalize(embeddings.float(), dim=1, eps=1e-6)
+    similarity = torch.matmul(normalized, normalized.T)
+    batch_size = int(embeddings.size(0))
+    self_mask = torch.eye(batch_size, device=device, dtype=torch.bool)
+    pair_losses: List[Tensor] = []
+    pair_terms = 0
+
+    for left_class, right_class in pairs:
+        if int(left_class) < 0:
+            right_mask = target_indices == int(right_class)
+            left_mask = target_indices != int(right_class)
+        else:
+            left_mask = target_indices == int(left_class)
+            right_mask = target_indices == int(right_class)
+        if not bool(left_mask.any().item()) or not bool(right_mask.any().item()):
+            continue
+
+        side_losses: List[Tensor] = []
+        for anchor_mask, negative_mask in ((left_mask, right_mask), (right_mask, left_mask)):
+            anchor_positive_mask = anchor_mask.unsqueeze(0) & anchor_mask.unsqueeze(1) & ~self_mask
+            anchor_negative_mask = anchor_mask.unsqueeze(1) & negative_mask.unsqueeze(0)
+            valid_anchor_mask = anchor_positive_mask.any(dim=1) & anchor_negative_mask.any(dim=1)
+            if not bool(valid_anchor_mask.any().item()):
+                continue
+            positive_counts = anchor_positive_mask.sum(dim=1).clamp(min=1).to(dtype=similarity.dtype)
+            mean_positive = (
+                similarity.masked_fill(~anchor_positive_mask, 0.0).sum(dim=1)
+                / positive_counts
+            )
+            hardest_negative = similarity.masked_fill(~anchor_negative_mask, -1.0e4).max(dim=1).values
+            anchor_losses = F.softplus(
+                (hardest_negative - mean_positive + float(margin))
+                / max(float(temperature), 1e-6)
+            )[valid_anchor_mask]
+            if anchor_losses.numel() == 0:
+                continue
+            if anchor_losses.numel() > int(max_pairs):
+                anchor_losses = torch.topk(anchor_losses, k=int(max_pairs), largest=True).values
+            pair_terms += int(anchor_losses.numel())
+            side_losses.append(anchor_losses.mean())
+        if side_losses:
+            pair_losses.append(torch.stack(side_losses).mean())
+
+    if not pair_losses:
+        return embeddings.sum() * 0.0, 0
+    return torch.stack(pair_losses).mean().to(dtype=embeddings.dtype), pair_terms
+
+
+def _boundary_contrastive_loss_from_features(
+    *,
+    model: nn.Module,
+    features: Dict[str, Tensor],
+    targets: Tensor,
+    pairs: str,
+    sources: Union[str, Sequence[str]],
+    margin: float,
+    temperature: float,
+    max_pairs: int,
+    num_classes: int,
+) -> Tuple[Tensor, Dict[str, object]]:
+    parsed_pairs = _parse_boundary_contrastive_pairs(pairs, num_classes)
+    source_losses: List[Tensor] = []
+    used_sources: List[str] = []
+    total_terms = 0
+    for source in _parse_metric_learning_sources(sources):
+        embedding = _embedding_from_features_source(
+            model=model,
+            features=features,
+            source=source,
+        )
+        if embedding is None or not torch.is_tensor(embedding) or embedding.ndim != 2:
+            continue
+        source_loss, source_terms = _boundary_contrastive_loss_for_embedding(
+            embedding,
+            targets,
+            pairs=parsed_pairs,
+            margin=margin,
+            temperature=temperature,
+            max_pairs=max_pairs,
+        )
+        source_losses.append(source_loss)
+        used_sources.append(source)
+        total_terms += int(source_terms)
+
+    if not source_losses:
+        zero = next(iter(features.values())).sum() * 0.0
+        return zero, {"used_sources": used_sources, "terms": 0, "pairs": parsed_pairs}
+    return torch.stack(source_losses).mean(), {
+        "used_sources": used_sources,
+        "terms": int(total_terms),
+        "pairs": parsed_pairs,
+    }
 
 
 def _pseudo_foreground_mask_from_normalized_images(
@@ -3416,6 +3668,44 @@ def _early_learning_regularization_loss(
     return torch.log1p(-agreement).mean().to(dtype=logits.dtype)
 
 
+def _classification_loss_with_sample_weights(
+    criterion: nn.Module,
+    logits: Tensor,
+    targets,
+    sample_weights: Optional[Tensor],
+) -> Tuple[Tensor, Tensor]:
+    if sample_weights is None or not torch.is_tensor(sample_weights):
+        return criterion(logits, targets), logits.new_tensor(1.0)
+    weights = sample_weights.to(device=logits.device, dtype=logits.dtype).view(-1)
+    if weights.numel() != logits.size(0):
+        return criterion(logits, targets), logits.new_tensor(1.0)
+    weights = weights.clamp(min=0.0)
+    if float(weights.sum().detach().cpu().item()) <= 0.0:
+        return criterion(logits, targets), logits.new_tensor(0.0)
+
+    per_sample_loss_fn = getattr(criterion, "per_sample_loss", None)
+    if callable(per_sample_loss_fn):
+        per_sample = per_sample_loss_fn(logits, targets)
+    elif isinstance(criterion, nn.CrossEntropyLoss) and torch.is_tensor(targets):
+        ce_weight = criterion.weight
+        if torch.is_tensor(ce_weight):
+            ce_weight = ce_weight.to(device=logits.device, dtype=logits.dtype)
+        per_sample = F.cross_entropy(
+            logits,
+            targets.to(device=logits.device, dtype=torch.long),
+            weight=ce_weight,
+            ignore_index=criterion.ignore_index,
+            reduction="none",
+            label_smoothing=float(getattr(criterion, "label_smoothing", 0.0) or 0.0),
+        )
+    else:
+        return criterion(logits, targets), weights.mean().detach()
+    if per_sample.ndim != 1 or per_sample.numel() != weights.numel():
+        return criterion(logits, targets), weights.mean().detach()
+    weighted_loss = (per_sample * weights).sum() / weights.sum().clamp(min=1e-12)
+    return weighted_loss.to(dtype=logits.dtype), weights.mean().detach()
+
+
 def _stack_image_masks_from_targets(targets) -> Optional[Tensor]:
     if not _is_detection_targets(targets):
         return None
@@ -3442,6 +3732,12 @@ def _forward_train_loss(
     metric_learning_criterion: Optional[nn.Module] = None,
     metric_learning_loss_weight: float = 0.0,
     metric_learning_sources: Union[str, Sequence[str]] = "head",
+    boundary_contrastive_loss_weight: float = 0.0,
+    boundary_contrastive_pairs: str = "0-1,1-2,2-3,4-rest",
+    boundary_contrastive_sources: Union[str, Sequence[str]] = "head,patch",
+    boundary_contrastive_margin: float = 0.12,
+    boundary_contrastive_temperature: float = 0.20,
+    boundary_contrastive_max_pairs: int = 128,
     foreground_consistency_loss_weight: float = 0.0,
     foreground_consistency_margin: float = 0.08,
     attention_view_loss_weight: float = 0.0,
@@ -3470,6 +3766,7 @@ def _forward_train_loss(
     distillation_focus_class_weight: float = 1.0,
     offline_teacher_probabilities: Optional[Tensor] = None,
     sample_indices: Optional[Tensor] = None,
+    sample_weights: Optional[Tensor] = None,
     elr_target_state: Optional[Tensor] = None,
     elr_loss_weight: float = 0.0,
     elr_beta: float = 0.70,
@@ -3483,8 +3780,15 @@ def _forward_train_loss(
         if _is_detection_targets(targets):
             loss, loss_details = criterion(outputs, targets, return_details=True, debug_bbox=debug_bbox)
         else:
-            loss = criterion(logits, targets)
+            loss, sample_weight_mean = _classification_loss_with_sample_weights(
+                criterion,
+                logits,
+                targets,
+                sample_weights,
+            )
             metric_learning_loss = logits.sum() * 0.0
+            boundary_contrastive_loss = logits.sum() * 0.0
+            boundary_contrastive_terms = 0
             foreground_consistency_loss = logits.sum() * 0.0
             attention_view_loss = logits.sum() * 0.0
             attention_view_stats = {
@@ -3513,6 +3817,30 @@ def _forward_train_loss(
                         sources=metric_learning_sources,
                     )
                     loss = loss + float(metric_learning_loss_weight) * metric_learning_loss
+            if (
+                features is not None
+                and float(boundary_contrastive_loss_weight) > 0.0
+                and torch.is_tensor(targets)
+            ):
+                target_indices = _classification_target_indices(targets, logits)
+                if target_indices is not None:
+                    boundary_contrastive_loss, boundary_contrastive_stats = (
+                        _boundary_contrastive_loss_from_features(
+                            model=model,
+                            features=features,
+                            targets=target_indices,
+                            pairs=boundary_contrastive_pairs,
+                            sources=boundary_contrastive_sources,
+                            margin=boundary_contrastive_margin,
+                            temperature=boundary_contrastive_temperature,
+                            max_pairs=boundary_contrastive_max_pairs,
+                            num_classes=int(logits.size(1)),
+                        )
+                    )
+                    boundary_contrastive_terms = int(
+                        boundary_contrastive_stats.get("terms", 0) or 0
+                    )
+                    loss = loss + float(boundary_contrastive_loss_weight) * boundary_contrastive_loss
             if features is not None and float(foreground_consistency_loss_weight) > 0.0:
                 foreground_consistency_loss = _foreground_consistency_loss_from_features(
                     images=images,
@@ -3639,6 +3967,7 @@ def _forward_train_loss(
                     (
                         loss
                         - float(metric_learning_loss_weight) * metric_learning_loss
+                        - float(boundary_contrastive_loss_weight) * boundary_contrastive_loss
                         - float(foreground_consistency_loss_weight) * foreground_consistency_loss
                         - float(attention_view_loss_weight) * attention_view_loss
                         - float(register_diversity_loss_weight) * register_diversity_loss
@@ -3656,6 +3985,8 @@ def _forward_train_loss(
                     .item()
                 ),
                 "metric_learning_loss": float(metric_learning_loss.detach().cpu().item()),
+                "boundary_contrastive_loss": float(boundary_contrastive_loss.detach().cpu().item()),
+                "boundary_contrastive_terms": float(boundary_contrastive_terms),
                 "foreground_consistency_loss": float(foreground_consistency_loss.detach().cpu().item()),
                 "attention_view_loss": float(attention_view_loss.detach().cpu().item()),
                 **attention_view_stats,
@@ -3664,6 +3995,7 @@ def _forward_train_loss(
                 "ordinal_maturity_loss": float(ordinal_maturity_loss.detach().cpu().item()),
                 "distillation_loss": float(distillation_loss.detach().cpu().item()),
                 "elr_loss": float(elr_loss.detach().cpu().item()),
+                "sample_weight_mean": float(sample_weight_mean.detach().cpu().item()),
                 "objectness_loss": 0.0,
                 "bbox_l1_loss": 0.0,
                 "bbox_giou_loss": 0.0,
@@ -3809,6 +4141,12 @@ def train_one_epoch(
     metric_learning_criterion: Optional[nn.Module] = None,
     metric_learning_loss_weight: float = 0.0,
     metric_learning_sources: Union[str, Sequence[str]] = "head",
+    boundary_contrastive_loss_weight: float = 0.0,
+    boundary_contrastive_pairs: str = "0-1,1-2,2-3,4-rest",
+    boundary_contrastive_sources: Union[str, Sequence[str]] = "head,patch",
+    boundary_contrastive_margin: float = 0.12,
+    boundary_contrastive_temperature: float = 0.20,
+    boundary_contrastive_max_pairs: int = 128,
     foreground_consistency_loss_weight: float = 0.0,
     foreground_consistency_margin: float = 0.08,
     attention_view_loss_weight: float = 0.0,
@@ -3863,6 +4201,8 @@ def train_one_epoch(
     train_loss_components = {
         "cls_loss": 0.0,
         "metric_learning_loss": 0.0,
+        "boundary_contrastive_loss": 0.0,
+        "boundary_contrastive_terms": 0.0,
         "foreground_consistency_loss": 0.0,
         "attention_view_loss": 0.0,
         "attention_view_fraction": 0.0,
@@ -3874,6 +4214,7 @@ def train_one_epoch(
         "ordinal_maturity_loss": 0.0,
         "distillation_loss": 0.0,
         "elr_loss": 0.0,
+        "sample_weight_mean": 0.0,
         "objectness_loss": 0.0,
         "bbox_l1_loss": 0.0,
         "bbox_giou_loss": 0.0,
@@ -3905,6 +4246,7 @@ def train_one_epoch(
                 replay_batches.append(_clone_batch_for_replay(batch))
             offline_teacher_probabilities = None
             sample_indices = None
+            sample_weights = None
             if len(batch) == 2 and _is_detection_targets(batch[1]):
                 batch_images, batch_targets = batch
                 labels = None
@@ -3920,6 +4262,13 @@ def train_one_epoch(
                         sample_indices = sample_value.to(
                             device=device,
                             dtype=torch.long,
+                            non_blocking=True,
+                        )
+                    weight_value = moved_batch_targets.get("sample_weight")
+                    if torch.is_tensor(weight_value):
+                        sample_weights = weight_value.to(
+                            device=device,
+                            dtype=torch.float32,
                             non_blocking=True,
                         )
                     teacher_value = moved_batch_targets.get("teacher_probs")
@@ -3945,6 +4294,12 @@ def train_one_epoch(
                 metric_learning_criterion=metric_learning_criterion,
                 metric_learning_loss_weight=metric_learning_loss_weight,
                 metric_learning_sources=metric_learning_sources,
+                boundary_contrastive_loss_weight=boundary_contrastive_loss_weight,
+                boundary_contrastive_pairs=boundary_contrastive_pairs,
+                boundary_contrastive_sources=boundary_contrastive_sources,
+                boundary_contrastive_margin=boundary_contrastive_margin,
+                boundary_contrastive_temperature=boundary_contrastive_temperature,
+                boundary_contrastive_max_pairs=boundary_contrastive_max_pairs,
                 foreground_consistency_loss_weight=foreground_consistency_loss_weight,
                 foreground_consistency_margin=foreground_consistency_margin,
                 attention_view_loss_weight=attention_view_loss_weight,
@@ -3973,6 +4328,7 @@ def train_one_epoch(
                 distillation_focus_class_weight=distillation_focus_class_weight,
                 offline_teacher_probabilities=offline_teacher_probabilities,
                 sample_indices=sample_indices,
+                sample_weights=sample_weights,
                 elr_target_state=elr_target_state,
                 elr_loss_weight=elr_loss_weight,
                 elr_beta=elr_beta,
@@ -4054,6 +4410,7 @@ def train_one_epoch(
                         replay_labels = None
                         replay_offline_teacher_probabilities = None
                         replay_sample_indices = None
+                        replay_sample_weights = None
                         if len(replay_batch) == 2 and _is_detection_targets(replay_batch[1]):
                             replay_targets = _move_batch_item_to_device(replay_batch[1], device)
                         elif len(replay_batch) == 3:
@@ -4065,6 +4422,13 @@ def train_one_epoch(
                                     replay_sample_indices = sample_value.to(
                                         device=device,
                                         dtype=torch.long,
+                                        non_blocking=True,
+                                    )
+                                weight_value = replay_moved_targets.get("sample_weight")
+                                if torch.is_tensor(weight_value):
+                                    replay_sample_weights = weight_value.to(
+                                        device=device,
+                                        dtype=torch.float32,
                                         non_blocking=True,
                                     )
                                 teacher_value = replay_moved_targets.get("teacher_probs")
@@ -4085,6 +4449,12 @@ def train_one_epoch(
                             metric_learning_criterion=metric_learning_criterion,
                             metric_learning_loss_weight=metric_learning_loss_weight,
                             metric_learning_sources=metric_learning_sources,
+                            boundary_contrastive_loss_weight=boundary_contrastive_loss_weight,
+                            boundary_contrastive_pairs=boundary_contrastive_pairs,
+                            boundary_contrastive_sources=boundary_contrastive_sources,
+                            boundary_contrastive_margin=boundary_contrastive_margin,
+                            boundary_contrastive_temperature=boundary_contrastive_temperature,
+                            boundary_contrastive_max_pairs=boundary_contrastive_max_pairs,
                             foreground_consistency_loss_weight=foreground_consistency_loss_weight,
                             foreground_consistency_margin=foreground_consistency_margin,
                             attention_view_loss_weight=attention_view_loss_weight,
@@ -4113,6 +4483,7 @@ def train_one_epoch(
                             distillation_focus_class_weight=distillation_focus_class_weight,
                             offline_teacher_probabilities=replay_offline_teacher_probabilities,
                             sample_indices=replay_sample_indices,
+                            sample_weights=replay_sample_weights,
                             elr_target_state=elr_target_state,
                             elr_loss_weight=elr_loss_weight,
                             elr_beta=elr_beta,
@@ -4365,6 +4736,83 @@ def _load_hard_sample_manifest(path_text: str) -> List[Path]:
                 if value and not value.startswith("#"):
                     paths.append(Path(value))
     return paths
+
+
+def _load_sample_weight_manifest(
+    path_text: str,
+    *,
+    default_weight: float,
+    max_weight: float,
+) -> Tuple[Dict[str, float], Dict[str, object]]:
+    summary: Dict[str, object] = {
+        "enabled": False,
+        "manifest": str(path_text or ""),
+    }
+    if not str(path_text or "").strip():
+        return {}, summary
+    manifest_path = Path(path_text).expanduser()
+    if not manifest_path.exists():
+        raise FileNotFoundError(f"Missing sample weight manifest: {manifest_path}")
+    weights_by_path: Dict[str, float] = {}
+    by_reason: Counter[str] = Counter()
+    by_pair: Counter[str] = Counter()
+    duplicate_rows = 0
+    invalid_rows = 0
+    with manifest_path.open("r", encoding="utf-8-sig", newline="") as handle:
+        reader = csv.DictReader(handle)
+        if reader.fieldnames is None:
+            raise ValueError(f"Sample weight manifest phai la CSV co header: {manifest_path}")
+        for row in reader:
+            raw_path = (
+                str(row.get("image_path", "") or "").strip()
+                or str(row.get("path", "") or "").strip()
+                or str(row.get("sample_path", "") or "").strip()
+            )
+            if not raw_path:
+                invalid_rows += 1
+                continue
+            raw_weight = (
+                str(row.get("sample_weight", "") or "").strip()
+                or str(row.get("weight", "") or "").strip()
+            )
+            try:
+                weight = float(raw_weight) if raw_weight else float(default_weight)
+            except ValueError:
+                invalid_rows += 1
+                continue
+            if not math.isfinite(weight) or weight <= 0.0:
+                invalid_rows += 1
+                continue
+            weight = min(float(max_weight), max(1e-6, weight))
+            key = str(Path(raw_path).resolve()).lower()
+            if key in weights_by_path:
+                duplicate_rows += 1
+                weight = max(weight, float(weights_by_path[key]))
+            weights_by_path[key] = weight
+            reason = str(row.get("reason", "") or "").strip()
+            if reason:
+                by_reason[reason] += 1
+            target = str(row.get("target_index", "") or row.get("y_true", "") or "").strip()
+            prediction = str(row.get("prediction_index", "") or row.get("y_pred", "") or "").strip()
+            if target or prediction:
+                by_pair[f"{target}->{prediction}"] += 1
+    if not weights_by_path:
+        raise ValueError(f"Sample weight manifest khong co dong hop le: {manifest_path}")
+    weights = list(weights_by_path.values())
+    summary = {
+        "enabled": True,
+        "manifest": str(manifest_path.resolve()),
+        "paths": int(len(weights_by_path)),
+        "duplicate_rows": int(duplicate_rows),
+        "invalid_rows": int(invalid_rows),
+        "default_weight": float(default_weight),
+        "max_weight": float(max_weight),
+        "mean_manifest_weight": float(sum(weights) / max(1, len(weights))),
+        "max_manifest_weight": float(max(weights)),
+        "by_reason": dict(by_reason),
+        "by_target_prediction_pair": dict(by_pair),
+    }
+    return weights_by_path, summary
 
 
 def _build_eval_loader(
@@ -5111,6 +5559,24 @@ def main() -> None:
         )
         print({"offline_distillation": offline_distillation_summary}, flush=True)
 
+    sample_weight_summary: Dict[str, object] = {"enabled": False}
+    if str(train_config.sample_weight_manifest or "").strip():
+        if detection_mode:
+            raise ValueError("Sample-weight manifest hien chi ho tro classification-only train.")
+        sample_weights, sample_weight_summary = _load_sample_weight_manifest(
+            str(train_config.sample_weight_manifest),
+            default_weight=float(train_config.sample_weight_factor),
+            max_weight=float(train_config.sample_weight_max),
+        )
+        train_dataset = SampleWeightDataset(
+            train_dataset,
+            sample_weights,
+            default_weight=1.0,
+            max_weight=float(train_config.sample_weight_max),
+        )
+        sample_weight_summary.update(train_dataset.sample_weight_summary())
+        print({"sample_weight_manifest": sample_weight_summary}, flush=True)
+
     if balance_auto_summary.get("enabled"):
         rare_class_repeat_factors = [
             float(value)
@@ -5653,6 +6119,25 @@ def main() -> None:
             },
             flush=True,
         )
+    if (not detection_mode) and float(train_config.boundary_contrastive_loss_weight) > 0.0:
+        print(
+            {
+                "boundary_contrastive": {
+                    "type": "in_batch_hard_boundary_contrastive",
+                    "loss_weight": float(train_config.boundary_contrastive_loss_weight),
+                    "pairs": _parse_boundary_contrastive_pairs(
+                        train_config.boundary_contrastive_pairs,
+                        data_spec.num_classes,
+                    ),
+                    "sources": _parse_metric_learning_sources(train_config.boundary_contrastive_sources),
+                    "margin": float(train_config.boundary_contrastive_margin),
+                    "temperature": float(train_config.boundary_contrastive_temperature),
+                    "max_pairs": int(train_config.boundary_contrastive_max_pairs),
+                },
+                "reason": "Tap trung so sanh class de nham trong batch, khong tao pair dataset.",
+            },
+            flush=True,
+        )
     train_amp = bool(train_config.amp)
     if train_config.use_sam and train_amp:
         train_amp = False
@@ -5767,6 +6252,7 @@ def main() -> None:
         "train_dataset_report": train_dataset_report,
         "rare_class_repeat": rare_class_repeat_summary,
         "hard_sample_repeat": hard_sample_repeat_summary,
+        "sample_weight_manifest": sample_weight_summary,
         "class_crop_margin": class_crop_margin_summary,
         "targeted_copy_paste": targeted_copy_paste_summary,
         "val_dataset_report": val_dataset_report,
@@ -5994,6 +6480,12 @@ def main() -> None:
                     metric_learning_criterion=metric_learning_criterion,
                     metric_learning_loss_weight=train_config.metric_learning_loss_weight,
                     metric_learning_sources=train_config.metric_learning_sources,
+                    boundary_contrastive_loss_weight=train_config.boundary_contrastive_loss_weight,
+                    boundary_contrastive_pairs=train_config.boundary_contrastive_pairs,
+                    boundary_contrastive_sources=train_config.boundary_contrastive_sources,
+                    boundary_contrastive_margin=train_config.boundary_contrastive_margin,
+                    boundary_contrastive_temperature=train_config.boundary_contrastive_temperature,
+                    boundary_contrastive_max_pairs=train_config.boundary_contrastive_max_pairs,
                     foreground_consistency_loss_weight=train_config.foreground_consistency_loss_weight,
                     foreground_consistency_margin=train_config.foreground_consistency_margin,
                     attention_view_loss_weight=train_config.attention_view_loss_weight,
@@ -6126,6 +6618,14 @@ def main() -> None:
                     "train_loss": train_loss,
                     "train_cls_loss": train_artifact_stats.get("cls_loss", 0.0),
                     "train_metric_learning_loss": train_artifact_stats.get("metric_learning_loss", 0.0),
+                    "train_boundary_contrastive_loss": train_artifact_stats.get(
+                        "boundary_contrastive_loss",
+                        0.0,
+                    ),
+                    "train_boundary_contrastive_terms": train_artifact_stats.get(
+                        "boundary_contrastive_terms",
+                        0.0,
+                    ),
                     "train_foreground_consistency_loss": train_artifact_stats.get(
                         "foreground_consistency_loss",
                         0.0,
@@ -6164,6 +6664,7 @@ def main() -> None:
                         0.0,
                     ),
                     "train_elr_loss": train_artifact_stats.get("elr_loss", 0.0),
+                    "train_sample_weight_mean": train_artifact_stats.get("sample_weight_mean", 1.0),
                     "train_objectness_loss": train_artifact_stats.get("objectness_loss", 0.0),
                     "train_bbox_l1_loss": train_artifact_stats.get("bbox_l1_loss", 0.0),
                     "train_bbox_giou_loss": train_artifact_stats.get("bbox_giou_loss", 0.0),
@@ -6542,6 +7043,8 @@ def main() -> None:
                         "train_loss",
                         "train_cls_loss",
                         "train_metric_learning_loss",
+                        "train_boundary_contrastive_loss",
+                        "train_boundary_contrastive_terms",
                         "train_foreground_consistency_loss",
                         "train_attention_view_loss",
                         "train_attention_view_fraction",
@@ -6553,6 +7056,7 @@ def main() -> None:
                         "train_ordinal_maturity_loss",
                         "train_distillation_loss",
                         "train_elr_loss",
+                        "train_sample_weight_mean",
                         "train_objectness_loss",
                         "train_bbox_l1_loss",
                         "train_bbox_giou_loss",

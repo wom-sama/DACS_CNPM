@@ -244,6 +244,12 @@ class TrainConfig:
     metric_learning_temperature: float = 0.12
     metric_learning_class_balanced: bool = True
     metric_learning_sources: str = "head"
+    boundary_contrastive_loss_weight: float = 0.0
+    boundary_contrastive_pairs: str = "0-1,1-2,2-3,4-rest"
+    boundary_contrastive_sources: str = "head,patch"
+    boundary_contrastive_margin: float = 0.12
+    boundary_contrastive_temperature: float = 0.20
+    boundary_contrastive_max_pairs: int = 128
     foreground_consistency_loss_weight: float = 0.0
     foreground_consistency_margin: float = 0.08
     attention_view_loss_weight: float = 0.0
@@ -273,6 +279,9 @@ class TrainConfig:
     elr_loss_weight: float = 0.0
     elr_beta: float = 0.70
     elr_start_epoch: int = 2
+    sample_weight_manifest: str = ""
+    sample_weight_factor: float = 1.0
+    sample_weight_max: float = 5.0
     balance_auto_max_repeat_factor: float = 0.0
     fair_f1_gap_target: float = 0.05
     fair_f1_gap_penalty: float = 1.5
