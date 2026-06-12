@@ -46,6 +46,7 @@ from trkh.models.feature_hooks import (
 from trkh.data.dataset import (
     ClassificationFolderDataset,
     HardSampleRepeatDataset,
+    IndexedSampleDataset,
     MangoYOLOCropDataset,
     RareClassRepeatDataset,
     StrictBalancedBatchSampler,
@@ -94,6 +95,7 @@ from trkh.training.train import (
     _save_interrupt_checkpoint,
     _build_attention_guided_views,
     _attention_guided_score_map,
+    _early_learning_regularization_loss,
     _bounded_attention_drop_mask,
     _forward_train_loss,
     _foreground_consistency_loss_from_features,
@@ -3105,6 +3107,48 @@ dataset_balance:
         self.assertGreater(collapsed_loss.item(), diverse_loss.item())
         collapsed_loss.backward()
         self.assertIsNotNone(collapsed.grad)
+
+    def test_indexed_sample_dataset_collate_preserves_sample_indices(self):
+        class _TinyDataset(torch.utils.data.Dataset):
+            def __len__(self):
+                return 3
+
+            def __getitem__(self, index):
+                return torch.full((3, 8, 8), float(index)), int(index % 2)
+
+        wrapped = IndexedSampleDataset(_TinyDataset())
+        collate = build_train_collate_fn(num_classes=2, batch_mix_probability=0.0)
+        images, labels, metadata = collate([wrapped[0], wrapped[2]])
+
+        self.assertEqual(tuple(images.shape), (2, 3, 8, 8))
+        self.assertTrue(torch.equal(labels, torch.tensor([0, 0], dtype=torch.long)))
+        self.assertIn("sample_index", metadata)
+        self.assertTrue(torch.equal(metadata["sample_index"], torch.tensor([0, 2], dtype=torch.long)))
+
+    def test_early_learning_regularization_updates_target_state(self):
+        logits = torch.tensor(
+            [[2.0, 0.2, -0.4], [0.1, 1.5, -0.2]],
+            dtype=torch.float32,
+            requires_grad=True,
+        )
+        sample_indices = torch.tensor([0, 3], dtype=torch.long)
+        target_state = torch.zeros(5, 3, dtype=torch.float32)
+
+        loss = _early_learning_regularization_loss(
+            logits,
+            sample_indices,
+            target_state,
+            beta=0.7,
+            update_state=True,
+        )
+
+        self.assertTrue(torch.isfinite(loss).item())
+        self.assertLessEqual(float(loss.item()), 0.0)
+        self.assertTrue(torch.allclose(target_state[0].sum(), torch.tensor(1.0), atol=1e-6))
+        self.assertTrue(torch.allclose(target_state[3].sum(), torch.tensor(1.0), atol=1e-6))
+        self.assertEqual(float(target_state[1].sum().item()), 0.0)
+        loss.backward()
+        self.assertIsNotNone(logits.grad)
 
 if __name__ == "__main__":
     unittest.main()

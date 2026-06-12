@@ -19,6 +19,9 @@ param(
     [double]$AttentionViewForegroundWeight = 0.40,
     [double]$AttentionDropMinAreaRatio = 0.06,
     [double]$AttentionDropMaxAreaRatio = 0.16,
+    [double]$ElrLossWeight = 0.0,
+    [double]$ElrBeta = 0.70,
+    [int]$ElrStartEpoch = 2,
     [switch]$PreflightOnly,
     [switch]$Smoke,
     [bool]$TraceArchitecture = $true
@@ -93,6 +96,9 @@ if ($PreflightOnly) {
         attention_view_foreground_weight = $AttentionViewForegroundWeight
         attention_drop_min_area_ratio = $AttentionDropMinAreaRatio
         attention_drop_max_area_ratio = $AttentionDropMaxAreaRatio
+        elr_loss_weight = $ElrLossWeight
+        elr_beta = $ElrBeta
+        elr_start_epoch = $ElrStartEpoch
     } | ConvertTo-Json -Depth 5
     exit 0
 }
@@ -215,6 +221,9 @@ try {
         "--attention-drop-dilation-kernel", "5",
         "--attention-drop-min-area-ratio", "$AttentionDropMinAreaRatio",
         "--attention-drop-max-area-ratio", "$AttentionDropMaxAreaRatio",
+        "--elr-loss-weight", "$ElrLossWeight",
+        "--elr-beta", "$ElrBeta",
+        "--elr-start-epoch", "$ElrStartEpoch",
         "--register-diversity-loss-weight", "0.0",
         "--pairwise-margin-loss-weight", "0.04",
         "--hard-sample-manifest", "runs\mango_cls_256_5class_defectstat_v3_30e\hard_mining_train_only\hard_samples_train_only.csv",
@@ -301,6 +310,9 @@ try {
         attention_view_foreground_weight = $AttentionViewForegroundWeight
         attention_drop_min_area_ratio = $AttentionDropMinAreaRatio
         attention_drop_max_area_ratio = $AttentionDropMaxAreaRatio
+        elr_loss_weight = $ElrLossWeight
+        elr_beta = $ElrBeta
+        elr_start_epoch = $ElrStartEpoch
         train_args = $TrainArgs
     } | ConvertTo-Json -Depth 6 |
         Set-Content -Path (Join-Path $RunDir "launcher_args.json")

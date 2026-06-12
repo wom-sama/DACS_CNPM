@@ -953,6 +953,11 @@ class TrainBatchCollator:
                     [sample[2]["teacher_probs"] for sample in batch],
                     dim=0,
                 ).to(dtype=torch.float32)
+            if "sample_index" in batch[0][2]:
+                metadata["sample_index"] = torch.as_tensor(
+                    [int(sample[2]["sample_index"]) for sample in batch],
+                    dtype=torch.long,
+                )
             if metadata:
                 return images, labels, metadata
 
@@ -2527,6 +2532,34 @@ class TeacherProbabilityDataset(Dataset):
         if len(item) >= 3 and isinstance(item[2], dict):
             metadata = dict(item[2])
             metadata["teacher_probs"] = teacher_probs.clone()
+            return item[0], item[1], metadata
+        return item
+
+
+class IndexedSampleDataset(Dataset):
+    def __init__(self, dataset: Dataset) -> None:
+        self.dataset = dataset
+
+    def __len__(self) -> int:
+        return len(self.dataset)
+
+    def __getattr__(self, name: str):
+        if name.startswith("__") and name.endswith("__"):
+            raise AttributeError(name)
+        dataset = self.__dict__.get("dataset")
+        if dataset is None:
+            raise AttributeError(name)
+        return getattr(dataset, name)
+
+    def __getitem__(self, index: int):
+        item = self.dataset[int(index)]
+        sample_index = torch.tensor(int(index), dtype=torch.long)
+        if len(item) == 2:
+            image, label = item
+            return image, label, {"sample_index": sample_index}
+        if len(item) >= 3 and isinstance(item[2], dict):
+            metadata = dict(item[2])
+            metadata["sample_index"] = sample_index
             return item[0], item[1], metadata
         return item
 

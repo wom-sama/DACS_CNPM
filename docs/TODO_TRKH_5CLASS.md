@@ -107,8 +107,15 @@
 - [x] Smoke v9 de xac nhan score/crop/drop nam tren be mat qua, khong bam padding/vien; trace class 1 tap trung vao vet lom/dot tren be mat, con mot diem nong mep trai.
 - [x] Chay probe v9 80 train batch x 4 epoch, full val: best val macro F1 `0.8857`, class 1 F1 `0.6783`; test macro F1 `0.8894`, class 1 F1 `0.6708`.
 - [x] Khong full-train v9 vi chua dat gate class-1 val F1 `>=0.70`; ghi audit tai `docs/TRKH_5CLASS_SURFACE_DETAIL_V9_AUDIT_20260612.md`.
-- [ ] Huong tiep theo co do dot pha hon: calibration/selector leakage-safe tu top-5 TTA teacher + TRKH V8/V9, hoac label-boundary audit truoc ELR.
-- [ ] Neu attention-view khong vuot v4, audit nhan train-only va thu ELR warm-up; khong bat ELR tren test.
+- [x] Them ELR optional cho classification-only voi `IndexedSampleDataset`, CLI flags `--elr-loss-weight/--elr-beta/--elr-start-epoch`, mac dinh tat.
+- [x] Them `train_elr_loss` vao history va test unit cho sample index + ELR target history.
+- [x] Them launcher `scripts/run_trkh_5class_elr_v10.ps1` va tham so ELR vao attention-view launcher v8.
+- [x] Chay smoke v10: exit `0`, ELR state `[9524,5]`, architecture trace completed, `train_elr_loss=-0.2485`.
+- [x] Chay probe v10 120 train batch x 4 epoch, full val: best val macro F1 `0.8862`, class 1 F1 `0.6784`; test macro F1 `0.8923`, class 1 F1 `0.6792`.
+- [x] Khong full-train v10 vi chua dat gate class-1 val F1 `>=0.70`; ghi audit tai `docs/TRKH_5CLASS_ELR_V10_AUDIT_20260612.md`.
+- [x] Xuat v10 test detailed predictions va class-1 confusion audit tai `runs/probe_mango_cls_256_5class_surface_detail_elr_v10_120b_6e_20260612/class1_confusion_audit_test`.
+- [ ] Huong tiep theo co do dot pha hon: label-boundary audit train-only, boundary-aware loss/sample weighting, hoac local surface/color pair comparator cho bien `0/1`, `1/2`, `2/3`.
+- [ ] Neu tiep tuc ELR, chi thu ablation nho hon/lon hon (`0.03`, `0.20`) sau label audit; khong full train neu class-1 val F1 chua qua `0.70`.
 - [x] Chay preflight khong train truoc smoke 2026-06-11.
 - [x] Chay smoke TRKH voi `--max-train-batches 1 --max-val-batches 1 --skip-final-test`.
 - [x] Tao audit list anh sai/confusion class 1 tu `final_test_detailed/predictions_detailed.csv`.

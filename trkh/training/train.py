@@ -40,6 +40,7 @@ from trkh.core.config import (
 from trkh.data.dataset import (
     ClassificationFolderDataset,
     HardSampleRepeatDataset,
+    IndexedSampleDataset,
     MangoYOLOCropDataset,
     PseudoVideoAugmenter,
     RareClassRepeatDataset,
@@ -685,6 +686,27 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--distillation-focus-class-index", type=int, default=1)
     parser.add_argument("--distillation-focus-class-weight", type=float, default=1.5)
     parser.add_argument(
+        "--elr-loss-weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Trong so Early-Learning Regularization cho classification-only; "
+            "0 de tat. Dung khi nghi nhan/boundary noise."
+        ),
+    )
+    parser.add_argument(
+        "--elr-beta",
+        type=float,
+        default=0.70,
+        help="EMA beta cho target history cua ELR.",
+    )
+    parser.add_argument(
+        "--elr-start-epoch",
+        type=int,
+        default=2,
+        help="Epoch bat dau cong ELR loss; target history van duoc cap nhat tu dau.",
+    )
+    parser.add_argument(
         "--balance-auto-max-repeat-factor",
         type=float,
         default=0.0,
@@ -1164,6 +1186,12 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         raise ValueError("--distillation-focus-class-index phai >= 0.")
     if args.distillation_focus_class_weight <= 0.0:
         raise ValueError("--distillation-focus-class-weight phai > 0.")
+    if args.elr_loss_weight < 0.0:
+        raise ValueError("--elr-loss-weight phai >= 0.")
+    if not 0.0 <= args.elr_beta < 1.0:
+        raise ValueError("--elr-beta phai nam trong [0, 1).")
+    if args.elr_start_epoch < 0:
+        raise ValueError("--elr-start-epoch phai >= 0.")
     if (
         args.pretrained_distillation
         and args.distillation_teacher_checkpoint is None
@@ -1384,6 +1412,9 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         distillation_temperature=args.distillation_temperature,
         distillation_focus_class_index=args.distillation_focus_class_index,
         distillation_focus_class_weight=args.distillation_focus_class_weight,
+        elr_loss_weight=args.elr_loss_weight,
+        elr_beta=args.elr_beta,
+        elr_start_epoch=args.elr_start_epoch,
         balance_auto_max_repeat_factor=args.balance_auto_max_repeat_factor,
         fair_f1_gap_target=args.fair_f1_gap_target,
         fair_f1_gap_penalty=args.fair_f1_gap_penalty,
@@ -3343,6 +3374,48 @@ def _probability_distillation_loss(
     return loss.to(dtype=student_logits.dtype) * (temperature * temperature)
 
 
+def _early_learning_regularization_loss(
+    logits: Tensor,
+    sample_indices: Optional[Tensor],
+    target_state: Optional[Tensor],
+    *,
+    beta: float,
+    update_state: bool = True,
+) -> Tensor:
+    zero = logits.sum() * 0.0
+    if (
+        target_state is None
+        or sample_indices is None
+        or not torch.is_tensor(sample_indices)
+        or logits.ndim != 2
+        or target_state.ndim != 2
+        or target_state.size(1) != logits.size(1)
+    ):
+        return zero
+    flat_indices = sample_indices.to(device=target_state.device, dtype=torch.long).view(-1)
+    if flat_indices.numel() != logits.size(0):
+        return zero
+    valid_mask = (flat_indices >= 0) & (flat_indices < int(target_state.size(0)))
+    if not bool(valid_mask.any().item()):
+        return zero
+    valid_indices = flat_indices[valid_mask]
+    valid_logits = logits[valid_mask.to(device=logits.device)]
+    with torch.no_grad():
+        probabilities = F.softmax(valid_logits.detach().float(), dim=1).to(
+            device=target_state.device,
+            dtype=target_state.dtype,
+        )
+        previous = target_state.index_select(0, valid_indices)
+        updated = float(beta) * previous + (1.0 - float(beta)) * probabilities
+        updated = updated / updated.sum(dim=1, keepdim=True).clamp(min=1e-12)
+        if update_state:
+            target_state.index_copy_(0, valid_indices, updated)
+        target = updated.detach().to(device=logits.device, dtype=torch.float32)
+    student_probabilities = F.softmax(valid_logits.float(), dim=1)
+    agreement = (student_probabilities * target).sum(dim=1).clamp(min=1e-6, max=1.0 - 1e-6)
+    return torch.log1p(-agreement).mean().to(dtype=logits.dtype)
+
+
 def _stack_image_masks_from_targets(targets) -> Optional[Tensor]:
     if not _is_detection_targets(targets):
         return None
@@ -3396,6 +3469,12 @@ def _forward_train_loss(
     distillation_focus_class_index: int = 1,
     distillation_focus_class_weight: float = 1.0,
     offline_teacher_probabilities: Optional[Tensor] = None,
+    sample_indices: Optional[Tensor] = None,
+    elr_target_state: Optional[Tensor] = None,
+    elr_loss_weight: float = 0.0,
+    elr_beta: float = 0.70,
+    elr_start_epoch: int = 2,
+    elr_update_state: bool = True,
 ) -> Tuple[Tensor, Optional[Dict[str, Tensor]], Tensor, Dict[str, float], Optional[Tensor]]:
     with autocast_context(device, amp):
         image_valid_mask = _stack_image_masks_from_targets(targets)
@@ -3418,6 +3497,7 @@ def _forward_train_loss(
             pairwise_margin_loss = logits.sum() * 0.0
             ordinal_maturity_loss = logits.sum() * 0.0
             distillation_loss = logits.sum() * 0.0
+            elr_loss = logits.sum() * 0.0
             if (
                 metric_learning_criterion is not None
                 and float(metric_learning_loss_weight) > 0.0
@@ -3538,6 +3618,21 @@ def _forward_train_loss(
                 )
                 distillation_loss = distillation_loss + offline_distillation_loss
                 loss = loss + float(distillation_loss_weight) * offline_distillation_loss
+            if (
+                elr_target_state is not None
+                and sample_indices is not None
+                and float(elr_loss_weight) > 0.0
+                and torch.is_tensor(targets)
+            ):
+                elr_loss = _early_learning_regularization_loss(
+                    logits,
+                    sample_indices,
+                    elr_target_state,
+                    beta=elr_beta,
+                    update_state=elr_update_state,
+                )
+                if int(epoch_index) >= int(elr_start_epoch):
+                    loss = loss + float(elr_loss_weight) * elr_loss
             loss_details = {
                 "loss": float(loss.detach().cpu().item()),
                 "cls_loss": float(
@@ -3550,6 +3645,11 @@ def _forward_train_loss(
                         - float(pairwise_margin_loss_weight) * pairwise_margin_loss
                         - float(ordinal_maturity_loss_weight) * ordinal_maturity_loss
                         - float(distillation_loss_weight) * distillation_loss
+                        - (
+                            float(elr_loss_weight) * elr_loss
+                            if int(epoch_index) >= int(elr_start_epoch)
+                            else 0.0
+                        )
                     )
                     .detach()
                     .cpu()
@@ -3563,6 +3663,7 @@ def _forward_train_loss(
                 "pairwise_margin_loss": float(pairwise_margin_loss.detach().cpu().item()),
                 "ordinal_maturity_loss": float(ordinal_maturity_loss.detach().cpu().item()),
                 "distillation_loss": float(distillation_loss.detach().cpu().item()),
+                "elr_loss": float(elr_loss.detach().cpu().item()),
                 "objectness_loss": 0.0,
                 "bbox_l1_loss": 0.0,
                 "bbox_giou_loss": 0.0,
@@ -3733,6 +3834,10 @@ def train_one_epoch(
     distillation_temperature: float = 2.0,
     distillation_focus_class_index: int = 1,
     distillation_focus_class_weight: float = 1.0,
+    elr_target_state: Optional[Tensor] = None,
+    elr_loss_weight: float = 0.0,
+    elr_beta: float = 0.70,
+    elr_start_epoch: int = 2,
     use_sam: bool = False,
     grad_accum_steps: int = 1,
     max_nonfinite_grad_steps: int = 8,
@@ -3768,6 +3873,7 @@ def train_one_epoch(
         "pairwise_margin_loss": 0.0,
         "ordinal_maturity_loss": 0.0,
         "distillation_loss": 0.0,
+        "elr_loss": 0.0,
         "objectness_loss": 0.0,
         "bbox_l1_loss": 0.0,
         "bbox_giou_loss": 0.0,
@@ -3798,6 +3904,7 @@ def train_one_epoch(
                 # during regular AdamW training where replay is never consumed.
                 replay_batches.append(_clone_batch_for_replay(batch))
             offline_teacher_probabilities = None
+            sample_indices = None
             if len(batch) == 2 and _is_detection_targets(batch[1]):
                 batch_images, batch_targets = batch
                 labels = None
@@ -3807,7 +3914,14 @@ def train_one_epoch(
                 labels = batch_labels.to(device, non_blocking=True) if batch_labels is not None else None
                 moved_batch_targets = _move_batch_item_to_device(batch_targets, device)
                 offline_teacher_probabilities = None
-                if isinstance(moved_batch_targets, dict) and "teacher_probs" in moved_batch_targets:
+                if isinstance(moved_batch_targets, dict):
+                    sample_value = moved_batch_targets.get("sample_index")
+                    if torch.is_tensor(sample_value):
+                        sample_indices = sample_value.to(
+                            device=device,
+                            dtype=torch.long,
+                            non_blocking=True,
+                        )
                     teacher_value = moved_batch_targets.get("teacher_probs")
                     if torch.is_tensor(teacher_value):
                         offline_teacher_probabilities = teacher_value.to(
@@ -3858,6 +3972,12 @@ def train_one_epoch(
                 distillation_focus_class_index=distillation_focus_class_index,
                 distillation_focus_class_weight=distillation_focus_class_weight,
                 offline_teacher_probabilities=offline_teacher_probabilities,
+                sample_indices=sample_indices,
+                elr_target_state=elr_target_state,
+                elr_loss_weight=elr_loss_weight,
+                elr_beta=elr_beta,
+                elr_start_epoch=elr_start_epoch,
+                elr_update_state=True,
                 images=images,
                 labels=labels,
                 targets=targets,
@@ -3933,12 +4053,20 @@ def train_one_epoch(
                         replay_images = replay_batch[0].to(device, non_blocking=True)
                         replay_labels = None
                         replay_offline_teacher_probabilities = None
+                        replay_sample_indices = None
                         if len(replay_batch) == 2 and _is_detection_targets(replay_batch[1]):
                             replay_targets = _move_batch_item_to_device(replay_batch[1], device)
                         elif len(replay_batch) == 3:
                             replay_labels = replay_batch[1].to(device, non_blocking=True)
                             replay_moved_targets = _move_batch_item_to_device(replay_batch[2], device)
-                            if isinstance(replay_moved_targets, dict) and "teacher_probs" in replay_moved_targets:
+                            if isinstance(replay_moved_targets, dict):
+                                sample_value = replay_moved_targets.get("sample_index")
+                                if torch.is_tensor(sample_value):
+                                    replay_sample_indices = sample_value.to(
+                                        device=device,
+                                        dtype=torch.long,
+                                        non_blocking=True,
+                                    )
                                 teacher_value = replay_moved_targets.get("teacher_probs")
                                 if torch.is_tensor(teacher_value):
                                     replay_offline_teacher_probabilities = teacher_value.to(
@@ -3946,7 +4074,7 @@ def train_one_epoch(
                                         dtype=torch.float32,
                                         non_blocking=True,
                                     )
-                                replay_targets = replay_labels
+                                replay_targets = replay_labels if replay_labels is not None else replay_moved_targets
                             else:
                                 replay_targets = replay_moved_targets
                         else:
@@ -3984,6 +4112,12 @@ def train_one_epoch(
                             distillation_focus_class_index=distillation_focus_class_index,
                             distillation_focus_class_weight=distillation_focus_class_weight,
                             offline_teacher_probabilities=replay_offline_teacher_probabilities,
+                            sample_indices=replay_sample_indices,
+                            elr_target_state=elr_target_state,
+                            elr_loss_weight=elr_loss_weight,
+                            elr_beta=elr_beta,
+                            elr_start_epoch=elr_start_epoch,
+                            elr_update_state=False,
                             images=replay_images,
                             labels=replay_labels,
                             targets=replay_targets,
@@ -5063,6 +5197,30 @@ def main() -> None:
             },
             flush=True,
         )
+    elr_summary: Dict[str, object] = {"enabled": False}
+    if float(train_config.elr_loss_weight) > 0.0:
+        if detection_mode:
+            raise ValueError("ELR hien chi ho tro classification-only train.")
+        train_dataset = IndexedSampleDataset(train_dataset)
+        elr_summary = {
+            "enabled": True,
+            "samples": int(len(train_dataset)),
+            "num_classes": int(data_spec.num_classes),
+            "loss_weight": float(train_config.elr_loss_weight),
+            "beta": float(train_config.elr_beta),
+            "start_epoch": int(train_config.elr_start_epoch),
+            "source_split": "train_only_after_repeat_wrappers",
+            "note": (
+                "sample_index duoc tao sau rare/hard repeat va truoc sampler; "
+                "khong dung val/test de cap nhat target history"
+            ),
+        }
+        if float(train_config.batch_mix_probability) > 0.0:
+            elr_summary["batch_mix_note"] = (
+                "ELR metadata lam collator tra ve hard-label batch; "
+                "nen dat --batch-mix-probability 0 cho run ELR de hanh vi ro rang"
+            )
+        print({"early_learning_regularization": elr_summary}, flush=True)
     class_target_scales = _combine_class_target_scales(
         data_spec.num_classes,
         getattr(train_dataset, "class_augmentation_scales", []),
@@ -5302,6 +5460,23 @@ def main() -> None:
             raise ValueError(
                 "Distillation da bat nhung khong co checkpoint hoac offline CSV."
             )
+    elr_target_state: Optional[Tensor] = None
+    if bool(elr_summary.get("enabled")):
+        elr_target_state = torch.zeros(
+            (int(elr_summary["samples"]), int(data_spec.num_classes)),
+            device=device,
+            dtype=torch.float32,
+        )
+        print(
+            {
+                "early_learning_regularization_state": {
+                    "shape": list(elr_target_state.shape),
+                    "device": str(elr_target_state.device),
+                    "dtype": str(elr_target_state.dtype).replace("torch.", ""),
+                }
+            },
+            flush=True,
+        )
     if model_config.gradient_checkpointing:
         GradientCheckpointingEnabler.enable_gradient_checkpointing(model)
         print(
@@ -5629,6 +5804,7 @@ def main() -> None:
         "parameter_count": count_parameters(model),
         "pretrained_distillation": to_serializable(distillation_summary),
         "offline_distillation": to_serializable(offline_distillation_summary),
+        "early_learning_regularization": to_serializable(elr_summary),
     }
     json_dump(run_dir / "resolved_config.json", config_payload)
     parameter_count = int(config_payload["parameter_count"])
@@ -5843,6 +6019,10 @@ def main() -> None:
                     distillation_temperature=train_config.distillation_temperature,
                     distillation_focus_class_index=train_config.distillation_focus_class_index,
                     distillation_focus_class_weight=train_config.distillation_focus_class_weight,
+                    elr_target_state=elr_target_state,
+                    elr_loss_weight=train_config.elr_loss_weight,
+                    elr_beta=train_config.elr_beta,
+                    elr_start_epoch=train_config.elr_start_epoch,
                     use_sam=train_config.use_sam,
                     grad_accum_steps=train_config.grad_accum_steps,
                     max_nonfinite_grad_steps=train_config.max_nonfinite_grad_steps,
@@ -5983,6 +6163,7 @@ def main() -> None:
                         "distillation_loss",
                         0.0,
                     ),
+                    "train_elr_loss": train_artifact_stats.get("elr_loss", 0.0),
                     "train_objectness_loss": train_artifact_stats.get("objectness_loss", 0.0),
                     "train_bbox_l1_loss": train_artifact_stats.get("bbox_l1_loss", 0.0),
                     "train_bbox_giou_loss": train_artifact_stats.get("bbox_giou_loss", 0.0),
@@ -6371,6 +6552,7 @@ def main() -> None:
                         "train_pairwise_margin_loss",
                         "train_ordinal_maturity_loss",
                         "train_distillation_loss",
+                        "train_elr_loss",
                         "train_objectness_loss",
                         "train_bbox_l1_loss",
                         "train_bbox_giou_loss",

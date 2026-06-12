@@ -270,6 +270,9 @@ class TrainConfig:
     distillation_temperature: float = 2.0
     distillation_focus_class_index: int = 1
     distillation_focus_class_weight: float = 1.0
+    elr_loss_weight: float = 0.0
+    elr_beta: float = 0.70
+    elr_start_epoch: int = 2
     balance_auto_max_repeat_factor: float = 0.0
     fair_f1_gap_target: float = 0.05
     fair_f1_gap_penalty: float = 1.5
