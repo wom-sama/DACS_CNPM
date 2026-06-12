@@ -139,9 +139,17 @@
 - [x] Chay probe V14 120 batch x toi da 6 epoch: best val macro/class1 `0.8859/0.6802`; test `0.8912/0.6750`.
 - [x] Khong full-train V14 vi class-1 validation F1 thap hon V12 va khong qua gate `0.70`.
 - [x] Ghi audit V14 tai `docs/TRKH_5CLASS_BILINEAR_PATCH_V14_AUDIT_20260612.md`.
-- [ ] Audit exact/near duplicate/source sequence cua `class_f` va doi chieu fairness cua baseline ViT `1.0`.
-- [ ] Chay validation-only boundary calibration tren V12, sau do chi danh gia test mot lan.
-- [ ] Huong tiep theo co do dot pha hon: train-only label-boundary audit hoac learned object-tight crop/mask truoc local comparator.
+- [x] Audit exact/near duplicate/source sequence cua `class_f`: khong co exact SHA1, nhung co source-sequence leakage tren cung qua/phien chup giua train/val/test; ghi tai `docs/TRKH_5CLASS_CLASS_F_SPLIT_AUDIT_20260612.md`.
+- [x] Doi chieu baseline ViT `1.0`: khong co trong bang local tren cung protocol; khong du thong tin de so sanh truc tiep.
+- [x] Chay validation-only boundary calibration tren V12: val tang nhe `0.8863/0.6864 -> 0.8929/0.6925`, nhung test macro giam `0.8943 -> 0.8877`, class 1 khong doi; reject.
+- [x] Nghien cuu va them frequency-selective patch pooling V15 theo LaSt-ViT, co foreground gating, residual blend, CLI, launcher va trace vote.
+- [x] Full regression V15: `116 passed`; preflight/smoke/probe exit `0`.
+- [x] Probe V15: val macro/class1 `0.8872/0.6788`, test `0.8975/0.6923`; khong full train vi class-1 val thap hon V12 va chua qua `0.70`.
+- [x] Xuat detailed predictions, class-1 audit va 1 trace moi class cho V15.
+- [ ] Tao group-clean split theo qua goc/phien chup truoc khi dung metric de khang dinh generalization.
+- [ ] Tao train-only label-boundary review set cho 0/1/2, ghi label dung/sai/ambiguous va quality condition.
+- [ ] Thu learned object-tight localization/mask co supervision; khong tiep tuc siet pseudo-mask mau vi co/la xanh co the dinh vao qua.
+- [ ] Thu pairwise specialist/router chi kich hoat tren top-2 boundary, khong adjustment toan cuc.
 - [ ] Neu tiep tuc ELR, chi thu ablation nho hon/lon hon (`0.03`, `0.20`) sau label audit; khong full train neu class-1 val F1 chua qua `0.70`.
 - [x] Chay preflight khong train truoc smoke 2026-06-11.
 - [x] Chay smoke TRKH voi `--max-train-batches 1 --max-val-batches 1 --skip-final-test`.

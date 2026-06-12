@@ -552,6 +552,106 @@ class DetectionCalibrationTests(unittest.TestCase):
         with torch.no_grad():
             self.assertTrue(torch.allclose(base(images), bilinear(images), atol=1e-6))
 
+    def test_frequency_selective_pooling_blend_zero_preserves_checkpoint(self):
+        base = create_model(
+            num_classes=5,
+            model_config=ModelConfig(
+                model_type="vit_registers",
+                image_size=32,
+                patch_size=8,
+                use_cnn_stem=False,
+                embed_dim=32,
+                depth=2,
+                num_heads=4,
+                num_registers=2,
+                dropout=0.0,
+                attention_dropout=0.0,
+                drop_path_rate=0.0,
+            ),
+        )
+        selective = create_model(
+            num_classes=5,
+            model_config=ModelConfig(
+                model_type="vit_registers",
+                image_size=32,
+                patch_size=8,
+                use_cnn_stem=False,
+                embed_dim=32,
+                depth=2,
+                num_heads=4,
+                num_registers=2,
+                dropout=0.0,
+                attention_dropout=0.0,
+                drop_path_rate=0.0,
+                frequency_selective_pooling=True,
+                frequency_selective_top_k=1,
+                frequency_selective_blend=0.0,
+            ),
+        )
+        missing, unexpected = selective.load_flexible_state_dict(
+            base.state_dict(),
+            strict=False,
+        )
+        self.assertEqual(missing, [])
+        self.assertEqual(unexpected, [])
+        images = torch.randn(2, 3, 32, 32)
+        base.eval()
+        selective.eval()
+        with torch.no_grad():
+            self.assertTrue(torch.allclose(base(images), selective(images), atol=1e-6))
+
+    def test_frequency_selective_pooling_votes_are_normalized_and_traced(self):
+        model = create_model(
+            num_classes=5,
+            model_config=ModelConfig(
+                model_type="vit_registers",
+                image_size=32,
+                patch_size=8,
+                use_cnn_stem=False,
+                embed_dim=32,
+                depth=2,
+                num_heads=4,
+                num_registers=2,
+                dropout=0.0,
+                attention_dropout=0.0,
+                drop_path_rate=0.0,
+                frequency_selective_pooling=True,
+                frequency_selective_top_k=2,
+                frequency_selective_blend=1.0,
+                frequency_selective_foreground_threshold=0.35,
+            ),
+        )
+        images = torch.randn(2, 3, 32, 32)
+        features = model.forward_features(images, return_trace=True)
+        logits = classification_logits_from_features(model, features)
+        votes = features["trace"]["frequency_selective_vote_fraction"]
+        self.assertEqual(tuple(logits.shape), (2, 5))
+        self.assertEqual(tuple(votes.shape), (2, 16))
+        self.assertTrue(
+            torch.allclose(
+                votes.sum(dim=1),
+                torch.ones(2),
+                atol=1e-6,
+            )
+        )
+        self.assertTrue(torch.isfinite(features["frequency_selective_feature"]).all())
+
+    def test_frequency_selective_pooling_respects_foreground_candidates(self):
+        pool = model_module.FrequencySelectivePatchPooling(
+            dim=8,
+            top_k=2,
+            foreground_threshold=0.5,
+        )
+        patches = torch.randn(1, 5, 8)
+        foreground_prior = torch.tensor([[0.1, 0.8, 0.9, 0.2, 0.7]])
+        _, trace = pool(
+            patches,
+            foreground_prior=foreground_prior,
+            return_trace=True,
+        )
+        selected = set(trace["selected_indices"].flatten().tolist())
+        self.assertTrue(selected.issubset({1, 2, 4}))
+
     def test_yolo_crop_dataset_exposes_sample_paths_for_color_audit(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

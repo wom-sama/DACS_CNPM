@@ -269,6 +269,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--bilinear-patch-rank", type=int, default=32)
     parser.add_argument("--bilinear-patch-dropout", type=float, default=0.1)
     parser.add_argument(
+        "--frequency-selective-pooling",
+        action="store_true",
+        default=False,
+        help=(
+            "Thay global token bang patch feature duoc chon theo on dinh tan so kieu LaSt-ViT; "
+            "padding-aware, khong dung pretrained."
+        ),
+    )
+    parser.add_argument("--frequency-selective-top-k", type=int, default=1)
+    parser.add_argument("--frequency-selective-blend", type=float, default=1.0)
+    parser.add_argument(
+        "--frequency-selective-foreground-threshold",
+        type=float,
+        default=0.35,
+    )
+    parser.add_argument(
         "--fine-grained-pooling",
         action="store_true",
         default=False,
@@ -1056,6 +1072,14 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         raise ValueError("--bilinear-patch-rank phai >= 8.")
     if args.bilinear_patch_dropout < 0.0:
         raise ValueError("--bilinear-patch-dropout phai >= 0.")
+    if args.frequency_selective_top_k < 1:
+        raise ValueError("--frequency-selective-top-k phai >= 1.")
+    if not 0.0 <= args.frequency_selective_blend <= 1.0:
+        raise ValueError("--frequency-selective-blend phai nam trong [0, 1].")
+    if not 0.0 <= args.frequency_selective_foreground_threshold <= 1.0:
+        raise ValueError(
+            "--frequency-selective-foreground-threshold phai nam trong [0, 1]."
+        )
     if args.fine_grained_pooling_dropout < 0.0:
         raise ValueError("--fine-grained-pooling-dropout phai >= 0.")
     if args.branch_token_dropout < 0.0:
@@ -1392,6 +1416,10 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         bilinear_patch_fusion=bool(args.bilinear_patch_fusion),
         bilinear_patch_rank=args.bilinear_patch_rank,
         bilinear_patch_dropout=args.bilinear_patch_dropout,
+        frequency_selective_pooling=bool(args.frequency_selective_pooling),
+        frequency_selective_top_k=args.frequency_selective_top_k,
+        frequency_selective_blend=args.frequency_selective_blend,
+        frequency_selective_foreground_threshold=args.frequency_selective_foreground_threshold,
         fine_grained_pooling=bool(args.fine_grained_pooling),
         fine_grained_pooling_dropout=args.fine_grained_pooling_dropout,
         multi_branch_fusion=bool(args.multi_branch_fusion),

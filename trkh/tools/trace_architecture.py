@@ -381,6 +381,16 @@ def main() -> None:
             _heatmap_image(bilinear_map, input_image.size).save(
                 class_dir / "09g_bilinear_patch_attention.png"
             )
+        frequency_votes = trace.get("frequency_selective_vote_fraction")
+        if torch.is_tensor(frequency_votes):
+            frequency_vote_map = _scatter_patch_values(
+                features["patch_indices"][0],
+                frequency_votes[0],
+                grid_size,
+            )
+            _heatmap_image(frequency_vote_map, input_image.size).save(
+                class_dir / "09h_frequency_selective_votes.png"
+            )
 
         block_shapes = trace["block_token_shapes"]
         block_indices = trace["block_patch_indices"]
@@ -439,6 +449,21 @@ def main() -> None:
             record["bilinear_patch_descriptor_shape"] = list(bilinear_descriptor.shape)
         if torch.is_tensor(bilinear_attention):
             record["bilinear_patch_attention_shape"] = list(bilinear_attention.shape)
+        if torch.is_tensor(frequency_votes):
+            record["frequency_selective_vote_shape"] = list(frequency_votes.shape)
+            record["frequency_selective_vote_sum"] = float(
+                frequency_votes[0].sum().item()
+            )
+            kept_foreground_prior = trace["foreground_prior"][0].gather(
+                0,
+                features["patch_indices"][0],
+            )
+            record["frequency_selective_foreground_prior_mean"] = float(
+                (frequency_votes[0] * kept_foreground_prior).sum().item()
+            )
+            record["frequency_selective_foreground_vote_mass"] = float(
+                frequency_votes[0][kept_foreground_prior >= 0.5].sum().item()
+            )
         (class_dir / "shapes.json").write_text(
             json.dumps(record, indent=2, ensure_ascii=False),
             encoding="utf-8",
@@ -488,6 +513,7 @@ def main() -> None:
         "- `09e_foreground_surface_brown_spot.png`: diem vet nau/hu hong sau khi mask foreground.",
         "- `09f_foreground_surface_bright_spot.png`: diem qua sang/lo sang sau khi mask foreground.",
         "- `09g_bilinear_patch_attention.png`: trong so patch cua compact bilinear fusion sau pruning.",
+        "- `09h_frequency_selective_votes.png`: ty le vote patch cua frequency-selective aggregation sau pruning.",
         "- `block_XX_token_norm.png`: norm token sau tung transformer block; o da prune de trong.",
         "- `prune_XX_after_layer_Y.png`: patch xanh duoc giu, patch toi bi loai.",
         "- `shapes.json`: shape va patch index chi tiet.",

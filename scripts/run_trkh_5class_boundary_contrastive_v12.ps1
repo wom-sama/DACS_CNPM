@@ -31,6 +31,10 @@ param(
     [bool]$BilinearPatchFusion = $false,
     [int]$BilinearPatchRank = 32,
     [double]$BilinearPatchDropout = 0.08,
+    [bool]$FrequencySelectivePooling = $false,
+    [int]$FrequencySelectiveTopK = 1,
+    [double]$FrequencySelectiveBlend = 1.0,
+    [double]$FrequencySelectiveForegroundThreshold = 0.35,
     [switch]$Probe,
     [switch]$PreflightOnly,
     [switch]$Smoke,
@@ -92,6 +96,10 @@ $launcherArgs = @{
     BilinearPatchFusion = $BilinearPatchFusion
     BilinearPatchRank = $BilinearPatchRank
     BilinearPatchDropout = $BilinearPatchDropout
+    FrequencySelectivePooling = $FrequencySelectivePooling
+    FrequencySelectiveTopK = $FrequencySelectiveTopK
+    FrequencySelectiveBlend = $FrequencySelectiveBlend
+    FrequencySelectiveForegroundThreshold = $FrequencySelectiveForegroundThreshold
     TraceArchitecture = $TraceArchitecture
 }
 if ($PreflightOnly) {

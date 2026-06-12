@@ -144,6 +144,10 @@ class ModelConfig:
     bilinear_patch_fusion: bool = False
     bilinear_patch_rank: int = 32
     bilinear_patch_dropout: float = 0.1
+    frequency_selective_pooling: bool = False
+    frequency_selective_top_k: int = 1
+    frequency_selective_blend: float = 1.0
+    frequency_selective_foreground_threshold: float = 0.35
     fine_grained_pooling: bool = False
     fine_grained_pooling_dropout: float = 0.1
     multi_branch_fusion: bool = False

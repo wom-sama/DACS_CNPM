@@ -36,6 +36,10 @@ param(
     [bool]$BilinearPatchFusion = $false,
     [int]$BilinearPatchRank = 32,
     [double]$BilinearPatchDropout = 0.08,
+    [bool]$FrequencySelectivePooling = $false,
+    [int]$FrequencySelectiveTopK = 1,
+    [double]$FrequencySelectiveBlend = 1.0,
+    [double]$FrequencySelectiveForegroundThreshold = 0.35,
     [switch]$PreflightOnly,
     [switch]$Smoke,
     [bool]$TraceArchitecture = $true
@@ -128,6 +132,10 @@ if ($PreflightOnly) {
         bilinear_patch_fusion = [bool]$BilinearPatchFusion
         bilinear_patch_rank = $BilinearPatchRank
         bilinear_patch_dropout = $BilinearPatchDropout
+        frequency_selective_pooling = [bool]$FrequencySelectivePooling
+        frequency_selective_top_k = $FrequencySelectiveTopK
+        frequency_selective_blend = $FrequencySelectiveBlend
+        frequency_selective_foreground_threshold = $FrequencySelectiveForegroundThreshold
     } | ConvertTo-Json -Depth 5
     exit 0
 }
@@ -336,6 +344,14 @@ try {
             "--bilinear-patch-dropout", "$BilinearPatchDropout"
         )
     }
+    if ($FrequencySelectivePooling) {
+        $TrainArgs += @(
+            "--frequency-selective-pooling",
+            "--frequency-selective-top-k", "$FrequencySelectiveTopK",
+            "--frequency-selective-blend", "$FrequencySelectiveBlend",
+            "--frequency-selective-foreground-threshold", "$FrequencySelectiveForegroundThreshold"
+        )
+    }
     if ($Smoke) {
         $TrainArgs += @("--skip-final-test")
     }
@@ -358,6 +374,10 @@ try {
         effective_batch_size = $BatchSize * $GradAccumSteps
         num_workers = $NumWorkers
         eval_num_workers = $EvalNumWorkers
+        frequency_selective_pooling = [bool]$FrequencySelectivePooling
+        frequency_selective_top_k = $FrequencySelectiveTopK
+        frequency_selective_blend = $FrequencySelectiveBlend
+        frequency_selective_foreground_threshold = $FrequencySelectiveForegroundThreshold
         attention_view_loss_weight = $AttentionViewLossWeight
         attention_crop_probability = $AttentionCropProbability
         attention_drop_probability = $AttentionDropProbability

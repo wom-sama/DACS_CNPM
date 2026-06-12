@@ -326,3 +326,45 @@ validation macro/class-1 F1 `0.8859/0.6802`, khong qua gate `0.70`. Heatmap van
 co diem nong o bien qua, nen khong tang rank hoac full-train truoc khi sua
 localization. Chi tiet:
 `docs/TRKH_5CLASS_BILINEAR_PATCH_V14_AUDIT_20260612.md`.
+
+## V15 Frequency-Selective Patch Pooling (2026-06-12)
+
+V15 them mot pooling tuy chon theo LaSt-ViT sau token pruning. Muc tieu la
+giam lazy aggregation: moi feature dimension chon patch co bieu dien on dinh
+sau low-pass filtering tren chieu embedding.
+
+Input:
+
+- patch token `[B,N,256]` sau prune;
+- valid-patch mask `[B,N]`;
+- foreground prior `[B,N]`.
+
+Xu ly:
+
+1. FFT patch token tren chieu `256`.
+2. Nhan Gaussian frequency kernel voi `sigma=sqrt(256)`.
+3. IFFT va tinh `x / abs(filtered-x)`.
+4. Mask padding va patch co foreground prior thap.
+5. Top-k patch theo tung feature dimension.
+6. Gather/average thanh selected feature `[B,256]`.
+7. Residual blend voi pooled feature cu.
+
+Output:
+
+- `frequency_selective_feature [B,256]`;
+- vote fraction `[B,N]`, tong bang 1;
+- classifier input `[B,256]` sau blend.
+
+Config/CLI:
+
+- `frequency_selective_pooling`;
+- `frequency_selective_top_k`;
+- `frequency_selective_blend`;
+- `frequency_selective_foreground_threshold`;
+- cac flag CLI cung ten voi prefix `--`.
+
+Trace them `09h_frequency_selective_votes.png`. Probe V15 dung
+`top_k=1`, `blend=0.25`, threshold `0.35`; validation macro/class-1 F1
+`0.8872/0.6788`, khong qua gate `0.70`. Vote van bam co/la xanh khi nen co mau
+gan qua, nen khong full-train. Chi tiet:
+`docs/TRKH_5CLASS_FREQUENCY_SELECTIVE_V15_AUDIT_20260612.md`.

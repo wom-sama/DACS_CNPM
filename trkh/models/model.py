@@ -232,6 +232,127 @@ class FineGrainedPatchPooling(nn.Module):
         return global_feature + residual
 
 
+class FrequencySelectivePatchPooling(nn.Module):
+    """Aggregate feature dimensions from frequency-stable patch tokens."""
+
+    def __init__(
+        self,
+        dim: int,
+        top_k: int = 1,
+        foreground_threshold: float = 0.35,
+        eps: float = 1e-6,
+    ) -> None:
+        super().__init__()
+        self.dim = int(dim)
+        self.top_k = max(1, int(top_k))
+        self.foreground_threshold = float(
+            min(max(foreground_threshold, 0.0), 1.0)
+        )
+        self.eps = float(max(eps, 1e-12))
+        positions = torch.arange(
+            -(self.dim // 2) + 1,
+            (self.dim // 2) + 1,
+            dtype=torch.float32,
+        )
+        if int(positions.numel()) != self.dim:
+            positions = torch.linspace(
+                -(self.dim - 1) / 2.0,
+                (self.dim - 1) / 2.0,
+                steps=self.dim,
+                dtype=torch.float32,
+            )
+        sigma = math.sqrt(float(max(1, self.dim)))
+        kernel = torch.exp(-0.5 * (positions / sigma).pow(2))
+        kernel = kernel / kernel.max().clamp(min=1e-8)
+        self.register_buffer(
+            "gaussian_kernel",
+            kernel.view(1, 1, self.dim),
+            persistent=False,
+        )
+
+    def forward(
+        self,
+        patch_tokens: Tensor,
+        valid_mask: Optional[Tensor] = None,
+        foreground_prior: Optional[Tensor] = None,
+        return_trace: bool = False,
+    ):
+        if patch_tokens.ndim != 3 or patch_tokens.size(1) == 0:
+            selected = patch_tokens.new_zeros((patch_tokens.size(0), self.dim))
+            votes = patch_tokens.new_zeros(patch_tokens.shape[:2], dtype=torch.float32)
+            if not return_trace:
+                return selected
+            return selected, {"vote_fraction": votes}
+
+        source = patch_tokens.to(dtype=torch.float32)
+        frequency = torch.fft.fft(source, dim=-1)
+        frequency = torch.fft.fftshift(frequency, dim=-1)
+        frequency = frequency * self.gaussian_kernel.to(device=source.device)
+        filtered = torch.fft.ifftshift(frequency, dim=-1)
+        filtered = torch.fft.ifft(filtered, dim=-1).real
+        stability = source / (filtered - source).abs().clamp(min=self.eps)
+
+        valid = torch.ones(
+            source.shape[:2],
+            device=source.device,
+            dtype=torch.bool,
+        )
+        if torch.is_tensor(valid_mask) and tuple(valid_mask.shape) == tuple(source.shape[:2]):
+            valid = valid & valid_mask.to(device=source.device, dtype=torch.bool)
+        candidate_mask = valid
+        if (
+            torch.is_tensor(foreground_prior)
+            and tuple(foreground_prior.shape) == tuple(source.shape[:2])
+            and self.foreground_threshold > 0.0
+        ):
+            foreground_candidate = foreground_prior.to(
+                device=source.device,
+                dtype=torch.float32,
+            ) >= self.foreground_threshold
+            gated = valid & foreground_candidate
+            enough_candidates = gated.sum(dim=1) >= min(self.top_k, int(source.size(1)))
+            candidate_mask = torch.where(
+                enough_candidates[:, None],
+                gated,
+                valid,
+            )
+        all_invalid = ~candidate_mask.any(dim=1)
+        if all_invalid.any():
+            candidate_mask = candidate_mask.clone()
+            candidate_mask[all_invalid] = True
+        stability = stability.masked_fill(
+            ~candidate_mask.unsqueeze(-1),
+            torch.finfo(stability.dtype).min,
+        )
+
+        selected_count = min(self.top_k, int(source.size(1)))
+        selected_indices = torch.topk(
+            stability,
+            k=selected_count,
+            dim=1,
+            largest=True,
+            sorted=False,
+        ).indices
+        selected = torch.gather(source, dim=1, index=selected_indices).mean(dim=1)
+
+        vote_counts = source.new_zeros(source.shape[:2])
+        flattened_indices = selected_indices.reshape(source.size(0), -1)
+        vote_counts.scatter_add_(
+            1,
+            flattened_indices,
+            torch.ones_like(flattened_indices, dtype=vote_counts.dtype),
+        )
+        vote_fraction = vote_counts / float(max(1, self.dim * selected_count))
+        selected = selected.to(dtype=patch_tokens.dtype)
+        if not return_trace:
+            return selected
+        return selected, {
+            "vote_fraction": vote_fraction.detach(),
+            "selected_indices": selected_indices.detach(),
+            "candidate_mask": candidate_mask.detach(),
+        }
+
+
 class CompactBilinearPatchFusion(nn.Module):
     def __init__(
         self,
@@ -1322,6 +1443,10 @@ class VisionTransformerWithRegisters(nn.Module):
         bilinear_patch_fusion: bool = False,
         bilinear_patch_rank: int = 32,
         bilinear_patch_dropout: float = 0.1,
+        frequency_selective_pooling: bool = False,
+        frequency_selective_top_k: int = 1,
+        frequency_selective_blend: float = 1.0,
+        frequency_selective_foreground_threshold: float = 0.35,
         num_classes: int = 4,
         embed_dim: int = 256,
         depth: int = 8,
@@ -1370,6 +1495,10 @@ class VisionTransformerWithRegisters(nn.Module):
         self.defect_stat_fusion = bool(defect_stat_fusion)
         self.foreground_surface_fusion = bool(foreground_surface_fusion)
         self.bilinear_patch_fusion = bool(bilinear_patch_fusion)
+        self.frequency_selective_pooling = bool(frequency_selective_pooling)
+        self.frequency_selective_blend = float(
+            min(max(frequency_selective_blend, 0.0), 1.0)
+        )
         self.detail_patch_enhancement = bool(detail_patch_enhancement)
         self.pairwise_margin_head_enabled = bool(pairwise_margin_head)
         self.pairwise_margin_logit_scale = float(max(0.0, pairwise_margin_logit_scale))
@@ -1487,6 +1616,15 @@ class VisionTransformerWithRegisters(nn.Module):
             )
         else:
             self.fine_grained_pool = None
+        self.frequency_selective_pool = (
+            FrequencySelectivePatchPooling(
+                dim=embed_dim,
+                top_k=frequency_selective_top_k,
+                foreground_threshold=frequency_selective_foreground_threshold,
+            )
+            if self.frequency_selective_pooling
+            else None
+        )
         self.head = nn.Linear(embed_dim, num_classes)
         if self.pairwise_margin_pairs:
             self.pairwise_margin_norm = nn.LayerNorm(embed_dim)
@@ -1953,7 +2091,7 @@ class VisionTransformerWithRegisters(nn.Module):
                 grid_size=grid_size,
                 image_valid_mask=image_valid_mask,
             )
-            if pruning_enabled or return_trace
+            if pruning_enabled or return_trace or self.frequency_selective_pool is not None
             else patch_tokens.new_zeros((batch_size, original_patch_count), dtype=torch.float32)
         )
         collect_all_attentions = return_attention and attention_layers is None
@@ -2029,6 +2167,11 @@ class VisionTransformerWithRegisters(nn.Module):
                 patch_indices,
                 num_classes=original_patch_count,
             ).sum(dim=1).clamp(max=1).to(dtype=torch.bool)
+        if self.frequency_selective_pool is not None:
+            features["patch_foreground_prior"] = foreground_prior.gather(
+                1,
+                patch_indices,
+            )
         if self.cnn_feature_fusion:
             features["cnn_pooled"] = F.adaptive_avg_pool2d(stem_features, output_size=1).flatten(1)
         if detail_map is not None:
@@ -2143,11 +2286,35 @@ class VisionTransformerWithRegisters(nn.Module):
                 features["registers"],
                 features.get("branch_tokens"),
             )
+        valid_mask = None
+        key_padding_mask = features.get("memory_key_padding_mask")
+        if torch.is_tensor(key_padding_mask):
+            valid_mask = ~key_padding_mask.to(dtype=torch.bool)
+        if self.frequency_selective_pool is not None and "patches" in features:
+            return_trace = isinstance(features.get("trace"), dict)
+            selected_output = self.frequency_selective_pool(
+                features["patches"],
+                valid_mask=valid_mask,
+                foreground_prior=features.get("patch_foreground_prior"),
+                return_trace=return_trace,
+            )
+            if return_trace:
+                selected_feature, selective_trace = selected_output
+                features["trace"]["frequency_selective_vote_fraction"] = (
+                    selective_trace["vote_fraction"]
+                )
+                features["trace"]["frequency_selective_selected_indices"] = (
+                    selective_trace["selected_indices"]
+                )
+                features["trace"]["frequency_selective_candidate_mask"] = (
+                    selective_trace["candidate_mask"]
+                )
+            else:
+                selected_feature = selected_output
+            features["frequency_selective_feature"] = selected_feature
+            blend = float(self.frequency_selective_blend)
+            pooled = pooled * (1.0 - blend) + selected_feature * blend
         if self.fine_grained_pool is not None and "patches" in features:
-            valid_mask = None
-            key_padding_mask = features.get("memory_key_padding_mask")
-            if torch.is_tensor(key_padding_mask):
-                valid_mask = ~key_padding_mask.to(dtype=torch.bool)
             patch_attention = self.fine_grained_pool.attention_weights(
                 pooled,
                 features["patches"],
@@ -2464,6 +2631,10 @@ class DETRVisionTransformerWithRegisters(VisionTransformerWithRegisters):
         bilinear_patch_fusion: bool = False,
         bilinear_patch_rank: int = 32,
         bilinear_patch_dropout: float = 0.1,
+        frequency_selective_pooling: bool = False,
+        frequency_selective_top_k: int = 1,
+        frequency_selective_blend: float = 1.0,
+        frequency_selective_foreground_threshold: float = 0.35,
         num_classes: int = 4,
         embed_dim: int = 256,
         depth: int = 8,
@@ -2535,6 +2706,10 @@ class DETRVisionTransformerWithRegisters(VisionTransformerWithRegisters):
             bilinear_patch_fusion=bilinear_patch_fusion,
             bilinear_patch_rank=bilinear_patch_rank,
             bilinear_patch_dropout=bilinear_patch_dropout,
+            frequency_selective_pooling=frequency_selective_pooling,
+            frequency_selective_top_k=frequency_selective_top_k,
+            frequency_selective_blend=frequency_selective_blend,
+            frequency_selective_foreground_threshold=frequency_selective_foreground_threshold,
             num_classes=num_classes,
             embed_dim=embed_dim,
             depth=depth,
