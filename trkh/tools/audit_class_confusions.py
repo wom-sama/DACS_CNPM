@@ -76,13 +76,13 @@ def _index_from_row(
     name_keys: Sequence[str],
     class_to_index: Mapping[str, int],
 ) -> int:
+    name = _first_non_empty(row, name_keys)
+    if name and name in class_to_index:
+        return int(class_to_index[name])
     for key in index_keys:
         value = str(row.get(key, "") or "").strip()
         if value:
             return int(float(value))
-    name = _first_non_empty(row, name_keys)
-    if name and name in class_to_index:
-        return int(class_to_index[name])
     return 0
 
 

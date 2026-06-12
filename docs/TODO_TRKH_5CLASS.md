@@ -82,6 +82,13 @@
 - [x] Theo doi GPU moi giay: train sau warm-up dat `74%-91%`, khong co deadlock.
 - [x] Xuat score/crop/drop 1 mau moi class tai smoke v8 architecture trace.
 - [x] Ghi audit tai `docs/TRKH_5CLASS_ATTENTION_V8_SMOKE_AUDIT_20260612.md`.
+- [x] Hoan thanh full v8; early-stop epoch 16, best epoch 13, exit code `0`.
+- [x] V8 test macro F1 `0.8869`, class 1 F1 `0.6626`; tot hon v4 nhe nhung recall class 1 khong doi.
+- [x] Xuat `final_test_detailed`, class-1 confusion audit va review images cho v8.
+- [x] Sua `audit_class_confusions` de uu tien class-name mapping, tranh trao class khi CSV co thu tu baseline khac `data.yaml`.
+- [x] Chay XAI/robustness v8 tren 36 case; background blur/gray drop gan `0`, object desaturate drop `0.1157`.
+- [x] Review thu cong mau v8 `0->1`, `2->1`, `1->0`, `1->2`; xac nhan nhieu ranh gioi label/maturity mo ho.
+- [x] Ghi full audit tai `docs/TRKH_5CLASS_ATTENTION_V8_FULL_AUDIT_20260612.md`.
 
 ## Can tiep tuc
 
@@ -90,8 +97,11 @@
 - [x] Chay preflight dataset/config/leak cho attention-view run.
 - [x] Chay smoke attention crop/drop gioi han va smoke throughput 10 batch.
 - [x] Xuat anh audit original/score-map/crop/drop cho 1 mau moi class.
-- [ ] Chi chay full 30 epoch neu smoke throughput/GPU utilization on dinh; patience `3`.
-- [ ] Sau full run, xuat class-1 confusion va XAI/background audit roi so sanh v4/top-5 TTA.
+- [x] Chi chay full 30 epoch neu smoke throughput/GPU utilization on dinh; patience `3`.
+- [x] Sau full run, xuat class-1 confusion va XAI/background audit roi so sanh v4/top-5 TTA.
+- [ ] Them score source `surface_detail`/`hybrid` cho attention views va expose trong trace/config.
+- [ ] Smoke v9 de xac nhan score/crop/drop nam tren be mat qua, khong bam padding/vien.
+- [ ] Chi full-train v9 neu validation probe vuot v8 hoac giam ro confusion `0/1`, `1/2`.
 - [ ] Neu attention-view khong vuot v4, audit nhan train-only va thu ELR warm-up; khong bat ELR tren test.
 - [x] Chay preflight khong train truoc smoke 2026-06-11.
 - [x] Chay smoke TRKH voi `--max-train-batches 1 --max-val-batches 1 --skip-final-test`.
