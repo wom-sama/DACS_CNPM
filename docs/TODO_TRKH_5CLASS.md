@@ -131,7 +131,17 @@
 - [x] Review close-margin `0->1`, `1->0`, `1->2`: boundary maturity/illumination mo ho; mask van thu mot phan nen co mau gan xoai.
 - [x] Khong full-train V13 vi val class-1 F1 `0.6822 < 0.70` va thap hon V12.
 - [x] Ghi audit V13 tai `docs/TRKH_5CLASS_FOREGROUND_SURFACE_V13_AUDIT_20260612.md`.
-- [ ] Huong tiep theo co do dot pha hon: train-only label-boundary audit, learned object-tight crop/mask, hoac local foreground patch comparator theo PMG/API-Net.
+- [x] Nghien cuu Bilinear CNN, Compact Bilinear Pooling va Low-rank Bilinear Pooling cho fine-grained recognition.
+- [x] Them optional compact bilinear patch fusion V14 tren patch sau pruning, residual zero-init va padding-aware attention.
+- [x] Them CLI/config/launcher V14 va checkpoint extension allowlist cho model + EMA.
+- [x] Them `09g_bilinear_patch_attention.png` va descriptor/attention shapes vao architecture trace.
+- [x] Chay full regression V14: `105 passed`; preflight va smoke exit `0`.
+- [x] Chay probe V14 120 batch x toi da 6 epoch: best val macro/class1 `0.8859/0.6802`; test `0.8912/0.6750`.
+- [x] Khong full-train V14 vi class-1 validation F1 thap hon V12 va khong qua gate `0.70`.
+- [x] Ghi audit V14 tai `docs/TRKH_5CLASS_BILINEAR_PATCH_V14_AUDIT_20260612.md`.
+- [ ] Audit exact/near duplicate/source sequence cua `class_f` va doi chieu fairness cua baseline ViT `1.0`.
+- [ ] Chay validation-only boundary calibration tren V12, sau do chi danh gia test mot lan.
+- [ ] Huong tiep theo co do dot pha hon: train-only label-boundary audit hoac learned object-tight crop/mask truoc local comparator.
 - [ ] Neu tiep tuc ELR, chi thu ablation nho hon/lon hon (`0.03`, `0.20`) sau label audit; khong full train neu class-1 val F1 chua qua `0.70`.
 - [x] Chay preflight khong train truoc smoke 2026-06-11.
 - [x] Chay smoke TRKH voi `--max-train-batches 1 --max-val-batches 1 --skip-final-test`.

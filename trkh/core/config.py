@@ -141,6 +141,9 @@ class ModelConfig:
     defect_stat_fusion_dropout: float = 0.1
     foreground_surface_fusion: bool = False
     foreground_surface_fusion_dropout: float = 0.1
+    bilinear_patch_fusion: bool = False
+    bilinear_patch_rank: int = 32
+    bilinear_patch_dropout: float = 0.1
     fine_grained_pooling: bool = False
     fine_grained_pooling_dropout: float = 0.1
     multi_branch_fusion: bool = False

@@ -258,6 +258,17 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--foreground-surface-fusion-dropout", type=float, default=0.1)
     parser.add_argument(
+        "--bilinear-patch-fusion",
+        action="store_true",
+        default=False,
+        help=(
+            "Them compact bilinear pooling tren patch token de hoc tuong tac texture/mau bac hai; "
+            "khong dung pretrain va khoi tao residual-zero."
+        ),
+    )
+    parser.add_argument("--bilinear-patch-rank", type=int, default=32)
+    parser.add_argument("--bilinear-patch-dropout", type=float, default=0.1)
+    parser.add_argument(
         "--fine-grained-pooling",
         action="store_true",
         default=False,
@@ -1041,6 +1052,10 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         raise ValueError("--defect-stat-fusion-dropout phai >= 0.")
     if args.foreground_surface_fusion_dropout < 0.0:
         raise ValueError("--foreground-surface-fusion-dropout phai >= 0.")
+    if args.bilinear_patch_rank < 8:
+        raise ValueError("--bilinear-patch-rank phai >= 8.")
+    if args.bilinear_patch_dropout < 0.0:
+        raise ValueError("--bilinear-patch-dropout phai >= 0.")
     if args.fine_grained_pooling_dropout < 0.0:
         raise ValueError("--fine-grained-pooling-dropout phai >= 0.")
     if args.branch_token_dropout < 0.0:
@@ -1374,6 +1389,9 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         defect_stat_fusion_dropout=args.defect_stat_fusion_dropout,
         foreground_surface_fusion=bool(args.foreground_surface_fusion),
         foreground_surface_fusion_dropout=args.foreground_surface_fusion_dropout,
+        bilinear_patch_fusion=bool(args.bilinear_patch_fusion),
+        bilinear_patch_rank=args.bilinear_patch_rank,
+        bilinear_patch_dropout=args.bilinear_patch_dropout,
         fine_grained_pooling=bool(args.fine_grained_pooling),
         fine_grained_pooling_dropout=args.fine_grained_pooling_dropout,
         multi_branch_fusion=bool(args.multi_branch_fusion),
@@ -2337,6 +2355,7 @@ ALLOWED_RESUME_EXTENSION_PREFIXES = (
     "cnn_fusion_norm.",
     "cnn_fusion_head.",
     "foreground_surface_fusion_head.",
+    "bilinear_patch_fusion_head.",
 )
 
 

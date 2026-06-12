@@ -371,6 +371,16 @@ def main() -> None:
             surface_map = trace.get(trace_key)
             if torch.is_tensor(surface_map):
                 _heatmap_image(surface_map[0], input_image.size).save(class_dir / filename)
+        bilinear_attention = trace.get("bilinear_patch_attention")
+        if torch.is_tensor(bilinear_attention):
+            bilinear_map = _scatter_patch_values(
+                features["patch_indices"][0],
+                bilinear_attention[0],
+                grid_size,
+            )
+            _heatmap_image(bilinear_map, input_image.size).save(
+                class_dir / "09g_bilinear_patch_attention.png"
+            )
 
         block_shapes = trace["block_token_shapes"]
         block_indices = trace["block_patch_indices"]
@@ -424,6 +434,11 @@ def main() -> None:
         surface_mask = trace.get("foreground_surface_mask")
         if torch.is_tensor(surface_mask):
             record["foreground_surface_mask_shape"] = list(surface_mask.shape)
+        bilinear_descriptor = trace.get("bilinear_patch_descriptor")
+        if torch.is_tensor(bilinear_descriptor):
+            record["bilinear_patch_descriptor_shape"] = list(bilinear_descriptor.shape)
+        if torch.is_tensor(bilinear_attention):
+            record["bilinear_patch_attention_shape"] = list(bilinear_attention.shape)
         (class_dir / "shapes.json").write_text(
             json.dumps(record, indent=2, ensure_ascii=False),
             encoding="utf-8",
@@ -472,6 +487,7 @@ def main() -> None:
         "- `09d_foreground_surface_dark_spot.png`: diem vet toi/underexposure/bam sau khi mask foreground.",
         "- `09e_foreground_surface_brown_spot.png`: diem vet nau/hu hong sau khi mask foreground.",
         "- `09f_foreground_surface_bright_spot.png`: diem qua sang/lo sang sau khi mask foreground.",
+        "- `09g_bilinear_patch_attention.png`: trong so patch cua compact bilinear fusion sau pruning.",
         "- `block_XX_token_norm.png`: norm token sau tung transformer block; o da prune de trong.",
         "- `prune_XX_after_layer_Y.png`: patch xanh duoc giu, patch toi bi loai.",
         "- `shapes.json`: shape va patch index chi tiet.",

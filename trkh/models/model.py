@@ -197,12 +197,24 @@ class FineGrainedPatchPooling(nn.Module):
             if final_linear.bias is not None:
                 nn.init.zeros_(final_linear.bias)
 
-    def attention_weights(self, global_feature: Tensor, patch_tokens: Tensor) -> Tensor:
+    def attention_weights(
+        self,
+        global_feature: Tensor,
+        patch_tokens: Tensor,
+        valid_mask: Optional[Tensor] = None,
+    ) -> Tensor:
         if patch_tokens.ndim != 3 or patch_tokens.size(1) == 0:
             return patch_tokens.new_zeros((patch_tokens.size(0), patch_tokens.size(1)))
         normalized_patches = self.patch_norm(patch_tokens)
         context = self.context_norm(global_feature).unsqueeze(1).expand_as(normalized_patches)
         scores = self.score(torch.cat((normalized_patches, context), dim=-1)).squeeze(-1)
+        if torch.is_tensor(valid_mask) and tuple(valid_mask.shape) == tuple(scores.shape):
+            valid = valid_mask.to(device=scores.device, dtype=torch.bool)
+            all_invalid = ~valid.any(dim=1)
+            if all_invalid.any():
+                valid = valid.clone()
+                valid[all_invalid] = True
+            scores = scores.masked_fill(~valid, torch.finfo(scores.dtype).min)
         return torch.softmax(scores, dim=1)
 
     def forward(
@@ -218,6 +230,108 @@ class FineGrainedPatchPooling(nn.Module):
         patch_feature = torch.bmm(attention.unsqueeze(1), patch_tokens).squeeze(1)
         residual = self.fusion(torch.cat((global_feature, patch_feature), dim=-1))
         return global_feature + residual
+
+
+class CompactBilinearPatchFusion(nn.Module):
+    def __init__(
+        self,
+        dim: int,
+        num_classes: int,
+        rank: int = 32,
+        hidden_dim: int = 128,
+        dropout: float = 0.1,
+    ) -> None:
+        super().__init__()
+        self.rank = max(8, int(rank))
+        self.patch_norm = nn.LayerNorm(dim)
+        self.left_proj = nn.Linear(dim, self.rank, bias=False)
+        self.right_proj = nn.Linear(dim, self.rank, bias=False)
+        self.descriptor_dim = (self.rank * self.rank) + (2 * self.rank)
+        hidden = max(32, int(hidden_dim))
+        self.net = nn.Sequential(
+            nn.LayerNorm(self.descriptor_dim),
+            nn.Linear(self.descriptor_dim, hidden),
+            nn.GELU(),
+            nn.Dropout(float(max(0.0, dropout))),
+            nn.Linear(hidden, int(num_classes)),
+        )
+
+    def zero_init_residual(self) -> None:
+        final_linear = self.net[-1]
+        if isinstance(final_linear, nn.Linear):
+            nn.init.zeros_(final_linear.weight)
+            if final_linear.bias is not None:
+                nn.init.zeros_(final_linear.bias)
+
+    @staticmethod
+    def _normalized_weights(
+        patch_tokens: Tensor,
+        attention: Optional[Tensor],
+        valid_mask: Optional[Tensor],
+    ) -> Tensor:
+        batch_size, token_count = patch_tokens.shape[:2]
+        if torch.is_tensor(attention) and tuple(attention.shape) == (batch_size, token_count):
+            weights = attention.to(device=patch_tokens.device, dtype=torch.float32).clamp(min=0.0)
+        else:
+            weights = torch.ones(
+                (batch_size, token_count),
+                device=patch_tokens.device,
+                dtype=torch.float32,
+            )
+        valid = None
+        if torch.is_tensor(valid_mask) and tuple(valid_mask.shape) == (batch_size, token_count):
+            valid = valid_mask.to(device=patch_tokens.device, dtype=torch.bool)
+            weights = weights * valid.to(dtype=weights.dtype)
+        totals = weights.sum(dim=1, keepdim=True)
+        empty = totals.squeeze(1) <= 1e-8
+        if empty.any():
+            fallback = (
+                valid.to(dtype=weights.dtype)
+                if valid is not None
+                else torch.ones_like(weights)
+            )
+            fallback_totals = fallback.sum(dim=1, keepdim=True)
+            fallback_empty = fallback_totals.squeeze(1) <= 1e-8
+            if fallback_empty.any():
+                fallback = fallback.clone()
+                fallback[fallback_empty] = 1.0
+            weights = torch.where(empty[:, None], fallback, weights)
+            totals = weights.sum(dim=1, keepdim=True)
+        return weights / totals.clamp(min=1e-8)
+
+    def forward(
+        self,
+        patch_tokens: Tensor,
+        attention: Optional[Tensor] = None,
+        valid_mask: Optional[Tensor] = None,
+        return_trace: bool = False,
+    ):
+        if patch_tokens.ndim != 3 or patch_tokens.size(1) == 0:
+            logits = patch_tokens.new_zeros((patch_tokens.size(0), self.net[-1].out_features))
+            if not return_trace:
+                return logits
+            return logits, {
+                "attention": patch_tokens.new_zeros(patch_tokens.shape[:2]),
+                "descriptor": patch_tokens.new_zeros((patch_tokens.size(0), self.descriptor_dim)),
+            }
+
+        normalized = self.patch_norm(patch_tokens)
+        left = F.normalize(F.gelu(self.left_proj(normalized)).float(), dim=-1, eps=1e-6)
+        right = F.normalize(F.gelu(self.right_proj(normalized)).float(), dim=-1, eps=1e-6)
+        weights = self._normalized_weights(patch_tokens, attention, valid_mask)
+        left_mean = torch.einsum("bn,bnr->br", weights, left)
+        right_mean = torch.einsum("bn,bnr->br", weights, right)
+        bilinear = torch.einsum("bn,bnr,bns->brs", weights, left, right).flatten(1)
+        bilinear = torch.sign(bilinear) * torch.sqrt(bilinear.abs() + 1e-8)
+        bilinear = F.normalize(bilinear, dim=1, eps=1e-6)
+        descriptor = torch.cat((left_mean, right_mean, bilinear), dim=1)
+        logits = self.net(descriptor.to(dtype=patch_tokens.dtype))
+        if not return_trace:
+            return logits
+        return logits, {
+            "attention": weights.detach(),
+            "descriptor": descriptor.detach(),
+        }
 
 
 class ColorStatisticFusion(nn.Module):
@@ -1205,6 +1319,9 @@ class VisionTransformerWithRegisters(nn.Module):
         defect_stat_fusion_dropout: float = 0.1,
         foreground_surface_fusion: bool = False,
         foreground_surface_fusion_dropout: float = 0.1,
+        bilinear_patch_fusion: bool = False,
+        bilinear_patch_rank: int = 32,
+        bilinear_patch_dropout: float = 0.1,
         num_classes: int = 4,
         embed_dim: int = 256,
         depth: int = 8,
@@ -1252,6 +1369,7 @@ class VisionTransformerWithRegisters(nn.Module):
         self.color_stat_fusion = bool(color_stat_fusion)
         self.defect_stat_fusion = bool(defect_stat_fusion)
         self.foreground_surface_fusion = bool(foreground_surface_fusion)
+        self.bilinear_patch_fusion = bool(bilinear_patch_fusion)
         self.detail_patch_enhancement = bool(detail_patch_enhancement)
         self.pairwise_margin_head_enabled = bool(pairwise_margin_head)
         self.pairwise_margin_logit_scale = float(max(0.0, pairwise_margin_logit_scale))
@@ -1418,6 +1536,16 @@ class VisionTransformerWithRegisters(nn.Module):
             )
         else:
             self.foreground_surface_fusion_head = None
+        if self.bilinear_patch_fusion:
+            self.bilinear_patch_fusion_head = CompactBilinearPatchFusion(
+                dim=embed_dim,
+                num_classes=num_classes,
+                rank=bilinear_patch_rank,
+                hidden_dim=max(64, embed_dim // 2),
+                dropout=bilinear_patch_dropout,
+            )
+        else:
+            self.bilinear_patch_fusion_head = None
 
         self.apply(self._init_weights)
         self._init_parameter_tensors()
@@ -1433,6 +1561,8 @@ class VisionTransformerWithRegisters(nn.Module):
             self.defect_fusion_head.zero_init_residual()
         if self.foreground_surface_fusion_head is not None:
             self.foreground_surface_fusion_head.zero_init_residual()
+        if self.bilinear_patch_fusion_head is not None:
+            self.bilinear_patch_fusion_head.zero_init_residual()
         if self.pairwise_margin_head is not None:
             nn.init.zeros_(self.pairwise_margin_head.weight)
             if self.pairwise_margin_head.bias is not None:
@@ -2014,9 +2144,14 @@ class VisionTransformerWithRegisters(nn.Module):
                 features.get("branch_tokens"),
             )
         if self.fine_grained_pool is not None and "patches" in features:
+            valid_mask = None
+            key_padding_mask = features.get("memory_key_padding_mask")
+            if torch.is_tensor(key_padding_mask):
+                valid_mask = ~key_padding_mask.to(dtype=torch.bool)
             patch_attention = self.fine_grained_pool.attention_weights(
                 pooled,
                 features["patches"],
+                valid_mask=valid_mask,
             )
             features["fine_grained_attention"] = patch_attention
             pooled = self.fine_grained_pool(
@@ -2326,6 +2461,9 @@ class DETRVisionTransformerWithRegisters(VisionTransformerWithRegisters):
         defect_stat_fusion_dropout: float = 0.1,
         foreground_surface_fusion: bool = False,
         foreground_surface_fusion_dropout: float = 0.1,
+        bilinear_patch_fusion: bool = False,
+        bilinear_patch_rank: int = 32,
+        bilinear_patch_dropout: float = 0.1,
         num_classes: int = 4,
         embed_dim: int = 256,
         depth: int = 8,
@@ -2394,6 +2532,9 @@ class DETRVisionTransformerWithRegisters(VisionTransformerWithRegisters):
             defect_stat_fusion_dropout=defect_stat_fusion_dropout,
             foreground_surface_fusion=foreground_surface_fusion,
             foreground_surface_fusion_dropout=foreground_surface_fusion_dropout,
+            bilinear_patch_fusion=bilinear_patch_fusion,
+            bilinear_patch_rank=bilinear_patch_rank,
+            bilinear_patch_dropout=bilinear_patch_dropout,
             num_classes=num_classes,
             embed_dim=embed_dim,
             depth=depth,
@@ -2610,6 +2751,29 @@ def classification_logits_from_features(model: nn.Module, features: Dict[str, Te
     foreground_surface_logits = features.get("foreground_surface_logits")
     if torch.is_tensor(foreground_surface_logits):
         logits = logits + foreground_surface_logits
+    bilinear_head = getattr(model, "bilinear_patch_fusion_head", None)
+    if bilinear_head is not None and "patches" in features:
+        key_padding_mask = features.get("memory_key_padding_mask")
+        valid_mask = (
+            ~key_padding_mask.to(dtype=torch.bool)
+            if torch.is_tensor(key_padding_mask)
+            else None
+        )
+        return_trace = isinstance(features.get("trace"), dict)
+        bilinear_output = bilinear_head(
+            features["patches"],
+            attention=features.get("fine_grained_attention"),
+            valid_mask=valid_mask,
+            return_trace=return_trace,
+        )
+        if return_trace:
+            bilinear_logits, bilinear_trace = bilinear_output
+            features["trace"]["bilinear_patch_attention"] = bilinear_trace["attention"]
+            features["trace"]["bilinear_patch_descriptor"] = bilinear_trace["descriptor"]
+        else:
+            bilinear_logits = bilinear_output
+        features["bilinear_patch_logits"] = bilinear_logits
+        logits = logits + bilinear_logits
     pairwise_fn = getattr(model, "pairwise_margin_logits_from_head_input", None)
     adjust_fn = getattr(model, "pairwise_margin_adjustment", None)
     if callable(pairwise_fn) and callable(adjust_fn):

@@ -510,6 +510,48 @@ class DetectionCalibrationTests(unittest.TestCase):
         with torch.no_grad():
             self.assertTrue(torch.allclose(base(images), surface_fusion(images), atol=1e-6))
 
+    def test_bilinear_patch_fusion_can_extend_existing_vit_checkpoint(self):
+        base = create_model(
+            num_classes=3,
+            model_config=ModelConfig(
+                model_type="vit_registers",
+                image_size=64,
+                patch_size=16,
+                stem_channels=8,
+                embed_dim=32,
+                depth=1,
+                num_heads=4,
+                num_registers=2,
+                fine_grained_pooling=True,
+            ),
+        )
+        bilinear = create_model(
+            num_classes=3,
+            model_config=ModelConfig(
+                model_type="vit_registers",
+                image_size=64,
+                patch_size=16,
+                stem_channels=8,
+                embed_dim=32,
+                depth=1,
+                num_heads=4,
+                num_registers=2,
+                fine_grained_pooling=True,
+                bilinear_patch_fusion=True,
+                bilinear_patch_rank=16,
+                bilinear_patch_dropout=0.0,
+            ),
+        )
+        missing, unexpected = bilinear.load_flexible_state_dict(base.state_dict(), strict=False)
+        self.assertFalse(unexpected)
+        self.assertTrue(any(str(key).startswith("bilinear_patch_fusion_head.") for key in missing))
+
+        base.eval()
+        bilinear.eval()
+        images = torch.randn(2, 3, 64, 64)
+        with torch.no_grad():
+            self.assertTrue(torch.allclose(base(images), bilinear(images), atol=1e-6))
+
     def test_yolo_crop_dataset_exposes_sample_paths_for_color_audit(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -628,6 +670,23 @@ class DetectionCalibrationTests(unittest.TestCase):
                 atol=1e-5,
             )
         )
+
+    def test_fine_grained_pool_masks_invalid_patch_attention(self):
+        pool = model_module.FineGrainedPatchPooling(dim=8, dropout=0.0)
+        global_feature = torch.randn(2, 8)
+        patch_tokens = torch.randn(2, 4, 8)
+        valid_mask = torch.tensor(
+            [[True, True, False, False], [False, False, False, False]],
+            dtype=torch.bool,
+        )
+        attention = pool.attention_weights(
+            global_feature,
+            patch_tokens,
+            valid_mask=valid_mask,
+        )
+
+        self.assertTrue(torch.allclose(attention[0, 2:], torch.zeros(2), atol=1e-7))
+        self.assertTrue(torch.allclose(attention.sum(dim=1), torch.ones(2), atol=1e-6))
 
     def test_attention_guided_crop_and_drop_build_valid_views(self):
         images = torch.randn(2, 3, 32, 32)
@@ -843,6 +902,45 @@ class DetectionCalibrationTests(unittest.TestCase):
         self.assertIn("foreground_surface_stats", features["trace"])
         self.assertIn("foreground_surface_weight_map", features["trace"])
         self.assertEqual(tuple(features["trace"]["foreground_surface_stats"].shape), (2, 129))
+
+    def test_bilinear_patch_fusion_logits_are_used_and_traced(self):
+        model = create_model(
+            num_classes=3,
+            model_config=ModelConfig(
+                model_type="vit_registers",
+                image_size=64,
+                patch_size=16,
+                stem_channels=8,
+                embed_dim=32,
+                depth=2,
+                num_heads=4,
+                num_registers=2,
+                fine_grained_pooling=True,
+                bilinear_patch_fusion=True,
+                bilinear_patch_rank=16,
+                bilinear_patch_dropout=0.0,
+                token_pruning=True,
+                token_prune_layers="1",
+                token_keep_rates="0.50",
+            ),
+        )
+        with torch.no_grad():
+            model.bilinear_patch_fusion_head.net[-1].bias.fill_(0.12)
+        images = torch.randn(2, 3, 64, 64)
+        features = model.forward_features(images, return_trace=True)
+        logits = classification_logits_from_features(model, features)
+        base_logits = model.head(model.head_input_from_features(features))
+
+        self.assertTrue(torch.allclose(logits - base_logits, torch.full_like(logits, 0.12), atol=1e-5))
+        self.assertEqual(tuple(features["trace"]["bilinear_patch_attention"].shape), (2, 8))
+        self.assertEqual(tuple(features["trace"]["bilinear_patch_descriptor"].shape), (2, 288))
+        self.assertTrue(
+            torch.allclose(
+                features["trace"]["bilinear_patch_attention"].sum(dim=1),
+                torch.ones(2),
+                atol=1e-6,
+            )
+        )
 
     def test_pairwise_margin_head_adjusts_logits_and_has_auxiliary_loss(self):
         model = create_model(

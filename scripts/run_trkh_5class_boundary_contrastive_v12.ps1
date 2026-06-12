@@ -28,6 +28,9 @@ param(
     [double]$SampleWeightMax = 2.50,
     [bool]$ForegroundSurfaceFusion = $false,
     [double]$ForegroundSurfaceFusionDropout = 0.08,
+    [bool]$BilinearPatchFusion = $false,
+    [int]$BilinearPatchRank = 32,
+    [double]$BilinearPatchDropout = 0.08,
     [switch]$Probe,
     [switch]$PreflightOnly,
     [switch]$Smoke,
@@ -86,6 +89,9 @@ $launcherArgs = @{
     SampleWeightMax = $SampleWeightMax
     ForegroundSurfaceFusion = $ForegroundSurfaceFusion
     ForegroundSurfaceFusionDropout = $ForegroundSurfaceFusionDropout
+    BilinearPatchFusion = $BilinearPatchFusion
+    BilinearPatchRank = $BilinearPatchRank
+    BilinearPatchDropout = $BilinearPatchDropout
     TraceArchitecture = $TraceArchitecture
 }
 if ($PreflightOnly) {

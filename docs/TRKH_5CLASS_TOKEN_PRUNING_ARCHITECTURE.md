@@ -295,3 +295,34 @@ bright map. Probe V13 cho thay mask tap trung phan lon tren qua nhung van nhan
 mot phan nen co mau gan xoai; class-1 validation F1 `0.6822`, khong qua gate
 `0.70`. Chi tiet tai
 `docs/TRKH_5CLASS_FOREGROUND_SURFACE_V13_AUDIT_20260612.md`.
+
+## V14 Compact Bilinear Patch Fusion (2026-06-12)
+
+V14 them second-order local feature pooling sau token pruning. Nhanh nay hoc
+tuong tac giua cac kenh patch feature de bat texture/dom/chuyen mau cuc bo.
+
+Input:
+
+- patch token `[B,N,256]` sau prune;
+- fine-grained patch attention `[B,N]`;
+- valid patch mask neu co.
+
+Voi rank `R`:
+
+- hai projection `256 -> R`;
+- weighted outer product `[B,R,R]`;
+- signed square-root va L2 normalize;
+- noi left/right mean thanh descriptor `[B,R*R+2R]`.
+
+Voi `R=32`, descriptor la `[B,1088]`. Head residual:
+
+`LayerNorm(1088) -> Linear(1088,128) -> GELU -> Dropout -> Linear(128,5)`
+
+Linear cuoi zero-init. Trace them
+`09g_bilinear_patch_attention.png` va shape descriptor/attention.
+
+V14 cung mask invalid/padding patch trong fine-grained attention. Probe dat
+validation macro/class-1 F1 `0.8859/0.6802`, khong qua gate `0.70`. Heatmap van
+co diem nong o bien qua, nen khong tang rank hoac full-train truoc khi sua
+localization. Chi tiet:
+`docs/TRKH_5CLASS_BILINEAR_PATCH_V14_AUDIT_20260612.md`.

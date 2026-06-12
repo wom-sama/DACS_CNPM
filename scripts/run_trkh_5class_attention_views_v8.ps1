@@ -33,6 +33,9 @@ param(
     [double]$SampleWeightMax = 5.0,
     [bool]$ForegroundSurfaceFusion = $false,
     [double]$ForegroundSurfaceFusionDropout = 0.08,
+    [bool]$BilinearPatchFusion = $false,
+    [int]$BilinearPatchRank = 32,
+    [double]$BilinearPatchDropout = 0.08,
     [switch]$PreflightOnly,
     [switch]$Smoke,
     [bool]$TraceArchitecture = $true
@@ -122,6 +125,9 @@ if ($PreflightOnly) {
         sample_weight_manifest = $SampleWeightManifest
         sample_weight_factor = $SampleWeightFactor
         sample_weight_max = $SampleWeightMax
+        bilinear_patch_fusion = [bool]$BilinearPatchFusion
+        bilinear_patch_rank = $BilinearPatchRank
+        bilinear_patch_dropout = $BilinearPatchDropout
     } | ConvertTo-Json -Depth 5
     exit 0
 }
@@ -323,6 +329,13 @@ try {
             "--foreground-surface-fusion-dropout", "$ForegroundSurfaceFusionDropout"
         )
     }
+    if ($BilinearPatchFusion) {
+        $TrainArgs += @(
+            "--bilinear-patch-fusion",
+            "--bilinear-patch-rank", "$BilinearPatchRank",
+            "--bilinear-patch-dropout", "$BilinearPatchDropout"
+        )
+    }
     if ($Smoke) {
         $TrainArgs += @("--skip-final-test")
     }
@@ -367,6 +380,9 @@ try {
         sample_weight_max = $SampleWeightMax
         foreground_surface_fusion = [bool]$ForegroundSurfaceFusion
         foreground_surface_fusion_dropout = $ForegroundSurfaceFusionDropout
+        bilinear_patch_fusion = [bool]$BilinearPatchFusion
+        bilinear_patch_rank = $BilinearPatchRank
+        bilinear_patch_dropout = $BilinearPatchDropout
         train_args = $TrainArgs
     } | ConvertTo-Json -Depth 6 |
         Set-Content -Path (Join-Path $RunDir "launcher_args.json")
