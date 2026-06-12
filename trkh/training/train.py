@@ -601,6 +601,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--attention-crop-min-area-ratio", type=float, default=0.20)
     parser.add_argument("--attention-view-foreground-weight", type=float, default=0.35)
     parser.add_argument(
+        "--attention-view-score-source",
+        type=str,
+        choices=("learned_attention", "surface_detail", "hybrid"),
+        default="learned_attention",
+        help=(
+            "Nguon score tao attention crop/drop. learned_attention giu hanh vi v8; "
+            "surface_detail dung high-frequency/edge gated boi foreground; hybrid tron ca hai."
+        ),
+    )
+    parser.add_argument(
         "--attention-drop-blur-kernel",
         type=int,
         default=15,
@@ -1353,6 +1363,7 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         attention_crop_padding_ratio=args.attention_crop_padding_ratio,
         attention_crop_min_area_ratio=args.attention_crop_min_area_ratio,
         attention_view_foreground_weight=args.attention_view_foreground_weight,
+        attention_view_score_source=args.attention_view_score_source,
         attention_drop_blur_kernel=args.attention_drop_blur_kernel,
         attention_drop_dilation_kernel=args.attention_drop_dilation_kernel,
         attention_drop_min_area_ratio=args.attention_drop_min_area_ratio,
@@ -2696,6 +2707,7 @@ def _attention_guided_score_map(
     images: Tensor,
     features: Dict[str, Tensor],
     foreground_weight: float,
+    score_source: str = "learned_attention",
 ) -> Tensor:
     patches = features.get("patches")
     grid_size = features.get("grid_size")
@@ -2754,11 +2766,49 @@ def _attention_guided_score_map(
             mode="area",
         ).flatten(1)
 
+    normalized_learned = _normalize_attention_scores(spatial_scores)
+    normalized_foreground = _normalize_attention_scores(foreground_scores)
+    detail_map = features.get("detail_map")
+    if (
+        torch.is_tensor(detail_map)
+        and detail_map.ndim == 4
+        and detail_map.size(0) == images.size(0)
+        and detail_map.size(1) == 1
+    ):
+        detail_scores = F.adaptive_avg_pool2d(
+            detail_map.detach().float(),
+            output_size=(grid_h, grid_w),
+        ).flatten(1)
+        normalized_detail = _normalize_attention_scores(detail_scores)
+    else:
+        normalized_detail = normalized_learned
+
     foreground_weight = float(min(1.0, max(0.0, foreground_weight)))
-    combined = (
-        (1.0 - foreground_weight) * _normalize_attention_scores(spatial_scores)
-        + foreground_weight * _normalize_attention_scores(foreground_scores)
-    )
+    score_source = str(score_source).strip().lower()
+    if score_source == "learned_attention":
+        combined = (
+            (1.0 - foreground_weight) * normalized_learned
+            + foreground_weight * normalized_foreground
+        )
+    else:
+        foreground_gate = (
+            (1.0 - foreground_weight)
+            + foreground_weight * normalized_foreground
+        )
+        surface_detail = normalized_detail * foreground_gate
+        if score_source == "surface_detail":
+            combined = surface_detail
+        elif score_source == "hybrid":
+            learned_with_prior = (
+                (1.0 - foreground_weight) * normalized_learned
+                + foreground_weight * normalized_foreground
+            )
+            combined = 0.35 * learned_with_prior + 0.65 * surface_detail
+        else:
+            raise ValueError(
+                "attention view score source chi ho tro "
+                "learned_attention, surface_detail, hybrid."
+            )
     combined = combined.view(images.size(0), 1, grid_h, grid_w)
     combined = F.interpolate(
         combined,
@@ -2898,6 +2948,7 @@ def _build_attention_guided_views(
     crop_min_area_ratio: float,
     foreground_weight: float,
     drop_blur_kernel: int,
+    score_source: str = "learned_attention",
     drop_dilation_kernel: int = 5,
     drop_min_area_ratio: float = 0.06,
     drop_max_area_ratio: float = 0.16,
@@ -2917,6 +2968,7 @@ def _build_attention_guided_views(
             images=images,
             features=features,
             foreground_weight=foreground_weight,
+            score_source=score_source,
         )
         draws = torch.rand((batch_size,), device=images.device)
         crop_mask = draws < float(crop_probability)
@@ -3328,6 +3380,7 @@ def _forward_train_loss(
     attention_crop_padding_ratio: float = 0.08,
     attention_crop_min_area_ratio: float = 0.20,
     attention_view_foreground_weight: float = 0.35,
+    attention_view_score_source: str = "learned_attention",
     attention_drop_blur_kernel: int = 15,
     attention_drop_dilation_kernel: int = 5,
     attention_drop_min_area_ratio: float = 0.06,
@@ -3405,6 +3458,7 @@ def _forward_train_loss(
                         crop_min_area_ratio=attention_crop_min_area_ratio,
                         foreground_weight=attention_view_foreground_weight,
                         drop_blur_kernel=attention_drop_blur_kernel,
+                        score_source=attention_view_score_source,
                         drop_dilation_kernel=attention_drop_dilation_kernel,
                         drop_min_area_ratio=attention_drop_min_area_ratio,
                         drop_max_area_ratio=attention_drop_max_area_ratio,
@@ -3665,6 +3719,7 @@ def train_one_epoch(
     attention_crop_padding_ratio: float = 0.08,
     attention_crop_min_area_ratio: float = 0.20,
     attention_view_foreground_weight: float = 0.35,
+    attention_view_score_source: str = "learned_attention",
     attention_drop_blur_kernel: int = 15,
     attention_drop_dilation_kernel: int = 5,
     attention_drop_min_area_ratio: float = 0.06,
@@ -3787,6 +3842,7 @@ def train_one_epoch(
                 attention_crop_padding_ratio=attention_crop_padding_ratio,
                 attention_crop_min_area_ratio=attention_crop_min_area_ratio,
                 attention_view_foreground_weight=attention_view_foreground_weight,
+                attention_view_score_source=attention_view_score_source,
                 attention_drop_blur_kernel=attention_drop_blur_kernel,
                 attention_drop_dilation_kernel=attention_drop_dilation_kernel,
                 attention_drop_min_area_ratio=attention_drop_min_area_ratio,
@@ -3912,6 +3968,7 @@ def train_one_epoch(
                             attention_crop_padding_ratio=attention_crop_padding_ratio,
                             attention_crop_min_area_ratio=attention_crop_min_area_ratio,
                             attention_view_foreground_weight=attention_view_foreground_weight,
+                            attention_view_score_source=attention_view_score_source,
                             attention_drop_blur_kernel=attention_drop_blur_kernel,
                             attention_drop_dilation_kernel=attention_drop_dilation_kernel,
                             attention_drop_min_area_ratio=attention_drop_min_area_ratio,
@@ -5772,6 +5829,7 @@ def main() -> None:
                     attention_crop_padding_ratio=train_config.attention_crop_padding_ratio,
                     attention_crop_min_area_ratio=train_config.attention_crop_min_area_ratio,
                     attention_view_foreground_weight=train_config.attention_view_foreground_weight,
+                    attention_view_score_source=train_config.attention_view_score_source,
                     attention_drop_blur_kernel=train_config.attention_drop_blur_kernel,
                     attention_drop_dilation_kernel=train_config.attention_drop_dilation_kernel,
                     attention_drop_min_area_ratio=train_config.attention_drop_min_area_ratio,

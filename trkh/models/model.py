@@ -1606,6 +1606,8 @@ class VisionTransformerWithRegisters(nn.Module):
             ).sum(dim=1).clamp(max=1).to(dtype=torch.bool)
         if self.cnn_feature_fusion:
             features["cnn_pooled"] = F.adaptive_avg_pool2d(stem_features, output_size=1).flatten(1)
+        if detail_map is not None:
+            features["detail_map"] = detail_map
         if image_valid_mask is not None:
             key_padding_mask = self._build_patch_key_padding_mask(
                 image_valid_mask=image_valid_mask,

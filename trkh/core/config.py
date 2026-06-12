@@ -255,6 +255,7 @@ class TrainConfig:
     attention_crop_padding_ratio: float = 0.08
     attention_crop_min_area_ratio: float = 0.20
     attention_view_foreground_weight: float = 0.35
+    attention_view_score_source: str = "learned_attention"
     attention_drop_blur_kernel: int = 15
     attention_drop_dilation_kernel: int = 5
     attention_drop_min_area_ratio: float = 0.06

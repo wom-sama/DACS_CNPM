@@ -14,6 +14,9 @@ param(
     [double]$AttentionCropProbability = 0.40,
     [double]$AttentionDropProbability = 0.20,
     [int]$AttentionViewStartEpoch = 2,
+    [ValidateSet("learned_attention", "surface_detail", "hybrid")]
+    [string]$AttentionViewScoreSource = "learned_attention",
+    [double]$AttentionViewForegroundWeight = 0.40,
     [double]$AttentionDropMinAreaRatio = 0.06,
     [double]$AttentionDropMaxAreaRatio = 0.16,
     [switch]$PreflightOnly,
@@ -86,6 +89,8 @@ if ($PreflightOnly) {
         attention_crop_probability = $AttentionCropProbability
         attention_drop_probability = $AttentionDropProbability
         attention_view_start_epoch = $AttentionViewStartEpoch
+        attention_view_score_source = $AttentionViewScoreSource
+        attention_view_foreground_weight = $AttentionViewForegroundWeight
         attention_drop_min_area_ratio = $AttentionDropMinAreaRatio
         attention_drop_max_area_ratio = $AttentionDropMaxAreaRatio
     } | ConvertTo-Json -Depth 5
@@ -204,7 +209,8 @@ try {
         "--attention-drop-threshold", "0.72",
         "--attention-crop-padding-ratio", "0.08",
         "--attention-crop-min-area-ratio", "0.25",
-        "--attention-view-foreground-weight", "0.40",
+        "--attention-view-foreground-weight", "$AttentionViewForegroundWeight",
+        "--attention-view-score-source", "$AttentionViewScoreSource",
         "--attention-drop-blur-kernel", "15",
         "--attention-drop-dilation-kernel", "5",
         "--attention-drop-min-area-ratio", "$AttentionDropMinAreaRatio",
@@ -291,6 +297,8 @@ try {
         attention_crop_probability = $AttentionCropProbability
         attention_drop_probability = $AttentionDropProbability
         attention_view_start_epoch = $EffectiveAttentionViewStartEpoch
+        attention_view_score_source = $AttentionViewScoreSource
+        attention_view_foreground_weight = $AttentionViewForegroundWeight
         attention_drop_min_area_ratio = $AttentionDropMinAreaRatio
         attention_drop_max_area_ratio = $AttentionDropMaxAreaRatio
         train_args = $TrainArgs

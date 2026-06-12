@@ -89,6 +89,10 @@
 - [x] Chay XAI/robustness v8 tren 36 case; background blur/gray drop gan `0`, object desaturate drop `0.1157`.
 - [x] Review thu cong mau v8 `0->1`, `2->1`, `1->0`, `1->2`; xac nhan nhieu ranh gioi label/maturity mo ho.
 - [x] Ghi full audit tai `docs/TRKH_5CLASS_ATTENTION_V8_FULL_AUDIT_20260612.md`.
+- [x] Cai Repomix `1.14.1` va them `repomix.config.json` de snapshot codebase khong gom runs/checkpoints/anh nang.
+- [x] Them personal skill `trkh-5class` cho cac thread sau.
+- [x] Ghi agent rules/gate tai `docs/TRKH_AGENT_RULES_20260612.md`.
+- [x] Tra cuu WS-DAN, PMG, ELR, background masking va tooling; ghi tai `docs/TRKH_RESEARCH_AND_TOOLING_UPDATE_20260612.md`.
 
 ## Can tiep tuc
 
@@ -99,9 +103,11 @@
 - [x] Xuat anh audit original/score-map/crop/drop cho 1 mau moi class.
 - [x] Chi chay full 30 epoch neu smoke throughput/GPU utilization on dinh; patience `3`.
 - [x] Sau full run, xuat class-1 confusion va XAI/background audit roi so sanh v4/top-5 TTA.
-- [ ] Them score source `surface_detail`/`hybrid` cho attention views va expose trong trace/config.
-- [ ] Smoke v9 de xac nhan score/crop/drop nam tren be mat qua, khong bam padding/vien.
-- [ ] Chi full-train v9 neu validation probe vuot v8 hoac giam ro confusion `0/1`, `1/2`.
+- [x] Them score source `surface_detail`/`hybrid` cho attention views va expose trong trace/config.
+- [x] Smoke v9 de xac nhan score/crop/drop nam tren be mat qua, khong bam padding/vien; trace class 1 tap trung vao vet lom/dot tren be mat, con mot diem nong mep trai.
+- [x] Chay probe v9 80 train batch x 4 epoch, full val: best val macro F1 `0.8857`, class 1 F1 `0.6783`; test macro F1 `0.8894`, class 1 F1 `0.6708`.
+- [x] Khong full-train v9 vi chua dat gate class-1 val F1 `>=0.70`; ghi audit tai `docs/TRKH_5CLASS_SURFACE_DETAIL_V9_AUDIT_20260612.md`.
+- [ ] Huong tiep theo co do dot pha hon: calibration/selector leakage-safe tu top-5 TTA teacher + TRKH V8/V9, hoac label-boundary audit truoc ELR.
 - [ ] Neu attention-view khong vuot v4, audit nhan train-only va thu ELR warm-up; khong bat ELR tren test.
 - [x] Chay preflight khong train truoc smoke 2026-06-11.
 - [x] Chay smoke TRKH voi `--max-train-batches 1 --max-val-batches 1 --skip-final-test`.

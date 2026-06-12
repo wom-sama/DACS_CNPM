@@ -93,6 +93,7 @@ from trkh.training.train import (
     _resolve_detection_stage,
     _save_interrupt_checkpoint,
     _build_attention_guided_views,
+    _attention_guided_score_map,
     _bounded_attention_drop_mask,
     _forward_train_loss,
     _foreground_consistency_loss_from_features,
@@ -649,6 +650,37 @@ class DetectionCalibrationTests(unittest.TestCase):
 
         self.assertTrue(torch.all(fractions >= 0.06))
         self.assertTrue(torch.all(fractions <= 0.16))
+
+    def test_surface_detail_attention_score_uses_detail_map_and_foreground_gate(self):
+        images = torch.zeros(1, 3, 32, 32)
+        features = {
+            "patches": torch.randn(1, 4, 8),
+            "grid_size": (2, 2),
+            "patch_indices": torch.tensor([[0, 1, 2, 3]]),
+            "fine_grained_attention": torch.tensor([[0.90, 0.05, 0.03, 0.02]]),
+            "foreground_prior": torch.tensor([[0.0, 0.0, 0.2, 1.0]]),
+            "detail_map": torch.tensor([[[[1.0, 0.0], [0.0, 1.0]]]]),
+        }
+
+        learned = _attention_guided_score_map(
+            images=images,
+            features=features,
+            foreground_weight=0.8,
+            score_source="learned_attention",
+        )
+        surface = _attention_guided_score_map(
+            images=images,
+            features=features,
+            foreground_weight=0.8,
+            score_source="surface_detail",
+        )
+
+        self.assertEqual(tuple(surface.shape), (1, 1, 32, 32))
+        self.assertFalse(torch.allclose(learned, surface))
+        self.assertGreater(
+            float(surface[0, 0, 24, 24]),
+            float(surface[0, 0, 8, 8]),
+        )
 
     def test_attention_view_loss_is_finite_and_backpropagates(self):
         model = create_model(

@@ -292,6 +292,10 @@ def main() -> None:
                 foreground_weight=float(
                     train_config.get("attention_view_foreground_weight", 0.40) or 0.40
                 ),
+                score_source=str(
+                    train_config.get("attention_view_score_source", "learned_attention")
+                    or "learned_attention"
+                ),
             )
             attention_crop = _attention_crop_single(
                 model_input[0],
@@ -438,7 +442,7 @@ def main() -> None:
         "- `03_patch_embedding_norm.png`: norm patch token truoc transformer.",
         "- `04_detail_map.png`: local color/high-frequency/edge map.",
         "- `05_foreground_prior.png`: prior dung cung attention khi xep hang token.",
-        "- `06_attention_view_score.png`: score learned patch attention tron foreground prior.",
+        "- `06_attention_view_score.png`: score source theo train config ket hop foreground prior.",
         "- `07_attention_crop.png`: crop salient dung lam view phu khi train.",
         "- `08_attention_drop.png`: vung salient bi blur de ep model tim dau hieu phu.",
         "- `block_XX_token_norm.png`: norm token sau tung transformer block; o da prune de trong.",
