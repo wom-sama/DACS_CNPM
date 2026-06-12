@@ -471,6 +471,45 @@ class DetectionCalibrationTests(unittest.TestCase):
         with torch.no_grad():
             self.assertTrue(torch.allclose(base(images), defect_fusion(images), atol=1e-6))
 
+    def test_foreground_surface_fusion_can_extend_existing_vit_checkpoint(self):
+        base = create_model(
+            num_classes=3,
+            model_config=ModelConfig(
+                model_type="vit_registers",
+                image_size=64,
+                patch_size=16,
+                stem_channels=8,
+                embed_dim=32,
+                depth=1,
+                num_heads=4,
+                num_registers=2,
+            ),
+        )
+        surface_fusion = create_model(
+            num_classes=3,
+            model_config=ModelConfig(
+                model_type="vit_registers",
+                image_size=64,
+                patch_size=16,
+                stem_channels=8,
+                embed_dim=32,
+                depth=1,
+                num_heads=4,
+                num_registers=2,
+                foreground_surface_fusion=True,
+                foreground_surface_fusion_dropout=0.0,
+            ),
+        )
+        missing, unexpected = surface_fusion.load_flexible_state_dict(base.state_dict(), strict=False)
+        self.assertFalse(unexpected)
+        self.assertTrue(any(str(key).startswith("foreground_surface_fusion_head.") for key in missing))
+
+        base.eval()
+        surface_fusion.eval()
+        images = torch.randn(2, 3, 64, 64)
+        with torch.no_grad():
+            self.assertTrue(torch.allclose(base(images), surface_fusion(images), atol=1e-6))
+
     def test_yolo_crop_dataset_exposes_sample_paths_for_color_audit(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -778,6 +817,32 @@ class DetectionCalibrationTests(unittest.TestCase):
         logits = classification_logits_from_features(model, features)
         base_logits = model.head(model.head_input_from_features(features))
         self.assertTrue(torch.allclose(logits - base_logits, torch.full_like(logits, 0.2), atol=1e-5))
+
+    def test_foreground_surface_fusion_logits_are_used_and_traced(self):
+        model = create_model(
+            num_classes=3,
+            model_config=ModelConfig(
+                model_type="vit_registers",
+                image_size=64,
+                patch_size=16,
+                stem_channels=8,
+                embed_dim=32,
+                depth=1,
+                num_heads=4,
+                num_registers=2,
+                foreground_surface_fusion=True,
+            ),
+        )
+        with torch.no_grad():
+            model.foreground_surface_fusion_head.net[-1].bias.fill_(0.15)
+        images = torch.randn(2, 3, 64, 64)
+        features = model.forward_features(images, return_trace=True)
+        logits = classification_logits_from_features(model, features)
+        base_logits = model.head(model.head_input_from_features(features))
+        self.assertTrue(torch.allclose(logits - base_logits, torch.full_like(logits, 0.15), atol=1e-5))
+        self.assertIn("foreground_surface_stats", features["trace"])
+        self.assertIn("foreground_surface_weight_map", features["trace"])
+        self.assertEqual(tuple(features["trace"]["foreground_surface_stats"].shape), (2, 129))
 
     def test_pairwise_margin_head_adjusts_logits_and_has_auxiliary_loss(self):
         model = create_model(

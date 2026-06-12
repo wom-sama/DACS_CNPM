@@ -122,7 +122,16 @@
 - [x] Chay probe v12 120 train batch x 6 epoch, full val: best val macro F1 `0.8866`, class 1 F1 `0.6864`; test macro F1 `0.8943`, class 1 F1 `0.6879`; reject full train vi chua qua gate `0.70`.
 - [x] Xuat v12 test detailed predictions va class-1 confusion audit tai `runs/probe_mango_cls_256_5class_boundary_contrastive_v12_120b_6e_20260612/class1_confusion_audit_test`.
 - [x] Ghi audit v11/v12 tai `docs/TRKH_5CLASS_BOUNDARY_CONTRASTIVE_V12_AUDIT_20260612.md`.
-- [ ] Huong tiep theo co do dot pha hon: validation-only boundary calibration, label-boundary audit train-only, local surface/color comparator branch cho bien `0/1`, `1/2`, `2/3`, hoac PMG-lite local patch branch.
+- [x] Them optional foreground surface statistic fusion V13: pseudo foreground, gray-world RGB/Lab/HSV, exposure, damage/detail va center-border stats `[B,129]`.
+- [x] Sua resume checkpoint extension cho ca model va EMA; missing key ngoai allowlist van fail.
+- [x] Chay full regression test V13: `102 passed`.
+- [x] Chay final smoke V13; exit `0`, partial model/EMA load thanh cong, trace du 1 mau moi class.
+- [x] Chay probe V13 120 train batch x toi da 6 epoch: best val macro/class1 `0.8868/0.6822`, test `0.8938/0.6835`.
+- [x] Xuat detailed predictions, class-1 confusion audit va `09a-09f` surface trace cho V13.
+- [x] Review close-margin `0->1`, `1->0`, `1->2`: boundary maturity/illumination mo ho; mask van thu mot phan nen co mau gan xoai.
+- [x] Khong full-train V13 vi val class-1 F1 `0.6822 < 0.70` va thap hon V12.
+- [x] Ghi audit V13 tai `docs/TRKH_5CLASS_FOREGROUND_SURFACE_V13_AUDIT_20260612.md`.
+- [ ] Huong tiep theo co do dot pha hon: train-only label-boundary audit, learned object-tight crop/mask, hoac local foreground patch comparator theo PMG/API-Net.
 - [ ] Neu tiep tuc ELR, chi thu ablation nho hon/lon hon (`0.03`, `0.20`) sau label audit; khong full train neu class-1 val F1 chua qua `0.70`.
 - [x] Chay preflight khong train truoc smoke 2026-06-11.
 - [x] Chay smoke TRKH voi `--max-train-batches 1 --max-val-batches 1 --skip-final-test`.

@@ -26,6 +26,8 @@ param(
     [int]$BoundaryContrastiveMaxPairs = 128,
     [double]$SampleWeightFactor = 1.0,
     [double]$SampleWeightMax = 2.50,
+    [bool]$ForegroundSurfaceFusion = $false,
+    [double]$ForegroundSurfaceFusionDropout = 0.08,
     [switch]$Probe,
     [switch]$PreflightOnly,
     [switch]$Smoke,
@@ -82,6 +84,8 @@ $launcherArgs = @{
     SampleWeightManifest = $SampleWeightManifest
     SampleWeightFactor = $SampleWeightFactor
     SampleWeightMax = $SampleWeightMax
+    ForegroundSurfaceFusion = $ForegroundSurfaceFusion
+    ForegroundSurfaceFusionDropout = $ForegroundSurfaceFusionDropout
     TraceArchitecture = $TraceArchitecture
 }
 if ($PreflightOnly) {

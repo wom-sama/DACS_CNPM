@@ -31,6 +31,8 @@ param(
     [string]$SampleWeightManifest = "",
     [double]$SampleWeightFactor = 1.0,
     [double]$SampleWeightMax = 5.0,
+    [bool]$ForegroundSurfaceFusion = $false,
+    [double]$ForegroundSurfaceFusionDropout = 0.08,
     [switch]$PreflightOnly,
     [switch]$Smoke,
     [bool]$TraceArchitecture = $true
@@ -315,6 +317,12 @@ try {
         }
         $TrainArgs += @("--sample-weight-manifest", $SampleWeightManifest)
     }
+    if ($ForegroundSurfaceFusion) {
+        $TrainArgs += @(
+            "--foreground-surface-fusion",
+            "--foreground-surface-fusion-dropout", "$ForegroundSurfaceFusionDropout"
+        )
+    }
     if ($Smoke) {
         $TrainArgs += @("--skip-final-test")
     }
@@ -357,6 +365,8 @@ try {
         sample_weight_manifest = $SampleWeightManifest
         sample_weight_factor = $SampleWeightFactor
         sample_weight_max = $SampleWeightMax
+        foreground_surface_fusion = [bool]$ForegroundSurfaceFusion
+        foreground_surface_fusion_dropout = $ForegroundSurfaceFusionDropout
         train_args = $TrainArgs
     } | ConvertTo-Json -Depth 6 |
         Set-Content -Path (Join-Path $RunDir "launcher_args.json")

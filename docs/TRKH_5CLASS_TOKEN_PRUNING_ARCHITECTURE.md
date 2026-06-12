@@ -252,3 +252,46 @@ Co warm-up theo epoch; full v8 bat tu epoch 2. Architecture trace tu dong them:
 
 History ghi view/crop/drop sample fraction va dien tich drop thuc te. Chi phi
 forward ty le voi so sample duoc chon, khong co ba full forward nhu WS-DAN goc.
+
+## V13 Foreground Surface Statistic Fusion (2026-06-12)
+
+V13 them mot nhanh residual co the bat/tat de do mau, anh sang va sai khac be
+mat chi trong pseudo foreground. Nhanh nay khong thay token-pruning path.
+
+Input:
+
+- model input `[B, 3, H, W]`;
+- anh duoc denormalize va downsample toi da `64x64`.
+
+Xu ly:
+
+- tao soft foreground tu green/yellow/brown support, non-padding, local detail
+  va center prior;
+- dark/detail chi mo rong mask khi nam gan fruit-color support;
+- tinh RGB/Lab/HSV truoc va sau gray-world normalization;
+- tinh exposure, color ratio, histogram, dark/brown/bright spot,
+  local-contrast/edge va center-border difference.
+
+Output:
+
+- vector thong ke `[B, 129]`;
+- residual class logits `[B, 5]`;
+- final logits la tong classifier logits va surface residual logits.
+
+Head:
+
+`LayerNorm(129) -> Linear(129, 64) -> GELU -> Dropout -> Linear(64, 5)`
+
+Linear cuoi zero-init de checkpoint cu co the resume ma prediction ban dau
+khong thay doi. Config/CLI:
+
+- `foreground_surface_fusion`;
+- `foreground_surface_fusion_dropout`;
+- `--foreground-surface-fusion`;
+- `--foreground-surface-fusion-dropout`.
+
+Architecture trace them `09a` den `09f` cho weight, mask, edge, dark, brown va
+bright map. Probe V13 cho thay mask tap trung phan lon tren qua nhung van nhan
+mot phan nen co mau gan xoai; class-1 validation F1 `0.6822`, khong qua gate
+`0.70`. Chi tiet tai
+`docs/TRKH_5CLASS_FOREGROUND_SURFACE_V13_AUDIT_20260612.md`.

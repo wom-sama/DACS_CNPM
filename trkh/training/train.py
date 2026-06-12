@@ -248,6 +248,16 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--defect-stat-fusion-dropout", type=float, default=0.1)
     parser.add_argument(
+        "--foreground-surface-fusion",
+        action="store_true",
+        default=False,
+        help=(
+            "Them head thong ke foreground-only + gray-world color constancy cho maturity/damage boundary; "
+            "khong dung pretrain va khoi tao residual-zero."
+        ),
+    )
+    parser.add_argument("--foreground-surface-fusion-dropout", type=float, default=0.1)
+    parser.add_argument(
         "--fine-grained-pooling",
         action="store_true",
         default=False,
@@ -1029,6 +1039,8 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         raise ValueError("--color-stat-fusion-dropout phai >= 0.")
     if args.defect_stat_fusion_dropout < 0.0:
         raise ValueError("--defect-stat-fusion-dropout phai >= 0.")
+    if args.foreground_surface_fusion_dropout < 0.0:
+        raise ValueError("--foreground-surface-fusion-dropout phai >= 0.")
     if args.fine_grained_pooling_dropout < 0.0:
         raise ValueError("--fine-grained-pooling-dropout phai >= 0.")
     if args.branch_token_dropout < 0.0:
@@ -1360,6 +1372,8 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         color_stat_fusion_dropout=args.color_stat_fusion_dropout,
         defect_stat_fusion=bool(args.defect_stat_fusion),
         defect_stat_fusion_dropout=args.defect_stat_fusion_dropout,
+        foreground_surface_fusion=bool(args.foreground_surface_fusion),
+        foreground_surface_fusion_dropout=args.foreground_surface_fusion_dropout,
         fine_grained_pooling=bool(args.fine_grained_pooling),
         fine_grained_pooling_dropout=args.fine_grained_pooling_dropout,
         multi_branch_fusion=bool(args.multi_branch_fusion),
@@ -2318,6 +2332,44 @@ def _move_optimizer_state_to_device(optimizer: optim.Optimizer, device: torch.de
                 state[key] = value.to(device=device)
 
 
+ALLOWED_RESUME_EXTENSION_PREFIXES = (
+    "quality_head.",
+    "cnn_fusion_norm.",
+    "cnn_fusion_head.",
+    "foreground_surface_fusion_head.",
+)
+
+
+def _load_model_state_allowing_extensions(
+    model: nn.Module,
+    state_dict: Dict[str, Tensor],
+    *,
+    allow_extensions: bool,
+) -> Optional[Dict[str, object]]:
+    try:
+        load_model_state(model, state_dict, strict=True)
+        return None
+    except RuntimeError:
+        if not allow_extensions:
+            raise
+        missing_keys, unexpected_keys = load_model_state(model, state_dict, strict=False)
+        disallowed_missing = [
+            key
+            for key in missing_keys
+            if not any(str(key).startswith(prefix) for prefix in ALLOWED_RESUME_EXTENSION_PREFIXES)
+        ]
+        if disallowed_missing or unexpected_keys:
+            raise RuntimeError(
+                "Resume partial load chi cho phep them cac module mo rong da duoc khai bao. "
+                f"missing={missing_keys}, unexpected={unexpected_keys}"
+            )
+        return {
+            "allowed_missing_keys": list(missing_keys),
+            "unexpected_keys": list(unexpected_keys),
+            "reason": "allowed_architecture_extension_initialized_from_scratch",
+        }
+
+
 def _load_training_checkpoint(
     *,
     resume_path: Path,
@@ -2340,32 +2392,15 @@ def _load_training_checkpoint(
         raise ValueError(f"Checkpoint resume thieu model_state: {resume_path}")
 
     resume_model_state = checkpoint.get("train_model_state", checkpoint["model_state"])
-    try:
-        load_model_state(model, resume_model_state, strict=True)
-    except RuntimeError:
-        if not allow_added_detection_heads:
-            raise
-        missing_keys, unexpected_keys = load_model_state(model, resume_model_state, strict=False)
-        allowed_missing_prefixes = (
-            "quality_head.",
-            "cnn_fusion_norm.",
-            "cnn_fusion_head.",
-        )
-        disallowed_missing = [
-            key for key in missing_keys if not any(str(key).startswith(prefix) for prefix in allowed_missing_prefixes)
-        ]
-        if disallowed_missing or unexpected_keys:
-            raise RuntimeError(
-                "Resume partial load chi cho phep them cac module mo rong da duoc khai bao. "
-                f"missing={missing_keys}, unexpected={unexpected_keys}"
-            )
+    partial_load_summary = _load_model_state_allowing_extensions(
+        model,
+        resume_model_state,
+        allow_extensions=bool(allow_added_detection_heads),
+    )
+    if partial_load_summary is not None:
         print(
             {
-                "resume_partial_model_load": {
-                    "allowed_missing_keys": list(missing_keys),
-                    "unexpected_keys": list(unexpected_keys),
-                    "reason": "allowed_architecture_extension_initialized_from_scratch",
-                }
+                "resume_partial_model_load": partial_load_summary
             },
             flush=True,
         )
@@ -6185,7 +6220,13 @@ def main() -> None:
             decay=train_config.model_ema_decay,
         )
         if resume_checkpoint is not None and isinstance(resume_checkpoint.get("ema_model_state"), dict):
-            model_ema.load_state_dict(resume_checkpoint["ema_model_state"])
+            ema_partial_load_summary = _load_model_state_allowing_extensions(
+                model_ema.module,
+                resume_checkpoint["ema_model_state"],
+                allow_extensions=bool(args.resume_use_cli_config),
+            )
+            if ema_partial_load_summary is not None:
+                print({"model_ema_partial_load": ema_partial_load_summary}, flush=True)
             ema_updates = int(resume_checkpoint.get("ema_updates", 0) or 0)
             model_ema.updates = max(0, ema_updates)
         print(

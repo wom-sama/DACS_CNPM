@@ -559,6 +559,288 @@ class DefectStatisticFusion(ColorStatisticFusion):
         return stats
 
 
+class ForegroundSurfaceStatisticFusion(DefectStatisticFusion):
+    def __init__(
+        self,
+        num_classes: int,
+        hidden_dim: int = 64,
+        dropout: float = 0.1,
+    ) -> None:
+        nn.Module.__init__(self)
+        self.hue_bins = 12
+        self.color_bins = 8
+        self.stats_dim = 129
+        self.max_stats_size = 64
+        self.register_buffer("rgb_mean", torch.tensor([0.485, 0.456, 0.406], dtype=torch.float32).view(1, 3, 1, 1))
+        self.register_buffer("rgb_std", torch.tensor([0.229, 0.224, 0.225], dtype=torch.float32).view(1, 3, 1, 1))
+        hidden = max(16, int(hidden_dim))
+        self.net = nn.Sequential(
+            nn.LayerNorm(self.stats_dim),
+            nn.Linear(self.stats_dim, hidden),
+            nn.GELU(),
+            nn.Dropout(float(max(0.0, dropout))),
+            nn.Linear(hidden, int(num_classes)),
+        )
+
+    @staticmethod
+    def _normalize_weights(weights: Tensor) -> Tensor:
+        return weights / weights.sum(dim=(-2, -1), keepdim=True).clamp(min=1e-6)
+
+    def _foreground_weight_maps(
+        self,
+        image_float: Tensor,
+        hue: Tensor,
+        saturation: Tensor,
+        value: Tensor,
+        edge_detail: Tensor,
+        dark_spot: Tensor,
+    ) -> Dict[str, Tensor]:
+        fill_distance = (image_float - self.rgb_mean.to(device=image_float.device, dtype=image_float.dtype)).abs().mean(dim=1)
+        non_padding = (fill_distance > 0.035).to(dtype=image_float.dtype)
+        green_yellow = (
+            (hue >= 0.08)
+            & (hue <= 0.45)
+            & (saturation >= 0.07)
+            & (value >= 0.12)
+        ).to(dtype=image_float.dtype)
+        yellow_band = (
+            (hue >= 0.10)
+            & (hue <= 0.24)
+            & (saturation >= 0.08)
+            & (value >= 0.16)
+        ).to(dtype=image_float.dtype)
+        brown_or_orange = (
+            (hue >= 0.035)
+            & (hue <= 0.17)
+            & (saturation >= 0.10)
+            & (value >= 0.10)
+        ).to(dtype=image_float.dtype)
+        dark_defect = (dark_spot > 0.35).to(dtype=image_float.dtype)
+        fruit_color = torch.maximum(torch.maximum(green_yellow, yellow_band), brown_or_orange)
+        fruit_support = F.max_pool2d(
+            fruit_color.unsqueeze(1),
+            kernel_size=3,
+            stride=1,
+            padding=1,
+        ).squeeze(1)
+
+        height, width = int(image_float.shape[-2]), int(image_float.shape[-1])
+        y = torch.linspace(-1.0, 1.0, height, device=image_float.device, dtype=image_float.dtype).view(1, height, 1)
+        x = torch.linspace(-1.0, 1.0, width, device=image_float.device, dtype=image_float.dtype).view(1, 1, width)
+        center_prior = torch.exp(-((x * x) + (y * y)) / (2.0 * 0.70 * 0.70))
+        foreground_raw = (
+            fruit_color
+            + 0.30 * edge_detail * fruit_support
+            + 0.15 * dark_defect * fruit_support
+            + 0.08 * center_prior * fruit_support
+        ) * non_padding
+        fallback_raw = (non_padding + 0.05 * center_prior * non_padding).clamp(min=0.0)
+        use_fallback = foreground_raw.flatten(1).sum(dim=1).view(-1, 1, 1) <= 1e-6
+        foreground_raw = torch.where(use_fallback, fallback_raw, foreground_raw)
+        foreground_weights = self._normalize_weights(foreground_raw.unsqueeze(1))
+        center_weights = self._normalize_weights(foreground_weights * center_prior.unsqueeze(1))
+        border_weights = self._normalize_weights(foreground_weights * (1.0 - center_prior).clamp(min=0.0).unsqueeze(1))
+        return {
+            "foreground_raw": foreground_raw,
+            "foreground_weights": foreground_weights,
+            "center_weights": center_weights,
+            "border_weights": border_weights,
+            "center_prior": center_prior,
+            "non_padding": non_padding,
+            "green_yellow": green_yellow,
+            "yellow_band": yellow_band,
+            "brown_or_orange": brown_or_orange,
+            "dark_defect": dark_defect,
+        }
+
+    def _weighted_channel_mean_std(self, image: Tensor, weights: Tensor) -> Tuple[Tensor, Tensor]:
+        mean = (image * weights).sum(dim=(-2, -1))
+        variance = (((image - mean[:, :, None, None]) ** 2) * weights).sum(dim=(-2, -1))
+        return mean, variance.clamp(min=1e-8).sqrt()
+
+    def _weighted_scalar_pack(self, values: Tensor, weights: Tensor, threshold: float = 0.5) -> Tensor:
+        weight_map = weights.squeeze(1)
+        weighted_mean = (values[:, None] * weights).sum(dim=(-2, -1)).squeeze(1)
+        masked_values = torch.where(weight_map > 0.0, values, torch.zeros_like(values))
+        maximum = masked_values.flatten(1).amax(dim=1)
+        flat = masked_values.flatten(1)
+        top_k = max(1, int(math.ceil(float(flat.size(1)) * 0.05)))
+        top_mean = torch.topk(flat, k=top_k, dim=1, largest=True, sorted=False).values.mean(dim=1)
+        fraction = (((values > float(threshold)).to(dtype=values.dtype))[:, None] * weights).sum(dim=(-2, -1)).squeeze(1)
+        return torch.stack((weighted_mean, maximum, top_mean, fraction), dim=1)
+
+    def _weighted_mask_fraction(self, mask: Tensor, weights: Tensor) -> Tensor:
+        return (mask.to(dtype=weights.dtype)[:, None] * weights).sum(dim=(-2, -1)).squeeze(1)
+
+    def _gray_world_normalize(self, image_float: Tensor, weights: Tensor) -> Tensor:
+        mean_rgb, _ = self._weighted_channel_mean_std(image_float, weights)
+        gray_level = mean_rgb.mean(dim=1, keepdim=True).clamp(min=0.08)
+        scale = gray_level / mean_rgb.clamp(min=0.08)
+        return (image_float * scale[:, :, None, None]).clamp(0.0, 1.0)
+
+    def _extract_stats_and_maps(self, image: Tensor) -> Tuple[Tensor, Dict[str, Tensor]]:
+        image_float = (image.to(dtype=torch.float32) * self.rgb_std) + self.rgb_mean
+        image_float = image_float.clamp(0.0, 1.0)
+        if max(int(image_float.shape[-2]), int(image_float.shape[-1])) > self.max_stats_size:
+            image_float = F.interpolate(
+                image_float,
+                size=(self.max_stats_size, self.max_stats_size),
+                mode="area",
+            )
+
+        hue, saturation, value = self._rgb_to_hsv_maps(image_float)
+        luminance = (
+            0.299 * image_float[:, 0]
+            + 0.587 * image_float[:, 1]
+            + 0.114 * image_float[:, 2]
+        )
+        local_mean = F.avg_pool2d(luminance[:, None], kernel_size=5, stride=1, padding=2).squeeze(1)
+        local_contrast = self._normalize_map((luminance - local_mean).abs())
+        grad_x = F.pad((luminance[:, :, 1:] - luminance[:, :, :-1]).abs(), (0, 1, 0, 0))
+        grad_y = F.pad((luminance[:, 1:, :] - luminance[:, :-1, :]).abs(), (0, 0, 0, 1))
+        edge_detail = self._normalize_map(local_contrast + 0.5 * (grad_x + grad_y))
+
+        dark_spot = torch.sigmoid((0.38 - value) * 16.0) * torch.sigmoid((saturation - 0.10) * 12.0)
+        brown_hue = torch.exp(-0.5 * (self._circular_hue_distance(hue, 0.10) / 0.09).pow(2))
+        brown_spot = brown_hue * torch.sigmoid((0.65 - value) * 10.0) * torch.sigmoid((saturation - 0.12) * 10.0)
+        bright_spot = torch.sigmoid((value - 0.88) * 14.0) * torch.sigmoid((0.24 - saturation) * 10.0)
+        maps = self._foreground_weight_maps(
+            image_float=image_float,
+            hue=hue,
+            saturation=saturation,
+            value=value,
+            edge_detail=edge_detail,
+            dark_spot=dark_spot,
+        )
+        foreground_weights = maps["foreground_weights"]
+        center_weights = maps["center_weights"]
+        border_weights = maps["border_weights"]
+        normalized_image = self._gray_world_normalize(image_float, foreground_weights)
+        hue_norm, saturation_norm, value_norm = self._rgb_to_hsv_maps(normalized_image)
+        lab = self._rgb_to_lab(image_float)
+        lab_norm = self._rgb_to_lab(normalized_image)
+
+        raw_rgb_mean, raw_rgb_std = self._weighted_channel_mean_std(image_float, foreground_weights)
+        norm_rgb_mean, norm_rgb_std = self._weighted_channel_mean_std(normalized_image, foreground_weights)
+        raw_lab_mean, raw_lab_std = self._weighted_channel_mean_std(lab, foreground_weights)
+        norm_lab_mean, norm_lab_std = self._weighted_channel_mean_std(lab_norm, foreground_weights)
+        center_rgb_mean, _ = self._weighted_channel_mean_std(image_float, center_weights)
+        border_rgb_mean, _ = self._weighted_channel_mean_std(image_float, border_weights)
+        center_lab_mean, _ = self._weighted_channel_mean_std(lab, center_weights)
+        border_lab_mean, _ = self._weighted_channel_mean_std(lab, border_weights)
+        center_damage = torch.cat(
+            [
+                self._weighted_scalar_pack(score, center_weights, threshold=0.5)[:, :1]
+                - self._weighted_scalar_pack(score, border_weights, threshold=0.5)[:, :1]
+                for score in (dark_spot, brown_spot, bright_spot)
+            ],
+            dim=1,
+        )
+
+        foreground_area = (maps["foreground_raw"] > 0.05).to(dtype=image_float.dtype).flatten(1).mean(dim=1)
+        area_stats = torch.stack(
+            (
+                maps["non_padding"].flatten(1).mean(dim=1),
+                maps["foreground_raw"].flatten(1).mean(dim=1),
+                foreground_area,
+                (foreground_weights.squeeze(1) * maps["center_prior"]).sum(dim=(-2, -1)),
+                (foreground_weights.squeeze(1) * (1.0 - maps["center_prior"]).clamp(min=0.0)).sum(dim=(-2, -1)),
+            ),
+            dim=1,
+        )
+        color_ratios = torch.stack(
+            (
+                self._weighted_mask_fraction(maps["green_yellow"], foreground_weights),
+                self._weighted_mask_fraction(maps["yellow_band"], foreground_weights),
+                self._weighted_mask_fraction(maps["brown_or_orange"], foreground_weights),
+                self._weighted_mask_fraction(maps["dark_defect"], foreground_weights),
+                self._weighted_mask_fraction(bright_spot > 0.5, foreground_weights),
+                self._weighted_mask_fraction(value < 0.18, foreground_weights),
+                self._weighted_mask_fraction(value > 0.90, foreground_weights),
+            ),
+            dim=1,
+        )
+        score_packs = torch.cat(
+            [
+                self._weighted_scalar_pack(score, foreground_weights, threshold=0.5)
+                for score in (dark_spot, brown_spot, bright_spot, local_contrast, edge_detail)
+            ],
+            dim=1,
+        )
+        histograms = torch.cat(
+            (
+                self._soft_histogram(hue, foreground_weights, bins=self.hue_bins, min_value=0.0, max_value=1.0),
+                self._soft_histogram(saturation, foreground_weights, bins=self.color_bins, min_value=0.0, max_value=1.0),
+                self._soft_histogram(value, foreground_weights, bins=self.color_bins, min_value=0.0, max_value=1.0),
+                self._soft_histogram(hue_norm, foreground_weights, bins=self.hue_bins, min_value=0.0, max_value=1.0),
+                self._soft_histogram(saturation_norm, foreground_weights, bins=self.color_bins, min_value=0.0, max_value=1.0),
+                self._soft_histogram(value_norm, foreground_weights, bins=self.color_bins, min_value=0.0, max_value=1.0),
+            ),
+            dim=1,
+        )
+        center_border_stats = torch.cat(
+            (
+                center_rgb_mean - border_rgb_mean,
+                center_lab_mean - border_lab_mean,
+                center_damage,
+            ),
+            dim=1,
+        )
+        stats = torch.cat(
+            (
+                area_stats,
+                raw_rgb_mean,
+                raw_rgb_std,
+                norm_rgb_mean,
+                norm_rgb_std,
+                raw_lab_mean,
+                raw_lab_std,
+                norm_lab_mean,
+                norm_lab_std,
+                self._rgb_to_hsv_summary(image_float, foreground_weights),
+                self._rgb_to_hsv_summary(normalized_image, foreground_weights),
+                color_ratios,
+                score_packs,
+                histograms,
+                center_border_stats,
+            ),
+            dim=1,
+        )
+        if int(stats.size(1)) != self.stats_dim:
+            raise RuntimeError(
+                f"ForegroundSurfaceStatisticFusion stats_dim mismatch: {int(stats.size(1))} != {self.stats_dim}"
+            )
+        maps.update(
+            {
+                "edge_detail": edge_detail,
+                "dark_spot": dark_spot,
+                "brown_spot": brown_spot,
+                "bright_spot": bright_spot,
+            }
+        )
+        return stats, maps
+
+    def extract_stats(self, image: Tensor) -> Tensor:
+        stats, _ = self._extract_stats_and_maps(image)
+        return stats
+
+    def forward(self, image: Tensor, return_trace: bool = False):
+        stats, maps = self._extract_stats_and_maps(image)
+        logits = self.net(stats.to(dtype=image.dtype))
+        if not return_trace:
+            return logits
+        foreground_surface_mask = (maps["foreground_raw"] > 0.05).to(dtype=stats.dtype)
+        return logits, {
+            "stats": stats.detach(),
+            "foreground_weight_map": maps["foreground_weights"].detach(),
+            "foreground_mask": foreground_surface_mask.detach(),
+            "edge_detail": (maps["edge_detail"] * foreground_surface_mask).detach(),
+            "dark_spot": (maps["dark_spot"] * foreground_surface_mask).detach(),
+            "brown_spot": (maps["brown_spot"] * foreground_surface_mask).detach(),
+            "bright_spot": (maps["bright_spot"] * foreground_surface_mask).detach(),
+        }
+
+
 class ColorStatisticTokenBranch(nn.Module):
     def __init__(
         self,
@@ -921,6 +1203,8 @@ class VisionTransformerWithRegisters(nn.Module):
         color_stat_fusion_dropout: float = 0.1,
         defect_stat_fusion: bool = False,
         defect_stat_fusion_dropout: float = 0.1,
+        foreground_surface_fusion: bool = False,
+        foreground_surface_fusion_dropout: float = 0.1,
         num_classes: int = 4,
         embed_dim: int = 256,
         depth: int = 8,
@@ -967,6 +1251,7 @@ class VisionTransformerWithRegisters(nn.Module):
         self.fine_grained_pooling = bool(fine_grained_pooling)
         self.color_stat_fusion = bool(color_stat_fusion)
         self.defect_stat_fusion = bool(defect_stat_fusion)
+        self.foreground_surface_fusion = bool(foreground_surface_fusion)
         self.detail_patch_enhancement = bool(detail_patch_enhancement)
         self.pairwise_margin_head_enabled = bool(pairwise_margin_head)
         self.pairwise_margin_logit_scale = float(max(0.0, pairwise_margin_logit_scale))
@@ -1125,6 +1410,14 @@ class VisionTransformerWithRegisters(nn.Module):
             )
         else:
             self.defect_fusion_head = None
+        if self.foreground_surface_fusion:
+            self.foreground_surface_fusion_head = ForegroundSurfaceStatisticFusion(
+                num_classes=num_classes,
+                hidden_dim=max(32, embed_dim // 2),
+                dropout=foreground_surface_fusion_dropout,
+            )
+        else:
+            self.foreground_surface_fusion_head = None
 
         self.apply(self._init_weights)
         self._init_parameter_tensors()
@@ -1138,6 +1431,8 @@ class VisionTransformerWithRegisters(nn.Module):
             self.color_fusion_head.zero_init_residual()
         if self.defect_fusion_head is not None:
             self.defect_fusion_head.zero_init_residual()
+        if self.foreground_surface_fusion_head is not None:
+            self.foreground_surface_fusion_head.zero_init_residual()
         if self.pairwise_margin_head is not None:
             nn.init.zeros_(self.pairwise_margin_head.weight)
             if self.pairwise_margin_head.bias is not None:
@@ -1624,6 +1919,17 @@ class VisionTransformerWithRegisters(nn.Module):
             features["color_logits"] = self.color_fusion_head(input_image)
         if self.defect_fusion_head is not None:
             features["defect_logits"] = self.defect_fusion_head(input_image)
+        foreground_surface_trace = None
+        if self.foreground_surface_fusion_head is not None:
+            if return_trace:
+                foreground_surface_logits, foreground_surface_trace = self.foreground_surface_fusion_head(
+                    input_image,
+                    return_trace=True,
+                )
+                features["foreground_surface_logits"] = foreground_surface_logits
+                features["foreground_surface_trace"] = foreground_surface_trace
+            else:
+                features["foreground_surface_logits"] = self.foreground_surface_fusion_head(input_image)
         if return_trace:
             features["trace"] = {
                 "input_shape": tuple(int(value) for value in input_image.shape),
@@ -1643,6 +1949,14 @@ class VisionTransformerWithRegisters(nn.Module):
                 "foreground_prior": foreground_prior,
                 "pruning": pruning_trace,
             }
+            if foreground_surface_trace is not None:
+                features["trace"]["foreground_surface_stats"] = foreground_surface_trace["stats"]
+                features["trace"]["foreground_surface_weight_map"] = foreground_surface_trace["foreground_weight_map"]
+                features["trace"]["foreground_surface_mask"] = foreground_surface_trace["foreground_mask"]
+                features["trace"]["foreground_surface_edge_detail"] = foreground_surface_trace["edge_detail"]
+                features["trace"]["foreground_surface_dark_spot"] = foreground_surface_trace["dark_spot"]
+                features["trace"]["foreground_surface_brown_spot"] = foreground_surface_trace["brown_spot"]
+                features["trace"]["foreground_surface_bright_spot"] = foreground_surface_trace["bright_spot"]
         return features
 
     def _build_patch_key_padding_mask(
@@ -2010,6 +2324,8 @@ class DETRVisionTransformerWithRegisters(VisionTransformerWithRegisters):
         color_stat_fusion_dropout: float = 0.1,
         defect_stat_fusion: bool = False,
         defect_stat_fusion_dropout: float = 0.1,
+        foreground_surface_fusion: bool = False,
+        foreground_surface_fusion_dropout: float = 0.1,
         num_classes: int = 4,
         embed_dim: int = 256,
         depth: int = 8,
@@ -2076,6 +2392,8 @@ class DETRVisionTransformerWithRegisters(VisionTransformerWithRegisters):
             color_stat_fusion_dropout=color_stat_fusion_dropout,
             defect_stat_fusion=defect_stat_fusion,
             defect_stat_fusion_dropout=defect_stat_fusion_dropout,
+            foreground_surface_fusion=foreground_surface_fusion,
+            foreground_surface_fusion_dropout=foreground_surface_fusion_dropout,
             num_classes=num_classes,
             embed_dim=embed_dim,
             depth=depth,
@@ -2289,6 +2607,9 @@ def classification_logits_from_features(model: nn.Module, features: Dict[str, Te
     defect_logits = features.get("defect_logits")
     if torch.is_tensor(defect_logits):
         logits = logits + defect_logits
+    foreground_surface_logits = features.get("foreground_surface_logits")
+    if torch.is_tensor(foreground_surface_logits):
+        logits = logits + foreground_surface_logits
     pairwise_fn = getattr(model, "pairwise_margin_logits_from_head_input", None)
     adjust_fn = getattr(model, "pairwise_margin_adjustment", None)
     if callable(pairwise_fn) and callable(adjust_fn):

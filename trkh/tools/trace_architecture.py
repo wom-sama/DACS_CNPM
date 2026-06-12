@@ -359,6 +359,18 @@ def main() -> None:
         )
         _tensor_to_image(attention_crop).save(class_dir / "07_attention_crop.png")
         _tensor_to_image(attention_drop[0]).save(class_dir / "08_attention_drop.png")
+        surface_map_specs = (
+            ("09a_foreground_surface_weight.png", "foreground_surface_weight_map"),
+            ("09b_foreground_surface_mask.png", "foreground_surface_mask"),
+            ("09c_foreground_surface_edge_detail.png", "foreground_surface_edge_detail"),
+            ("09d_foreground_surface_dark_spot.png", "foreground_surface_dark_spot"),
+            ("09e_foreground_surface_brown_spot.png", "foreground_surface_brown_spot"),
+            ("09f_foreground_surface_bright_spot.png", "foreground_surface_bright_spot"),
+        )
+        for filename, trace_key in surface_map_specs:
+            surface_map = trace.get(trace_key)
+            if torch.is_tensor(surface_map):
+                _heatmap_image(surface_map[0], input_image.size).save(class_dir / filename)
 
         block_shapes = trace["block_token_shapes"]
         block_indices = trace["block_patch_indices"]
@@ -403,6 +415,15 @@ def main() -> None:
             "grid_size": list(grid_size),
             "pruning": pruning_records,
         }
+        surface_stats = trace.get("foreground_surface_stats")
+        if torch.is_tensor(surface_stats):
+            record["foreground_surface_stats_shape"] = list(surface_stats.shape)
+        surface_weight_map = trace.get("foreground_surface_weight_map")
+        if torch.is_tensor(surface_weight_map):
+            record["foreground_surface_weight_map_shape"] = list(surface_weight_map.shape)
+        surface_mask = trace.get("foreground_surface_mask")
+        if torch.is_tensor(surface_mask):
+            record["foreground_surface_mask_shape"] = list(surface_mask.shape)
         (class_dir / "shapes.json").write_text(
             json.dumps(record, indent=2, ensure_ascii=False),
             encoding="utf-8",
@@ -445,6 +466,12 @@ def main() -> None:
         "- `06_attention_view_score.png`: score source theo train config ket hop foreground prior.",
         "- `07_attention_crop.png`: crop salient dung lam view phu khi train.",
         "- `08_attention_drop.png`: vung salient bi blur de ep model tim dau hieu phu.",
+        "- `09a_foreground_surface_weight.png`: mask mem foreground-only cua surface fusion head.",
+        "- `09b_foreground_surface_mask.png`: mask cung dung de cat nen cho audit map.",
+        "- `09c_foreground_surface_edge_detail.png`: chi tiet cuc bo/edge sau khi mask foreground.",
+        "- `09d_foreground_surface_dark_spot.png`: diem vet toi/underexposure/bam sau khi mask foreground.",
+        "- `09e_foreground_surface_brown_spot.png`: diem vet nau/hu hong sau khi mask foreground.",
+        "- `09f_foreground_surface_bright_spot.png`: diem qua sang/lo sang sau khi mask foreground.",
         "- `block_XX_token_norm.png`: norm token sau tung transformer block; o da prune de trong.",
         "- `prune_XX_after_layer_Y.png`: patch xanh duoc giu, patch toi bi loai.",
         "- `shapes.json`: shape va patch index chi tiet.",
