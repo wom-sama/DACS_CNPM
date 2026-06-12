@@ -86,9 +86,17 @@ def _build_dataset(
             "Hay dung data.yaml cua cls_crops cho nhanh phan loai."
         )
     image_size = int(checkpoint["model_config"]["image_size"])
+    augmentation_config = checkpoint.get("augmentation_config", {})
+    if not isinstance(augmentation_config, dict):
+        augmentation_config = {}
     transform = build_eval_transform(
         image_size=image_size,
-        resize_mode=checkpoint.get("augmentation_config", {}).get("resize_mode", "pad"),
+        resize_mode=augmentation_config.get("resize_mode", "pad"),
+        illumination_normalization=bool(augmentation_config.get("illumination_normalization", False)),
+        illumination_normalization_strength=float(augmentation_config.get("illumination_normalization_strength", 0.0) or 0.0),
+        background_suppression_mode=str(augmentation_config.get("background_suppression_mode", "none") or "none"),
+        background_suppression_margin=float(augmentation_config.get("background_suppression_margin", 0.08) or 0.08),
+        background_suppression_blur_radius=float(augmentation_config.get("background_suppression_blur_radius", 7.0) or 7.0),
     )
     return ClassificationFolderDataset.from_data_spec(
         data_spec=data_spec,
@@ -324,9 +332,17 @@ def _center_occlusion(crop_image: Image.Image, ratio: float = 0.24) -> Image.Ima
 
 def _tensor_from_crop(checkpoint: Dict[str, object], crop_image: Image.Image, device: torch.device) -> torch.Tensor:
     image_size = int(checkpoint["model_config"]["image_size"])
+    augmentation_config = checkpoint.get("augmentation_config", {})
+    if not isinstance(augmentation_config, dict):
+        augmentation_config = {}
     transform = build_eval_transform(
         image_size=image_size,
-        resize_mode=checkpoint.get("augmentation_config", {}).get("resize_mode", "pad"),
+        resize_mode=augmentation_config.get("resize_mode", "pad"),
+        illumination_normalization=bool(augmentation_config.get("illumination_normalization", False)),
+        illumination_normalization_strength=float(augmentation_config.get("illumination_normalization_strength", 0.0) or 0.0),
+        background_suppression_mode=str(augmentation_config.get("background_suppression_mode", "none") or "none"),
+        background_suppression_margin=float(augmentation_config.get("background_suppression_margin", 0.08) or 0.08),
+        background_suppression_blur_radius=float(augmentation_config.get("background_suppression_blur_radius", 7.0) or 7.0),
     )
     transformed = transform(crop_image)
     tensor = transformed[0] if isinstance(transformed, tuple) else transformed

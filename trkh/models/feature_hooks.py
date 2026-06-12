@@ -323,6 +323,7 @@ def _entropy_1d(values: Tensor) -> float:
 def summarize_register_attention(
     attentions: Union[Dict[int, Tensor], Sequence[Tensor]],
     prefix_tokens: int,
+    register_prefix_tokens: Optional[int] = None,
 ) -> Dict[str, float]:
     if isinstance(attentions, dict):
         ordered = [attentions[index] for index in sorted(attentions)]
@@ -337,6 +338,8 @@ def summarize_register_attention(
         return {}
 
     prefix_tokens = int(prefix_tokens)
+    register_prefix_tokens = int(register_prefix_tokens or prefix_tokens)
+    register_prefix_tokens = max(1, min(register_prefix_tokens, prefix_tokens))
     patch_attention = attention[:, :, prefix_tokens:]
     if patch_attention.numel() == 0:
         return {}
@@ -346,8 +349,8 @@ def summarize_register_attention(
         "cls_to_patch_attention_mean": float(cls_patch.mean().item()),
         "cls_attention_entropy": _entropy_1d(cls_patch),
     }
-    if prefix_tokens > 1:
-        register_patch = patch_attention[:, 1:prefix_tokens, :].mean(dim=(0, 1))
+    if register_prefix_tokens > 1:
+        register_patch = patch_attention[:, 1:register_prefix_tokens, :].mean(dim=(0, 1))
         similarity = F.cosine_similarity(
             cls_patch.flatten().unsqueeze(0),
             register_patch.flatten().unsqueeze(0),
@@ -358,9 +361,9 @@ def summarize_register_attention(
                 "register_to_patch_attention_mean": float(register_patch.mean().item()),
                 "register_attention_entropy": _entropy_1d(register_patch),
                 "cls_register_heatmap_similarity": float(similarity.item()),
-                "register_to_cls_attention_mean": float(attention[:, 1:prefix_tokens, 0].mean().item()),
+                "register_to_cls_attention_mean": float(attention[:, 1:register_prefix_tokens, 0].mean().item()),
                 "register_to_register_attention_mean": float(
-                    attention[:, 1:prefix_tokens, 1:prefix_tokens].mean().item()
+                    attention[:, 1:register_prefix_tokens, 1:register_prefix_tokens].mean().item()
                 ),
             }
         )

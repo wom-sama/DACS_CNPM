@@ -41,6 +41,7 @@ from trkh.evaluation.metrics import (
 )
 from trkh.models.model import (
     build_model_from_checkpoint,
+    classification_logits_from_features,
     extract_bbox_from_model_output,
     extract_detection_from_model_output,
     extract_head_input_from_features,
@@ -73,6 +74,23 @@ DETECTION_SCORE_MODES = (
     "objectness_quality",
     "class_sqrt_objectness_quality",
 )
+
+
+def _checkpoint_data_path_mismatch(
+    checkpoint: Dict[str, object],
+    requested_data_yaml: Path,
+) -> Optional[Dict[str, str]]:
+    checkpoint_data_yaml = str(checkpoint.get("data_yaml", "") or "").strip()
+    if not checkpoint_data_yaml:
+        return None
+    checkpoint_path = Path(checkpoint_data_yaml).expanduser().resolve(strict=False)
+    requested_path = Path(requested_data_yaml).expanduser().resolve(strict=False)
+    if checkpoint_path == requested_path:
+        return None
+    return {
+        "checkpoint_data_yaml": str(checkpoint_path),
+        "requested_data_yaml": str(requested_path),
+    }
 
 
 def resolve_crop_to_primary_object(
@@ -1143,7 +1161,7 @@ def evaluate_model(
                         base_output = model.forward_heads(base_features)
                     elif hasattr(model, "forward_features") and hasattr(model, "head") and hasattr(model, "num_registers"):
                         base_features = model.forward_features(images, image_valid_mask=image_valid_mask)
-                        base_output = model.head(extract_head_input_from_features(model, base_features))
+                        base_output = classification_logits_from_features(model, base_features)
                     else:
                         base_output = model(images)
                     base_logits, pred_boxes, base_objectness_logits = extract_detection_from_model_output(base_output)
@@ -1682,10 +1700,28 @@ def main() -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     checkpoint = load_checkpoint(args.checkpoint, map_location="cpu")
+    data_path_mismatch = _checkpoint_data_path_mismatch(checkpoint, data_spec.data_yaml)
+    if data_path_mismatch is not None:
+        print(
+            {
+                "warning": "evaluation_data_path_differs_from_checkpoint",
+                **data_path_mismatch,
+            },
+            flush=True,
+        )
     class_names = list(checkpoint.get("class_names", data_spec.class_names))
     if len(class_names) != data_spec.num_classes:
         raise ValueError("So lop trong checkpoint khong khop data.yaml")
-    checkpoint_model_type = str(checkpoint.get("model_config", {}).get("model_type", "")).strip().lower()
+
+    model = build_model_from_checkpoint(
+        checkpoint=checkpoint,
+        num_classes=len(class_names),
+        override_image_size=args.override_image_size,
+    )
+    model.to(device)
+    model.eval()
+
+    checkpoint_model_type = str(getattr(model, "model_type", checkpoint.get("model_config", {}).get("model_type", ""))).strip().lower()
     checkpoint_detection_mode = checkpoint_model_type in DETECTION_MODEL_TYPES
     crop_to_primary_object = resolve_crop_to_primary_object(
         checkpoint,
@@ -1697,18 +1733,18 @@ def main() -> None:
         disable_classification_object_crops=args.disable_classification_object_crops,
     )
 
-    model = build_model_from_checkpoint(
-        checkpoint=checkpoint,
-        num_classes=len(class_names),
-        override_image_size=args.override_image_size,
-    )
-    model.to(device)
-    model.eval()
-
     image_size = int(args.override_image_size or checkpoint.get("model_config", {}).get("image_size", 224))
+    augmentation_config = checkpoint.get("augmentation_config", {})
+    if not isinstance(augmentation_config, dict):
+        augmentation_config = {}
     eval_transform = build_eval_transform(
         image_size=image_size,
-        resize_mode=checkpoint.get("augmentation_config", {}).get("resize_mode", "pad"),
+        resize_mode=augmentation_config.get("resize_mode", "pad"),
+        illumination_normalization=bool(augmentation_config.get("illumination_normalization", False)),
+        illumination_normalization_strength=float(augmentation_config.get("illumination_normalization_strength", 0.0) or 0.0),
+        background_suppression_mode=str(augmentation_config.get("background_suppression_mode", "none") or "none"),
+        background_suppression_margin=float(augmentation_config.get("background_suppression_margin", 0.08) or 0.08),
+        background_suppression_blur_radius=float(augmentation_config.get("background_suppression_blur_radius", 7.0) or 7.0),
     )
     if data_spec.data_format == "classification_folder":
         if checkpoint_detection_mode:
@@ -1725,7 +1761,7 @@ def main() -> None:
             split=args.split,
             transform=eval_transform,
             crop_margin_ratio=float(
-                checkpoint.get("augmentation_config", {}).get("crop_margin_ratio", 0.05)
+                augmentation_config.get("crop_margin_ratio", 0.05)
             ),
             crop_to_primary_object=crop_to_primary_object,
             classification_target=not checkpoint_detection_mode,

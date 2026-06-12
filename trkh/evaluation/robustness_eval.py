@@ -17,7 +17,10 @@ from trkh.data.dataset import MangoYOLOCropDataset, PseudoVideoAugmenter, build_
 from trkh.evaluation.evaluate import resolve_crop_to_primary_object
 from trkh.models.feature_hooks import count_attention_layers
 from trkh.inference.inference import load_model
-from trkh.models.model import extract_bbox_from_model_output, extract_head_input_from_features
+from trkh.models.model import (
+    classification_logits_from_features,
+    extract_bbox_from_model_output,
+)
 from trkh.core.utils import (
     build_safe_dataloader_kwargs,
     ensure_dir,
@@ -188,7 +191,7 @@ def evaluate_condition(
                 logits, _ = model.forward_heads(features)
             elif hasattr(model, "forward_features") and hasattr(model, "head") and hasattr(model, "num_registers"):
                 features = model.forward_features(images)
-                logits = model.head(extract_head_input_from_features(model, features))
+                logits = classification_logits_from_features(model, features)
             else:
                 logits, _ = extract_bbox_from_model_output(model(images))
             predictions = logits.argmax(dim=1)
@@ -330,7 +333,18 @@ def main() -> None:
         crop_margin_ratio=crop_margin_ratio,
         crop_to_primary_object=resolve_crop_to_primary_object(checkpoint),
     )
-    base_transform = build_eval_transform(image_size=image_size, resize_mode=resize_mode)
+    augmentation_config = checkpoint.get("augmentation_config", {})
+    if not isinstance(augmentation_config, dict):
+        augmentation_config = {}
+    base_transform = build_eval_transform(
+        image_size=image_size,
+        resize_mode=resize_mode,
+        illumination_normalization=bool(augmentation_config.get("illumination_normalization", False)),
+        illumination_normalization_strength=float(augmentation_config.get("illumination_normalization_strength", 0.0) or 0.0),
+        background_suppression_mode=str(augmentation_config.get("background_suppression_mode", "none") or "none"),
+        background_suppression_margin=float(augmentation_config.get("background_suppression_margin", 0.08) or 0.08),
+        background_suppression_blur_radius=float(augmentation_config.get("background_suppression_blur_radius", 7.0) or 7.0),
+    )
     if temporal_frames > 1:
         transform = PseudoVideoAugmenter(
             frame_transform=base_transform,

@@ -4,6 +4,7 @@ import math
 import os
 import tempfile
 import unittest
+from collections import Counter
 from pathlib import Path
 
 import torch
@@ -11,11 +12,19 @@ from torch import nn
 from PIL import Image
 
 import trkh.models.model as model_module
-from trkh.core.config import AugmentationConfig, ModelConfig, TrainConfig, load_data_spec
+from trkh.core.config import (
+    IMAGENET_MEAN,
+    IMAGENET_STD,
+    AugmentationConfig,
+    ModelConfig,
+    TrainConfig,
+    load_data_spec,
+)
 from trkh.evaluation.attention_viz import summarize_heatmap_focus
 from trkh.evaluation.evaluate import (
     _build_prediction_records,
     _build_background_aware_classification_metrics,
+    _checkpoint_data_path_mismatch,
     _build_detection_confidence_curve,
     _build_detection_confidence_curve_from_prepared,
     _compute_detection_metrics_at_threshold,
@@ -39,7 +48,9 @@ from trkh.data.dataset import (
     HardSampleRepeatDataset,
     MangoYOLOCropDataset,
     RareClassRepeatDataset,
+    StrictBalancedBatchSampler,
     _apply_copypaste_detection_batch,
+    _pseudo_foreground_mask_array,
     build_rare_class_repeat_factors,
     build_eval_transform,
     build_train_collate_fn,
@@ -50,6 +61,8 @@ from trkh.inference.inference import (
     render_prediction_image,
     resolve_detection_output_limit,
 )
+from trkh.tools.filter_classification_single_source import build_single_source_classification_dataset
+from trkh.tools.build_classification_merged_classes import build_merged_classification_dataset
 from trkh.training.loss import DETRSetCriterion
 from trkh.training.losses import (
     BalancedSoftmaxFocalLoss,
@@ -58,8 +71,13 @@ from trkh.training.losses import (
     SupervisedContrastiveLoss,
 )
 from trkh.training.matcher import HungarianMatcher
-from trkh.models.model import create_model
+from trkh.models.model import (
+    build_model_from_checkpoint,
+    classification_logits_from_features,
+    create_model,
+)
 from trkh.training.train import (
+    ModelEMA,
     apply_balance_file_auto_adjustment,
     _initial_training_progress_from_resume,
     _load_resume_configs_from_checkpoint,
@@ -74,9 +92,13 @@ from trkh.training.train import (
     _resolve_checkpoint_selection,
     _resolve_detection_stage,
     _save_interrupt_checkpoint,
+    _build_attention_guided_views,
     _forward_train_loss,
     _foreground_consistency_loss_from_features,
     _metric_learning_loss_from_features,
+    _ordinal_maturity_loss_from_features,
+    _pairwise_margin_loss_from_features,
+    _register_diversity_loss_from_features,
     _pseudo_foreground_mask_from_normalized_images,
     _parse_metric_learning_sources,
     train_one_epoch,
@@ -85,6 +107,7 @@ from trkh.core.utils import (
     append_csv_row,
     build_warmup_decay_scheduler,
     load_checkpoint,
+    plot_dataset_color_audit,
     plot_per_class_validation_metric,
     plot_train_val_final_test_metrics,
     resolve_amp_dtype,
@@ -93,6 +116,43 @@ from trkh.core.utils import (
 
 
 class DetectionCalibrationTests(unittest.TestCase):
+    def test_checkpoint_data_path_mismatch_detects_different_split_roots(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            checkpoint_data = root / "dataset_a" / "data.yaml"
+            requested_data = root / "dataset_b" / "data.yaml"
+            mismatch = _checkpoint_data_path_mismatch(
+                {"data_yaml": str(checkpoint_data)},
+                requested_data,
+            )
+            self.assertIsNotNone(mismatch)
+            self.assertEqual(
+                Path(mismatch["checkpoint_data_yaml"]),
+                checkpoint_data.resolve(strict=False),
+            )
+            self.assertIsNone(
+                _checkpoint_data_path_mismatch(
+                    {"data_yaml": str(checkpoint_data)},
+                    checkpoint_data,
+                )
+            )
+
+    def test_model_ema_uses_warmup_decay_and_restores_state(self):
+        model = nn.Linear(2, 1, bias=False)
+        with torch.no_grad():
+            model.weight.zero_()
+        ema = ModelEMA(model, decay=0.9)
+
+        with torch.no_grad():
+            model.weight.fill_(1.0)
+        ema.update(model)
+
+        expected = 1.0 - (2.0 / 11.0)
+        self.assertTrue(torch.allclose(ema.module.weight, torch.full_like(model.weight, expected)))
+        restored = ModelEMA(model, decay=0.9)
+        restored.load_state_dict(ema.state_dict())
+        self.assertTrue(torch.equal(restored.module.weight, ema.module.weight))
+
     def test_attention_rollout_heatmap_has_requested_output_size(self):
         attention = torch.eye(6).unsqueeze(0).repeat(2, 1, 1)
         heatmap = build_attention_rollout_heatmap(
@@ -182,6 +242,53 @@ class DetectionCalibrationTests(unittest.TestCase):
         logits = model(torch.randn(2, 3, 64, 64))
         self.assertEqual(tuple(logits.shape), (2, 5))
 
+    def test_build_model_from_legacy_classifier_hybrid_checkpoint(self):
+        base = create_model(
+            num_classes=4,
+            model_config=ModelConfig(
+                model_type="vit_registers",
+                image_size=64,
+                patch_size=16,
+                stem_channels=8,
+                embed_dim=32,
+                depth=1,
+                num_heads=4,
+                num_registers=2,
+            ),
+        )
+        legacy_state = dict(base.state_dict())
+        legacy_state["bbox_head.0.weight"] = torch.randn(16, 32)
+        legacy_state["bbox_head.0.bias"] = torch.randn(16)
+        legacy_state["bbox_head.1.weight"] = torch.ones(16)
+        legacy_state["bbox_head.1.bias"] = torch.zeros(16)
+        legacy_state["bbox_head.4.weight"] = torch.randn(4, 16)
+        legacy_state["bbox_head.4.bias"] = torch.randn(4)
+        legacy_state["classification_head.weight"] = legacy_state["head.weight"].clone()
+        legacy_state["classification_head.bias"] = legacy_state["head.bias"].clone()
+        checkpoint = {
+            "class_names": ["a", "b", "c", "d"],
+            "model_config": {
+                "model_type": "vit_registers_hybrid",
+                "image_size": 64,
+                "patch_size": 16,
+                "stem_channels": 8,
+                "embed_dim": 32,
+                "depth": 1,
+                "num_heads": 4,
+                "num_registers": 2,
+                "bbox_head_hidden_dim": 16,
+            },
+            "model_state": legacy_state,
+        }
+
+        model = build_model_from_checkpoint(checkpoint)
+
+        self.assertEqual(getattr(model, "model_type", ""), "vit_registers")
+        self.assertFalse(hasattr(model, "bbox_head"))
+        with torch.no_grad():
+            logits = model(torch.randn(2, 3, 64, 64))
+        self.assertEqual(tuple(logits.shape), (2, 4))
+
     def test_cnn_feature_fusion_can_extend_existing_vit_checkpoint(self):
         base = create_model(
             num_classes=3,
@@ -259,6 +366,495 @@ class DetectionCalibrationTests(unittest.TestCase):
         with torch.no_grad():
             self.assertTrue(torch.allclose(base(images), fine_grained(images), atol=1e-6))
 
+    def test_dual_patch_norm_vit_registers_forward_shape(self):
+        model = create_model(
+            num_classes=3,
+            model_config=ModelConfig(
+                model_type="vit_registers",
+                image_size=64,
+                patch_size=16,
+                stem_channels=8,
+                embed_dim=32,
+                depth=1,
+                num_heads=4,
+                num_registers=2,
+                dual_patch_norm=True,
+            ),
+        )
+        self.assertTrue(model.patch_embed.dual_patch_norm)
+        logits = model(torch.randn(2, 3, 64, 64))
+        self.assertEqual(tuple(logits.shape), (2, 3))
+
+    def test_color_stat_fusion_can_extend_existing_vit_checkpoint(self):
+        base = create_model(
+            num_classes=3,
+            model_config=ModelConfig(
+                model_type="vit_registers",
+                image_size=64,
+                patch_size=16,
+                stem_channels=8,
+                embed_dim=32,
+                depth=1,
+                num_heads=4,
+                num_registers=2,
+            ),
+        )
+        color_fusion = create_model(
+            num_classes=3,
+            model_config=ModelConfig(
+                model_type="vit_registers",
+                image_size=64,
+                patch_size=16,
+                stem_channels=8,
+                embed_dim=32,
+                depth=1,
+                num_heads=4,
+                num_registers=2,
+                color_stat_fusion=True,
+                color_stat_fusion_dropout=0.0,
+            ),
+        )
+        missing, unexpected = color_fusion.load_flexible_state_dict(base.state_dict(), strict=False)
+        self.assertFalse(unexpected)
+        self.assertTrue(any(str(key).startswith("color_fusion_head.") for key in missing))
+
+        base.eval()
+        color_fusion.eval()
+        images = torch.randn(2, 3, 64, 64)
+        with torch.no_grad():
+            self.assertTrue(torch.allclose(base(images), color_fusion(images), atol=1e-6))
+
+    def test_defect_stat_fusion_can_extend_existing_vit_checkpoint(self):
+        base = create_model(
+            num_classes=3,
+            model_config=ModelConfig(
+                model_type="vit_registers",
+                image_size=64,
+                patch_size=16,
+                stem_channels=8,
+                embed_dim=32,
+                depth=1,
+                num_heads=4,
+                num_registers=2,
+            ),
+        )
+        defect_fusion = create_model(
+            num_classes=3,
+            model_config=ModelConfig(
+                model_type="vit_registers",
+                image_size=64,
+                patch_size=16,
+                stem_channels=8,
+                embed_dim=32,
+                depth=1,
+                num_heads=4,
+                num_registers=2,
+                defect_stat_fusion=True,
+                defect_stat_fusion_dropout=0.0,
+            ),
+        )
+        missing, unexpected = defect_fusion.load_flexible_state_dict(base.state_dict(), strict=False)
+        self.assertFalse(unexpected)
+        self.assertTrue(any(str(key).startswith("defect_fusion_head.") for key in missing))
+
+        base.eval()
+        defect_fusion.eval()
+        images = torch.randn(2, 3, 64, 64)
+        with torch.no_grad():
+            self.assertTrue(torch.allclose(base(images), defect_fusion(images), atol=1e-6))
+
+    def test_yolo_crop_dataset_exposes_sample_paths_for_color_audit(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            images_dir = root / "images"
+            labels_dir = root / "labels"
+            images_dir.mkdir()
+            labels_dir.mkdir()
+            image_path = images_dir / "sample.jpg"
+            Image.new("RGB", (32, 32), (128, 180, 64)).save(image_path)
+            (labels_dir / "sample.txt").write_text("0 0.5 0.5 0.5 0.5\n", encoding="utf-8")
+
+            dataset = MangoYOLOCropDataset(
+                images_dir=images_dir,
+                labels_dir=labels_dir,
+                classification_target=True,
+                classification_object_crops=True,
+                num_classes=1,
+            )
+
+            self.assertEqual(dataset.sample_paths(), [image_path])
+
+    def test_multi_branch_token_fusion_forward_shape(self):
+        model = create_model(
+            num_classes=3,
+            model_config=ModelConfig(
+                model_type="vit_registers",
+                image_size=64,
+                patch_size=16,
+                stem_channels=8,
+                embed_dim=32,
+                depth=1,
+                num_heads=4,
+                num_registers=2,
+                multi_branch_fusion=True,
+                branch_color_tokens=1,
+                branch_edge_tokens=1,
+                branch_cnn_tokens=1,
+                branch_token_dropout=0.0,
+                head_pooling="cls_branch_register_mean",
+            ),
+        )
+        images = torch.randn(2, 3, 64, 64)
+        logits = model(images)
+        features = model.forward_features(images, return_attention=True)
+        self.assertEqual(tuple(logits.shape), (2, 3))
+        self.assertEqual(tuple(features["branch_tokens"].shape), (2, 3, 32))
+        self.assertEqual(int(model.num_prefix_tokens), 6)
+        self.assertEqual(tuple(features["grid_size"]), (4, 4))
+        self.assertEqual(tuple(features["patches"].shape), (2, 16, 32))
+        self.assertEqual(tuple(features["tokens"].shape), (2, 22, 32))
+
+    def test_token_pruning_reduces_patch_count_and_preserves_xai_grid(self):
+        model = create_model(
+            num_classes=5,
+            model_config=ModelConfig(
+                model_type="vit_registers",
+                image_size=64,
+                patch_size=16,
+                stem_channels=8,
+                embed_dim=32,
+                depth=6,
+                num_heads=4,
+                num_registers=2,
+                detail_patch_enhancement=True,
+                token_pruning=True,
+                token_prune_layers="2,4",
+                token_keep_rates="0.75,0.50",
+            ),
+        )
+        images = torch.randn(2, 3, 64, 64)
+        features = model.forward_features(images, return_trace=True)
+        self.assertEqual(tuple(features["patches"].shape), (2, 8, 32))
+        self.assertEqual(tuple(features["patch_indices"].shape), (2, 8))
+        self.assertEqual(
+            [
+                (int(item["before_count"]), int(item["after_count"]))
+                for item in features["trace"]["pruning"]
+            ],
+            [(16, 12), (12, 8)],
+        )
+
+        xai_features = model.forward_features(images, return_attention=True)
+        self.assertEqual(tuple(xai_features["patches"].shape), (2, 16, 32))
+        self.assertEqual(len(xai_features["attentions"]), 6)
+
+    def test_fine_grained_pool_exposes_patch_attention_after_pruning(self):
+        model = create_model(
+            num_classes=5,
+            model_config=ModelConfig(
+                model_type="vit_registers",
+                image_size=64,
+                patch_size=16,
+                stem_channels=8,
+                embed_dim=32,
+                depth=4,
+                num_heads=4,
+                num_registers=2,
+                fine_grained_pooling=True,
+                fine_grained_pooling_dropout=0.0,
+                token_pruning=True,
+                token_prune_layers="2",
+                token_keep_rates="0.50",
+            ),
+        )
+        images = torch.randn(2, 3, 64, 64)
+        features = model.forward_features(images)
+        logits = classification_logits_from_features(model, features)
+        attention = features.get("fine_grained_attention")
+
+        self.assertEqual(tuple(logits.shape), (2, 5))
+        self.assertEqual(tuple(attention.shape), (2, 8))
+        self.assertTrue(
+            torch.allclose(
+                attention.sum(dim=1),
+                torch.ones(2),
+                atol=1e-5,
+            )
+        )
+
+    def test_attention_guided_crop_and_drop_build_valid_views(self):
+        images = torch.randn(2, 3, 32, 32)
+        features = {
+            "patches": torch.randn(2, 4, 8),
+            "grid_size": (2, 2),
+            "patch_indices": torch.tensor([[0, 1, 2, 3], [0, 1, 2, 3]]),
+            "fine_grained_attention": torch.tensor(
+                [[0.02, 0.03, 0.05, 0.90], [0.90, 0.05, 0.03, 0.02]]
+            ),
+            "foreground_prior": torch.tensor(
+                [[0.0, 0.0, 0.2, 1.0], [1.0, 0.2, 0.0, 0.0]]
+            ),
+        }
+
+        crop_views, crop_indices, crop_stats = _build_attention_guided_views(
+            images=images,
+            features=features,
+            crop_probability=1.0,
+            drop_probability=0.0,
+            crop_threshold=0.55,
+            drop_threshold=0.70,
+            crop_padding_ratio=0.05,
+            crop_min_area_ratio=0.25,
+            foreground_weight=0.35,
+            drop_blur_kernel=5,
+        )
+        drop_views, drop_indices, drop_stats = _build_attention_guided_views(
+            images=images,
+            features=features,
+            crop_probability=0.0,
+            drop_probability=1.0,
+            crop_threshold=0.55,
+            drop_threshold=0.70,
+            crop_padding_ratio=0.05,
+            crop_min_area_ratio=0.25,
+            foreground_weight=0.35,
+            drop_blur_kernel=5,
+        )
+
+        self.assertEqual(tuple(crop_views.shape), tuple(images.shape))
+        self.assertEqual(tuple(drop_views.shape), tuple(images.shape))
+        self.assertEqual(crop_indices.tolist(), [0, 1])
+        self.assertEqual(drop_indices.tolist(), [0, 1])
+        self.assertEqual(crop_stats["attention_crop_fraction"], 1.0)
+        self.assertEqual(drop_stats["attention_drop_fraction"], 1.0)
+        self.assertFalse(torch.allclose(crop_views, images))
+        self.assertFalse(torch.allclose(drop_views, images))
+
+    def test_attention_view_loss_is_finite_and_backpropagates(self):
+        model = create_model(
+            num_classes=3,
+            model_config=ModelConfig(
+                model_type="vit_registers",
+                image_size=64,
+                patch_size=16,
+                stem_channels=8,
+                embed_dim=32,
+                depth=2,
+                num_heads=4,
+                num_registers=2,
+                fine_grained_pooling=True,
+                fine_grained_pooling_dropout=0.0,
+            ),
+        )
+        images = torch.randn(3, 3, 64, 64)
+        targets = torch.tensor([0, 1, 2], dtype=torch.long)
+        loss, _, _, loss_details, _ = _forward_train_loss(
+            model=model,
+            criterion=nn.CrossEntropyLoss(),
+            images=images,
+            labels=None,
+            targets=targets,
+            device=torch.device("cpu"),
+            amp=False,
+            attention_view_loss_weight=0.5,
+            attention_crop_probability=1.0,
+            attention_drop_probability=0.0,
+            attention_view_start_epoch=1,
+            epoch_index=1,
+            attention_drop_blur_kernel=5,
+        )
+        loss.backward()
+
+        self.assertTrue(torch.isfinite(loss).item())
+        self.assertGreater(loss_details["attention_view_loss"], 0.0)
+        self.assertEqual(loss_details["attention_view_fraction"], 1.0)
+        gradient_sum = sum(
+            float(parameter.grad.abs().sum().item())
+            for parameter in model.parameters()
+            if parameter.grad is not None
+        )
+        self.assertGreater(gradient_sum, 0.0)
+
+    def test_color_fusion_logits_are_used_by_feature_training_path(self):
+        model = create_model(
+            num_classes=3,
+            model_config=ModelConfig(
+                model_type="vit_registers",
+                image_size=64,
+                patch_size=16,
+                stem_channels=8,
+                embed_dim=32,
+                depth=1,
+                num_heads=4,
+                num_registers=2,
+                color_stat_fusion=True,
+            ),
+        )
+        with torch.no_grad():
+            model.color_fusion_head.net[-1].bias.fill_(0.25)
+        images = torch.randn(2, 3, 64, 64)
+        features = model.forward_features(images)
+        logits = classification_logits_from_features(model, features)
+        base_logits = model.head(model.head_input_from_features(features))
+        self.assertTrue(torch.allclose(logits - base_logits, torch.full_like(logits, 0.25), atol=1e-5))
+
+    def test_defect_fusion_logits_are_used_by_feature_training_path(self):
+        model = create_model(
+            num_classes=3,
+            model_config=ModelConfig(
+                model_type="vit_registers",
+                image_size=64,
+                patch_size=16,
+                stem_channels=8,
+                embed_dim=32,
+                depth=1,
+                num_heads=4,
+                num_registers=2,
+                defect_stat_fusion=True,
+            ),
+        )
+        with torch.no_grad():
+            model.defect_fusion_head.net[-1].bias.fill_(0.2)
+        images = torch.randn(2, 3, 64, 64)
+        features = model.forward_features(images)
+        logits = classification_logits_from_features(model, features)
+        base_logits = model.head(model.head_input_from_features(features))
+        self.assertTrue(torch.allclose(logits - base_logits, torch.full_like(logits, 0.2), atol=1e-5))
+
+    def test_pairwise_margin_head_adjusts_logits_and_has_auxiliary_loss(self):
+        model = create_model(
+            num_classes=5,
+            model_config=ModelConfig(
+                model_type="vit_registers",
+                image_size=64,
+                patch_size=16,
+                stem_channels=8,
+                embed_dim=32,
+                depth=1,
+                num_heads=4,
+                num_registers=2,
+                pairwise_margin_head=True,
+                pairwise_margin_pairs="0-1,4-rest",
+                pairwise_margin_logit_scale=1.0,
+                pairwise_margin_dropout=0.0,
+            ),
+        )
+        images = torch.randn(4, 3, 64, 64)
+        features = model.forward_features(images)
+        base_logits = model.head(model.head_input_from_features(features))
+        with torch.no_grad():
+            model.pairwise_margin_head.bias[0] = 1.0
+            model.pairwise_margin_head.bias[1] = -0.5
+        logits = classification_logits_from_features(model, features)
+        pairwise_logits = features.get("pairwise_margin_logits")
+        aux_loss = _pairwise_margin_loss_from_features(
+            model=model,
+            features=features,
+            targets=torch.tensor([0, 1, 4, 3], dtype=torch.long),
+        )
+
+        self.assertEqual(tuple(logits.shape), (4, 5))
+        self.assertEqual(tuple(pairwise_logits.shape), (4, 2))
+        pair_delta = logits[:, 1] - logits[:, 0] - (base_logits[:, 1] - base_logits[:, 0])
+        self.assertGreater(float(pair_delta.mean()), 1.9)
+        self.assertTrue(torch.isfinite(aux_loss).item())
+
+    def test_ordinal_maturity_head_orders_non_defect_classes(self):
+        model = create_model(
+            num_classes=5,
+            model_config=ModelConfig(
+                model_type="vit_registers",
+                image_size=64,
+                patch_size=16,
+                stem_channels=8,
+                embed_dim=32,
+                depth=1,
+                num_heads=4,
+                num_registers=2,
+                ordinal_maturity_head=True,
+                ordinal_maturity_classes="0,1,2,3",
+                ordinal_maturity_logit_scale=1.0,
+                ordinal_maturity_dropout=0.0,
+            ),
+        )
+        images = torch.randn(4, 3, 64, 64)
+        features = model.forward_features(images)
+        base_logits = model.head(model.head_input_from_features(features))
+        with torch.no_grad():
+            model.ordinal_maturity_head.bias.fill_(1.0)
+        logits = classification_logits_from_features(model, features)
+        maturity_score = features.get("ordinal_maturity_score")
+        aux_loss = _ordinal_maturity_loss_from_features(
+            model=model,
+            features=features,
+            targets=torch.tensor([0, 1, 2, 4], dtype=torch.long),
+        )
+
+        self.assertEqual(tuple(maturity_score.shape), (4, 1))
+        delta = logits - base_logits
+        self.assertLess(float(delta[:, 0].mean()), float(delta[:, 1].mean()))
+        self.assertLess(float(delta[:, 1].mean()), float(delta[:, 2].mean()))
+        self.assertLess(float(delta[:, 2].mean()), float(delta[:, 3].mean()))
+        self.assertTrue(torch.allclose(delta[:, 4], torch.zeros_like(delta[:, 4])))
+        self.assertTrue(torch.isfinite(aux_loss).item())
+
+    def test_hybrid_model_accepts_classification_extension_config_keys(self):
+        model = create_model(
+            num_classes=3,
+            model_config=ModelConfig(
+                model_type="vit_registers_hybrid",
+                image_size=64,
+                patch_size=16,
+                stem_channels=8,
+                embed_dim=32,
+                depth=1,
+                num_heads=4,
+                num_registers=2,
+                num_queries=4,
+                decoder_depth=1,
+                decoder_num_heads=4,
+                decoder_ffn_dim=64,
+                color_stat_fusion=True,
+                fine_grained_pooling=True,
+            ),
+        )
+        output = model(torch.randn(2, 3, 64, 64))
+        self.assertIn("logits", output)
+        self.assertEqual(tuple(output["logits"].shape[:2]), (2, 4))
+
+    def test_plot_dataset_color_audit_writes_png_and_json(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            train_paths = []
+            train_labels = []
+            val_paths = []
+            val_labels = []
+            for split_paths, split_labels, suffix in (
+                (train_paths, train_labels, "train"),
+                (val_paths, val_labels, "val"),
+            ):
+                red = root / f"red_{suffix}.png"
+                green = root / f"green_{suffix}.png"
+                Image.new("RGB", (16, 16), (220, 30, 30)).save(red)
+                Image.new("RGB", (16, 16), (30, 180, 40)).save(green)
+                split_paths.extend([red, green])
+                split_labels.extend([0, 1])
+            summary = plot_dataset_color_audit(
+                class_names=["red", "green"],
+                train_paths=train_paths,
+                train_labels=train_labels,
+                val_paths=val_paths,
+                val_labels=val_labels,
+                output_path=root / "color_audit.png",
+                summary_path=root / "color_audit.json",
+                max_images_per_class=2,
+                max_pixels_per_image=32,
+            )
+            self.assertTrue((root / "color_audit.png").is_file())
+            self.assertTrue((root / "color_audit.json").is_file())
+            self.assertEqual(summary["classes"]["0"]["train"]["sampled_images"], 1)
+            self.assertGreater(summary["classes"]["0"]["train"]["mean_rgb"][0], 0.5)
+
     def test_classification_dataset_target_feeds_vit_registers_loss(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -309,6 +905,51 @@ class DetectionCalibrationTests(unittest.TestCase):
                 amp=False,
             )
             self.assertTrue(torch.isfinite(loss))
+
+    def test_eval_transform_can_normalize_illumination_and_suppress_background(self):
+        image = Image.new("RGB", (96, 72), (25, 95, 180))
+        image.paste((235, 235, 235), (0, 0, 24, 72))
+        image.paste((24, 24, 24), (72, 0, 96, 72))
+        image.paste((225, 175, 42), (30, 20, 66, 58))
+
+        plain_transform = build_eval_transform(image_size=64, resize_mode="pad")
+        filtered_transform = build_eval_transform(
+            image_size=64,
+            resize_mode="pad",
+            illumination_normalization=True,
+            illumination_normalization_strength=0.35,
+            background_suppression_mode="desaturate_blur",
+            background_suppression_margin=0.05,
+            background_suppression_blur_radius=5.0,
+        )
+
+        plain = plain_transform(image)
+        filtered, meta = filtered_transform(image, return_meta=True)
+
+        self.assertEqual(tuple(filtered.shape), (3, 64, 64))
+        self.assertEqual(meta["mode"], "pad")
+        self.assertGreater(float(torch.mean(torch.abs(filtered - plain)).item()), 1e-3)
+
+    def test_pseudo_foreground_mask_excludes_imagenet_padding(self):
+        image = Image.new("RGB", (64, 64), (124, 116, 104))
+        image.paste((220, 180, 38), (10, 20, 54, 44))
+        mask = _pseudo_foreground_mask_array(image, margin=0.05)
+
+        self.assertLess(float(mask[:12].mean()), 0.05)
+        self.assertLess(float(mask[52:].mean()), 0.05)
+        self.assertGreater(float(mask[24:40, 18:46].mean()), 0.80)
+
+    def test_training_pseudo_foreground_mask_excludes_imagenet_padding(self):
+        mean = torch.tensor(IMAGENET_MEAN, dtype=torch.float32).view(1, 3, 1, 1)
+        std = torch.tensor(IMAGENET_STD, dtype=torch.float32).view(1, 3, 1, 1)
+        rgb = mean.expand(1, 3, 64, 64).clone()
+        rgb[:, :, 20:44, 10:54] = torch.tensor([220 / 255, 180 / 255, 38 / 255]).view(1, 3, 1, 1)
+        images = (rgb - mean) / std
+        mask = _pseudo_foreground_mask_from_normalized_images(images, margin=0.05)
+
+        self.assertLess(float(mask[:, :, :12].mean().item()), 0.05)
+        self.assertLess(float(mask[:, :, 52:].mean().item()), 0.05)
+        self.assertGreater(float(mask[:, :, 24:40, 18:46].mean().item()), 0.80)
 
     def test_soft_target_class_weights_affect_hard_label_loss(self):
         logits = torch.zeros(2, 2)
@@ -518,6 +1159,140 @@ class DetectionCalibrationTests(unittest.TestCase):
             self.assertEqual(tuple(images.shape), (2, 3, 32, 32))
             self.assertEqual(tuple(targets.shape), (2, 2))
             self.assertEqual(int(targets.sum().item()), 2)
+
+    def test_build_classification_merged_classes_preserves_splits(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir) / "src"
+            class_names = ["raw0", "raw1", "raw2", "raw3", "raw4"]
+            for split in ("train", "val", "test"):
+                for class_index, class_name in enumerate(class_names):
+                    class_dir = root / split / class_name
+                    class_dir.mkdir(parents=True, exist_ok=True)
+                    Image.new(
+                        "RGB",
+                        (12, 10),
+                        color=(20 + class_index * 20, 40, 80),
+                    ).save(class_dir / f"{split}_{class_name}.jpg")
+            (root / "data.yaml").write_text(
+                "\n".join(
+                    [
+                        "format: classification_folder",
+                        "path: .",
+                        "train: train",
+                        "val: val",
+                        "test: test",
+                        "nc: 5",
+                        "class_name_mode: raw",
+                        "names:",
+                        "  0: raw0",
+                        "  1: raw1",
+                        "  2: raw2",
+                        "  3: raw3",
+                        "  4: raw4",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            output_dir = Path(tmpdir) / "merged"
+            summary = build_merged_classification_dataset(
+                root / "data.yaml",
+                output_dir,
+                merge_classes=[0, 1],
+                merged_name="raw0_or_raw1",
+                class_name_mode="raw",
+                expected_num_classes=5,
+                link_mode="copy",
+                overwrite=True,
+            )
+
+            self.assertEqual(summary["num_classes"], 4)
+            self.assertEqual(summary["old_to_new"], {"0": 0, "1": 0, "2": 1, "3": 2, "4": 3})
+            data_spec = load_data_spec(output_dir / "data.yaml", class_name_mode="raw", expected_num_classes=4)
+            self.assertEqual(data_spec.class_names, ["raw0_or_raw1", "raw2", "raw3", "raw4"])
+            self.assertEqual(data_spec.balance.class_counts(4), [6, 3, 3, 3])
+
+            dataset = ClassificationFolderDataset.from_data_spec(data_spec, split="train")
+            self.assertEqual(dataset.class_counts(4), [2, 1, 1, 1])
+            with (output_dir / "manifest.csv").open(encoding="utf-8", newline="") as handle:
+                manifest_rows = list(csv.DictReader(handle))
+            self.assertEqual(len(manifest_rows), 15)
+            self.assertEqual(
+                Counter(row["new_class_name"] for row in manifest_rows)["raw0_or_raw1"],
+                6,
+            )
+
+    def test_filter_classification_single_source_removes_multi_box_sources(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir) / "src"
+            class_names = ["raw0", "raw1"]
+            image_specs = [
+                ("train", 0, "Image_1_box000.jpg"),
+                ("train", 0, "Image_2_box000.jpg"),
+                ("train", 1, "Image_2_box001.jpg"),
+                ("val", 1, "Image_3_box000.jpg"),
+                ("test", 1, "Image_4_box000.jpg"),
+            ]
+            for split in ("train", "val", "test"):
+                for class_name in class_names:
+                    (root / split / class_name).mkdir(parents=True, exist_ok=True)
+            manifest_rows = []
+            for split, class_id, filename in image_specs:
+                class_name = class_names[class_id]
+                path = root / split / class_name / filename
+                Image.new("RGB", (12, 10), color=(20 + class_id * 60, 40, 80)).save(path)
+                source_id = filename.split("_box")[0]
+                manifest_rows.append(
+                    {
+                        "split": split,
+                        "original_split": split,
+                        "class_id": class_id,
+                        "class_name": class_name,
+                        "source_id": source_id,
+                        "image_number": source_id.replace("Image_", ""),
+                        "source_path": str(path),
+                        "output_path": str(path),
+                    }
+                )
+            (root / "data.yaml").write_text(
+                "\n".join(
+                    [
+                        "format: classification_folder",
+                        "path: .",
+                        "train: train",
+                        "val: val",
+                        "test: test",
+                        "nc: 2",
+                        "class_name_mode: raw",
+                        "names:",
+                        "  0: raw0",
+                        "  1: raw1",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            with (root / "manifest.csv").open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.DictWriter(handle, fieldnames=list(manifest_rows[0].keys()))
+                writer.writeheader()
+                writer.writerows(manifest_rows)
+
+            output_dir = Path(tmpdir) / "single"
+            report = build_single_source_classification_dataset(
+                root / "data.yaml",
+                output_dir,
+                class_name_mode="raw",
+                expected_num_classes=2,
+                link_mode="copy",
+                overwrite=True,
+            )
+
+            self.assertEqual(report["kept_rows"], 3)
+            self.assertEqual(report["removed_rows"], 2)
+            self.assertTrue((output_dir / "train" / "raw0" / "Image_1_box000.jpg").is_file())
+            self.assertFalse((output_dir / "train" / "raw0" / "Image_2_box000.jpg").exists())
+            self.assertFalse((output_dir / "train" / "raw1" / "Image_2_box001.jpg").exists())
+            data_spec = load_data_spec(output_dir / "data.yaml", class_name_mode="raw", expected_num_classes=2)
+            self.assertEqual(data_spec.balance.class_counts(2), [1, 2])
 
     def test_hard_sample_repeat_dataset_repeats_manifest_paths(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1374,7 +2149,7 @@ class_name_mode: raw
             if previous is not None:
                 os.environ["TRKH_AMP_DTYPE"] = previous
 
-    def test_canbang_yaml_auto_configures_balance_without_flags(self):
+    def test_canbang_yaml_reports_balanced_sampling_without_mutating_augmentation(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
             data_yaml_path = temp_path / "data.yaml"
@@ -1431,14 +2206,18 @@ dataset_balance:
 
         self.assertTrue(summary["enabled"])
         self.assertEqual(summary["class_counts"], [350, 250, 400])
-        self.assertGreater(summary["auto_repeat_factors"][1], summary["auto_repeat_factors"][0])
-        self.assertEqual(summary["auto_repeat_factors"][2], 1.0)
-        self.assertTrue(augmentation_config.class_aware_augmentation)
-        self.assertTrue(augmentation_config.rare_class_repeat)
-        self.assertFalse(augmentation_config.class_aware_photometric_augmentation)
-        self.assertTrue(train_config.auto_tune_imbalance)
+        self.assertGreater(
+            summary["balanced_sampling_factors"][1],
+            summary["balanced_sampling_factors"][0],
+        )
+        self.assertEqual(summary["auto_repeat_factors"], [1.0, 1.0, 1.0])
+        self.assertFalse(augmentation_config.class_aware_augmentation)
+        self.assertFalse(augmentation_config.rare_class_repeat)
+        self.assertTrue(augmentation_config.class_aware_photometric_augmentation)
+        self.assertFalse(train_config.auto_tune_imbalance)
+        self.assertFalse(summary["imbalance_auto_tune"])
 
-    def test_canbang_yaml_auto_repeat_respects_user_cap(self):
+    def test_canbang_yaml_prefers_train_split_counts_to_avoid_val_test_leakage(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
             data_yaml_path = temp_path / "data.yaml"
@@ -1476,6 +2255,13 @@ dataset_balance:
       count: 500
       ratio: 0.50
       percent: 50.0
+  splits:
+    train:
+      total_images: 700
+      classes:
+        "0": 300
+        "1": 100
+        "2": 300
 """,
                 encoding="utf-8",
             )
@@ -1493,10 +2279,11 @@ dataset_balance:
             )
 
         self.assertTrue(summary["enabled"])
-        self.assertGreater(summary["raw_auto_repeat_factors"][1], 1.8)
-        self.assertLessEqual(max(summary["auto_repeat_factors"]), 1.8)
-        self.assertEqual(augmentation_config.rare_class_repeat_max_factor, 1.8)
-        self.assertEqual(augmentation_config.class_augmentation_max_scale, 1.8)
+        self.assertEqual(summary["count_scope"], "train")
+        self.assertEqual(summary["class_counts"], [300, 100, 300])
+        self.assertEqual(summary["total_pairs"], 700)
+        self.assertGreater(summary["balanced_sampling_factors"][1], 1.0)
+        self.assertEqual(summary["raw_auto_repeat_factors"], [1.0, 1.0, 1.0])
 
     def test_foreground_consistency_loss_is_finite_and_backpropagates(self):
         torch.manual_seed(13)
@@ -1647,6 +2434,20 @@ dataset_balance:
         self.assertGreater(repeated_labels.count(2), labels.count(2))
         self.assertEqual(repeated_labels.count(3), labels.count(3))
         self.assertGreater(repeated_labels.count(2) / max(1, repeated_labels.count(3)), 0.25)
+
+    def test_strict_balanced_sampler_keeps_all_class_exposure_within_ten_percent(self):
+        labels = [0] * 1941 + [1] * 541 + [2] * 1920 + [3] * 2520 + [4] * 2293
+        sampler = StrictBalancedBatchSampler(
+            labels=labels,
+            batch_size=48,
+            num_classes=5,
+            epoch_multiplier=1.0,
+            seed=42,
+        )
+        summary = sampler.exposure_summary()
+        self.assertLessEqual(summary["relative_gap"], 0.10)
+        self.assertLessEqual(abs(summary["total_samples"] - len(labels)), 48)
+        self.assertEqual(len(summary["class_exposure_counts"]), 5)
 
     def test_class_aware_scale_does_not_amplify_photometric_by_default(self):
         transform = build_train_transform(
@@ -2241,6 +3042,17 @@ dataset_balance:
         self.assertTrue(torch.isfinite(loss).item())
         self.assertEqual(used_sources, ["head", "cnn", "patch", "registers"])
 
+    def test_register_diversity_loss_penalizes_collapsed_registers(self):
+        collapsed = torch.ones(2, 4, 8, requires_grad=True)
+        diverse = torch.eye(4, 8).unsqueeze(0).repeat(2, 1, 1).requires_grad_(True)
+
+        collapsed_loss = _register_diversity_loss_from_features({"registers": collapsed})
+        diverse_loss = _register_diversity_loss_from_features({"registers": diverse})
+
+        self.assertTrue(torch.isfinite(collapsed_loss).item())
+        self.assertGreater(collapsed_loss.item(), diverse_loss.item())
+        collapsed_loss.backward()
+        self.assertIsNotNone(collapsed.grad)
 
 if __name__ == "__main__":
     unittest.main()

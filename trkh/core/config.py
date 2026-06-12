@@ -45,6 +45,7 @@ class BalanceSpec:
     val_ratio_config: float
     test_ratio_config: float
     classes: Dict[int, BalanceClassSpec]
+    count_scope: str = "all"
 
     def class_counts(self, num_classes: int) -> List[int]:
         counts = [0 for _ in range(max(1, int(num_classes)))]
@@ -131,10 +132,34 @@ class ModelConfig:
     in_channels: int = 3
     use_cnn_stem: bool = True
     stem_channels: int = 32
+    dual_patch_norm: bool = False
     cnn_feature_fusion: bool = False
     cnn_fusion_dropout: float = 0.1
+    color_stat_fusion: bool = False
+    color_stat_fusion_dropout: float = 0.1
+    defect_stat_fusion: bool = False
+    defect_stat_fusion_dropout: float = 0.1
     fine_grained_pooling: bool = False
     fine_grained_pooling_dropout: float = 0.1
+    multi_branch_fusion: bool = False
+    branch_color_tokens: int = 1
+    branch_edge_tokens: int = 1
+    branch_cnn_tokens: int = 1
+    branch_token_dropout: float = 0.1
+    detail_patch_enhancement: bool = False
+    detail_patch_dropout: float = 0.05
+    token_pruning: bool = False
+    token_prune_layers: str = "2,5"
+    token_keep_rates: str = "0.75,0.50"
+    token_prune_foreground_weight: float = 0.35
+    pairwise_margin_head: bool = False
+    pairwise_margin_pairs: str = "0-1,2-3,4-rest"
+    pairwise_margin_logit_scale: float = 0.35
+    pairwise_margin_dropout: float = 0.05
+    ordinal_maturity_head: bool = False
+    ordinal_maturity_classes: str = "0,1,2,3"
+    ordinal_maturity_logit_scale: float = 0.20
+    ordinal_maturity_dropout: float = 0.05
     embed_dim: int = 256
     depth: int = 8
     num_heads: int = 8
@@ -200,6 +225,9 @@ class TrainConfig:
     use_weighted_sampler: bool = False
     weighted_sampler_power: float = 1.75
     weighted_sampler_epoch_multiplier: float = 2.0
+    balanced_epoch_sampling: bool = False
+    balanced_epoch_multiplier: float = 1.0
+    balanced_epoch_tolerance: float = 0.10
     auto_tune_imbalance: bool = False
     imbalance_sampler_disable_threshold: float = 0.18
     save_last_checkpoint: bool = True
@@ -218,6 +246,26 @@ class TrainConfig:
     metric_learning_sources: str = "head"
     foreground_consistency_loss_weight: float = 0.0
     foreground_consistency_margin: float = 0.08
+    attention_view_loss_weight: float = 0.0
+    attention_crop_probability: float = 0.50
+    attention_drop_probability: float = 0.25
+    attention_view_start_epoch: int = 2
+    attention_crop_threshold: float = 0.55
+    attention_drop_threshold: float = 0.70
+    attention_crop_padding_ratio: float = 0.08
+    attention_crop_min_area_ratio: float = 0.20
+    attention_view_foreground_weight: float = 0.35
+    attention_drop_blur_kernel: int = 15
+    register_diversity_loss_weight: float = 0.0
+    pairwise_margin_loss_weight: float = 0.0
+    ordinal_maturity_loss_weight: float = 0.0
+    pretrained_distillation: bool = False
+    distillation_teacher_checkpoint: str = ""
+    distillation_teacher_csv: str = ""
+    distillation_weight: float = 0.0
+    distillation_temperature: float = 2.0
+    distillation_focus_class_index: int = 1
+    distillation_focus_class_weight: float = 1.0
     balance_auto_max_repeat_factor: float = 0.0
     fair_f1_gap_target: float = 0.05
     fair_f1_gap_penalty: float = 1.5
@@ -226,6 +274,8 @@ class TrainConfig:
     use_sam: bool = False
     sam_rho: float = 0.05
     sam_adaptive: bool = False
+    model_ema: bool = False
+    model_ema_decay: float = 0.999
     batch_mix_probability: float = 0.5
     mosaic_probability: float = 0.25
     mosaic_min_split: float = 0.35
@@ -299,6 +349,7 @@ class AugmentationConfig:
     class_crop_margin_max_ratio: float = 0.16
     resize_mode: str = "pad"
     random_resized_crop_scale_min: float = 0.8
+    random_resized_crop_probability: float = 1.0
     color_jitter_brightness: float = 0.2
     color_jitter_contrast: float = 0.2
     color_jitter_saturation: float = 0.0
@@ -311,6 +362,16 @@ class AugmentationConfig:
     vertical_flip_probability: float = 0.1
     rotate90_probability: float = 0.15
     lighting_probability: float = 0.15
+    illumination_normalization: bool = False
+    illumination_normalization_strength: float = 0.0
+    background_suppression_mode: str = "none"
+    background_suppression_probability: float = 0.0
+    background_suppression_margin: float = 0.08
+    background_suppression_blur_radius: float = 7.0
+    local_exposure_probability: float = 0.0
+    local_exposure_strength: float = 0.25
+    obstacle_probability: float = 0.0
+    obstacle_max_area: float = 0.12
     class_aware_augmentation: bool = True
     class_augmentation_power: float = 0.75
     class_augmentation_max_scale: float = 1.8
@@ -459,12 +520,36 @@ def _load_balance_spec(
     if not isinstance(balance_payload, dict):
         raise ValueError(f"File can bang khong hop le: {balance_yaml_path}")
 
+    count_scope = "all"
     raw_classes = balance_payload.get("classes", {})
+    raw_splits = balance_payload.get("splits", {})
+    if isinstance(raw_splits, dict):
+        train_split = raw_splits.get("train", {})
+        if isinstance(train_split, dict) and isinstance(train_split.get("classes"), dict):
+            raw_classes = train_split["classes"]
+            count_scope = "train"
     if not isinstance(raw_classes, dict):
         raise ValueError(f"dataset_balance.classes phai la mapping trong {balance_yaml_path}")
 
     classes: Dict[int, BalanceClassSpec] = {}
-    total_pairs = int(balance_payload.get("total_pairs", 0) or 0)
+    total_pairs = 0
+    if count_scope == "train":
+        train_split = raw_splits.get("train", {})
+        total_pairs = int(
+            train_split.get(
+                "total_objects",
+                train_split.get("total_images", 0),
+            )
+            or 0
+        )
+    if total_pairs <= 0:
+        total_pairs = int(
+            balance_payload.get(
+                "total_pairs",
+                balance_payload.get("total_objects", balance_payload.get("total_images", 0)),
+            )
+            or 0
+        )
     for raw_class_index, raw_class_payload in raw_classes.items():
         class_index = int(raw_class_index)
         if class_index < 0 or class_index >= int(num_classes):
@@ -472,6 +557,8 @@ def _load_balance_spec(
                 "Class ID trong canbang.yaml nam ngoai khoang data.yaml: "
                 f"class_id={class_index}, num_classes={num_classes}, file={balance_yaml_path}"
             )
+        if isinstance(raw_class_payload, (int, float)):
+            raw_class_payload = {"count": int(raw_class_payload)}
         if not isinstance(raw_class_payload, dict):
             raise ValueError(f"Thong tin class {class_index} trong canbang.yaml khong hop le.")
         count = int(raw_class_payload.get("count", 0) or 0)
@@ -509,10 +596,29 @@ def _load_balance_spec(
         balance_yaml=balance_yaml_path,
         version_note=str(balance_payload.get("version_note", "")),
         total_pairs=int(total_pairs),
-        train_ratio_config=float(balance_payload.get("train_ratio_config", 0.0) or 0.0),
-        val_ratio_config=float(balance_payload.get("val_ratio_config", 0.0) or 0.0),
-        test_ratio_config=float(balance_payload.get("test_ratio_config", 0.0) or 0.0),
+        train_ratio_config=float(
+            balance_payload.get(
+                "train_ratio_config",
+                (balance_payload.get("split_ratios", {}) or {}).get("train", 0.0),
+            )
+            or 0.0
+        ),
+        val_ratio_config=float(
+            balance_payload.get(
+                "val_ratio_config",
+                (balance_payload.get("split_ratios", {}) or {}).get("val", 0.0),
+            )
+            or 0.0
+        ),
+        test_ratio_config=float(
+            balance_payload.get(
+                "test_ratio_config",
+                (balance_payload.get("split_ratios", {}) or {}).get("test", 0.0),
+            )
+            or 0.0
+        ),
         classes=classes,
+        count_scope=count_scope,
     )
 
 

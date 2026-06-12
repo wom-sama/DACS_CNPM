@@ -1365,6 +1365,234 @@ def plot_dataset_overview(
     plt.close(figure)
 
 
+def _srgb_to_lab(rgb: np.ndarray) -> np.ndarray:
+    rgb = np.asarray(rgb, dtype=np.float32)
+    rgb = np.clip(rgb, 0.0, 1.0)
+    linear = np.where(rgb <= 0.04045, rgb / 12.92, ((rgb + 0.055) / 1.055) ** 2.4)
+    matrix = np.asarray(
+        [
+            [0.4124564, 0.3575761, 0.1804375],
+            [0.2126729, 0.7151522, 0.0721750],
+            [0.0193339, 0.1191920, 0.9503041],
+        ],
+        dtype=np.float32,
+    )
+    xyz = linear @ matrix.T
+    xyz = xyz / np.asarray([0.95047, 1.0, 1.08883], dtype=np.float32)
+    threshold = 0.008856
+    f_xyz = np.where(xyz > threshold, np.cbrt(xyz), (7.787 * xyz) + (16.0 / 63.0))
+    lab = np.empty_like(f_xyz, dtype=np.float32)
+    lab[:, 0] = 116.0 * f_xyz[:, 1] - 16.0
+    lab[:, 1] = 500.0 * (f_xyz[:, 0] - f_xyz[:, 1])
+    lab[:, 2] = 200.0 * (f_xyz[:, 1] - f_xyz[:, 2])
+    return lab
+
+
+def _circular_hue_mean(hue: np.ndarray) -> float:
+    if hue.size == 0:
+        return 0.0
+    angles = np.asarray(hue, dtype=np.float32) * (2.0 * math.pi)
+    return float((math.atan2(float(np.sin(angles).mean()), float(np.cos(angles).mean())) / (2.0 * math.pi)) % 1.0)
+
+
+def plot_dataset_color_audit(
+    class_names: Sequence[str],
+    train_paths: Sequence[Path],
+    train_labels: Sequence[int],
+    val_paths: Sequence[Path],
+    val_labels: Sequence[int],
+    output_path: Path,
+    summary_path: Optional[Path] = None,
+    max_images_per_class: int = 200,
+    max_pixels_per_image: int = 2048,
+    thumbnail_size: int = 128,
+    seed: int = 42,
+) -> Dict[str, Any]:
+    from matplotlib import colors as mcolors
+    from PIL import Image
+
+    rng = np.random.default_rng(int(seed))
+    num_classes = len(class_names)
+    palette = plt.cm.tab10(np.linspace(0.0, 1.0, max(10, num_classes)))
+
+    def _sample_by_class(paths: Sequence[Path], labels: Sequence[int]) -> Dict[int, List[Path]]:
+        grouped: Dict[int, List[Path]] = {index: [] for index in range(num_classes)}
+        for path, label in zip(paths, labels):
+            label_int = int(label)
+            if 0 <= label_int < num_classes:
+                grouped[label_int].append(Path(path))
+        sampled: Dict[int, List[Path]] = {}
+        for class_index, values in grouped.items():
+            if len(values) <= max_images_per_class:
+                sampled[class_index] = list(values)
+                continue
+            indices = rng.choice(len(values), size=max_images_per_class, replace=False)
+            sampled[class_index] = [values[int(index)] for index in sorted(indices.tolist())]
+        return sampled
+
+    def _collect(paths: Sequence[Path], labels: Sequence[int]) -> Tuple[Dict[int, Dict[str, Any]], Dict[int, np.ndarray]]:
+        sampled = _sample_by_class(paths, labels)
+        split_stats: Dict[int, Dict[str, Any]] = {}
+        split_pixels: Dict[int, np.ndarray] = {}
+        for class_index in range(num_classes):
+            rgb_means: List[np.ndarray] = []
+            pixel_chunks: List[np.ndarray] = []
+            missing = 0
+            for path in sampled.get(class_index, []):
+                try:
+                    with Image.open(path) as image:
+                        image = image.convert("RGB")
+                        image.thumbnail((thumbnail_size, thumbnail_size), Image.Resampling.BILINEAR)
+                        array = np.asarray(image, dtype=np.float32) / 255.0
+                except Exception:
+                    missing += 1
+                    continue
+                pixels = array.reshape(-1, 3)
+                if pixels.shape[0] > max_pixels_per_image:
+                    indices = rng.choice(pixels.shape[0], size=max_pixels_per_image, replace=False)
+                    pixels = pixels[indices]
+                rgb_means.append(array.reshape(-1, 3).mean(axis=0))
+                pixel_chunks.append(pixels)
+            pixels_all = (
+                np.concatenate(pixel_chunks, axis=0).astype(np.float32)
+                if pixel_chunks
+                else np.zeros((0, 3), dtype=np.float32)
+            )
+            split_pixels[class_index] = pixels_all
+            if pixels_all.size:
+                hsv = mcolors.rgb_to_hsv(pixels_all)
+                lab = _srgb_to_lab(pixels_all)
+                rgb_mean = np.asarray(rgb_means, dtype=np.float32).mean(axis=0) if rgb_means else pixels_all.mean(axis=0)
+                split_stats[class_index] = {
+                    "sampled_images": len(sampled.get(class_index, [])),
+                    "missing_images": int(missing),
+                    "sampled_pixels": int(pixels_all.shape[0]),
+                    "mean_rgb": [float(value) for value in rgb_mean.tolist()],
+                    "mean_hsv": [
+                        _circular_hue_mean(hsv[:, 0]),
+                        float(hsv[:, 1].mean()),
+                        float(hsv[:, 2].mean()),
+                    ],
+                    "mean_lab": [float(value) for value in lab.mean(axis=0).tolist()],
+                    "std_lab": [float(value) for value in lab.std(axis=0).tolist()],
+                    "mean_chroma": float(np.sqrt((lab[:, 1] ** 2) + (lab[:, 2] ** 2)).mean()),
+                }
+            else:
+                split_stats[class_index] = {
+                    "sampled_images": 0,
+                    "missing_images": int(missing),
+                    "sampled_pixels": 0,
+                    "mean_rgb": [0.0, 0.0, 0.0],
+                    "mean_hsv": [0.0, 0.0, 0.0],
+                    "mean_lab": [0.0, 0.0, 0.0],
+                    "std_lab": [0.0, 0.0, 0.0],
+                    "mean_chroma": 0.0,
+                }
+        return split_stats, split_pixels
+
+    train_stats, train_pixels = _collect(train_paths, train_labels)
+    val_stats, val_pixels = _collect(val_paths, val_labels)
+
+    delta_e: Dict[int, float] = {}
+    for class_index in range(num_classes):
+        train_lab = np.asarray(train_stats[class_index]["mean_lab"], dtype=np.float32)
+        val_lab = np.asarray(val_stats[class_index]["mean_lab"], dtype=np.float32)
+        delta_e[class_index] = float(np.linalg.norm(train_lab - val_lab))
+
+    figure, axes = plt.subplots(2, 3, figsize=(18, 10))
+    axes = axes.ravel()
+    class_indices = np.arange(num_classes)
+
+    mean_rgb = np.asarray([train_stats[index]["mean_rgb"] for index in range(num_classes)], dtype=np.float32)
+    width = 0.25
+    axes[0].bar(class_indices - width, mean_rgb[:, 0], width=width, label="R", color="#d95f5f")
+    axes[0].bar(class_indices, mean_rgb[:, 1], width=width, label="G", color="#66a65c")
+    axes[0].bar(class_indices + width, mean_rgb[:, 2], width=width, label="B", color="#5f7fd9")
+    axes[0].set_title("Train Mean RGB By Class")
+    axes[0].set_xticks(class_indices)
+    axes[0].set_xticklabels(class_names, rotation=30, ha="right")
+    axes[0].set_ylim(0.0, 1.0)
+    axes[0].grid(True, axis="y", linestyle="--", linewidth=0.5, alpha=0.4)
+    axes[0].legend()
+
+    for class_index in range(num_classes):
+        pixels = train_pixels[class_index]
+        if pixels.size == 0:
+            continue
+        hsv = mcolors.rgb_to_hsv(pixels)
+        axes[1].hist(
+            hsv[:, 0],
+            bins=36,
+            range=(0.0, 1.0),
+            histtype="step",
+            density=True,
+            linewidth=1.5,
+            color=palette[class_index],
+            label=str(class_names[class_index])[:24],
+        )
+        axes[2].hist(hsv[:, 1], bins=30, range=(0.0, 1.0), alpha=0.18, density=True, color=palette[class_index])
+        axes[3].hist(hsv[:, 2], bins=30, range=(0.0, 1.0), alpha=0.18, density=True, color=palette[class_index])
+    axes[1].set_title("Train Hue Histogram")
+    axes[1].set_xlabel("Hue [0, 1]")
+    axes[1].legend(fontsize=8)
+    axes[2].set_title("Train Saturation Distribution")
+    axes[2].set_xlabel("Saturation")
+    axes[3].set_title("Train Value Distribution")
+    axes[3].set_xlabel("Value")
+    for axis in (axes[1], axes[2], axes[3]):
+        axis.grid(True, linestyle="--", linewidth=0.5, alpha=0.4)
+
+    for class_index in range(num_classes):
+        for split_name, stats, marker, alpha in (
+            ("train", train_stats, "o", 0.9),
+            ("val", val_stats, "x", 0.8),
+        ):
+            lab = np.asarray(stats[class_index]["mean_lab"], dtype=np.float32)
+            axes[4].scatter(
+                lab[1],
+                lab[2],
+                marker=marker,
+                s=90,
+                color=palette[class_index],
+                alpha=alpha,
+                label=f"{class_names[class_index][:18]} {split_name}" if split_name == "train" else None,
+            )
+            axes[4].annotate(str(class_index), (float(lab[1]), float(lab[2])), fontsize=8)
+    axes[4].set_title("Lab a*b* Class Centroids")
+    axes[4].set_xlabel("a*")
+    axes[4].set_ylabel("b*")
+    axes[4].grid(True, linestyle="--", linewidth=0.5, alpha=0.4)
+
+    axes[5].bar(class_indices, [delta_e[index] for index in range(num_classes)], color=palette[:num_classes])
+    axes[5].set_title("Train-Val Color Shift (Lab Delta)")
+    axes[5].set_xticks(class_indices)
+    axes[5].set_xticklabels(class_names, rotation=30, ha="right")
+    axes[5].grid(True, axis="y", linestyle="--", linewidth=0.5, alpha=0.4)
+
+    figure.tight_layout()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    figure.savefig(output_path, dpi=200, bbox_inches="tight")
+    plt.close(figure)
+
+    summary: Dict[str, Any] = {
+        "max_images_per_class": int(max_images_per_class),
+        "max_pixels_per_image": int(max_pixels_per_image),
+        "thumbnail_size": int(thumbnail_size),
+        "classes": {
+            str(index): {
+                "name": str(class_names[index]),
+                "train": train_stats[index],
+                "val": val_stats[index],
+                "train_val_lab_delta": float(delta_e[index]),
+            }
+            for index in range(num_classes)
+        },
+    }
+    if summary_path is not None:
+        json_dump(summary_path, summary)
+    return summary
+
+
 def summarize_token_norms(features: Dict[str, torch.Tensor]) -> Dict[str, float]:
     if "patches" not in features or "registers" not in features:
         return {}

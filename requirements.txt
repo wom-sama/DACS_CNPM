@@ -6,3 +6,4 @@ torch==2.6.0
 torchvision==0.21.0
 tqdm
 scipy==1.13.1
+pytest==8.4.2

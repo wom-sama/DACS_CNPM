@@ -5,10 +5,10 @@ import logging
 from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Dict, Iterator, List, Optional, Sequence, Tuple, Union
+from typing import Callable, Dict, Iterator, List, Mapping, Optional, Sequence, Tuple, Union
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFile, ImageOps
+from PIL import Image, ImageDraw, ImageFile, ImageFilter, ImageOps
 import torch
 import torch.nn.functional as F
 from torch import Tensor
@@ -35,6 +35,121 @@ PIL_RESAMPLE_MAP = {
 
 def _imagenet_fill(mean: Sequence[float]) -> Tuple[int, int, int]:
     return tuple(int(round(channel * 255.0)) for channel in mean)
+
+
+def _pseudo_foreground_mask_array(image: Image.Image, margin: float = 0.08) -> np.ndarray:
+    rgb = np.asarray(image.convert("RGB"), dtype=np.float32) / 255.0
+    if rgb.ndim != 3 or rgb.shape[-1] != 3:
+        return np.ones((max(1, image.height), max(1, image.width)), dtype=bool)
+    height, width = rgb.shape[:2]
+    gray = rgb.mean(axis=2)
+    fill_rgb = np.asarray(_imagenet_fill(IMAGENET_MEAN), dtype=np.float32).reshape(1, 1, 3) / 255.0
+    median_rgb = np.median(rgb.reshape(-1, 3), axis=0).reshape(1, 1, 3)
+    median_gray = float(np.median(gray))
+    color_delta = np.abs(rgb - median_rgb).mean(axis=2)
+    intensity_delta = np.abs(gray - median_gray)
+    edge_delta = np.zeros_like(gray, dtype=np.float32)
+    edge_delta[:, 1:] = np.maximum(edge_delta[:, 1:], np.abs(gray[:, 1:] - gray[:, :-1]))
+    edge_delta[1:, :] = np.maximum(edge_delta[1:, :], np.abs(gray[1:, :] - gray[:-1, :]))
+    score = color_delta + intensity_delta + 0.5 * edge_delta
+
+    max_channel = rgb.max(axis=2)
+    min_channel = rgb.min(axis=2)
+    delta = max_channel - min_channel
+    saturation = np.where(max_channel > 1e-6, delta / np.maximum(max_channel, 1e-6), 0.0)
+    hue = np.zeros_like(max_channel, dtype=np.float32)
+    non_gray = delta > 1e-6
+    red_is_max = (rgb[..., 0] >= rgb[..., 1]) & (rgb[..., 0] >= rgb[..., 2])
+    green_is_max = (rgb[..., 1] > rgb[..., 0]) & (rgb[..., 1] >= rgb[..., 2])
+    blue_is_max = ~(red_is_max | green_is_max)
+    hue[red_is_max & non_gray] = ((rgb[..., 1] - rgb[..., 2]) / np.maximum(delta, 1e-6))[red_is_max & non_gray] % 6.0
+    hue[green_is_max & non_gray] = ((rgb[..., 2] - rgb[..., 0]) / np.maximum(delta, 1e-6) + 2.0)[green_is_max & non_gray]
+    hue[blue_is_max & non_gray] = ((rgb[..., 0] - rgb[..., 1]) / np.maximum(delta, 1e-6) + 4.0)[blue_is_max & non_gray]
+    hue = (hue / 6.0).astype(np.float32)
+
+    fill_delta = np.abs(rgb - fill_rgb).mean(axis=2)
+    padding_like = (fill_delta < 0.035) & (edge_delta < 0.025)
+    not_padding = ~padding_like
+
+    yy, xx = np.mgrid[0:height, 0:width].astype(np.float32)
+    xx = (xx + 0.5) / max(1.0, float(width)) * 2.0 - 1.0
+    yy = (yy + 0.5) / max(1.0, float(height)) * 2.0 - 1.0
+    central = ((xx / 0.92) ** 2 + (yy / 0.96) ** 2) <= 1.0
+
+    green_yellow = (hue >= 0.08) & (hue <= 0.45) & (saturation >= 0.07) & (max_channel >= 0.12)
+    brown_or_orange = (hue >= 0.035) & (hue <= 0.17) & (saturation >= 0.10) & (max_channel >= 0.10)
+    dark_defect = (max_channel <= 0.45) & (saturation >= 0.08) & (score > max(0.02, float(margin) * 0.35))
+    detail_center = central & (score > max(0.035, float(margin)))
+    mask = not_padding & (green_yellow | brown_or_orange | dark_defect | detail_center)
+    if float(mask.mean()) > 0.92:
+        mask = not_padding & (
+            green_yellow
+            | brown_or_orange
+            | dark_defect
+            | (central & (score > max(0.05, float(margin) * 1.25)))
+        )
+    if float(mask.mean()) < 0.08:
+        fallback = not_padding & central
+        mask = fallback if float(fallback.mean()) >= 0.03 else not_padding
+    mask_image = Image.fromarray((mask.astype(np.uint8) * 255), mode="L")
+    mask_image = mask_image.filter(ImageFilter.MaxFilter(size=5)).filter(ImageFilter.MinFilter(size=5))
+    mask = np.asarray(mask_image, dtype=np.uint8) > 127
+    return mask
+
+
+def _soft_mask_image(mask: np.ndarray, radius: float = 3.0) -> Image.Image:
+    mask_uint8 = (mask.astype(np.uint8) * 255)
+    image = Image.fromarray(mask_uint8, mode="L")
+    if radius > 0.0:
+        image = image.filter(ImageFilter.GaussianBlur(radius=float(radius)))
+    return image
+
+
+def _normalize_illumination_image(image: Image.Image, strength: float = 0.35) -> Image.Image:
+    strength = max(0.0, min(1.0, float(strength)))
+    if strength <= 0.0:
+        return image
+    rgb = np.asarray(image.convert("RGB"), dtype=np.float32) / 255.0
+    luminance = (0.299 * rgb[..., 0] + 0.587 * rgb[..., 1] + 0.114 * rgb[..., 2]).astype(np.float32)
+    low, high = np.percentile(luminance, [2.0, 98.0])
+    if not np.isfinite(low) or not np.isfinite(high) or float(high - low) < 1e-4:
+        return image
+    stretched = np.clip((luminance - low) / max(float(high - low), 1e-4), 0.0, 1.0)
+    target = (1.0 - strength) * luminance + strength * (0.08 + 0.84 * stretched)
+    ratio = target / np.maximum(luminance, 1e-3)
+    ratio = np.clip(ratio, 0.55, 1.65)
+    adjusted = np.clip(rgb * ratio[..., None], 0.0, 1.0)
+    return Image.fromarray((adjusted * 255.0).round().astype(np.uint8), mode="RGB")
+
+
+def _suppress_background_image(
+    image: Image.Image,
+    *,
+    mode: str = "none",
+    margin: float = 0.08,
+    blur_radius: float = 7.0,
+) -> Image.Image:
+    normalized_mode = str(mode or "none").strip().lower().replace("-", "_")
+    if normalized_mode in {"", "none", "off", "false"}:
+        return image
+    mask = _pseudo_foreground_mask_array(image, margin=margin)
+    alpha = _soft_mask_image(mask, radius=max(1.0, float(blur_radius) * 0.25))
+    base = image.convert("RGB")
+    if normalized_mode in {"gray", "background_gray"}:
+        background = ImageOps.grayscale(base).convert("RGB")
+    elif normalized_mode in {"blur", "background_blur"}:
+        background = base.filter(ImageFilter.GaussianBlur(radius=max(0.1, float(blur_radius))))
+    elif normalized_mode in {"mean", "background_mean"}:
+        rgb = np.asarray(base, dtype=np.float32)
+        mean = np.median(rgb.reshape(-1, 3), axis=0).round().astype(np.uint8)
+        background = Image.new("RGB", base.size, tuple(int(value) for value in mean.tolist()))
+    elif normalized_mode in {"desaturate_blur", "blur_gray"}:
+        background = ImageOps.grayscale(base).convert("RGB").filter(
+            ImageFilter.GaussianBlur(radius=max(0.1, float(blur_radius)))
+        )
+    else:
+        raise ValueError(f"background_suppression_mode khong hop le: {mode}")
+    return Image.composite(base, background, alpha)
 
 
 def _apply_mixup_batch(images: Tensor, targets: Tensor, alpha: float) -> Tuple[Tensor, Tensor]:
@@ -827,11 +942,19 @@ class TrainBatchCollator:
 
         labels = torch.tensor([sample[1] for sample in batch], dtype=torch.long)
         if sample_size >= 3 and isinstance(batch[0][2], dict):
-            bbox_targets = torch.stack(
-                [sample[2]["bbox"] for sample in batch],
-                dim=0,
-            ).to(dtype=torch.float32)
-            return images, labels, {"bbox": bbox_targets}
+            metadata: Dict[str, Tensor] = {}
+            if "bbox" in batch[0][2]:
+                metadata["bbox"] = torch.stack(
+                    [sample[2]["bbox"] for sample in batch],
+                    dim=0,
+                ).to(dtype=torch.float32)
+            if "teacher_probs" in batch[0][2]:
+                metadata["teacher_probs"] = torch.stack(
+                    [sample[2]["teacher_probs"] for sample in batch],
+                    dim=0,
+                ).to(dtype=torch.float32)
+            if metadata:
+                return images, labels, metadata
 
         targets = F.one_hot(labels, num_classes=self.num_classes).to(dtype=torch.float32)
 
@@ -1659,6 +1782,9 @@ class MangoYOLOCropDataset(Dataset):
     def bboxes(self) -> List[Tuple[float, float, float, float]]:
         return [obj.bbox for sample in self.samples for obj in sample.objects]
 
+    def sample_paths(self) -> List[Path]:
+        return [sample.image_path for sample in self.samples]
+
     def quality_report(self) -> Dict[str, object]:
         report = dict(self.audit)
         report["crop_to_primary_object"] = bool(self.crop_to_primary_object)
@@ -2008,6 +2134,32 @@ class StrictBalancedBatchSampler(Sampler[List[int]]):
                         break
         return [(class_index, count) for class_index, count in allocations if count > 0]
 
+    def exposure_counts(self) -> List[int]:
+        counts = [0 for _ in range(self.num_classes)]
+        for batch_index in range(self.num_batches):
+            for class_index, sample_count in self._allocation_for_batch(batch_index):
+                counts[int(class_index)] += int(sample_count)
+        return counts
+
+    def exposure_summary(self) -> Dict[str, object]:
+        counts = self.exposure_counts()
+        positive = [count for count in counts if count > 0]
+        minimum = min(positive) if positive else 0
+        maximum = max(positive) if positive else 0
+        relative_gap = (
+            float(maximum - minimum) / float(maximum)
+            if maximum > 0
+            else 0.0
+        )
+        return {
+            "class_exposure_counts": counts,
+            "min_class_exposure": int(minimum),
+            "max_class_exposure": int(maximum),
+            "relative_gap": float(relative_gap),
+            "total_samples": int(sum(counts)),
+            "num_batches": int(self.num_batches),
+        }
+
     def __iter__(self) -> Iterator[List[int]]:
         generator = torch.Generator()
         generator.manual_seed(self.seed + max(0, self.epoch))
@@ -2262,6 +2414,123 @@ class HardSampleRepeatDataset(Dataset):
         return report
 
 
+class TeacherProbabilityDataset(Dataset):
+    def __init__(
+        self,
+        dataset: Dataset,
+        probabilities_by_path: Mapping[str, Sequence[float]],
+        *,
+        num_classes: int,
+    ) -> None:
+        self.dataset = dataset
+        self.num_classes = int(num_classes)
+        self.probabilities_by_path = {
+            str(Path(path).resolve()).lower(): torch.tensor(
+                list(probabilities),
+                dtype=torch.float32,
+            )
+            for path, probabilities in probabilities_by_path.items()
+        }
+        self._sample_paths = self._collect_sample_paths()
+        sample_paths = self._sample_paths
+        missing_paths = [
+            str(path)
+            for path in sample_paths
+            if str(Path(path).resolve()).lower() not in self.probabilities_by_path
+        ]
+        if missing_paths:
+            preview = missing_paths[:5]
+            raise ValueError(
+                "Teacher probability cache khong phu het train samples: "
+                f"missing={len(missing_paths)}/{len(sample_paths)} preview={preview}"
+            )
+        invalid_paths = [
+            str(path)
+            for path, probabilities in self.probabilities_by_path.items()
+            if probabilities.numel() != self.num_classes
+            or not torch.isfinite(probabilities).all()
+            or float(probabilities.sum().item()) <= 0.0
+        ]
+        if invalid_paths:
+            raise ValueError(
+                "Teacher probability cache co dong khong hop le: "
+                f"count={len(invalid_paths)} preview={invalid_paths[:5]}"
+            )
+
+    def __len__(self) -> int:
+        return len(self.dataset)
+
+    def __getattr__(self, name: str):
+        if name.startswith("__") and name.endswith("__"):
+            raise AttributeError(name)
+        dataset = self.__dict__.get("dataset")
+        if dataset is None:
+            raise AttributeError(name)
+        return getattr(dataset, name)
+
+    def _collect_sample_paths(self) -> List[Path]:
+        sample_paths_fn = getattr(self.dataset, "sample_paths", None)
+        if callable(sample_paths_fn):
+            return list(sample_paths_fn())
+        samples = getattr(self.dataset, "samples", None)
+        if samples is None:
+            return []
+        return [
+            Path(getattr(sample, "image_path"))
+            for sample in samples
+            if getattr(sample, "image_path", None) is not None
+        ]
+
+    def sample_paths(self) -> List[Path]:
+        return list(self._sample_paths)
+
+    def teacher_probability_summary(self) -> Dict[str, object]:
+        paths = self._sample_paths
+        probabilities = torch.stack(
+            [
+                self.probabilities_by_path[str(Path(path).resolve()).lower()]
+                for path in paths
+            ],
+            dim=0,
+        )
+        predictions = probabilities.argmax(dim=1)
+        labels_fn = getattr(self.dataset, "labels", None)
+        labels = list(labels_fn()) if callable(labels_fn) else []
+        agreement = 0.0
+        if labels and len(labels) == len(paths):
+            label_tensor = torch.tensor(labels, dtype=torch.long)
+            agreement = float((predictions.cpu() == label_tensor).float().mean().item())
+        return {
+            "enabled": True,
+            "samples": len(paths),
+            "num_classes": int(self.num_classes),
+            "mean_confidence": float(probabilities.max(dim=1).values.mean().item()),
+            "teacher_label_agreement": agreement,
+        }
+
+    def quality_report(self) -> Dict[str, object]:
+        quality_fn = getattr(self.dataset, "quality_report", None)
+        report = quality_fn() if callable(quality_fn) else {}
+        report = dict(report)
+        report["teacher_probabilities"] = self.teacher_probability_summary()
+        return report
+
+    def __getitem__(self, index: int):
+        item = self.dataset[int(index)]
+        sample_path = self._sample_paths[int(index)]
+        key = str(Path(sample_path).resolve()).lower()
+        teacher_probs = self.probabilities_by_path[key]
+        teacher_probs = teacher_probs / teacher_probs.sum().clamp(min=1e-12)
+        if len(item) == 2:
+            image, label = item
+            return image, label, {"teacher_probs": teacher_probs.clone()}
+        if len(item) >= 3 and isinstance(item[2], dict):
+            metadata = dict(item[2])
+            metadata["teacher_probs"] = teacher_probs.clone()
+            return item[0], item[1], metadata
+        return item
+
+
 class ResizePadToSquare:
     def __init__(
         self,
@@ -2490,6 +2759,7 @@ class HybridImageTransform:
         resize_mode: str = "pad",
         train: bool = False,
         random_resized_crop_scale_min: float = 1.0,
+        random_resized_crop_probability: float = 1.0,
         brightness: float = 0.2,
         contrast: float = 0.2,
         saturation: float = 0.15,
@@ -2502,6 +2772,16 @@ class HybridImageTransform:
         vertical_flip_probability: float = 0.1,
         rotate90_probability: float = 0.15,
         lighting_probability: float = 0.15,
+        illumination_normalization: bool = False,
+        illumination_normalization_strength: float = 0.0,
+        background_suppression_mode: str = "none",
+        background_suppression_probability: float = 0.0,
+        background_suppression_margin: float = 0.08,
+        background_suppression_blur_radius: float = 7.0,
+        local_exposure_probability: float = 0.0,
+        local_exposure_strength: float = 0.25,
+        obstacle_probability: float = 0.0,
+        obstacle_max_area: float = 0.12,
         scale_photometric_with_augmentation: bool = False,
         mean: Sequence[float] = IMAGENET_MEAN,
         std: Sequence[float] = IMAGENET_STD,
@@ -2513,6 +2793,10 @@ class HybridImageTransform:
         self.std = tuple(float(value) for value in std)
         self.fill = _imagenet_fill(self.mean)
         self.random_resized_crop_scale_min = float(min(max(random_resized_crop_scale_min, 0.05), 1.0))
+        self.random_resized_crop_probability = max(
+            0.0,
+            min(1.0, float(random_resized_crop_probability)),
+        )
         self.color_jitter_brightness = max(0.0, float(brightness))
         self.color_jitter_contrast = max(0.0, float(contrast))
         self.color_jitter_saturation = max(0.0, float(saturation))
@@ -2526,6 +2810,16 @@ class HybridImageTransform:
         self.vertical_flip_probability = max(0.0, min(1.0, float(vertical_flip_probability)))
         self.rotate90_probability = max(0.0, min(1.0, float(rotate90_probability)))
         self.scale_photometric_with_augmentation = bool(scale_photometric_with_augmentation)
+        self.illumination_normalization = bool(illumination_normalization)
+        self.illumination_normalization_strength = max(0.0, min(1.0, float(illumination_normalization_strength)))
+        self.background_suppression_mode = str(background_suppression_mode or "none").strip().lower()
+        self.background_suppression_probability = max(0.0, min(1.0, float(background_suppression_probability)))
+        self.background_suppression_margin = max(0.0, float(background_suppression_margin))
+        self.background_suppression_blur_radius = max(0.1, float(background_suppression_blur_radius))
+        self.local_exposure_probability = max(0.0, min(1.0, float(local_exposure_probability)))
+        self.local_exposure_strength = max(0.0, min(1.0, float(local_exposure_strength)))
+        self.obstacle_probability = max(0.0, min(1.0, float(obstacle_probability)))
+        self.obstacle_max_area = max(0.0, min(0.5, float(obstacle_max_area)))
         self.resize_pad = ResizePadToSquare(
             image_size=self.image_size,
             fill=self.fill,
@@ -2678,7 +2972,12 @@ class HybridImageTransform:
         masks: Optional[List[Image.Image]],
         augmentation_scale: float = 1.0,
     ) -> Tuple[Image.Image, Optional[List[Image.Image]]]:
-        if not self.train or self.random_resized_crop_scale_min >= 0.999:
+        if (
+            not self.train
+            or self.random_resized_crop_scale_min >= 0.999
+            or self.random_resized_crop_probability <= 0.0
+            or torch.rand(1).item() >= self.random_resized_crop_probability
+        ):
             return image, masks
         width, height = image.size
         if width <= 1 or height <= 1:
@@ -2703,6 +3002,102 @@ class HybridImageTransform:
             if cropped_masks is None or any(np.asarray(mask, dtype=np.uint8).max() > 0 for mask in cropped_masks):
                 return image.crop(crop_box), cropped_masks
         return image, masks
+
+    def _apply_input_preprocess(self, image: Image.Image) -> Image.Image:
+        if self.illumination_normalization and self.illumination_normalization_strength > 0.0:
+            image = _normalize_illumination_image(
+                image,
+                strength=self.illumination_normalization_strength,
+            )
+        if self.background_suppression_mode not in {"", "none", "off", "false"}:
+            should_apply = (not self.train) or (
+                torch.rand(1).item() < self.background_suppression_probability
+            )
+            if should_apply:
+                image = _suppress_background_image(
+                    image,
+                    mode=self.background_suppression_mode,
+                    margin=self.background_suppression_margin,
+                    blur_radius=self.background_suppression_blur_radius,
+                )
+        return image
+
+    def _apply_local_exposure_aug(self, image: Image.Image, augmentation_scale: float = 1.0) -> Image.Image:
+        if not self.train or self.local_exposure_probability <= 0.0:
+            return image
+        probability = min(1.0, self.local_exposure_probability * math.sqrt(max(1.0, float(augmentation_scale))))
+        if torch.rand(1).item() >= probability:
+            return image
+        width, height = image.size
+        if width <= 1 or height <= 1:
+            return image
+        strength = self.local_exposure_strength * float(torch.empty(1).uniform_(0.45, 1.0).item())
+        factor = 1.0 - strength if torch.rand(1).item() < 0.55 else 1.0 + strength
+        center_x = float(torch.empty(1).uniform_(0.15, 0.85).item()) * width
+        center_y = float(torch.empty(1).uniform_(0.15, 0.85).item()) * height
+        radius_x = float(torch.empty(1).uniform_(0.20, 0.55).item()) * width
+        radius_y = float(torch.empty(1).uniform_(0.18, 0.50).item()) * height
+        yy, xx = np.mgrid[0:height, 0:width].astype(np.float32)
+        ellipse = ((xx - center_x) / max(radius_x, 1.0)) ** 2 + ((yy - center_y) / max(radius_y, 1.0)) ** 2
+        mask = np.clip(1.0 - ellipse, 0.0, 1.0) ** 1.5
+        mask_image = Image.fromarray((mask * 255.0).round().astype(np.uint8), mode="L").filter(
+            ImageFilter.GaussianBlur(radius=max(2.0, min(width, height) * 0.025))
+        )
+        base = image.convert("RGB")
+        adjusted = Image.fromarray(
+            (np.asarray(base, dtype=np.float32) * factor).clip(0.0, 255.0).round().astype(np.uint8),
+            mode="RGB",
+        )
+        return Image.composite(adjusted, base, mask_image)
+
+    def _apply_obstacle_aug(self, image: Image.Image, augmentation_scale: float = 1.0) -> Image.Image:
+        if not self.train or self.obstacle_probability <= 0.0 or self.obstacle_max_area <= 0.0:
+            return image
+        probability = min(1.0, self.obstacle_probability * math.sqrt(max(1.0, float(augmentation_scale))))
+        if torch.rand(1).item() >= probability:
+            return image
+        width, height = image.size
+        if width <= 1 or height <= 1:
+            return image
+        max_area = min(0.5, max(0.01, self.obstacle_max_area))
+        area = float(torch.empty(1).uniform_(0.015, max_area).item()) * width * height
+        aspect = float(torch.empty(1).uniform_(0.35, 2.4).item())
+        box_w = min(width, max(4, int(round(math.sqrt(area * aspect)))))
+        box_h = min(height, max(4, int(round(math.sqrt(area / max(aspect, 1e-3))))))
+        edge_anchor = torch.rand(1).item() < 0.60
+        if edge_anchor:
+            side = int(torch.randint(4, (1,)).item())
+            if side == 0:
+                left = 0
+                top = int(torch.randint(0, max(1, height - box_h + 1), (1,)).item())
+            elif side == 1:
+                left = max(0, width - box_w)
+                top = int(torch.randint(0, max(1, height - box_h + 1), (1,)).item())
+            elif side == 2:
+                left = int(torch.randint(0, max(1, width - box_w + 1), (1,)).item())
+                top = 0
+            else:
+                left = int(torch.randint(0, max(1, width - box_w + 1), (1,)).item())
+                top = max(0, height - box_h)
+        else:
+            left = int(torch.randint(0, max(1, width - box_w + 1), (1,)).item())
+            top = int(torch.randint(0, max(1, height - box_h + 1), (1,)).item())
+        overlay = Image.new("RGBA", image.size, (0, 0, 0, 0))
+        draw = ImageDraw.Draw(overlay, mode="RGBA")
+        color_choices = (
+            (36, 28, 24, 130),
+            (92, 72, 52, 105),
+            (12, 12, 12, 115),
+            (205, 190, 160, 80),
+        )
+        fill = color_choices[int(torch.randint(len(color_choices), (1,)).item())]
+        box = (left, top, left + box_w, top + box_h)
+        if torch.rand(1).item() < 0.5:
+            draw.ellipse(box, fill=fill)
+        else:
+            draw.rounded_rectangle(box, radius=max(1, min(box_w, box_h) // 6), fill=fill)
+        overlay = overlay.filter(ImageFilter.GaussianBlur(radius=max(0.5, min(width, height) * 0.006)))
+        return Image.alpha_composite(image.convert("RGBA"), overlay).convert("RGB")
 
     def _apply_resize(
         self,
@@ -2801,6 +3196,9 @@ class HybridImageTransform:
         image, masks = self._apply_random_scale_crop(image, masks, augmentation_scale=augmentation_scale)
         image, masks, meta = self._apply_resize(image, masks)
         meta["augmentation_scale"] = float(augmentation_scale)
+        image = self._apply_input_preprocess(image)
+        image = self._apply_local_exposure_aug(image, augmentation_scale=augmentation_scale)
+        image = self._apply_obstacle_aug(image, augmentation_scale=augmentation_scale)
         image = self._apply_color(image, augmentation_scale=augmentation_scale)
         tensor = self._to_tensor(image, augmentation_scale=augmentation_scale)
 
@@ -2916,6 +3314,7 @@ def build_train_transform(
     image_size: int,
     resize_mode: str = "pad",
     scale_min: float = 0.8,
+    scale_crop_probability: float = 1.0,
     brightness: float = 0.2,
     contrast: float = 0.2,
     saturation: float = 0.15,
@@ -2930,6 +3329,16 @@ def build_train_transform(
     lighting_probability: float = 0.15,
     randaugment_num_ops: int = 2,
     randaugment_magnitude: int = 10,
+    illumination_normalization: bool = False,
+    illumination_normalization_strength: float = 0.0,
+    background_suppression_mode: str = "none",
+    background_suppression_probability: float = 0.0,
+    background_suppression_margin: float = 0.08,
+    background_suppression_blur_radius: float = 7.0,
+    local_exposure_probability: float = 0.0,
+    local_exposure_strength: float = 0.25,
+    obstacle_probability: float = 0.0,
+    obstacle_max_area: float = 0.12,
     scale_photometric_with_augmentation: bool = False,
     mean: Sequence[float] = IMAGENET_MEAN,
     std: Sequence[float] = IMAGENET_STD,
@@ -2939,6 +3348,7 @@ def build_train_transform(
         resize_mode=resize_mode,
         train=True,
         random_resized_crop_scale_min=scale_min,
+        random_resized_crop_probability=scale_crop_probability,
         brightness=brightness,
         contrast=contrast,
         saturation=saturation,
@@ -2951,6 +3361,16 @@ def build_train_transform(
         vertical_flip_probability=vertical_flip_probability,
         rotate90_probability=rotate90_probability,
         lighting_probability=lighting_probability,
+        illumination_normalization=illumination_normalization,
+        illumination_normalization_strength=illumination_normalization_strength,
+        background_suppression_mode=background_suppression_mode,
+        background_suppression_probability=background_suppression_probability,
+        background_suppression_margin=background_suppression_margin,
+        background_suppression_blur_radius=background_suppression_blur_radius,
+        local_exposure_probability=local_exposure_probability,
+        local_exposure_strength=local_exposure_strength,
+        obstacle_probability=obstacle_probability,
+        obstacle_max_area=obstacle_max_area,
         scale_photometric_with_augmentation=scale_photometric_with_augmentation,
         mean=mean,
         std=std,
@@ -2960,6 +3380,11 @@ def build_train_transform(
 def build_eval_transform(
     image_size: int,
     resize_mode: str = "pad",
+    illumination_normalization: bool = False,
+    illumination_normalization_strength: float = 0.0,
+    background_suppression_mode: str = "none",
+    background_suppression_margin: float = 0.08,
+    background_suppression_blur_radius: float = 7.0,
     mean: Sequence[float] = IMAGENET_MEAN,
     std: Sequence[float] = IMAGENET_STD,
 ) -> HybridImageTransform:
@@ -2967,6 +3392,12 @@ def build_eval_transform(
         image_size=image_size,
         resize_mode=resize_mode,
         train=False,
+        illumination_normalization=illumination_normalization,
+        illumination_normalization_strength=illumination_normalization_strength,
+        background_suppression_mode=background_suppression_mode,
+        background_suppression_probability=1.0,
+        background_suppression_margin=background_suppression_margin,
+        background_suppression_blur_radius=background_suppression_blur_radius,
         mean=mean,
         std=std,
     )

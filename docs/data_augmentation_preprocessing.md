@@ -106,43 +106,52 @@ Object crop image
 
 ## Lệnh Train Khuyến Nghị Hiện Tại
 
-Lệnh dưới đây là cấu hình classification-only từ đầu đến cuối, không dùng pretrain, giữ CNN stem, dùng object-level crops, input 224 để so sánh trực tiếp với baseline `mango_hybrid_224`, và tắt toàn bộ batch composition không phù hợp với phân loại.
+Lệnh dưới đây là cấu hình classification-only hiện tại cho split grouped/sequence-safe, không dùng pretrain, giữ CNN stem, input 224, và tắt toàn bộ batch composition không phù hợp với phân loại. Khi train, pipeline tự xuất `color_audit.png` và `color_audit.json` để kiểm tra lệch màu RGB/HSV/Lab giữa train/val theo class; đây là artifact phân tích, không tạo thêm dữ liệu.
 
 ```powershell
 cd D:\DataAI\AIEx\TRKH
 $env:PYTHONPATH='D:\DataAI\AIEx\TRKH'
 $env:TRKH_AMP_DTYPE='bf16'
-$env:OMP_NUM_THREADS='6'
+$env:OMP_NUM_THREADS='4'
 $env:TRKH_ALLOW_WINDOWS_MULTIPROCESSING='1'
 $env:TRKH_ALLOW_WINDOWS_PIN_MEMORY='1'
 $env:TRKH_ALLOW_WINDOWS_PERSISTENT_WORKERS='1'
 
 D:\DataAI\.venv\Scripts\python.exe -m trkh.training.train `
-  --data D:\DataAI\AIEx\dataset\data.yaml `
+  --data D:\DataAI\AIEx\image_baseline_experiments\data\cls_crops_grouped_seqsafe_w3\data.yaml `
   --class-name-mode raw --expected-num-classes 5 `
-  --run-name mango_cls_224_cnnstem_vitreg_5cls_objectcrops_rarecrop_local_v3 `
+  --run-name mango_cls_224_clscrops_grouped_rawguard_bf16_v25_full `
   --output-dir runs --disable-resume --seed 42 `
-  --model-type vit_registers --image-size 224 --patch-size 16 `
-  --stem-channels 32 --head-pooling cls_register_mean `
+  --model-type vit_registers --image-size 224 --patch-size 16 --stem-channels 32 `
+  --cnn-feature-fusion --cnn-fusion-dropout 0.30 `
   --embed-dim 256 --depth 8 --num-heads 8 --num-registers 4 `
-  --dropout 0.10 --drop-path-rate 0.10 `
-  --batch-size 64 --grad-accum-steps 1 --epochs 0 --scheduler-total-epochs 140 --patience 70 `
-  --learning-rate 3e-4 --min-learning-rate 1e-6 --weight-decay 0.05 --warmup-epochs 8 `
-  --grad-clip-norm 0.75 --max-nonfinite-grad-steps 4 `
-  --num-workers 8 --eval-num-workers 4 --train-image-cache-mb 0 --eval-image-cache-mb 0 `
-  --class-weight-mode sqrt_inverse --focal-loss-gamma 2.0 --focal-loss-mix 0.20 `
-  --label-smoothing 0.015 --ldam-scale 18.0 --best-metric macro_f1 `
-  --resize-mode pad --crop-margin-ratio 0.08 `
-  --class-crop-margin-scale-threshold 1.5 --class-crop-margin-max-ratio 0.16 `
-  --brightness 0.0 --contrast 0.0 --saturation 0.0 --hue 0.0 --lighting-probability 0.0 `
+  --register-positional-embedding --head-pooling cls_register_mean `
+  --dropout 0.24 --attention-dropout 0.08 --drop-path-rate 0.22 `
+  --batch-size 64 --grad-accum-steps 1 --epochs 0 --scheduler-total-epochs 80 --patience 35 `
+  --learning-rate 2.2e-5 --min-learning-rate 5e-7 --weight-decay 0.16 --warmup-epochs 4 `
+  --grad-clip-norm 0.45 --max-nonfinite-grad-steps 4 `
+  --num-workers 6 --eval-num-workers 4 --train-image-cache-mb 0 --eval-image-cache-mb 0 `
+  --imbalance-auto-tune --disable-class-weights --class-weight-mode sqrt_inverse `
+  --balance-auto-max-repeat-factor 1.25 `
+  --classification-loss ldam_focal --ldam-max-margin 0.18 --ldam-scale 10.0 `
+  --focal-loss-gamma 1.5 --focal-loss-mix 0.03 --label-smoothing 0.04 `
+  --metric-learning-loss-weight 0.006 --metric-learning-temperature 0.22 `
+  --metric-learning-sources head,cnn `
+  --foreground-consistency-loss-weight 0.015 --foreground-consistency-margin 0.07 `
+  --rare-class-recall-target 0.55 --rare-class-recall-guard-scale-threshold 1.5 `
+  --rare-class-recall-guard-max-multiplier 1.8 --rare-class-recall-guard-min-precision 0.05 `
+  --best-metric loss_aware_fair_macro_f1 --fair-f1-gap-target 0.05 `
+  --fair-f1-gap-penalty 0.8 --fair-f1-min-weight 0.50 --fair-f1-loss-weight 0.16 `
+  --resize-mode crop --brightness 0.025 --contrast 0.025 --saturation 0.01 --hue 0.0 `
   --random-erasing-probability 0.0 `
-  --random-affine-degrees 3 --random-affine-translate 0.02 --random-affine-scale-min 0.96 `
-  --horizontal-flip-probability 0.5 --vertical-flip-probability 0.0 --rotate90-probability 0.02 `
-  --batch-mix-probability 0.0 --mosaic-probability 0.0 --mixup-probability 0.0 `
-  --cutmix-probability 0.0 --copy-paste-probability 0.0
+  --random-affine-degrees 4 --random-affine-translate 0.025 --random-affine-scale-min 0.96 `
+  --horizontal-flip-probability 0.5 --vertical-flip-probability 0.0 --rotate90-probability 0.03 `
+  --lighting-probability 0.0 --batch-mix-probability 0.0 `
+  --mosaic-probability 0.0 --mixup-probability 0.0 `
+  --cutmix-probability 0.0 --copy-paste-probability 0.0 --targeted-copy-paste-probability 0.0
 ```
 
-Nếu VRAM không đủ ở input 224, giảm `--batch-size 64` xuống `48` hoặc `32`. Không nên bật `--disable-cnn-stem` cho run chính; chỉ dùng flag đó cho ablation để chứng minh vai trò của hybrid CNN stem.
+Sau train phải đánh giá cả `checkpoints\best.pt` và `checkpoints\last.pt`, rồi xuất `xai_audit` cho checkpoint được báo cáo. Probe v25 cho thấy `last.pt` tốt hơn `best.pt` trên test grouped, nên không nên chỉ nhìn một checkpoint.
 
 ## Benchmark Num Workers
 
@@ -189,3 +198,13 @@ D:\DataAI\.venv\Scripts\python.exe -m trkh.tools.benchmark_num_workers `
   --warmup-batches 3 --measure-batches 20 `
   --torch-threads 6
 ```
+
+## Cap nhat EMA cho run 4 class
+
+Run 4 class grouped/sequence-safe hien dung them:
+
+```text
+--model-ema --model-ema-decay 0.995
+```
+
+EMA khong phai data augmentation va khong phai pretrain. No chi trung binh cac trong so ma model hoc duoc trong chinh run scratch hien tai. Probe cho thay EMA giam dao dong `val_loss` giai doan muon va tang F1 cua hai class de nham lan, trong khi pipeline augmentation van giu nguyen: crop, affine nhe, horizontal flip, photometric rat nhe; mosaic, mixup, cutmix va copy-paste van tat.

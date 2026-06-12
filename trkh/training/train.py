@@ -5,11 +5,14 @@ import matplotlib
 matplotlib.use("Agg")
 
 import argparse
+import copy
 import csv
 import gc
 import logging
 import math
 import os
+import subprocess
+import sys
 import time
 from dataclasses import fields
 from functools import partial
@@ -41,6 +44,7 @@ from trkh.data.dataset import (
     PseudoVideoAugmenter,
     RareClassRepeatDataset,
     StrictBalancedBatchSampler,
+    TeacherProbabilityDataset,
     build_rare_class_repeat_factors,
     build_eval_transform,
     build_train_collate_fn,
@@ -56,6 +60,7 @@ from trkh.training.loss import HybridDetectionClassificationLoss
 from trkh.training.losses import BalancedSoftmaxFocalLoss, LDAMFocalLoss, SupervisedContrastiveLoss
 from trkh.models.model import (
     build_model_from_checkpoint,
+    classification_logits_from_features,
     create_model,
     extract_bbox_from_model_output,
     extract_head_input_from_features,
@@ -78,6 +83,7 @@ from trkh.core.utils import (
     plot_all_training_metrics,
     plot_detection_training_metrics,
     plot_dataset_overview,
+    plot_dataset_color_audit,
     plot_per_class_training_metrics,
     plot_per_class_validation_metric,
     plot_train_val_final_test_metrics,
@@ -184,10 +190,33 @@ def parse_args() -> argparse.Namespace:
         choices=("detr_vit_registers", "vit_registers_hybrid", "vit_registers", "resnet50", "mobilenet_v3_large", "vit_b_16"),
         default="vit_registers_hybrid",
     )
+    pretrained_group = parser.add_mutually_exclusive_group()
+    pretrained_group.add_argument(
+        "--pretrained",
+        dest="pretrained",
+        action="store_true",
+        default=False,
+        help=(
+            "Dung weights ImageNet cua torchvision cho model_type resnet50/mobilenet_v3_large/vit_b_16. "
+            "Mac dinh tat de giu TRKH scratch/no-pretrain."
+        ),
+    )
+    pretrained_group.add_argument(
+        "--no-pretrained",
+        dest="pretrained",
+        action="store_false",
+        help="Train tu dau; day la mac dinh.",
+    )
     parser.add_argument("--image-size", type=int, default=224)
     parser.add_argument("--patch-size", type=int, default=16)
     parser.add_argument("--disable-cnn-stem", action="store_true", default=False)
     parser.add_argument("--stem-channels", type=int, default=32)
+    parser.add_argument(
+        "--dual-patch-norm",
+        action="store_true",
+        default=False,
+        help="Dung LayerNorm truoc/sau patch embedding de on dinh ViT scratch tren du lieu nho/fine-grained.",
+    )
     parser.add_argument(
         "--cnn-feature-fusion",
         action="store_true",
@@ -195,6 +224,26 @@ def parse_args() -> argparse.Namespace:
         help="Them nhanh global pooled CNN stem vao logits phan loai; mac dinh tat de giu hanh vi cu.",
     )
     parser.add_argument("--cnn-fusion-dropout", type=float, default=0.1)
+    parser.add_argument(
+        "--color-stat-fusion",
+        action="store_true",
+        default=False,
+        help=(
+            "Them head thong ke mau RGB/center-border vao logits phan loai; "
+            "khong dung pretrain va khoi tao residual-zero."
+        ),
+    )
+    parser.add_argument("--color-stat-fusion-dropout", type=float, default=0.1)
+    parser.add_argument(
+        "--defect-stat-fusion",
+        action="store_true",
+        default=False,
+        help=(
+            "Them head thong ke vet toi/dom/local contrast/overexposure vao logits; "
+            "nham loi fine-grained do vet hu, bam, qua sang/toi."
+        ),
+    )
+    parser.add_argument("--defect-stat-fusion-dropout", type=float, default=0.1)
     parser.add_argument(
         "--fine-grained-pooling",
         action="store_true",
@@ -205,6 +254,66 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument("--fine-grained-pooling-dropout", type=float, default=0.1)
+    parser.add_argument(
+        "--multi-branch-fusion",
+        action="store_true",
+        default=False,
+        help=(
+            "Them token nhanh mau/edge/CNN-stem vao transformer cho classification fine-grained; "
+            "khong dung pretrained va mac dinh tat."
+        ),
+    )
+    parser.add_argument("--branch-color-tokens", type=int, default=1)
+    parser.add_argument("--branch-edge-tokens", type=int, default=1)
+    parser.add_argument("--branch-cnn-tokens", type=int, default=1)
+    parser.add_argument("--branch-token-dropout", type=float, default=0.1)
+    parser.add_argument(
+        "--detail-patch-enhancement",
+        action="store_true",
+        default=False,
+        help="Them residual mau cuc bo/high-frequency/edge vao tung patch token.",
+    )
+    parser.add_argument("--detail-patch-dropout", type=float, default=0.05)
+    parser.add_argument(
+        "--token-pruning",
+        action="store_true",
+        default=False,
+        help="Prune patch token theo attention va foreground prior de giam nhieu nen.",
+    )
+    parser.add_argument(
+        "--token-prune-layers",
+        type=str,
+        default="2,5",
+        help="Danh sach layer 1-based thuc hien pruning, vi du 2,5.",
+    )
+    parser.add_argument(
+        "--token-keep-rates",
+        type=str,
+        default="0.75,0.50",
+        help="Ty le patch goc con lai sau tung prune layer.",
+    )
+    parser.add_argument("--token-prune-foreground-weight", type=float, default=0.35)
+    parser.add_argument(
+        "--pairwise-margin-head",
+        action="store_true",
+        default=False,
+        help="Them auxiliary head nhe cho cac cap class de nham nhu 0-1,2-3,4-rest.",
+    )
+    parser.add_argument("--pairwise-margin-pairs", type=str, default="0-1,2-3,4-rest")
+    parser.add_argument("--pairwise-margin-logit-scale", type=float, default=0.35)
+    parser.add_argument("--pairwise-margin-dropout", type=float, default=0.05)
+    parser.add_argument(
+        "--ordinal-maturity-head",
+        action="store_true",
+        default=False,
+        help=(
+            "Them mot truc maturity co thu tu cho cac class 0,1,2,3; "
+            "khong ep class defect 4 vao cung truc."
+        ),
+    )
+    parser.add_argument("--ordinal-maturity-classes", type=str, default="0,1,2,3")
+    parser.add_argument("--ordinal-maturity-logit-scale", type=float, default=0.20)
+    parser.add_argument("--ordinal-maturity-dropout", type=float, default=0.05)
     parser.add_argument("--embed-dim", type=int, default=256)
     parser.add_argument("--depth", type=int, default=8)
     parser.add_argument("--num-heads", type=int, default=8)
@@ -215,7 +324,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--drop-path-rate", type=float, default=0.1)
     parser.add_argument("--register-positional-embedding", action="store_true", default=False)
     parser.add_argument("--gradient-checkpointing", action="store_true", default=False)
-    parser.add_argument("--head-pooling", choices=("cls", "cls_register_mean"), default="cls_register_mean")
+    parser.add_argument(
+        "--head-pooling",
+        choices=("cls", "cls_register_mean", "cls_branch_register_mean"),
+        default="cls_register_mean",
+    )
     parser.add_argument("--bbox-head-hidden-dim", type=int, default=512)
     parser.add_argument("--num-queries", type=int, default=40)
     parser.add_argument("--decoder-depth", type=int, default=4)
@@ -300,6 +413,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--sam", action="store_true", default=False)
     parser.add_argument("--sam-rho", type=float, default=0.05)
     parser.add_argument("--sam-adaptive", action="store_true", default=False)
+    parser.add_argument(
+        "--model-ema",
+        action="store_true",
+        default=False,
+        help="Danh gia va luu best.pt bang exponential moving average cua trong so model.",
+    )
+    parser.add_argument(
+        "--model-ema-decay",
+        type=float,
+        default=0.999,
+        help="EMA decay trong (0, 1). EMA khoi dong dong de khong bi tre o cac epoch dau.",
+    )
     parser.add_argument("--label-smoothing", type=float, default=0.02)
     parser.add_argument("--grad-clip-norm", type=float, default=1.0)
     parser.add_argument(
@@ -346,6 +471,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--weighted-sampler", "--use-weighted-sampler", action="store_true", default=False)
     parser.add_argument("--weighted-sampler-power", type=float, default=1.75)
     parser.add_argument("--weighted-sampler-epoch-multiplier", type=float, default=2.0)
+    parser.add_argument(
+        "--disable-balanced-epoch-sampling",
+        action="store_true",
+        default=False,
+        help=(
+            "Tat sampler chia deu exposure giua cac class. Mac dinh bat cho classification-only; "
+            "sampler chi doc train split va khong thay doi val/test."
+        ),
+    )
+    parser.add_argument("--balanced-epoch-multiplier", type=float, default=1.0)
+    parser.add_argument("--balanced-epoch-tolerance", type=float, default=0.10)
     parser.add_argument("--imbalance-auto-tune", action="store_true", default=False)
     parser.add_argument("--disable-imbalance-auto-tune", action="store_true", default=False)
     parser.add_argument("--imbalance-sampler-disable-threshold", type=float, default=0.18)
@@ -356,6 +492,27 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         default=False,
         help="Bo qua evaluate test cuoi run; chi dung cho smoke/debug nhanh, khong dung cho run chinh.",
+    )
+    parser.add_argument(
+        "--trace-architecture",
+        action="store_true",
+        default=False,
+        help=(
+            "Sau khi train/evaluate xong, tao architecture trace 1 anh train ngau nhien moi class "
+            "qua cac block bang checkpoints/best.pt."
+        ),
+    )
+    parser.add_argument(
+        "--trace-architecture-output-dir",
+        type=Path,
+        default=None,
+        help="Thu muc trace. Mac dinh la <run_dir>/architecture_trace.",
+    )
+    parser.add_argument("--trace-architecture-seed", type=int, default=42)
+    parser.add_argument(
+        "--trace-architecture-device",
+        choices=("auto", "cpu", "cuda"),
+        default="auto",
     )
     parser.add_argument(
         "--full-image-detection",
@@ -421,6 +578,84 @@ def parse_args() -> argparse.Namespace:
         default=0.08,
         help="Nguong mem tao pseudo foreground tu anh da normalize; lon hon se mask chat hon.",
     )
+    parser.add_argument(
+        "--attention-view-loss-weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Trong so CE tren mot view crop/drop dan huong boi patch attention; "
+            "0 de tat. View chi dung trong classification training."
+        ),
+    )
+    parser.add_argument("--attention-crop-probability", type=float, default=0.50)
+    parser.add_argument("--attention-drop-probability", type=float, default=0.25)
+    parser.add_argument(
+        "--attention-view-start-epoch",
+        type=int,
+        default=2,
+        help="Epoch 1-based bat dau attention crop/drop, de attention co warm-up.",
+    )
+    parser.add_argument("--attention-crop-threshold", type=float, default=0.55)
+    parser.add_argument("--attention-drop-threshold", type=float, default=0.70)
+    parser.add_argument("--attention-crop-padding-ratio", type=float, default=0.08)
+    parser.add_argument("--attention-crop-min-area-ratio", type=float, default=0.20)
+    parser.add_argument("--attention-view-foreground-weight", type=float, default=0.35)
+    parser.add_argument(
+        "--attention-drop-blur-kernel",
+        type=int,
+        default=15,
+        help="Kernel le de blur vung salient trong attention-drop.",
+    )
+    parser.add_argument(
+        "--register-diversity-loss-weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Trong so regularizer giam cosine similarity giua cac register token "
+            "trong cung anh; 0 de tat."
+        ),
+    )
+    parser.add_argument(
+        "--pairwise-margin-loss-weight",
+        type=float,
+        default=0.0,
+        help="Trong so auxiliary BCE loss cho pairwise margin head; 0 de chi dung logits adjustment neu head ton tai.",
+    )
+    parser.add_argument(
+        "--ordinal-maturity-loss-weight",
+        type=float,
+        default=0.0,
+        help="Trong so SmoothL1 loss cho truc maturity co thu tu; chi tinh tren cac class da khai bao.",
+    )
+    parser.add_argument(
+        "--pretrained-distillation",
+        dest="pretrained_distillation",
+        action="store_true",
+        help="Bat knowledge distillation tu checkpoint pretrained local cho custom TRKH.",
+    )
+    parser.add_argument(
+        "--no-pretrained-distillation",
+        dest="pretrained_distillation",
+        action="store_false",
+        help="Tat knowledge distillation; custom TRKH train/fine-tune khong dung teacher.",
+    )
+    parser.set_defaults(pretrained_distillation=False)
+    parser.add_argument("--distillation-teacher-checkpoint", type=Path, default=None)
+    parser.add_argument(
+        "--distillation-teacher-csv",
+        "--offline-distillation-csv",
+        dest="distillation_teacher_csv",
+        type=Path,
+        default=None,
+        help=(
+            "CSV soft-label da map theo class order TRKH voi cot path,prob_0..prob_N. "
+            "Dung de distill tu ensemble pretrained ma khong forward teacher trong moi batch."
+        ),
+    )
+    parser.add_argument("--distillation-weight", type=float, default=0.10)
+    parser.add_argument("--distillation-temperature", type=float, default=2.0)
+    parser.add_argument("--distillation-focus-class-index", type=int, default=1)
+    parser.add_argument("--distillation-focus-class-weight", type=float, default=1.5)
     parser.add_argument(
         "--balance-auto-max-repeat-factor",
         type=float,
@@ -580,10 +815,33 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--resize-mode", choices=("pad", "crop"), default="pad")
     parser.add_argument("--train-scale-min", type=float, default=0.8)
+    parser.add_argument(
+        "--train-scale-crop-probability",
+        type=float,
+        default=1.0,
+        help=(
+            "Xac suat random scale-crop tren train. Dat <1 de giu mot phan anh day du "
+            "va chi mo phong partial-view tren mot ty le sample."
+        ),
+    )
     parser.add_argument("--brightness", "--color-jitter-brightness", type=float, default=0.2)
     parser.add_argument("--contrast", "--color-jitter-contrast", type=float, default=0.2)
     parser.add_argument("--saturation", "--color-jitter-saturation", type=float, default=0.0)
     parser.add_argument("--hue", "--color-jitter-hue", type=float, default=0.0)
+    parser.add_argument("--illumination-normalization", action="store_true", default=False)
+    parser.add_argument("--illumination-normalization-strength", type=float, default=0.0)
+    parser.add_argument(
+        "--background-suppression-mode",
+        choices=("none", "gray", "blur", "mean", "desaturate_blur", "blur_gray"),
+        default="none",
+    )
+    parser.add_argument("--background-suppression-probability", type=float, default=0.0)
+    parser.add_argument("--background-suppression-margin", type=float, default=0.08)
+    parser.add_argument("--background-suppression-blur-radius", type=float, default=7.0)
+    parser.add_argument("--local-exposure-probability", type=float, default=0.0)
+    parser.add_argument("--local-exposure-strength", type=float, default=0.25)
+    parser.add_argument("--obstacle-probability", type=float, default=0.0)
+    parser.add_argument("--obstacle-max-area", type=float, default=0.12)
     parser.add_argument("--random-erasing-probability", type=float, default=0.2)
     parser.add_argument("--random-affine-degrees", type=float, default=8.0)
     parser.add_argument("--random-affine-translate", type=float, default=0.05)
@@ -653,6 +911,8 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         raise ValueError("--resume-reset-epoch phai dung cung --resume-reset-scheduler de tranh scheduler state/progress lech.")
     if args.scheduler_total_epochs < 0:
         raise ValueError("--scheduler-total-epochs phai >= 0.")
+    if not 0.0 < float(args.model_ema_decay) < 1.0:
+        raise ValueError("--model-ema-decay phai nam trong (0, 1).")
     if args.backbone_lr_scale <= 0.0:
         raise ValueError("--backbone-lr-scale phai > 0.")
     if args.temporal_frames < 1:
@@ -663,8 +923,24 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         raise ValueError("--train-image-cache-mb/--eval-image-cache-mb phai >= -1.")
     if args.cnn_fusion_dropout < 0.0:
         raise ValueError("--cnn-fusion-dropout phai >= 0.")
+    if args.color_stat_fusion_dropout < 0.0:
+        raise ValueError("--color-stat-fusion-dropout phai >= 0.")
+    if args.defect_stat_fusion_dropout < 0.0:
+        raise ValueError("--defect-stat-fusion-dropout phai >= 0.")
     if args.fine_grained_pooling_dropout < 0.0:
         raise ValueError("--fine-grained-pooling-dropout phai >= 0.")
+    if args.branch_token_dropout < 0.0:
+        raise ValueError("--branch-token-dropout phai >= 0.")
+    if args.branch_color_tokens < 0 or args.branch_edge_tokens < 0 or args.branch_cnn_tokens < 0:
+        raise ValueError("--branch-*-tokens phai >= 0.")
+    if args.detail_patch_dropout < 0.0:
+        raise ValueError("--detail-patch-dropout phai >= 0.")
+    if args.token_prune_foreground_weight < 0.0:
+        raise ValueError("--token-prune-foreground-weight phai >= 0.")
+    if args.balanced_epoch_multiplier <= 0.0:
+        raise ValueError("--balanced-epoch-multiplier phai > 0.")
+    if not 0.0 <= args.balanced_epoch_tolerance <= 1.0:
+        raise ValueError("--balanced-epoch-tolerance phai nam trong [0, 1].")
     if args.sam_rho < 0.0:
         raise ValueError("--sam-rho phai >= 0.")
     if args.ldam_max_margin < 0.0:
@@ -695,6 +971,36 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         raise ValueError("--foreground-consistency-loss-weight phai >= 0.")
     if args.foreground_consistency_margin < 0.0:
         raise ValueError("--foreground-consistency-margin phai >= 0.")
+    if args.attention_view_loss_weight < 0.0:
+        raise ValueError("--attention-view-loss-weight phai >= 0.")
+    if not 0.0 <= args.attention_crop_probability <= 1.0:
+        raise ValueError("--attention-crop-probability phai nam trong [0, 1].")
+    if not 0.0 <= args.attention_drop_probability <= 1.0:
+        raise ValueError("--attention-drop-probability phai nam trong [0, 1].")
+    if args.attention_crop_probability + args.attention_drop_probability > 1.0:
+        raise ValueError(
+            "Tong --attention-crop-probability va --attention-drop-probability phai <= 1."
+        )
+    if args.attention_view_start_epoch < 1:
+        raise ValueError("--attention-view-start-epoch phai >= 1.")
+    if not 0.0 < args.attention_crop_threshold <= 1.0:
+        raise ValueError("--attention-crop-threshold phai nam trong (0, 1].")
+    if not 0.0 < args.attention_drop_threshold <= 1.0:
+        raise ValueError("--attention-drop-threshold phai nam trong (0, 1].")
+    if not 0.0 <= args.attention_crop_padding_ratio <= 0.5:
+        raise ValueError("--attention-crop-padding-ratio phai nam trong [0, 0.5].")
+    if not 0.0 < args.attention_crop_min_area_ratio <= 1.0:
+        raise ValueError("--attention-crop-min-area-ratio phai nam trong (0, 1].")
+    if not 0.0 <= args.attention_view_foreground_weight <= 1.0:
+        raise ValueError("--attention-view-foreground-weight phai nam trong [0, 1].")
+    if args.attention_drop_blur_kernel < 1 or args.attention_drop_blur_kernel % 2 == 0:
+        raise ValueError("--attention-drop-blur-kernel phai la so le >= 1.")
+    if args.sam and args.attention_view_loss_weight > 0.0:
+        raise ValueError(
+            "Attention-guided views chua ho tro SAM vi hai SAM forward can cung view."
+        )
+    if args.register_diversity_loss_weight < 0.0:
+        raise ValueError("--register-diversity-loss-weight phai >= 0.")
     if 0.0 < args.balance_auto_max_repeat_factor < 1.0:
         raise ValueError("--balance-auto-max-repeat-factor phai >= 1 hoac <= 0 de tat cap.")
     if not 0.0 <= args.fair_f1_gap_target <= 1.0:
@@ -797,6 +1103,51 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         raise ValueError("--count-head-dropout phai >= 0.")
     if args.count_head_prior <= 0.0:
         raise ValueError("--count-head-prior phai > 0.")
+    if args.pairwise_margin_logit_scale < 0.0:
+        raise ValueError("--pairwise-margin-logit-scale phai >= 0.")
+    if args.pairwise_margin_dropout < 0.0:
+        raise ValueError("--pairwise-margin-dropout phai >= 0.")
+    if args.pairwise_margin_loss_weight < 0.0:
+        raise ValueError("--pairwise-margin-loss-weight phai >= 0.")
+    if args.ordinal_maturity_logit_scale < 0.0:
+        raise ValueError("--ordinal-maturity-logit-scale phai >= 0.")
+    if args.ordinal_maturity_dropout < 0.0:
+        raise ValueError("--ordinal-maturity-dropout phai >= 0.")
+    if args.ordinal_maturity_loss_weight < 0.0:
+        raise ValueError("--ordinal-maturity-loss-weight phai >= 0.")
+    if args.distillation_weight < 0.0:
+        raise ValueError("--distillation-weight phai >= 0.")
+    if args.distillation_temperature <= 0.0:
+        raise ValueError("--distillation-temperature phai > 0.")
+    if args.distillation_focus_class_index < 0:
+        raise ValueError("--distillation-focus-class-index phai >= 0.")
+    if args.distillation_focus_class_weight <= 0.0:
+        raise ValueError("--distillation-focus-class-weight phai > 0.")
+    if (
+        args.pretrained_distillation
+        and args.distillation_teacher_checkpoint is None
+        and args.distillation_teacher_csv is None
+    ):
+        raise ValueError(
+            "--pretrained-distillation yeu cau --distillation-teacher-checkpoint "
+            "hoac --distillation-teacher-csv."
+        )
+    if (
+        args.distillation_teacher_checkpoint is not None
+        and not args.distillation_teacher_checkpoint.is_file()
+    ):
+        raise FileNotFoundError(
+            f"Khong tim thay teacher checkpoint: {args.distillation_teacher_checkpoint}"
+        )
+    if (
+        args.distillation_teacher_csv is not None
+        and not args.distillation_teacher_csv.is_file()
+    ):
+        raise FileNotFoundError(
+            f"Khong tim thay teacher probability CSV: {args.distillation_teacher_csv}"
+        )
+    if not 0.0 <= args.train_scale_crop_probability <= 1.0:
+        raise ValueError("--train-scale-crop-probability phai nam trong [0, 1].")
     if args.objectness_loss_weight < 0.0:
         raise ValueError("--objectness-loss-weight phai >= 0.")
     if not 0.0 <= args.objectness_focal_alpha <= 1.0:
@@ -819,18 +1170,61 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         raise ValueError("--eval-adaptive-count-margin phai >= 0.")
     if args.eval_adaptive_min_detections < 0:
         raise ValueError("--eval-adaptive-min-detections phai >= 0.")
+    for name in (
+        "background_suppression_probability",
+        "local_exposure_probability",
+        "obstacle_probability",
+    ):
+        value = float(getattr(args, name))
+        if not 0.0 <= value <= 1.0:
+            raise ValueError(f"--{name.replace('_', '-')} phai nam trong [0, 1].")
+    if args.illumination_normalization_strength < 0.0:
+        raise ValueError("--illumination-normalization-strength phai >= 0.")
+    if args.background_suppression_margin < 0.0:
+        raise ValueError("--background-suppression-margin phai >= 0.")
+    if args.background_suppression_blur_radius <= 0.0:
+        raise ValueError("--background-suppression-blur-radius phai > 0.")
+    if args.local_exposure_strength < 0.0:
+        raise ValueError("--local-exposure-strength phai >= 0.")
+    if args.obstacle_max_area < 0.0:
+        raise ValueError("--obstacle-max-area phai >= 0.")
 
     model_config = ModelConfig(
         model_type=args.model_type,
+        pretrained=bool(args.pretrained),
         head_pooling=args.head_pooling,
         image_size=args.image_size,
         patch_size=args.patch_size,
         use_cnn_stem=not args.disable_cnn_stem,
         stem_channels=args.stem_channels,
+        dual_patch_norm=bool(args.dual_patch_norm),
         cnn_feature_fusion=bool(args.cnn_feature_fusion),
         cnn_fusion_dropout=args.cnn_fusion_dropout,
+        color_stat_fusion=bool(args.color_stat_fusion),
+        color_stat_fusion_dropout=args.color_stat_fusion_dropout,
+        defect_stat_fusion=bool(args.defect_stat_fusion),
+        defect_stat_fusion_dropout=args.defect_stat_fusion_dropout,
         fine_grained_pooling=bool(args.fine_grained_pooling),
         fine_grained_pooling_dropout=args.fine_grained_pooling_dropout,
+        multi_branch_fusion=bool(args.multi_branch_fusion),
+        branch_color_tokens=args.branch_color_tokens,
+        branch_edge_tokens=args.branch_edge_tokens,
+        branch_cnn_tokens=args.branch_cnn_tokens,
+        branch_token_dropout=args.branch_token_dropout,
+        detail_patch_enhancement=bool(args.detail_patch_enhancement),
+        detail_patch_dropout=args.detail_patch_dropout,
+        token_pruning=bool(args.token_pruning),
+        token_prune_layers=args.token_prune_layers,
+        token_keep_rates=args.token_keep_rates,
+        token_prune_foreground_weight=args.token_prune_foreground_weight,
+        pairwise_margin_head=bool(args.pairwise_margin_head),
+        pairwise_margin_pairs=args.pairwise_margin_pairs,
+        pairwise_margin_logit_scale=args.pairwise_margin_logit_scale,
+        pairwise_margin_dropout=args.pairwise_margin_dropout,
+        ordinal_maturity_head=bool(args.ordinal_maturity_head),
+        ordinal_maturity_classes=args.ordinal_maturity_classes,
+        ordinal_maturity_logit_scale=args.ordinal_maturity_logit_scale,
+        ordinal_maturity_dropout=args.ordinal_maturity_dropout,
         embed_dim=args.embed_dim,
         depth=args.depth,
         num_heads=args.num_heads,
@@ -880,6 +1274,8 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         use_sam=args.sam,
         sam_rho=args.sam_rho,
         sam_adaptive=args.sam_adaptive,
+        model_ema=args.model_ema,
+        model_ema_decay=args.model_ema_decay,
         label_smoothing=args.label_smoothing,
         grad_clip_norm=args.grad_clip_norm,
         max_nonfinite_grad_steps=args.max_nonfinite_grad_steps,
@@ -897,6 +1293,9 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         use_weighted_sampler=args.weighted_sampler,
         weighted_sampler_power=args.weighted_sampler_power,
         weighted_sampler_epoch_multiplier=args.weighted_sampler_epoch_multiplier,
+        balanced_epoch_sampling=not args.disable_balanced_epoch_sampling,
+        balanced_epoch_multiplier=args.balanced_epoch_multiplier,
+        balanced_epoch_tolerance=args.balanced_epoch_tolerance,
         auto_tune_imbalance=bool(args.imbalance_auto_tune and not args.disable_imbalance_auto_tune),
         imbalance_sampler_disable_threshold=args.imbalance_sampler_disable_threshold,
         max_train_batches=args.max_train_batches,
@@ -914,6 +1313,32 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         metric_learning_sources=",".join(requested_metric_sources),
         foreground_consistency_loss_weight=args.foreground_consistency_loss_weight,
         foreground_consistency_margin=args.foreground_consistency_margin,
+        attention_view_loss_weight=args.attention_view_loss_weight,
+        attention_crop_probability=args.attention_crop_probability,
+        attention_drop_probability=args.attention_drop_probability,
+        attention_view_start_epoch=args.attention_view_start_epoch,
+        attention_crop_threshold=args.attention_crop_threshold,
+        attention_drop_threshold=args.attention_drop_threshold,
+        attention_crop_padding_ratio=args.attention_crop_padding_ratio,
+        attention_crop_min_area_ratio=args.attention_crop_min_area_ratio,
+        attention_view_foreground_weight=args.attention_view_foreground_weight,
+        attention_drop_blur_kernel=args.attention_drop_blur_kernel,
+        register_diversity_loss_weight=args.register_diversity_loss_weight,
+        pairwise_margin_loss_weight=args.pairwise_margin_loss_weight,
+        ordinal_maturity_loss_weight=args.ordinal_maturity_loss_weight,
+        pretrained_distillation=bool(
+            args.pretrained_distillation or args.distillation_teacher_csv is not None
+        ),
+        distillation_teacher_checkpoint=str(args.distillation_teacher_checkpoint or ""),
+        distillation_teacher_csv=str(args.distillation_teacher_csv or ""),
+        distillation_weight=(
+            float(args.distillation_weight)
+            if args.pretrained_distillation or args.distillation_teacher_csv is not None
+            else 0.0
+        ),
+        distillation_temperature=args.distillation_temperature,
+        distillation_focus_class_index=args.distillation_focus_class_index,
+        distillation_focus_class_weight=args.distillation_focus_class_weight,
         balance_auto_max_repeat_factor=args.balance_auto_max_repeat_factor,
         fair_f1_gap_target=args.fair_f1_gap_target,
         fair_f1_gap_penalty=args.fair_f1_gap_penalty,
@@ -990,6 +1415,7 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         class_crop_margin_max_ratio=args.class_crop_margin_max_ratio,
         resize_mode=args.resize_mode,
         random_resized_crop_scale_min=args.train_scale_min,
+        random_resized_crop_probability=args.train_scale_crop_probability,
         color_jitter_brightness=args.brightness,
         color_jitter_contrast=args.contrast,
         color_jitter_saturation=args.saturation,
@@ -1002,6 +1428,16 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         vertical_flip_probability=args.vertical_flip_probability,
         rotate90_probability=args.rotate90_probability,
         lighting_probability=args.lighting_probability,
+        illumination_normalization=bool(args.illumination_normalization),
+        illumination_normalization_strength=args.illumination_normalization_strength,
+        background_suppression_mode=args.background_suppression_mode,
+        background_suppression_probability=args.background_suppression_probability,
+        background_suppression_margin=args.background_suppression_margin,
+        background_suppression_blur_radius=args.background_suppression_blur_radius,
+        local_exposure_probability=args.local_exposure_probability,
+        local_exposure_strength=args.local_exposure_strength,
+        obstacle_probability=args.obstacle_probability,
+        obstacle_max_area=args.obstacle_max_area,
         class_aware_augmentation=bool(args.class_aware_augmentation),
         class_augmentation_power=args.class_augmentation_power,
         class_augmentation_max_scale=args.class_augmentation_max_scale,
@@ -1092,44 +1528,41 @@ def apply_balance_file_auto_adjustment(
 
     balance_counts = balance_spec.class_counts(data_spec.num_classes)
     balance_ratios = balance_spec.class_ratios(data_spec.num_classes)
-    raw_repeat_factors = balance_spec.auto_repeat_factors(data_spec.num_classes)
-    cap = float(getattr(train_config, "balance_auto_max_repeat_factor", 0.0) or 0.0)
-    repeat_factors = (
-        [min(float(factor), cap) for factor in raw_repeat_factors]
-        if cap >= 1.0
-        else list(raw_repeat_factors)
+    positive_counts = [int(count) for count in balance_counts if int(count) > 0]
+    target_per_class = (
+        float(sum(positive_counts)) / float(len(positive_counts))
+        if positive_counts
+        else 0.0
     )
-    max_repeat_factor = max(repeat_factors, default=1.0)
+    sampling_factors = [
+        float(target_per_class / float(count)) if int(count) > 0 else 0.0
+        for count in balance_counts
+    ]
     min_positive_ratio = min((ratio for ratio in balance_ratios if ratio > 0.0), default=0.0)
     max_ratio = max(balance_ratios, default=0.0)
-
-    augmentation_config.class_aware_augmentation = True
-    augmentation_config.rare_class_repeat = max_repeat_factor > 1.0
-    augmentation_config.rare_class_repeat_power = 0.5
-    augmentation_config.rare_class_repeat_max_factor = max_repeat_factor
-    augmentation_config.rare_class_repeat_min_ratio = 1.0
-    augmentation_config.class_augmentation_power = 0.5
-    augmentation_config.class_augmentation_max_scale = max(1.0, max_repeat_factor)
-    augmentation_config.class_aware_photometric_augmentation = False
-    train_config.auto_tune_imbalance = True
 
     return {
         "enabled": True,
         "source": str(balance_spec.balance_yaml),
         "version_note": balance_spec.version_note,
         "total_pairs": int(balance_spec.total_pairs),
+        "count_scope": str(getattr(balance_spec, "count_scope", "all")),
         "class_counts": balance_counts,
         "class_ratios": balance_ratios,
-        "auto_repeat_factors": repeat_factors,
-        "raw_auto_repeat_factors": raw_repeat_factors,
-        "max_repeat_factor_cap": float(cap),
-        "max_repeat_factor": float(max_repeat_factor),
+        "target_samples_per_class": float(target_per_class),
+        "balanced_sampling_factors": sampling_factors,
+        "auto_repeat_factors": [1.0 for _ in balance_counts],
+        "raw_auto_repeat_factors": [1.0 for _ in balance_counts],
         "min_positive_ratio": float(min_positive_ratio),
         "max_ratio": float(max_ratio),
         "train_ratio_config": float(balance_spec.train_ratio_config),
         "val_ratio_config": float(balance_spec.val_ratio_config),
         "test_ratio_config": float(balance_spec.test_ratio_config),
-        "photometric_scaled_for_rare_classes": False,
+        "imbalance_auto_tune": bool(train_config.auto_tune_imbalance),
+        "balanced_epoch_sampling": bool(train_config.balanced_epoch_sampling),
+        "photometric_scaled_for_rare_classes": bool(
+            augmentation_config.class_aware_photometric_augmentation
+        ),
     }
 
 
@@ -1185,10 +1618,13 @@ def resolve_imbalance_strategy(
     strength = float(skew_metrics["intervention_strength"]) if train_config.auto_tune_imbalance else 1.0
     strength = min(max(strength, 0.0), 1.0)
 
-    use_weighted_sampler = bool(train_config.use_weighted_sampler)
+    use_weighted_sampler = bool(
+        train_config.use_weighted_sampler or train_config.balanced_epoch_sampling
+    )
     if (
         train_config.auto_tune_imbalance
         and not train_config.use_weighted_sampler
+        and not train_config.balanced_epoch_sampling
         and strength < float(train_config.imbalance_sampler_disable_threshold)
     ):
         use_weighted_sampler = False
@@ -1200,7 +1636,11 @@ def resolve_imbalance_strategy(
     if focal_loss_gamma < 0.1:
         focal_loss_gamma = 0.0
 
-    class_weight_blend = strength if train_config.use_class_weights else 0.0
+    class_weight_blend = (
+        0.0
+        if train_config.balanced_epoch_sampling
+        else strength if train_config.use_class_weights else 0.0
+    )
     class_weight_mode = train_config.class_weight_mode if class_weight_blend > 0.05 else "uniform"
     use_class_weights = bool(train_config.use_class_weights and class_weight_blend > 0.05)
     resolved_class_weights = (
@@ -1216,10 +1656,13 @@ def resolve_imbalance_strategy(
     )
 
     sampler_power = 1.0 + max(0.0, float(train_config.weighted_sampler_power) - 1.0) * strength
-    sampler_epoch_multiplier = 1.0 + max(
-        0.0,
-        float(train_config.weighted_sampler_epoch_multiplier) - 1.0,
-    ) * strength
+    if train_config.balanced_epoch_sampling:
+        sampler_epoch_multiplier = float(train_config.balanced_epoch_multiplier)
+    else:
+        sampler_epoch_multiplier = 1.0 + max(
+            0.0,
+            float(train_config.weighted_sampler_epoch_multiplier) - 1.0,
+        ) * strength
     ldam_margin_scale = 0.35 + 0.65 * strength
     resolved_ldam_max_margin = float(train_config.ldam_max_margin) * ldam_margin_scale if train_config.use_ldam else 0.0
 
@@ -1229,6 +1672,8 @@ def resolve_imbalance_strategy(
         "intervention_strength": strength,
         "use_weighted_sampler": use_weighted_sampler,
         "sampler_type": "strict_balanced" if use_weighted_sampler else "random",
+        "balanced_epoch_sampling": bool(train_config.balanced_epoch_sampling),
+        "balanced_epoch_tolerance": float(train_config.balanced_epoch_tolerance),
         "weighted_sampler_power": sampler_power,
         "weighted_sampler_epoch_multiplier": sampler_epoch_multiplier,
         "use_class_weights": use_class_weights,
@@ -1553,6 +1998,7 @@ def _combine_class_target_scales(
     num_classes: int,
     class_augmentation_scales: Sequence[float],
     rare_class_repeat_factors: Sequence[float],
+    raw_class_target_scales: Optional[Sequence[float]] = None,
 ) -> List[float]:
     combined: List[float] = []
     for class_index in range(max(0, int(num_classes))):
@@ -1566,7 +2012,12 @@ def _combine_class_target_scales(
             if class_index < len(rare_class_repeat_factors)
             else 1.0
         )
-        combined.append(max(1.0, augmentation_scale, repeat_factor))
+        raw_factor = (
+            float(raw_class_target_scales[class_index])
+            if raw_class_target_scales is not None and class_index < len(raw_class_target_scales)
+            else 1.0
+        )
+        combined.append(max(1.0, augmentation_scale, repeat_factor, raw_factor))
     return combined
 
 
@@ -1716,12 +2167,13 @@ def _load_training_checkpoint(
     if "model_state" not in checkpoint:
         raise ValueError(f"Checkpoint resume thieu model_state: {resume_path}")
 
+    resume_model_state = checkpoint.get("train_model_state", checkpoint["model_state"])
     try:
-        load_model_state(model, checkpoint["model_state"], strict=True)
+        load_model_state(model, resume_model_state, strict=True)
     except RuntimeError:
         if not allow_added_detection_heads:
             raise
-        missing_keys, unexpected_keys = load_model_state(model, checkpoint["model_state"], strict=False)
+        missing_keys, unexpected_keys = load_model_state(model, resume_model_state, strict=False)
         allowed_missing_prefixes = (
             "quality_head.",
             "cnn_fusion_norm.",
@@ -1858,6 +2310,7 @@ def _save_interrupt_checkpoint(
     best_selection_metric_higher_is_better: bool,
     epochs_without_improvement: int,
     stage1_auto_advance_epoch: Optional[int] = None,
+    model_ema: Optional[ModelEMA] = None,
 ) -> Dict[str, object]:
     checkpoint = {
         "epoch": int(epoch),
@@ -1890,6 +2343,11 @@ def _save_interrupt_checkpoint(
             "next_epoch": int(epoch) + 1,
         },
     }
+    if model_ema is not None:
+        checkpoint["ema_model_state"] = model_ema.state_dict()
+        checkpoint["ema_updates"] = int(model_ema.updates)
+        checkpoint["ema_decay"] = float(model_ema.decay)
+        checkpoint["validation_weight_source"] = "ema"
     save_checkpoint(path, checkpoint)
     return checkpoint
 
@@ -1976,13 +2434,7 @@ def _forward_model_outputs(
 
 
 def _classification_logits_from_features(model: nn.Module, features: Dict[str, Tensor]) -> Tensor:
-    logits = model.head(extract_head_input_from_features(model, features))
-    fusion_head = getattr(model, "cnn_fusion_head", None)
-    if fusion_head is not None and "cnn_pooled" in features:
-        cnn_features = model.cnn_fusion_norm(features["cnn_pooled"])
-        cnn_features = model.cnn_fusion_dropout(cnn_features)
-        logits = logits + fusion_head(cnn_features)
-    return logits
+    return classification_logits_from_features(model, features)
 
 
 def _classification_target_indices(targets, logits: Tensor) -> Optional[Tensor]:
@@ -2091,18 +2543,71 @@ def _pseudo_foreground_mask_from_normalized_images(
     )
     foreground_score = color_delta + intensity_delta + 0.5 * edge_delta
     threshold = float(max(0.0, margin))
-    mask = foreground_score > threshold
+
+    red, green, blue = rgb[:, 0], rgb[:, 1], rgb[:, 2]
+    max_channel, max_index = rgb.max(dim=1)
+    min_channel, _ = rgb.min(dim=1)
+    delta = max_channel - min_channel
+    eps = 1e-6
+    hue_red = torch.remainder((green - blue) / delta.clamp(min=eps), 6.0)
+    hue_green = ((blue - red) / delta.clamp(min=eps)) + 2.0
+    hue_blue = ((red - green) / delta.clamp(min=eps)) + 4.0
+    hue = torch.where(
+        max_index == 0,
+        hue_red,
+        torch.where(max_index == 1, hue_green, hue_blue),
+    )
+    hue = torch.where(delta > eps, hue / 6.0, torch.zeros_like(hue))
+    saturation = torch.where(max_channel > eps, delta / max_channel.clamp(min=eps), torch.zeros_like(max_channel))
+    fill_distance = (rgb - mean).abs().mean(dim=1, keepdim=True)
+    not_padding = ~((fill_distance < 0.035) & (edge_delta < 0.025))
+
     height, width = int(images.size(-2)), int(images.size(-1))
     y = torch.linspace(-1.0, 1.0, height, device=device, dtype=dtype).view(1, 1, height, 1)
     x = torch.linspace(-1.0, 1.0, width, device=device, dtype=dtype).view(1, 1, 1, width)
-    central_ellipse = ((x / 0.82).pow(2) + (y / 0.92).pow(2)) <= 1.0
-    mask = mask | central_ellipse
+    central_ellipse = ((x / 0.92).pow(2) + (y / 0.96).pow(2)) <= 1.0
+
+    green_yellow = (
+        (hue >= 0.08)
+        & (hue <= 0.45)
+        & (saturation >= 0.07)
+        & (max_channel >= 0.12)
+    ).unsqueeze(1)
+    brown_or_orange = (
+        (hue >= 0.035)
+        & (hue <= 0.17)
+        & (saturation >= 0.10)
+        & (max_channel >= 0.10)
+    ).unsqueeze(1)
+    dark_defect = (
+        (max_channel <= 0.45)
+        & (saturation >= 0.08)
+        & (foreground_score.squeeze(1) > max(0.02, threshold * 0.35))
+    ).unsqueeze(1)
+    detail_center = central_ellipse & (foreground_score > max(0.035, threshold))
+    mask = not_padding & (green_yellow | brown_or_orange | dark_defect | detail_center)
+    area = mask.flatten(1).float().mean(dim=1)
+    if bool((area > 0.92).any().item()):
+        tightened = not_padding & (
+            green_yellow
+            | brown_or_orange
+            | dark_defect
+            | (central_ellipse & (foreground_score > max(0.05, threshold * 1.25)))
+        )
+        mask = torch.where((area > 0.92).view(batch_size, 1, 1, 1), tightened, mask)
+
+    mask_float = mask.to(dtype=torch.float32)
+    mask_float = F.max_pool2d(mask_float, kernel_size=5, stride=1, padding=2)
+    mask_float = -F.max_pool2d(-mask_float, kernel_size=5, stride=1, padding=2)
+    mask = mask_float > 0.5
 
     # If a crop is almost uniform, keep a central ellipse instead of returning an empty mask.
     area = mask.flatten(1).float().mean(dim=1)
     if bool((area < 0.08).any().item()):
-        ellipse = ((x / 0.78).pow(2) + (y / 0.90).pow(2)) <= 1.0
-        mask = torch.where((area < 0.08).view(batch_size, 1, 1, 1), ellipse, mask)
+        fallback = not_padding & central_ellipse
+        fallback_area = fallback.flatten(1).float().mean(dim=1)
+        fallback = torch.where((fallback_area >= 0.03).view(batch_size, 1, 1, 1), fallback, not_padding)
+        mask = torch.where((area < 0.08).view(batch_size, 1, 1, 1), fallback, mask)
     return mask.to(dtype=torch.float32)
 
 
@@ -2120,13 +2625,18 @@ def _foreground_consistency_loss_from_features(
         grid_side = int(round(math.sqrt(float(patches.size(1)))))
         grid_size = (grid_side, grid_side)
     grid_h, grid_w = int(grid_size[0]), int(grid_size[1])
-    if grid_h <= 0 or grid_w <= 0 or grid_h * grid_w != int(patches.size(1)):
+    if grid_h <= 0 or grid_w <= 0:
         return patches.sum() * 0.0
 
     with torch.no_grad():
         foreground = _pseudo_foreground_mask_from_normalized_images(images.detach(), margin=margin)
         patch_mask = F.interpolate(foreground, size=(grid_h, grid_w), mode="area")
         patch_mask = patch_mask.flatten(1).clamp(0.0, 1.0)
+        patch_indices = features.get("patch_indices")
+        if torch.is_tensor(patch_indices) and patch_indices.ndim == 2:
+            patch_mask = patch_mask.gather(1, patch_indices.to(device=patch_mask.device, dtype=torch.long))
+        elif grid_h * grid_w != int(patches.size(1)):
+            return patches.sum() * 0.0
         background_mask = 1.0 - patch_mask
 
     patch_energy = patches.float().pow(2).mean(dim=-1)
@@ -2137,6 +2647,544 @@ def _foreground_consistency_loss_from_features(
     if not bool(valid.any().item()):
         return patches.sum() * 0.0
     return background_energy[valid].mean().to(dtype=patches.dtype)
+
+
+def _normalize_attention_scores(scores: Tensor) -> Tensor:
+    flattened = scores.flatten(1)
+    minimum = flattened.amin(dim=1, keepdim=True)
+    maximum = flattened.amax(dim=1, keepdim=True)
+    normalized = (flattened - minimum) / (maximum - minimum).clamp(min=1e-6)
+    return normalized.view_as(scores)
+
+
+def _attention_guided_score_map(
+    *,
+    images: Tensor,
+    features: Dict[str, Tensor],
+    foreground_weight: float,
+) -> Tensor:
+    patches = features.get("patches")
+    grid_size = features.get("grid_size")
+    if (
+        not torch.is_tensor(patches)
+        or patches.ndim != 3
+        or not isinstance(grid_size, tuple)
+        or len(grid_size) != 2
+    ):
+        return _pseudo_foreground_mask_from_normalized_images(images.detach())
+
+    grid_h, grid_w = int(grid_size[0]), int(grid_size[1])
+    original_patch_count = grid_h * grid_w
+    if original_patch_count <= 0:
+        return _pseudo_foreground_mask_from_normalized_images(images.detach())
+
+    learned_scores = features.get("fine_grained_attention")
+    if not torch.is_tensor(learned_scores) or learned_scores.shape[:2] != patches.shape[:2]:
+        learned_scores = patches.detach().float().norm(dim=-1)
+    else:
+        learned_scores = learned_scores.detach().float()
+    learned_scores = _normalize_attention_scores(learned_scores)
+
+    patch_indices = features.get("patch_indices")
+    if (
+        torch.is_tensor(patch_indices)
+        and patch_indices.ndim == 2
+        and patch_indices.shape == learned_scores.shape
+    ):
+        spatial_scores = learned_scores.new_zeros(
+            (learned_scores.size(0), original_patch_count)
+        )
+        spatial_scores.scatter_(
+            1,
+            patch_indices.detach().to(device=learned_scores.device, dtype=torch.long),
+            learned_scores,
+        )
+    elif learned_scores.size(1) == original_patch_count:
+        spatial_scores = learned_scores
+    else:
+        return _pseudo_foreground_mask_from_normalized_images(images.detach())
+
+    foreground_prior = features.get("foreground_prior")
+    if (
+        torch.is_tensor(foreground_prior)
+        and foreground_prior.ndim == 2
+        and foreground_prior.shape == spatial_scores.shape
+        and bool((foreground_prior.detach().abs().sum() > 0).item())
+    ):
+        foreground_scores = foreground_prior.detach().float()
+    else:
+        pseudo_foreground = _pseudo_foreground_mask_from_normalized_images(images.detach())
+        foreground_scores = F.interpolate(
+            pseudo_foreground,
+            size=(grid_h, grid_w),
+            mode="area",
+        ).flatten(1)
+
+    foreground_weight = float(min(1.0, max(0.0, foreground_weight)))
+    combined = (
+        (1.0 - foreground_weight) * _normalize_attention_scores(spatial_scores)
+        + foreground_weight * _normalize_attention_scores(foreground_scores)
+    )
+    combined = combined.view(images.size(0), 1, grid_h, grid_w)
+    combined = F.interpolate(
+        combined,
+        size=images.shape[-2:],
+        mode="bilinear",
+        align_corners=False,
+    )
+    return _normalize_attention_scores(combined).clamp(0.0, 1.0)
+
+
+def _attention_crop_single(
+    image: Tensor,
+    score_map: Tensor,
+    *,
+    threshold: float,
+    padding_ratio: float,
+    min_area_ratio: float,
+) -> Tensor:
+    height, width = int(image.size(-2)), int(image.size(-1))
+    score = score_map.squeeze()
+    cutoff = float(threshold) * float(score.max().item())
+    mask = score >= cutoff
+    nonzero = torch.nonzero(mask, as_tuple=False)
+    if nonzero.numel() == 0:
+        flat_index = int(score.argmax().item())
+        center_y, center_x = divmod(flat_index, width)
+        y1 = y2 = center_y
+        x1 = x2 = center_x
+    else:
+        y1 = int(nonzero[:, 0].min().item())
+        y2 = int(nonzero[:, 0].max().item())
+        x1 = int(nonzero[:, 1].min().item())
+        x2 = int(nonzero[:, 1].max().item())
+
+    pad_y = int(round(float(padding_ratio) * height))
+    pad_x = int(round(float(padding_ratio) * width))
+    y1, y2 = max(0, y1 - pad_y), min(height - 1, y2 + pad_y)
+    x1, x2 = max(0, x1 - pad_x), min(width - 1, x2 + pad_x)
+
+    min_scale = math.sqrt(float(min(1.0, max(1e-4, min_area_ratio))))
+    min_height = max(1, int(math.ceil(height * min_scale)))
+    min_width = max(1, int(math.ceil(width * min_scale)))
+    center_y = (y1 + y2) // 2
+    center_x = (x1 + x2) // 2
+    if y2 - y1 + 1 < min_height:
+        y1 = center_y - min_height // 2
+        y2 = y1 + min_height - 1
+    if x2 - x1 + 1 < min_width:
+        x1 = center_x - min_width // 2
+        x2 = x1 + min_width - 1
+    if y1 < 0:
+        y2 -= y1
+        y1 = 0
+    if x1 < 0:
+        x2 -= x1
+        x1 = 0
+    if y2 >= height:
+        y1 -= y2 - height + 1
+        y2 = height - 1
+    if x2 >= width:
+        x1 -= x2 - width + 1
+        x2 = width - 1
+    y1, x1 = max(0, y1), max(0, x1)
+
+    crop = image[:, y1 : y2 + 1, x1 : x2 + 1].unsqueeze(0)
+    return F.interpolate(
+        crop,
+        size=(height, width),
+        mode="bilinear",
+        align_corners=False,
+    ).squeeze(0)
+
+
+def _build_attention_guided_views(
+    *,
+    images: Tensor,
+    features: Dict[str, Tensor],
+    crop_probability: float,
+    drop_probability: float,
+    crop_threshold: float,
+    drop_threshold: float,
+    crop_padding_ratio: float,
+    crop_min_area_ratio: float,
+    foreground_weight: float,
+    drop_blur_kernel: int,
+) -> Tuple[Optional[Tensor], Tensor, Dict[str, float]]:
+    batch_size = int(images.size(0))
+    empty_indices = torch.zeros((0,), device=images.device, dtype=torch.long)
+    if batch_size == 0 or crop_probability + drop_probability <= 0.0:
+        return None, empty_indices, {
+            "attention_view_fraction": 0.0,
+            "attention_crop_fraction": 0.0,
+            "attention_drop_fraction": 0.0,
+        }
+
+    with torch.no_grad():
+        score_maps = _attention_guided_score_map(
+            images=images,
+            features=features,
+            foreground_weight=foreground_weight,
+        )
+        draws = torch.rand((batch_size,), device=images.device)
+        crop_mask = draws < float(crop_probability)
+        drop_mask = (
+            (draws >= float(crop_probability))
+            & (draws < float(crop_probability + drop_probability))
+        )
+        selected = crop_mask | drop_mask
+        selected_indices = torch.nonzero(selected, as_tuple=False).flatten()
+        if selected_indices.numel() == 0:
+            return None, empty_indices, {
+                "attention_view_fraction": 0.0,
+                "attention_crop_fraction": 0.0,
+                "attention_drop_fraction": 0.0,
+            }
+
+        blur_kernel = max(1, int(drop_blur_kernel))
+        blurred = F.avg_pool2d(
+            images,
+            kernel_size=blur_kernel,
+            stride=1,
+            padding=blur_kernel // 2,
+        )
+        views: List[Tensor] = []
+        for sample_index in selected_indices.tolist():
+            if bool(crop_mask[sample_index].item()):
+                view = _attention_crop_single(
+                    images[sample_index],
+                    score_maps[sample_index],
+                    threshold=crop_threshold,
+                    padding_ratio=crop_padding_ratio,
+                    min_area_ratio=crop_min_area_ratio,
+                )
+            else:
+                score = score_maps[sample_index : sample_index + 1]
+                cutoff = float(drop_threshold) * float(score.max().item())
+                salient = (score >= cutoff).to(dtype=images.dtype)
+                salient = F.max_pool2d(salient, kernel_size=5, stride=1, padding=2)
+                view = (
+                    images[sample_index : sample_index + 1] * (1.0 - salient)
+                    + blurred[sample_index : sample_index + 1] * salient
+                ).squeeze(0)
+            views.append(view)
+
+        return torch.stack(views, dim=0), selected_indices, {
+            "attention_view_fraction": float(selected.float().mean().item()),
+            "attention_crop_fraction": float(crop_mask.float().mean().item()),
+            "attention_drop_fraction": float(drop_mask.float().mean().item()),
+        }
+
+
+def _register_diversity_loss_from_features(features: Dict[str, Tensor]) -> Tensor:
+    registers = features.get("registers")
+    if not torch.is_tensor(registers) or registers.ndim != 3 or registers.size(1) < 2:
+        reference = next(
+            (value for value in features.values() if torch.is_tensor(value)),
+            None,
+        )
+        if reference is None:
+            return torch.tensor(0.0)
+        return reference.sum() * 0.0
+
+    normalized = F.normalize(registers.float(), dim=-1, eps=1e-6)
+    similarity = torch.matmul(normalized, normalized.transpose(1, 2))
+    register_count = int(registers.size(1))
+    off_diagonal = ~torch.eye(
+        register_count,
+        device=registers.device,
+        dtype=torch.bool,
+    ).unsqueeze(0)
+    loss = similarity.square().masked_select(off_diagonal.expand_as(similarity)).mean()
+    return loss.to(dtype=registers.dtype)
+
+
+def _pairwise_margin_loss_from_features(
+    *,
+    model: nn.Module,
+    features: Dict[str, Tensor],
+    targets: Tensor,
+) -> Tensor:
+    pairwise_logits = features.get("pairwise_margin_logits")
+    pairs = getattr(model, "pairwise_margin_pairs", [])
+    if not torch.is_tensor(pairwise_logits) or pairwise_logits.ndim != 2 or not pairs:
+        reference = next((value for value in features.values() if torch.is_tensor(value)), targets)
+        return reference.sum() * 0.0
+    target_indices = targets.to(device=pairwise_logits.device, dtype=torch.long).view(-1)
+    losses: List[Tensor] = []
+    for pair_index, pair in enumerate(pairs):
+        if pair_index >= int(pairwise_logits.size(1)):
+            break
+        left_class, right_class = [int(value) for value in pair]
+        logits = pairwise_logits[:, pair_index].float()
+        if left_class < 0:
+            if right_class < 0:
+                continue
+            binary_targets = (target_indices == right_class).to(dtype=logits.dtype)
+            losses.append(F.binary_cross_entropy_with_logits(logits, binary_targets))
+            continue
+        pair_mask = (target_indices == left_class) | (target_indices == right_class)
+        if not bool(pair_mask.any().item()):
+            continue
+        binary_targets = (target_indices[pair_mask] == right_class).to(dtype=logits.dtype)
+        losses.append(F.binary_cross_entropy_with_logits(logits[pair_mask], binary_targets))
+    if not losses:
+        return pairwise_logits.sum() * 0.0
+    return torch.stack(losses).mean().to(dtype=pairwise_logits.dtype)
+
+
+def _ordinal_maturity_loss_from_features(
+    *,
+    model: nn.Module,
+    features: Dict[str, Tensor],
+    targets: Tensor,
+) -> Tensor:
+    maturity_score = features.get("ordinal_maturity_score")
+    maturity_classes = [
+        int(value)
+        for value in getattr(model, "ordinal_maturity_classes", [])
+    ]
+    if (
+        not torch.is_tensor(maturity_score)
+        or maturity_score.ndim != 2
+        or maturity_score.size(1) != 1
+        or len(maturity_classes) < 2
+    ):
+        reference = next((value for value in features.values() if torch.is_tensor(value)), targets)
+        return reference.sum() * 0.0
+
+    target_indices = targets.to(device=maturity_score.device, dtype=torch.long).view(-1)
+    valid = torch.zeros_like(target_indices, dtype=torch.bool)
+    target_scores = torch.zeros_like(target_indices, dtype=torch.float32)
+    centered_ranks = torch.arange(
+        len(maturity_classes),
+        device=maturity_score.device,
+        dtype=torch.float32,
+    )
+    centered_ranks = centered_ranks - centered_ranks.mean()
+    for rank, class_index in enumerate(maturity_classes):
+        class_mask = target_indices == int(class_index)
+        valid = valid | class_mask
+        target_scores[class_mask] = centered_ranks[rank]
+    if not bool(valid.any().item()):
+        return maturity_score.sum() * 0.0
+
+    predicted = maturity_score[:, 0].float()[valid]
+    expected = target_scores[valid]
+    return F.smooth_l1_loss(predicted, expected).to(dtype=maturity_score.dtype)
+
+
+def _build_pretrained_distillation_teacher(
+    *,
+    checkpoint_path: Path,
+    target_class_names: Sequence[str],
+    device: torch.device,
+) -> Tuple[nn.Module, Tensor, Dict[str, object]]:
+    try:
+        import timm
+    except ImportError as exc:  # pragma: no cover - environment dependent.
+        raise RuntimeError(
+            "Pretrained distillation teacher yeu cau package timm."
+        ) from exc
+
+    checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+    if not isinstance(checkpoint, dict):
+        raise ValueError(f"Teacher checkpoint khong hop le: {checkpoint_path}")
+    teacher_args = checkpoint.get("args", {})
+    teacher_classes = [str(value) for value in checkpoint.get("classes", [])]
+    teacher_model_name = str(
+        teacher_args.get("model", "")
+        if isinstance(teacher_args, dict)
+        else ""
+    ).strip()
+    teacher_state = checkpoint.get("model")
+    if not teacher_model_name or not isinstance(teacher_state, dict):
+        raise ValueError(
+            "Teacher checkpoint phai co args.model va model state theo format baseline TIMM."
+        )
+    missing_classes = sorted(set(target_class_names) - set(teacher_classes))
+    if missing_classes or len(teacher_classes) != len(target_class_names):
+        raise ValueError(
+            "Teacher class names khong khop dataset: "
+            f"teacher={teacher_classes} target={list(target_class_names)}"
+        )
+
+    teacher = timm.create_model(
+        teacher_model_name,
+        pretrained=False,
+        num_classes=len(teacher_classes),
+    )
+    teacher.load_state_dict(teacher_state, strict=True)
+    teacher_total_parameters = sum(
+        int(parameter.numel()) for parameter in teacher.parameters()
+    )
+    teacher.eval().requires_grad_(False).to(device)
+    target_to_teacher = torch.tensor(
+        [teacher_classes.index(str(class_name)) for class_name in target_class_names],
+        dtype=torch.long,
+        device=device,
+    )
+    summary = {
+        "enabled": True,
+        "checkpoint": str(Path(checkpoint_path).resolve()),
+        "model": teacher_model_name,
+        "teacher_classes": teacher_classes,
+        "target_classes": list(target_class_names),
+        "target_to_teacher_indices": target_to_teacher.detach().cpu().tolist(),
+        "parameter_count": teacher_total_parameters,
+        "trainable_parameters": sum(
+            int(parameter.numel())
+            for parameter in teacher.parameters()
+            if parameter.requires_grad
+        ),
+    }
+    return teacher, target_to_teacher, summary
+
+
+def _load_offline_distillation_probabilities(
+    *,
+    csv_path: Path,
+    num_classes: int,
+    class_names: Sequence[str],
+) -> Tuple[Dict[str, List[float]], Dict[str, object]]:
+    csv_path = Path(csv_path)
+    if not csv_path.is_file():
+        raise FileNotFoundError(f"Khong tim thay teacher probability CSV: {csv_path}")
+    probabilities_by_path: Dict[str, List[float]] = {}
+    confidence_sum = 0.0
+    pred_counts = [0 for _ in range(max(1, int(num_classes)))]
+    duplicate_count = 0
+    with csv_path.open("r", newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        if reader.fieldnames is None:
+            raise ValueError(f"Teacher probability CSV rong: {csv_path}")
+        required = {"path", *[f"prob_{index}" for index in range(int(num_classes))]}
+        missing = required.difference(reader.fieldnames)
+        if missing:
+            raise ValueError(
+                f"Teacher probability CSV thieu cot {sorted(missing)}: {csv_path}"
+            )
+        for row in reader:
+            path_text = str(row.get("path", "") or "").strip()
+            if not path_text:
+                continue
+            values = [float(row[f"prob_{index}"]) for index in range(int(num_classes))]
+            probabilities = torch.tensor(values, dtype=torch.float32).clamp(min=0.0)
+            total = probabilities.sum().clamp(min=1e-12)
+            probabilities = probabilities / total
+            if not torch.isfinite(probabilities).all():
+                raise ValueError(f"Teacher probability CSV co prob khong huu han: {path_text}")
+            key = str(Path(path_text).resolve()).lower()
+            if key in probabilities_by_path:
+                duplicate_count += 1
+            probability_values = [float(value) for value in probabilities.tolist()]
+            probabilities_by_path[key] = probability_values
+            pred_index = int(probabilities.argmax().item())
+            if 0 <= pred_index < len(pred_counts):
+                pred_counts[pred_index] += 1
+            confidence_sum += float(probabilities.max().item())
+    if not probabilities_by_path:
+        raise ValueError(f"Teacher probability CSV khong co dong hop le: {csv_path}")
+    sample_count = len(probabilities_by_path)
+    summary = {
+        "enabled": True,
+        "csv": str(csv_path.resolve()),
+        "samples": sample_count,
+        "duplicate_rows": duplicate_count,
+        "num_classes": int(num_classes),
+        "class_names": list(class_names),
+        "mean_confidence": float(confidence_sum / max(1, sample_count)),
+        "predicted_class_counts": pred_counts,
+    }
+    return probabilities_by_path, summary
+
+
+def _distillation_loss(
+    *,
+    student_logits: Tensor,
+    teacher_logits: Tensor,
+    targets,
+    temperature: float,
+    focus_class_index: int,
+    focus_class_weight: float,
+) -> Tensor:
+    temperature = max(1e-4, float(temperature))
+    teacher_probabilities = F.softmax(
+        teacher_logits.float() / temperature,
+        dim=1,
+    )
+    student_log_probabilities = F.log_softmax(
+        student_logits.float() / temperature,
+        dim=1,
+    )
+    teacher_log_probabilities = torch.log(
+        teacher_probabilities.clamp(min=1e-8)
+    )
+    per_sample = (
+        teacher_probabilities
+        * (teacher_log_probabilities - student_log_probabilities)
+    ).sum(dim=1)
+    target_indices = _classification_target_indices(targets, student_logits)
+    if (
+        target_indices is not None
+        and 0 <= int(focus_class_index) < int(student_logits.size(1))
+        and float(focus_class_weight) != 1.0
+    ):
+        sample_weights = torch.ones_like(per_sample)
+        sample_weights[target_indices == int(focus_class_index)] = float(
+            focus_class_weight
+        )
+        per_sample = per_sample * sample_weights
+        loss = per_sample.sum() / sample_weights.sum().clamp(min=1.0)
+    else:
+        loss = per_sample.mean()
+    return loss.to(dtype=student_logits.dtype) * (temperature * temperature)
+
+
+def _probability_distillation_loss(
+    *,
+    student_logits: Tensor,
+    teacher_probabilities: Tensor,
+    targets,
+    temperature: float,
+    focus_class_index: int,
+    focus_class_weight: float,
+) -> Tensor:
+    temperature = max(1e-4, float(temperature))
+    teacher_probabilities = teacher_probabilities.to(
+        device=student_logits.device,
+        dtype=torch.float32,
+    ).clamp(min=0.0)
+    teacher_probabilities = teacher_probabilities / teacher_probabilities.sum(
+        dim=1,
+        keepdim=True,
+    ).clamp(min=1e-12)
+    student_log_probabilities = F.log_softmax(
+        student_logits.float() / temperature,
+        dim=1,
+    )
+    teacher_log_probabilities = torch.log(
+        teacher_probabilities.clamp(min=1e-8)
+    )
+    per_sample = (
+        teacher_probabilities
+        * (teacher_log_probabilities - student_log_probabilities)
+    ).sum(dim=1)
+    target_indices = _classification_target_indices(targets, student_logits)
+    if (
+        target_indices is not None
+        and 0 <= int(focus_class_index) < int(student_logits.size(1))
+        and float(focus_class_weight) != 1.0
+    ):
+        sample_weights = torch.ones_like(per_sample)
+        sample_weights[target_indices == int(focus_class_index)] = float(
+            focus_class_weight
+        )
+        per_sample = per_sample * sample_weights
+        loss = per_sample.sum() / sample_weights.sum().clamp(min=1.0)
+    else:
+        loss = per_sample.mean()
+    return loss.to(dtype=student_logits.dtype) * (temperature * temperature)
 
 
 def _stack_image_masks_from_targets(targets) -> Optional[Tensor]:
@@ -2167,6 +3215,27 @@ def _forward_train_loss(
     metric_learning_sources: Union[str, Sequence[str]] = "head",
     foreground_consistency_loss_weight: float = 0.0,
     foreground_consistency_margin: float = 0.08,
+    attention_view_loss_weight: float = 0.0,
+    attention_crop_probability: float = 0.50,
+    attention_drop_probability: float = 0.25,
+    attention_view_start_epoch: int = 2,
+    attention_crop_threshold: float = 0.55,
+    attention_drop_threshold: float = 0.70,
+    attention_crop_padding_ratio: float = 0.08,
+    attention_crop_min_area_ratio: float = 0.20,
+    attention_view_foreground_weight: float = 0.35,
+    attention_drop_blur_kernel: int = 15,
+    epoch_index: int = 0,
+    register_diversity_loss_weight: float = 0.0,
+    pairwise_margin_loss_weight: float = 0.0,
+    ordinal_maturity_loss_weight: float = 0.0,
+    distillation_teacher: Optional[nn.Module] = None,
+    distillation_class_indices: Optional[Tensor] = None,
+    distillation_loss_weight: float = 0.0,
+    distillation_temperature: float = 2.0,
+    distillation_focus_class_index: int = 1,
+    distillation_focus_class_weight: float = 1.0,
+    offline_teacher_probabilities: Optional[Tensor] = None,
 ) -> Tuple[Tensor, Optional[Dict[str, Tensor]], Tensor, Dict[str, float], Optional[Tensor]]:
     with autocast_context(device, amp):
         image_valid_mask = _stack_image_masks_from_targets(targets)
@@ -2178,6 +3247,16 @@ def _forward_train_loss(
             loss = criterion(logits, targets)
             metric_learning_loss = logits.sum() * 0.0
             foreground_consistency_loss = logits.sum() * 0.0
+            attention_view_loss = logits.sum() * 0.0
+            attention_view_stats = {
+                "attention_view_fraction": 0.0,
+                "attention_crop_fraction": 0.0,
+                "attention_drop_fraction": 0.0,
+            }
+            register_diversity_loss = logits.sum() * 0.0
+            pairwise_margin_loss = logits.sum() * 0.0
+            ordinal_maturity_loss = logits.sum() * 0.0
+            distillation_loss = logits.sum() * 0.0
             if (
                 metric_learning_criterion is not None
                 and float(metric_learning_loss_weight) > 0.0
@@ -2200,6 +3279,100 @@ def _forward_train_loss(
                     margin=foreground_consistency_margin,
                 )
                 loss = loss + float(foreground_consistency_loss_weight) * foreground_consistency_loss
+            if (
+                features is not None
+                and torch.is_tensor(targets)
+                and float(attention_view_loss_weight) > 0.0
+                and int(epoch_index) >= int(attention_view_start_epoch)
+            ):
+                attention_views, selected_indices, attention_view_stats = (
+                    _build_attention_guided_views(
+                        images=images,
+                        features=features,
+                        crop_probability=attention_crop_probability,
+                        drop_probability=attention_drop_probability,
+                        crop_threshold=attention_crop_threshold,
+                        drop_threshold=attention_drop_threshold,
+                        crop_padding_ratio=attention_crop_padding_ratio,
+                        crop_min_area_ratio=attention_crop_min_area_ratio,
+                        foreground_weight=attention_view_foreground_weight,
+                        drop_blur_kernel=attention_drop_blur_kernel,
+                    )
+                )
+                if attention_views is not None and selected_indices.numel() > 0:
+                    _, attention_outputs = _forward_model_outputs(
+                        model,
+                        attention_views,
+                        image_valid_mask=None,
+                    )
+                    attention_logits, _ = extract_bbox_from_model_output(attention_outputs)
+                    attention_targets = targets.index_select(
+                        0,
+                        selected_indices.to(device=targets.device),
+                    )
+                    attention_view_loss = criterion(attention_logits, attention_targets)
+                    loss = loss + float(attention_view_loss_weight) * attention_view_loss
+            if features is not None and float(register_diversity_loss_weight) > 0.0:
+                register_diversity_loss = _register_diversity_loss_from_features(features)
+                loss = loss + float(register_diversity_loss_weight) * register_diversity_loss
+            if features is not None and float(pairwise_margin_loss_weight) > 0.0:
+                target_indices = _classification_target_indices(targets, logits)
+                if target_indices is not None:
+                    pairwise_margin_loss = _pairwise_margin_loss_from_features(
+                        model=model,
+                        features=features,
+                        targets=target_indices,
+                    )
+                    loss = loss + float(pairwise_margin_loss_weight) * pairwise_margin_loss
+            if features is not None and float(ordinal_maturity_loss_weight) > 0.0:
+                target_indices = _classification_target_indices(targets, logits)
+                if target_indices is not None:
+                    ordinal_maturity_loss = _ordinal_maturity_loss_from_features(
+                        model=model,
+                        features=features,
+                        targets=target_indices,
+                    )
+                    loss = loss + float(ordinal_maturity_loss_weight) * ordinal_maturity_loss
+            if (
+                distillation_teacher is not None
+                and distillation_class_indices is not None
+                and float(distillation_loss_weight) > 0.0
+            ):
+                with torch.no_grad():
+                    teacher_logits = distillation_teacher(images)
+                    if isinstance(teacher_logits, (tuple, list)):
+                        teacher_logits = teacher_logits[0]
+                    if isinstance(teacher_logits, dict):
+                        teacher_logits = teacher_logits.get("logits")
+                    if not torch.is_tensor(teacher_logits) or teacher_logits.ndim != 2:
+                        raise ValueError("Teacher phai tra ve classification logits [B, C].")
+                    teacher_logits = teacher_logits.index_select(
+                        1,
+                        distillation_class_indices,
+                    )
+                distillation_loss = _distillation_loss(
+                    student_logits=logits,
+                    teacher_logits=teacher_logits,
+                    targets=targets,
+                    temperature=distillation_temperature,
+                    focus_class_index=distillation_focus_class_index,
+                    focus_class_weight=distillation_focus_class_weight,
+                )
+                loss = loss + float(distillation_loss_weight) * distillation_loss
+            if (
+                offline_teacher_probabilities is not None
+                and float(distillation_loss_weight) > 0.0
+            ):
+                offline_distillation_loss = _probability_distillation_loss(
+                    student_logits=logits,
+                    teacher_probabilities=offline_teacher_probabilities,
+                    targets=targets,
+                    temperature=distillation_temperature,
+                    focus_class_index=distillation_focus_class_index,
+                    focus_class_weight=distillation_focus_class_weight,
+                )
+                distillation_loss = distillation_loss + offline_distillation_loss
+                loss = loss + float(distillation_loss_weight) * offline_distillation_loss
             loss_details = {
                 "loss": float(loss.detach().cpu().item()),
                 "cls_loss": float(
@@ -2207,6 +3380,11 @@ def _forward_train_loss(
                         loss
                         - float(metric_learning_loss_weight) * metric_learning_loss
                         - float(foreground_consistency_loss_weight) * foreground_consistency_loss
+                        - float(attention_view_loss_weight) * attention_view_loss
+                        - float(register_diversity_loss_weight) * register_diversity_loss
+                        - float(pairwise_margin_loss_weight) * pairwise_margin_loss
+                        - float(ordinal_maturity_loss_weight) * ordinal_maturity_loss
+                        - float(distillation_loss_weight) * distillation_loss
                     )
                     .detach()
                     .cpu()
@@ -2214,6 +3392,12 @@ def _forward_train_loss(
                 ),
                 "metric_learning_loss": float(metric_learning_loss.detach().cpu().item()),
                 "foreground_consistency_loss": float(foreground_consistency_loss.detach().cpu().item()),
+                "attention_view_loss": float(attention_view_loss.detach().cpu().item()),
+                **attention_view_stats,
+                "register_diversity_loss": float(register_diversity_loss.detach().cpu().item()),
+                "pairwise_margin_loss": float(pairwise_margin_loss.detach().cpu().item()),
+                "ordinal_maturity_loss": float(ordinal_maturity_loss.detach().cpu().item()),
+                "distillation_loss": float(distillation_loss.detach().cpu().item()),
                 "objectness_loss": 0.0,
                 "bbox_l1_loss": 0.0,
                 "bbox_giou_loss": 0.0,
@@ -2312,6 +3496,39 @@ def _raise_if_nonfinite_gradient_streak_exceeded(
     )
 
 
+class ModelEMA:
+    def __init__(
+        self,
+        model: nn.Module,
+        *,
+        decay: float,
+        updates: int = 0,
+    ) -> None:
+        self.module = copy.deepcopy(model).eval()
+        self.module.requires_grad_(False)
+        self.decay = float(decay)
+        self.updates = max(0, int(updates))
+
+    @torch.no_grad()
+    def update(self, model: nn.Module) -> None:
+        self.updates += 1
+        warmup_decay = (1.0 + float(self.updates)) / (10.0 + float(self.updates))
+        decay = min(self.decay, warmup_decay)
+        model_state = model.state_dict()
+        for name, ema_value in self.module.state_dict().items():
+            source_value = model_state[name].detach()
+            if ema_value.is_floating_point():
+                ema_value.mul_(decay).add_(source_value, alpha=1.0 - decay)
+            else:
+                ema_value.copy_(source_value)
+
+    def state_dict(self) -> Dict[str, Tensor]:
+        return self.module.state_dict()
+
+    def load_state_dict(self, state_dict: Dict[str, Tensor]) -> None:
+        load_model_state(self.module, state_dict, strict=True)
+
+
 def train_one_epoch(
     model: nn.Module,
     dataloader: DataLoader,
@@ -2328,11 +3545,31 @@ def train_one_epoch(
     metric_learning_sources: Union[str, Sequence[str]] = "head",
     foreground_consistency_loss_weight: float = 0.0,
     foreground_consistency_margin: float = 0.08,
+    attention_view_loss_weight: float = 0.0,
+    attention_crop_probability: float = 0.50,
+    attention_drop_probability: float = 0.25,
+    attention_view_start_epoch: int = 2,
+    attention_crop_threshold: float = 0.55,
+    attention_drop_threshold: float = 0.70,
+    attention_crop_padding_ratio: float = 0.08,
+    attention_crop_min_area_ratio: float = 0.20,
+    attention_view_foreground_weight: float = 0.35,
+    attention_drop_blur_kernel: int = 15,
+    register_diversity_loss_weight: float = 0.0,
+    pairwise_margin_loss_weight: float = 0.0,
+    ordinal_maturity_loss_weight: float = 0.0,
+    distillation_teacher: Optional[nn.Module] = None,
+    distillation_class_indices: Optional[Tensor] = None,
+    distillation_loss_weight: float = 0.0,
+    distillation_temperature: float = 2.0,
+    distillation_focus_class_index: int = 1,
+    distillation_focus_class_weight: float = 1.0,
     use_sam: bool = False,
     grad_accum_steps: int = 1,
     max_nonfinite_grad_steps: int = 8,
     max_batches: int = 0,
     debug_bbox: bool = False,
+    model_ema: Optional[ModelEMA] = None,
 ) -> Tuple[float, Dict[str, float], float]:
     model.train()
     batch_sampler = getattr(dataloader, "batch_sampler", None)
@@ -2353,6 +3590,14 @@ def train_one_epoch(
         "cls_loss": 0.0,
         "metric_learning_loss": 0.0,
         "foreground_consistency_loss": 0.0,
+        "attention_view_loss": 0.0,
+        "attention_view_fraction": 0.0,
+        "attention_crop_fraction": 0.0,
+        "attention_drop_fraction": 0.0,
+        "register_diversity_loss": 0.0,
+        "pairwise_margin_loss": 0.0,
+        "ordinal_maturity_loss": 0.0,
+        "distillation_loss": 0.0,
         "objectness_loss": 0.0,
         "bbox_l1_loss": 0.0,
         "bbox_giou_loss": 0.0,
@@ -2382,6 +3627,7 @@ def train_one_epoch(
                 # SAM needs a second forward pass; avoid holding cloned CPU batches
                 # during regular AdamW training where replay is never consumed.
                 replay_batches.append(_clone_batch_for_replay(batch))
+            offline_teacher_probabilities = None
             if len(batch) == 2 and _is_detection_targets(batch[1]):
                 batch_images, batch_targets = batch
                 labels = None
@@ -2389,11 +3635,24 @@ def train_one_epoch(
             elif len(batch) == 3:
                 batch_images, batch_labels, batch_targets = batch
                 labels = batch_labels.to(device, non_blocking=True) if batch_labels is not None else None
-                targets = _move_batch_item_to_device(batch_targets, device)
+                moved_batch_targets = _move_batch_item_to_device(batch_targets, device)
+                offline_teacher_probabilities = None
+                if isinstance(moved_batch_targets, dict) and "teacher_probs" in moved_batch_targets:
+                    teacher_value = moved_batch_targets.get("teacher_probs")
+                    if torch.is_tensor(teacher_value):
+                        offline_teacher_probabilities = teacher_value.to(
+                            device=device,
+                            dtype=torch.float32,
+                            non_blocking=True,
+                        )
+                    targets = labels if labels is not None else moved_batch_targets
+                else:
+                    targets = moved_batch_targets
             else:
                 batch_images, batch_targets = batch
                 labels = None
                 targets = batch_targets.to(device, non_blocking=True)
+                offline_teacher_probabilities = None
             images = batch_images.to(device, non_blocking=True)
 
             loss, features, _, loss_details, _ = _forward_train_loss(
@@ -2404,6 +3663,27 @@ def train_one_epoch(
                 metric_learning_sources=metric_learning_sources,
                 foreground_consistency_loss_weight=foreground_consistency_loss_weight,
                 foreground_consistency_margin=foreground_consistency_margin,
+                attention_view_loss_weight=attention_view_loss_weight,
+                attention_crop_probability=attention_crop_probability,
+                attention_drop_probability=attention_drop_probability,
+                attention_view_start_epoch=attention_view_start_epoch,
+                attention_crop_threshold=attention_crop_threshold,
+                attention_drop_threshold=attention_drop_threshold,
+                attention_crop_padding_ratio=attention_crop_padding_ratio,
+                attention_crop_min_area_ratio=attention_crop_min_area_ratio,
+                attention_view_foreground_weight=attention_view_foreground_weight,
+                attention_drop_blur_kernel=attention_drop_blur_kernel,
+                epoch_index=epoch_index,
+                register_diversity_loss_weight=register_diversity_loss_weight,
+                pairwise_margin_loss_weight=pairwise_margin_loss_weight,
+                ordinal_maturity_loss_weight=ordinal_maturity_loss_weight,
+                distillation_teacher=distillation_teacher,
+                distillation_class_indices=distillation_class_indices,
+                distillation_loss_weight=distillation_loss_weight,
+                distillation_temperature=distillation_temperature,
+                distillation_focus_class_index=distillation_focus_class_index,
+                distillation_focus_class_weight=distillation_focus_class_weight,
+                offline_teacher_probabilities=offline_teacher_probabilities,
                 images=images,
                 labels=labels,
                 targets=targets,
@@ -2478,11 +3758,23 @@ def train_one_epoch(
                     for replay_batch in replay_batches:
                         replay_images = replay_batch[0].to(device, non_blocking=True)
                         replay_labels = None
+                        replay_offline_teacher_probabilities = None
                         if len(replay_batch) == 2 and _is_detection_targets(replay_batch[1]):
                             replay_targets = _move_batch_item_to_device(replay_batch[1], device)
                         elif len(replay_batch) == 3:
                             replay_labels = replay_batch[1].to(device, non_blocking=True)
-                            replay_targets = _move_batch_item_to_device(replay_batch[2], device)
+                            replay_moved_targets = _move_batch_item_to_device(replay_batch[2], device)
+                            if isinstance(replay_moved_targets, dict) and "teacher_probs" in replay_moved_targets:
+                                teacher_value = replay_moved_targets.get("teacher_probs")
+                                if torch.is_tensor(teacher_value):
+                                    replay_offline_teacher_probabilities = teacher_value.to(
+                                        device=device,
+                                        dtype=torch.float32,
+                                        non_blocking=True,
+                                    )
+                                replay_targets = replay_labels
+                            else:
+                                replay_targets = replay_moved_targets
                         else:
                             replay_targets = replay_batch[1].to(device, non_blocking=True)
                         replay_loss, _, _ = _forward_train_loss(
@@ -2493,6 +3785,27 @@ def train_one_epoch(
                             metric_learning_sources=metric_learning_sources,
                             foreground_consistency_loss_weight=foreground_consistency_loss_weight,
                             foreground_consistency_margin=foreground_consistency_margin,
+                            attention_view_loss_weight=attention_view_loss_weight,
+                            attention_crop_probability=attention_crop_probability,
+                            attention_drop_probability=attention_drop_probability,
+                            attention_view_start_epoch=attention_view_start_epoch,
+                            attention_crop_threshold=attention_crop_threshold,
+                            attention_drop_threshold=attention_drop_threshold,
+                            attention_crop_padding_ratio=attention_crop_padding_ratio,
+                            attention_crop_min_area_ratio=attention_crop_min_area_ratio,
+                            attention_view_foreground_weight=attention_view_foreground_weight,
+                            attention_drop_blur_kernel=attention_drop_blur_kernel,
+                            epoch_index=epoch_index,
+                            register_diversity_loss_weight=register_diversity_loss_weight,
+                            pairwise_margin_loss_weight=pairwise_margin_loss_weight,
+                            ordinal_maturity_loss_weight=ordinal_maturity_loss_weight,
+                            distillation_teacher=distillation_teacher,
+                            distillation_class_indices=distillation_class_indices,
+                            distillation_loss_weight=distillation_loss_weight,
+                            distillation_temperature=distillation_temperature,
+                            distillation_focus_class_index=distillation_focus_class_index,
+                            distillation_focus_class_weight=distillation_focus_class_weight,
+                            offline_teacher_probabilities=replay_offline_teacher_probabilities,
                             images=replay_images,
                             labels=replay_labels,
                             targets=replay_targets,
@@ -2608,6 +3921,8 @@ def train_one_epoch(
                             model,
                             context=f"epoch={epoch_index} batch={batch_index} after_amp_optimizer_step",
                         )
+                if model_ema is not None:
+                    model_ema.update(model)
                 replay_batches.clear()
                 if scheduler is not None:
                     progress = (epoch_index - 1) + float(batch_index + 1) / float(max(1, total_batches))
@@ -2811,6 +4126,82 @@ def _cleanup_device_memory(device: torch.device, heavy: bool = False) -> None:
         torch.cuda.ipc_collect()
 
 
+def _run_architecture_trace_after_training(
+    *,
+    args: argparse.Namespace,
+    data_spec,
+    run_dir: Path,
+    checkpoints_dir: Path,
+    image_size: int,
+) -> Dict[str, object]:
+    checkpoint_path = checkpoints_dir / "best.pt"
+    output_dir = (
+        Path(args.trace_architecture_output_dir)
+        if args.trace_architecture_output_dir is not None
+        else run_dir / "architecture_trace"
+    )
+    if not checkpoint_path.is_file():
+        return {
+            "enabled": True,
+            "status": "skipped",
+            "reason": "missing_best_checkpoint",
+            "checkpoint": str(checkpoint_path),
+            "output_dir": str(output_dir),
+        }
+
+    command = [
+        sys.executable,
+        "-m",
+        "trkh.tools.trace_architecture",
+        "--data",
+        str(data_spec.data_yaml),
+        "--output-dir",
+        str(output_dir),
+        "--seed",
+        str(int(args.trace_architecture_seed)),
+        "--device",
+        str(args.trace_architecture_device),
+        "--image-size",
+        str(int(image_size)),
+        "--checkpoint",
+        str(checkpoint_path),
+        "--class-name-mode",
+        str(args.class_name_mode or "raw"),
+        "--expected-num-classes",
+        str(int(args.expected_num_classes or data_spec.num_classes)),
+    ]
+    start = time.time()
+    print({"architecture_trace": "start", "output_dir": str(output_dir)}, flush=True)
+    try:
+        result = subprocess.run(
+            command,
+            cwd=str(Path(__file__).resolve().parents[2]),
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except Exception as exc:
+        return {
+            "enabled": True,
+            "status": "failed",
+            "error": repr(exc),
+            "checkpoint": str(checkpoint_path),
+            "output_dir": str(output_dir),
+        }
+    if result.stdout.strip():
+        print(result.stdout.strip(), flush=True)
+    if result.stderr.strip():
+        print(result.stderr.strip(), flush=True)
+    return {
+        "enabled": True,
+        "status": "completed" if int(result.returncode) == 0 else "failed",
+        "returncode": int(result.returncode),
+        "seconds": float(time.time() - start),
+        "checkpoint": str(checkpoint_path),
+        "output_dir": str(output_dir),
+    }
+
+
 def _device_memory_snapshot(device: torch.device) -> Dict[str, float]:
     if device.type != "cuda" or not torch.cuda.is_available() or not torch.cuda.is_initialized():
         return {
@@ -2935,6 +4326,14 @@ def make_train_transform(
         enabled_augmentations.append("rotate90")
     if augmentation_config.lighting_probability > 0.0:
         enabled_augmentations.append("lighting")
+    if augmentation_config.illumination_normalization:
+        enabled_augmentations.append("illumination_normalization")
+    if augmentation_config.background_suppression_mode not in {"", "none", "off", "false"}:
+        enabled_augmentations.append(f"background_{augmentation_config.background_suppression_mode}")
+    if augmentation_config.local_exposure_probability > 0.0:
+        enabled_augmentations.append("local_exposure")
+    if augmentation_config.obstacle_probability > 0.0:
+        enabled_augmentations.append("obstacle")
     if augmentation_config.class_aware_augmentation:
         enabled_augmentations.append("class_aware_intensity")
         if not augmentation_config.class_aware_photometric_augmentation:
@@ -2950,15 +4349,17 @@ def make_train_transform(
         enabled_augmentations or ["none"],
     )
     logger.debug(
-        "Train transform parameters: resize_mode=%s scale_min=%.4f brightness=%.4f "
+        "Train transform parameters: resize_mode=%s scale_min=%.4f scale_crop_p=%.4f brightness=%.4f "
         "contrast=%.4f saturation=%.4f hue=%.4f random_erasing=%.4f "
         "affine_degrees=%.4f affine_translate=%.4f affine_scale_min=%.4f "
         "hflip=%.4f vflip=%.4f rotate90=%.4f lighting=%.4f "
         "class_aware=%s class_power=%.4f class_max_scale=%.4f "
         "class_photometric=%s "
-        "randaugment_ops=%s randaugment_magnitude=%s temporal_frames=%s",
+        "randaugment_ops=%s randaugment_magnitude=%s illumination_norm=%s "
+        "background_mode=%s background_prob=%.4f local_exposure=%.4f obstacle=%.4f temporal_frames=%s",
         augmentation_config.resize_mode,
         augmentation_config.random_resized_crop_scale_min,
+        augmentation_config.random_resized_crop_probability,
         augmentation_config.color_jitter_brightness,
         augmentation_config.color_jitter_contrast,
         augmentation_config.color_jitter_saturation,
@@ -2977,6 +4378,11 @@ def make_train_transform(
         augmentation_config.class_aware_photometric_augmentation,
         augmentation_config.randaugment_num_ops,
         augmentation_config.randaugment_magnitude,
+        augmentation_config.illumination_normalization,
+        augmentation_config.background_suppression_mode,
+        augmentation_config.background_suppression_probability,
+        augmentation_config.local_exposure_probability,
+        augmentation_config.obstacle_probability,
         model_config.temporal_frames,
     )
 
@@ -2984,6 +4390,7 @@ def make_train_transform(
         image_size=int(image_size),
         resize_mode=augmentation_config.resize_mode,
         scale_min=augmentation_config.random_resized_crop_scale_min,
+        scale_crop_probability=augmentation_config.random_resized_crop_probability,
         brightness=augmentation_config.color_jitter_brightness,
         contrast=augmentation_config.color_jitter_contrast,
         saturation=augmentation_config.color_jitter_saturation,
@@ -2998,6 +4405,16 @@ def make_train_transform(
         lighting_probability=augmentation_config.lighting_probability,
         randaugment_num_ops=augmentation_config.randaugment_num_ops,
         randaugment_magnitude=augmentation_config.randaugment_magnitude,
+        illumination_normalization=augmentation_config.illumination_normalization,
+        illumination_normalization_strength=augmentation_config.illumination_normalization_strength,
+        background_suppression_mode=augmentation_config.background_suppression_mode,
+        background_suppression_probability=augmentation_config.background_suppression_probability,
+        background_suppression_margin=augmentation_config.background_suppression_margin,
+        background_suppression_blur_radius=augmentation_config.background_suppression_blur_radius,
+        local_exposure_probability=augmentation_config.local_exposure_probability,
+        local_exposure_strength=augmentation_config.local_exposure_strength,
+        obstacle_probability=augmentation_config.obstacle_probability,
+        obstacle_max_area=augmentation_config.obstacle_max_area,
         scale_photometric_with_augmentation=augmentation_config.class_aware_photometric_augmentation,
     )
     if model_config.temporal_frames <= 1:
@@ -3049,6 +4466,8 @@ def main() -> None:
                 flush=True,
             )
     detection_mode = model_config.model_type in DETECTION_MODEL_TYPES
+    if detection_mode:
+        train_config.balanced_epoch_sampling = False
     classification_object_crops = bool(not detection_mode and not args.disable_classification_object_crops)
     if not detection_mode:
         disabled_batch_composition = {
@@ -3099,7 +4518,10 @@ def main() -> None:
         print(
             {
                 "dataset_balance_auto_config": balance_auto_summary,
-                "reason": "doc canbang.yaml de tu dieu chinh repeat/geometric augmentation va giam phu thuoc vao weight phat",
+                "reason": (
+                    "canbang.yaml chi dung de doi chieu thong ke train; "
+                    "balanced sampler moi quyet dinh exposure va khong doc val/test"
+                ),
             },
             flush=True,
         )
@@ -3147,6 +4569,11 @@ def main() -> None:
     base_eval_transform = build_eval_transform(
         image_size=model_config.image_size,
         resize_mode=augmentation_config.resize_mode,
+        illumination_normalization=augmentation_config.illumination_normalization,
+        illumination_normalization_strength=augmentation_config.illumination_normalization_strength,
+        background_suppression_mode=augmentation_config.background_suppression_mode,
+        background_suppression_margin=augmentation_config.background_suppression_margin,
+        background_suppression_blur_radius=augmentation_config.background_suppression_blur_radius,
     )
     if model_config.temporal_frames > 1:
         train_transform = base_train_transform
@@ -3241,6 +4668,16 @@ def main() -> None:
     train_class_counts = train_dataset.class_counts(data_spec.num_classes)
     val_class_counts = val_dataset.class_counts(data_spec.num_classes)
     test_class_counts = test_dataset.class_counts(data_spec.num_classes) if test_dataset is not None else None
+    if (
+        balance_auto_summary.get("enabled")
+        and balance_auto_summary.get("count_scope") == "train"
+        and [int(value) for value in balance_auto_summary.get("class_counts", [])]
+        != [int(value) for value in train_class_counts]
+    ):
+        raise ValueError(
+            "Thong ke train trong canbang.yaml khong khop thu muc train. "
+            f"canbang={balance_auto_summary.get('class_counts')}, actual={train_class_counts}"
+        )
     total_class_counts = [
         int(train_class_counts[index])
         + int(val_class_counts[index])
@@ -3284,6 +4721,33 @@ def main() -> None:
         val_audit=val_dataset_report,
         output_path=run_dir / "labels.png",
     )
+    color_audit_summary = plot_dataset_color_audit(
+        class_names=data_spec.class_names,
+        train_paths=train_dataset.sample_paths(),
+        train_labels=train_dataset.labels(),
+        val_paths=val_dataset.sample_paths(),
+        val_labels=val_dataset.labels(),
+        output_path=run_dir / "color_audit.png",
+        summary_path=run_dir / "color_audit.json",
+        seed=train_config.seed,
+    )
+    print(
+        {
+            "color_audit": {
+                "plot": str(run_dir / "color_audit.png"),
+                "summary": str(run_dir / "color_audit.json"),
+                "max_train_val_lab_delta": max(
+                    (
+                        float(item.get("train_val_lab_delta", 0.0) or 0.0)
+                        for item in color_audit_summary.get("classes", {}).values()
+                        if isinstance(item, dict)
+                    ),
+                    default=0.0,
+                ),
+            }
+        },
+        flush=True,
+    )
 
     multi_scale_controller = None
     if train_config.multi_scale_training:
@@ -3306,6 +4770,34 @@ def main() -> None:
             },
             flush=True,
         )
+
+    offline_distillation_summary: Dict[str, object] = {"enabled": False}
+    if str(train_config.distillation_teacher_csv or "").strip():
+        offline_probabilities, offline_distillation_summary = _load_offline_distillation_probabilities(
+            csv_path=Path(train_config.distillation_teacher_csv),
+            num_classes=data_spec.num_classes,
+            class_names=data_spec.class_names,
+        )
+        train_dataset = TeacherProbabilityDataset(
+            train_dataset,
+            offline_probabilities,
+            num_classes=data_spec.num_classes,
+        )
+        offline_distillation_summary.update(train_dataset.teacher_probability_summary())
+        offline_distillation_summary.update(
+            {
+                "loss_weight": float(train_config.distillation_weight),
+                "temperature": float(train_config.distillation_temperature),
+                "focus_class_index": int(train_config.distillation_focus_class_index),
+                "focus_class_name": data_spec.class_names[
+                    int(train_config.distillation_focus_class_index)
+                ]
+                if 0 <= int(train_config.distillation_focus_class_index) < data_spec.num_classes
+                else "",
+                "focus_class_weight": float(train_config.distillation_focus_class_weight),
+            }
+        )
+        print({"offline_distillation": offline_distillation_summary}, flush=True)
 
     if balance_auto_summary.get("enabled"):
         rare_class_repeat_factors = [
@@ -3372,43 +4864,35 @@ def main() -> None:
     }
     hard_sample_paths = _load_hard_sample_manifest(str(train_config.hard_sample_manifest or ""))
     if hard_sample_paths and float(train_config.hard_sample_repeat_factor) > 1.0:
-        if imbalance_summary["use_weighted_sampler"]:
-            hard_sample_repeat_summary.update(
-                {
-                    "skipped_reason": "strict_balanced_sampler_enabled",
-                    "manifest_paths": len(hard_sample_paths),
-                }
-            )
-            print(
-                {
-                    "hard_sample_repeat": hard_sample_repeat_summary,
-                    "reason": "strict balanced sampler da duoc bat, tranh oversample hai lan",
-                },
-                flush=True,
-            )
-        else:
-            train_dataset = HardSampleRepeatDataset(
-                train_dataset,
-                hard_sample_paths=hard_sample_paths,
-                repeat_factor=float(train_config.hard_sample_repeat_factor),
-                seed=train_config.seed,
-            )
-            hard_sample_repeat_summary = {
-                "enabled": True,
-                "manifest": str(train_config.hard_sample_manifest),
-                **train_dataset.repeat_summary(),
-            }
-            print(
-                {
-                    "hard_sample_repeat": hard_sample_repeat_summary,
-                    "reason": "lap lai hard train samples da mine tu train split, khong dung val/test de train",
-                },
-                flush=True,
-            )
+        train_dataset = HardSampleRepeatDataset(
+            train_dataset,
+            hard_sample_paths=hard_sample_paths,
+            repeat_factor=float(train_config.hard_sample_repeat_factor),
+            seed=train_config.seed,
+        )
+        hard_sample_repeat_summary = {
+            "enabled": True,
+            "manifest": str(train_config.hard_sample_manifest),
+            **train_dataset.repeat_summary(),
+        }
+        print(
+            {
+                "hard_sample_repeat": hard_sample_repeat_summary,
+                "reason": (
+                    "lap lai hard train samples da mine tu train split; "
+                    "neu strict balanced sampler bat thi sampler se can bang lai exposure theo class"
+                ),
+            },
+            flush=True,
+        )
     class_target_scales = _combine_class_target_scales(
         data_spec.num_classes,
         getattr(train_dataset, "class_augmentation_scales", []),
         rare_class_repeat_factors,
+        [
+            float(value)
+            for value in balance_auto_summary.get("raw_auto_repeat_factors", [])
+        ],
     )
     class_crop_margin_summary = {
         "enabled": False,
@@ -3474,6 +4958,23 @@ def main() -> None:
         if imbalance_summary["use_weighted_sampler"]
         else None
     )
+    balanced_exposure_summary: Dict[str, object] = {"enabled": False}
+    if isinstance(train_sampler, StrictBalancedBatchSampler):
+        balanced_exposure_summary = {
+            "enabled": True,
+            "source": "train_split_labels_only",
+            **train_sampler.exposure_summary(),
+        }
+        if (
+            float(balanced_exposure_summary["relative_gap"])
+            > float(train_config.balanced_epoch_tolerance) + 1e-12
+        ):
+            raise ValueError(
+                "Balanced epoch sampler khong dat tolerance exposure: "
+                f"gap={balanced_exposure_summary['relative_gap']:.6f}, "
+                f"tolerance={train_config.balanced_epoch_tolerance:.6f}"
+            )
+        print({"balanced_epoch_exposure": balanced_exposure_summary}, flush=True)
     dataloader_kwargs, train_dataloader_summary = build_safe_dataloader_kwargs(
         requested_num_workers=train_config.num_workers,
         requested_pin_memory=device.type == "cuda",
@@ -3578,6 +5079,51 @@ def main() -> None:
         num_classes=data_spec.num_classes,
         model_config=to_serializable(model_config),
     ).to(device)
+    distillation_teacher: Optional[nn.Module] = None
+    distillation_class_indices: Optional[Tensor] = None
+    distillation_summary: Dict[str, object] = {"enabled": False}
+    if train_config.pretrained_distillation:
+        if detection_mode:
+            raise ValueError(
+                "Pretrained distillation hien chi ho tro classification-only TRKH."
+            )
+        if not 0 <= int(train_config.distillation_focus_class_index) < data_spec.num_classes:
+            raise ValueError(
+                "distillation_focus_class_index nam ngoai so class cua dataset."
+            )
+        if str(train_config.distillation_teacher_checkpoint or "").strip():
+            distillation_teacher, distillation_class_indices, distillation_summary = (
+                _build_pretrained_distillation_teacher(
+                    checkpoint_path=Path(train_config.distillation_teacher_checkpoint),
+                    target_class_names=data_spec.class_names,
+                    device=device,
+                )
+            )
+            distillation_summary.update(
+                {
+                    "loss_weight": float(train_config.distillation_weight),
+                    "temperature": float(train_config.distillation_temperature),
+                    "focus_class_index": int(
+                        train_config.distillation_focus_class_index
+                    ),
+                    "focus_class_name": data_spec.class_names[
+                        int(train_config.distillation_focus_class_index)
+                    ],
+                    "focus_class_weight": float(
+                        train_config.distillation_focus_class_weight
+                    ),
+                }
+            )
+            print({"pretrained_distillation": distillation_summary}, flush=True)
+        elif offline_distillation_summary.get("enabled"):
+            distillation_summary = {
+                "enabled": False,
+                "reason": "offline_teacher_probability_csv_only",
+            }
+        else:
+            raise ValueError(
+                "Distillation da bat nhung khong co checkpoint hoac offline CSV."
+            )
     if model_config.gradient_checkpointing:
         GradientCheckpointingEnabler.enable_gradient_checkpointing(model)
         print(
@@ -3793,6 +5339,29 @@ def main() -> None:
             allow_added_detection_heads=bool(args.resume_use_cli_config),
         )
         print({"resume": resume_summary}, flush=True)
+    model_ema: Optional[ModelEMA] = None
+    if train_config.model_ema:
+        ema_updates = 0
+        model_ema = ModelEMA(
+            model,
+            decay=train_config.model_ema_decay,
+        )
+        if resume_checkpoint is not None and isinstance(resume_checkpoint.get("ema_model_state"), dict):
+            model_ema.load_state_dict(resume_checkpoint["ema_model_state"])
+            ema_updates = int(resume_checkpoint.get("ema_updates", 0) or 0)
+            model_ema.updates = max(0, ema_updates)
+        print(
+            {
+                "model_ema": {
+                    "enabled": True,
+                    "decay": float(train_config.model_ema_decay),
+                    "updates": int(model_ema.updates),
+                    "validation_weights": "ema",
+                    "best_checkpoint_weights": "ema",
+                }
+            },
+            flush=True,
+        )
     print(
         "Optimizer setup:",
         {
@@ -3802,6 +5371,10 @@ def main() -> None:
             "effective_train_amp": train_amp,
             "effective_amp_dtype": str(effective_amp_dtype).replace("torch.", "") if effective_amp_dtype is not None else None,
             "grad_scaler_enabled": bool(scaler is not None and scaler.is_enabled()),
+            "model_ema": bool(model_ema is not None),
+            "model_ema_decay": (
+                float(train_config.model_ema_decay) if model_ema is not None else None
+            ),
         },
         flush=True,
     )
@@ -3833,6 +5406,7 @@ def main() -> None:
         "classification_target": not detection_mode,
         "classification_object_crops": classification_object_crops,
         "dataset_balance_auto_config": balance_auto_summary,
+        "balanced_epoch_exposure": balanced_exposure_summary,
         "train_class_counts": train_class_counts,
         "val_class_counts": val_class_counts,
         "test_class_counts": test_class_counts,
@@ -3875,6 +5449,8 @@ def main() -> None:
         },
         "effective_batch_size": effective_batch_size,
         "parameter_count": count_parameters(model),
+        "pretrained_distillation": to_serializable(distillation_summary),
+        "offline_distillation": to_serializable(offline_distillation_summary),
     }
     json_dump(run_dir / "resolved_config.json", config_payload)
     parameter_count = int(config_payload["parameter_count"])
@@ -4066,16 +5642,37 @@ def main() -> None:
                     metric_learning_sources=train_config.metric_learning_sources,
                     foreground_consistency_loss_weight=train_config.foreground_consistency_loss_weight,
                     foreground_consistency_margin=train_config.foreground_consistency_margin,
+                    attention_view_loss_weight=train_config.attention_view_loss_weight,
+                    attention_crop_probability=train_config.attention_crop_probability,
+                    attention_drop_probability=train_config.attention_drop_probability,
+                    attention_view_start_epoch=train_config.attention_view_start_epoch,
+                    attention_crop_threshold=train_config.attention_crop_threshold,
+                    attention_drop_threshold=train_config.attention_drop_threshold,
+                    attention_crop_padding_ratio=train_config.attention_crop_padding_ratio,
+                    attention_crop_min_area_ratio=train_config.attention_crop_min_area_ratio,
+                    attention_view_foreground_weight=train_config.attention_view_foreground_weight,
+                    attention_drop_blur_kernel=train_config.attention_drop_blur_kernel,
+                    register_diversity_loss_weight=train_config.register_diversity_loss_weight,
+                    pairwise_margin_loss_weight=train_config.pairwise_margin_loss_weight,
+                    ordinal_maturity_loss_weight=train_config.ordinal_maturity_loss_weight,
+                    distillation_teacher=distillation_teacher,
+                    distillation_class_indices=distillation_class_indices,
+                    distillation_loss_weight=train_config.distillation_weight,
+                    distillation_temperature=train_config.distillation_temperature,
+                    distillation_focus_class_index=train_config.distillation_focus_class_index,
+                    distillation_focus_class_weight=train_config.distillation_focus_class_weight,
                     use_sam=train_config.use_sam,
                     grad_accum_steps=train_config.grad_accum_steps,
                     max_nonfinite_grad_steps=train_config.max_nonfinite_grad_steps,
                     max_batches=train_config.max_train_batches,
                     debug_bbox=(args.debug_loss or args.debug_iou),
+                    model_ema=model_ema,
                 )
                 train_seconds = time.time() - train_phase_start
                 val_phase_start = time.time()
+                validation_model = model_ema.module if model_ema is not None else model
                 val_metrics = evaluate_model(
-                    model=model,
+                    model=validation_model,
                     dataloader=val_loader,
                     device=device,
                     class_names=data_spec.class_names,
@@ -4169,6 +5766,35 @@ def main() -> None:
                     "train_metric_learning_loss": train_artifact_stats.get("metric_learning_loss", 0.0),
                     "train_foreground_consistency_loss": train_artifact_stats.get(
                         "foreground_consistency_loss",
+                        0.0,
+                    ),
+                    "train_attention_view_loss": train_artifact_stats.get(
+                        "attention_view_loss",
+                        0.0,
+                    ),
+                    "train_attention_view_fraction": train_artifact_stats.get(
+                        "attention_view_fraction",
+                        0.0,
+                    ),
+                    "train_attention_crop_fraction": train_artifact_stats.get(
+                        "attention_crop_fraction",
+                        0.0,
+                    ),
+                    "train_attention_drop_fraction": train_artifact_stats.get(
+                        "attention_drop_fraction",
+                        0.0,
+                    ),
+                    "train_register_diversity_loss": train_artifact_stats.get(
+                        "register_diversity_loss",
+                        0.0,
+                    ),
+                    "train_pairwise_margin_loss": train_artifact_stats.get("pairwise_margin_loss", 0.0),
+                    "train_ordinal_maturity_loss": train_artifact_stats.get(
+                        "ordinal_maturity_loss",
+                        0.0,
+                    ),
+                    "train_distillation_loss": train_artifact_stats.get(
+                        "distillation_loss",
                         0.0,
                     ),
                     "train_objectness_loss": train_artifact_stats.get("objectness_loss", 0.0),
@@ -4370,6 +5996,13 @@ def main() -> None:
                         int(stage1_auto_advance_epoch) if stage1_auto_advance_epoch is not None else None
                     ),
                 }
+                checkpoint_payload["validation_weight_source"] = (
+                    "ema" if model_ema is not None else "train"
+                )
+                if model_ema is not None:
+                    checkpoint_payload["ema_model_state"] = model_ema.state_dict()
+                    checkpoint_payload["ema_updates"] = int(model_ema.updates)
+                    checkpoint_payload["ema_decay"] = float(model_ema.decay)
                 if is_stage1_epoch:
                     stage1_improved = current_macro_f1 > float(stage1_best_macro_f1)
                     if stage1_improved:
@@ -4457,6 +6090,10 @@ def main() -> None:
                         "higher_is_better": best_selection_metric_higher_is_better,
                     }
                     best_payload["optimizer_state"] = None
+                    if model_ema is not None:
+                        best_payload["train_model_state"] = best_payload["model_state"]
+                        best_payload["model_state"] = model_ema.state_dict()
+                        best_payload["checkpoint_weight_source"] = "ema"
                     checkpoint_start = time.time()
                     save_checkpoint(checkpoints_dir / "best.pt", best_payload)
                     checkpoint_seconds += time.time() - checkpoint_start
@@ -4539,6 +6176,14 @@ def main() -> None:
                         "train_cls_loss",
                         "train_metric_learning_loss",
                         "train_foreground_consistency_loss",
+                        "train_attention_view_loss",
+                        "train_attention_view_fraction",
+                        "train_attention_crop_fraction",
+                        "train_attention_drop_fraction",
+                        "train_register_diversity_loss",
+                        "train_pairwise_margin_loss",
+                        "train_ordinal_maturity_loss",
+                        "train_distillation_loss",
                         "train_objectness_loss",
                         "train_bbox_l1_loss",
                         "train_bbox_giou_loss",
@@ -4735,6 +6380,7 @@ def main() -> None:
                     best_selection_metric_higher_is_better=best_selection_metric_higher_is_better,
                     epochs_without_improvement=epochs_without_improvement,
                     stage1_auto_advance_epoch=stage1_auto_advance_epoch,
+                    model_ema=model_ema,
                 )
                 save_checkpoint(checkpoints_dir / "last.pt", interrupt_payload)
                 print(
@@ -4764,6 +6410,7 @@ def main() -> None:
     del class_weights
     del train_loader
     del val_loader
+    del model_ema
     del model
     _cleanup_device_memory(device, heavy=True)
 
@@ -4956,6 +6603,17 @@ def main() -> None:
         del test_criterion
         _cleanup_device_memory(device, heavy=True)
 
+    architecture_trace_summary = {"enabled": False}
+    if args.trace_architecture:
+        _cleanup_device_memory(device, heavy=True)
+        architecture_trace_summary = _run_architecture_trace_after_training(
+            args=args,
+            data_spec=data_spec,
+            run_dir=run_dir,
+            checkpoints_dir=checkpoints_dir,
+            image_size=int(model_config.image_size),
+        )
+
     summary = {
         "best_epoch": best_epoch,
         "best_macro_f1": best_macro_f1,
@@ -4968,6 +6626,7 @@ def main() -> None:
         "parameter_count": parameter_count,
         "run_dir": str(run_dir),
         "test_summary": test_summary,
+        "architecture_trace": architecture_trace_summary,
     }
     json_dump(run_dir / "summary.json", to_serializable(summary))
     print(summary, flush=True)

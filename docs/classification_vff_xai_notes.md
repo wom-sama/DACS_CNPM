@@ -321,3 +321,351 @@ D:\DataAI\.venv\Scripts\python.exe -m trkh.evaluation.xai_audit `
   --method all --query-tokens cls --feature-source stem_last --rollout-start-layer 1 `
   --robustness-probes --review-high-confidence 0.45 --top-k 5
 ```
+
+## Cap nhat v25/v26 - 2026-06-05
+
+Nguon tai lieu moi da doc:
+
+- `deep-research-report (9).md`: phan loai mau can than voi RGB do nhay anh sang/camera; HSV/Lab/histogram co ich nhung khong nen pha hue/saturation qua manh.
+- `deep-research-report (10).md`: bai toan fine-grained + long-tail can group-safe split, pair confusion, macro/minority metric, hard-pair audit, va regularization nhe. Khong dung pretrain.
+
+Thay doi code da them:
+
+- `color_audit.png` va `color_audit.json` duoc xuat sau khi load dataset. Artifact nay ve mean RGB/HSV/Lab train/val theo class de xem lech mau va giai thich confusion.
+- Rare-class recall guard dung ca `raw_auto_repeat_factors` tu `canbang.yaml`, khong chi dung repeat factor da bi cap. Nhu vay class nao co raw scale >= threshold moi duoc target dong, khong hard-code class 1.
+- Them `--dual-patch-norm` va `ColorStatisticFusion` mo rong Lab/HSV histogram, nhung chua khuyen nghi bat trong lenh chinh vi probe mau/dual patch truoc do chua tao dot pha tren grouped split.
+
+Probe v25: `runs/mango_cls_224_clscrops_grouped_rawguard_bf16_fast_v25_probe20`
+
+- Dataset: `cls_crops_grouped_seqsafe_w3`, scratch-only, khong them du lieu.
+- Windows loader dung worker that: train `6`, val/eval `4`, bf16. Epoch sau warm-up khoang `56s`, GPU util co luc 80-90%.
+- Guard da bat dung sau epoch 2: target class co raw scale `2.6303`, multiplier khoang `1.5-1.7`.
+- Best validation macro F1 trong history: `0.673372` o epoch `12`.
+- Best class 1 validation F1: `0.176471` o epoch `5`.
+- `best.pt` bi chon epoch `5` theo `loss_aware_fair_macro_f1`; test macro F1 chi `0.642724`.
+- `last.pt` test tot hon ro: accuracy `0.792570`, macro F1 `0.688339`, weighted F1 `0.792291`, class `Xoai_Song_ChuaNhe_CoNguyCo` F1 `0.1940`.
+- So voi v24b last, v25 tang class 1 test F1 tu `0.056` len `0.194` va macro F1 tu khoang `0.651` len `0.688`.
+
+Per-class test v25 `last.pt`:
+
+| Class | Precision | Recall | F1 | Support |
+| --- | ---: | ---: | ---: | ---: |
+| `Xoai_ChinGia_NgotGat_KhongVanChuyen` | 0.943 | 0.763 | 0.844 | 414 |
+| `Xoai_Chin_NgotThanh_DeDap` | 0.687 | 0.679 | 0.683 | 336 |
+| `Xoai_Hu_KhongAnDuoc` | 0.808 | 0.928 | 0.864 | 459 |
+| `Xoai_Song_ChuaNhe_CoNguyCo` | 0.191 | 0.197 | 0.194 | 66 |
+| `Xoai_Song_Chua_KhoDap` | 0.841 | 0.874 | 0.857 | 340 |
+
+XAI v25 `last.pt`: `runs/mango_cls_224_clscrops_grouped_rawguard_bf16_fast_v25_probe20/xai_audit_test_last_v2`
+
+- Top confusion: true `3` -> pred `2` (`80`), true `2` -> pred `1` (`40`), true `1` -> pred `0` (`27`), true `2` -> pred `4` (`26`), true `0` -> pred `4` (`24`).
+- Foreground mass cao: attention `0.9646`, grad rollout `0.9700`, Grad-CAM `0.9501`, rollout `0.9669`.
+- Background mass thap: khoang `0.03-0.05`; background blur/gray gan nhu khong lam giam confidence.
+- Border mass van cao: attention `0.3399`, Grad-CAM `0.5146`, rollout `0.3166`.
+- Review flags: `attention_border_attention=38/40`, `gradcam_border_attention=34/40`, `near_tie_top2=15/40`, `object_color_sensitive=19/40`, `register_attention_diffuse=13/40`.
+- Object desaturate drop `0.0967`, thap hon cac run color-heavy, nen van dung mau nhung khong phu thuoc cuc doan.
+
+Chan doan v25:
+
+- Van de chinh khong phai background shortcut. Model nhin dung object nhung con bam bien/crop-edge va ranh gioi mau/texture giua class 0/1/2/4 qua mong.
+- Guard raw-factor co loi ich that cho class 1, nhung validation class 1 support thap lam checkpoint selection nhieu nhieu. Can evaluate ca `best.pt` va `last.pt`.
+- Khong nen tang guard manh hon; v25 da dao dong. Huong tiep theo neu test them la giu v25, thu selection/evaluate protocol tot hon, hoac them hard-pair mining tu train-only confusion neu co manifest train loi.
+
+Probe v26: `runs/mango_cls_224_clscrops_grouped_fgpool_rawguard_bf16_v26_probe20`
+
+- Them `--fine-grained-pooling`, giam repeat cap xuong `1.18`, giam guard target/max multiplier.
+- Bi dung som tai epoch `6` vi kem hon v25: best val macro F1 `0.615075`, best class 1 F1 `0.066038`.
+- Ket luan: fine-grained pooling cau hinh nay lam hoc cham/kho hon, chua giam duoc loi class 1. Khong dung v26 lam lenh chinh.
+
+Lenh chinh hien tai nen dua tren v25:
+
+- `ldam_focal`, tat class weights, no SAM, no strict balanced sampler.
+- `--balance-auto-max-repeat-factor 1.25`.
+- Guard raw-factor: target `0.55`, threshold `1.5`, max multiplier `1.8`, min precision `0.05`.
+- `head-pooling cls_register_mean`, `register-positional-embedding`, `cnn-feature-fusion`.
+- Augmentation hinh hoc nhe, photometric cuc nhe, khong hue, khong mosaic/cutmix/copy-paste/mixup.
+- Luon xuat `color_audit`, `evaluate best`, `evaluate last`, va `xai_audit` cho checkpoint duoc bao cao.
+
+## Cap nhat gop class 0+1 thanh 4 class - 2026-06-05
+
+Muc tieu: test gia thuyet original class `1` nen duoc gop vao original class `0`, tao bai toan 4 class de giam nham lan fine-grained giua hai muc song/chua nhe. Quy tac van giu nguyen: khong pretrain, khong them anh, khong dung mosaic/cutmix/copy-paste/mixup.
+
+Dataset da tao:
+
+- Direct merge: `D:\DataAI\AIEx\image_baseline_experiments\data\cls_crops_grouped_seqsafe_w3_merge01_4cls`.
+- Split dung de train/evaluate: `D:\DataAI\AIEx\image_baseline_experiments\data\cls_crops_merge01_4cls_grouped_seqsafe_w3`.
+- Mapping: old `0,1 -> new 0`; old `2 -> new 1`; old `3 -> new 2`; old `4 -> new 3`.
+- Tong mau: `16149`; train/val/test: `11304/3230/1615`.
+
+Ly do phai regroup:
+
+- Direct merge giu split cu tao `408` near-ID cross-split pairs, vi old class 0 va 1 gan nhau theo sequence sau khi gop thanh cung label.
+- Ban regroup sequence-safe co exact/source/near-ID leakage bang `0`.
+- Van con `113` perceptual aHash cross-split groups, nen test split van kho va can bao cao leak audit kem metric.
+
+Ket qua probe/full:
+
+| Run | Epoch | Selection | Val macro F1 | Test macro F1 | Test accuracy | Nhan xet |
+| --- | ---: | --- | ---: | ---: | ---: | --- |
+| `mango_cls_224_merge01_4cls_grouped_bf16_v1_probe15` | 15 | macro_f1 | `0.8110` | `0.7359` | `0.7412` | LDAM nhe, test gap lon |
+| `mango_cls_224_merge01_4cls_grouped_colorce_v2_probe12` | 12 | loss-aware fair | `0.7807` | `0.7037` best / `0.7200` last | `0.7108` best / `0.7257` last | color-stat + CE nhe kem hon |
+| `mango_cls_224_merge01_4cls_grouped_ldam_lossaware_v3_50` | 47 stop | loss-aware fair | `0.8180` | `0.7571` final | `0.7628` final | tot hon v1 tren test, nhung xa 0.98 |
+
+XAI tren v1 test:
+
+- Foreground mass rat cao: attention `0.9796`, grad rollout `0.9854`, Grad-CAM `0.9832`, rollout `0.9829`.
+- Background mass thap: khoang `0.0146-0.0204`.
+- Object desaturate lam giam predicted probability `0.1172`, nen mau van la tin hieu quan trong.
+- Loi chinh khong phai background shortcut; la boundary mau/texture giua new class `1` va `2`, them confusion `0 -> 3` va `3 -> 0`.
+
+Ket luan tam thoi:
+
+- Gop `0+1` lam bai toan hop ly hon ve mat nhan, nhung khong tao dot pha du lon.
+- Tren split grouped/sequence-safe, muc `accuracy/macro_f1 > 0.98 trong 50 epoch` khong thuc te neu khong thay doi kien truc/split/nhan. Neu dat 0.98 bang split de hon hoac leak thi khong nen dung cho bai bao.
+- Huong tiep theo dang gia la multi-branch feature extraction nhe, nhung phai gioi han tham so de tranh overfit.
+
+## Multi-branch hybrid da trien khai va probe - 2026-06-05
+
+Y tuong da duoc trien khai o muc nhe: cho anh di qua nhieu nhanh dac trung roi hoi tu thanh token/fusion feature, sau do dua vao ViT-register aggregator. Tat ca nhanh khoi tao random, khong dung pretrain.
+
+Kien truc hien co:
+
+- Branch A - color-stat token: RGB/Lab/HSV histogram, moment mau, center-border delta.
+- Branch B - edge/texture token: Sobel grayscale, global/center/border edge stats, 4x4 pooled edge map.
+- Branch C - CNN-stem token: global pooled feature tu CNN stem hien co.
+- Fusion: project tung nhanh ve `embed_dim`, them branch type embedding, concat thanh prefix token.
+- ViT aggregator: token order `CLS + registers + branch_tokens + patches`; `num_prefix_tokens` duoc cap nhat de XAI khong nham branch thanh patch.
+- Head pooling moi: `cls_branch_register_mean`.
+- CLI flags: `--multi-branch-fusion`, `--branch-color-tokens`, `--branch-edge-tokens`, `--branch-cnn-tokens`, `--branch-token-dropout`.
+
+Kiem thu:
+
+- `python -m compileall trkh tests`: pass.
+- `python -m unittest discover -s tests -p "test_*.py" -v`: pass `75/75`.
+
+Ket qua probe 4-class grouped:
+
+| Run | Epoch | Val macro F1 | Val class 1 F1 | Test macro F1 | Test accuracy | Nhan xet |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| `mango_cls_224_merge01_4cls_grouped_ldam_lossaware_v3_50` | 47 stop | `0.8180` | `0.7745` | `0.7571` | `0.7628` | baseline 4-class tot nhat hien tai |
+| `mango_cls_224_merge01_4cls_grouped_multibranch_v27_probe12` | 12 | `0.7897` | `0.7021` | `0.7042` | `0.7102` | qua nhieu head phu, test gap xau |
+| `mango_cls_224_merge01_4cls_grouped_multibranch_min_v28_probe10` | 10 | `0.7708` | `0.6817` | `0.7260` | `0.7300` | nhanh hon v27 nhung van kem v3 |
+
+Ket luan: multi-branch da san sang lam ablation, nhung chua nen thay lenh chinh. Dau hieu hien tai la branch/token phu tang kha nang hoc train/val som nhung lam generalization tren grouped test kem hon. Neu tiep tuc, nen thu branch nho hon nua hoac chi bat edge token; khong tang len 5 full backbone vi se tang overfit va thoi gian train.
+
+## Danh gia overfit retrain va EMA - 2026-06-05
+
+Run bi dung:
+
+- `mango_cls_224_merge01_4cls_grouped_ldam_lossaware_v3_retrain`
+- Best epoch `29`, val macro F1 `0.818315`, test macro F1 `0.754891`, test accuracy `0.760372`.
+- Minimum val loss o epoch `15`: `0.756546`.
+- Epoch `29`: train loss `0.291051`, val loss `0.809641`.
+- Overfit bat dau ro theo loss sau epoch `15`, nhung F1 van tang den epoch `29`. Day la overfit calibration/generalization, khong phai model khong hoc duoc.
+- XAI: attention foreground `0.9821`, background `0.0179`; loi chinh la confusion `2 -> 1` va `0 -> 3`, khong phai background shortcut.
+
+Probe CE regularization:
+
+- `mango_cls_224_merge01_4cls_grouped_ce_reg_v29_probe20`
+- Early stop epoch `18`, best epoch `10`.
+- Val macro F1 `0.788942`, test macro F1 `0.706843`.
+- Ket luan: bo LDAM va tang label smoothing lam calibration som tot hon nhung tong quat hoa kem hon; khong dung lam lenh chinh.
+
+EMA da trien khai:
+
+- CLI: `--model-ema --model-ema-decay 0.995`.
+- Validation va `best.pt` dung EMA weights.
+- `last.pt`/`interrupt.pt` giu train weights va `ema_model_state` de resume dung optimizer va EMA.
+- Tat ca EMA weights deu sinh ra tu run scratch hien tai, khong co pretrain.
+- Unit tests pass `76/76`; smoke checkpoint va resume EMA pass.
+
+Ket qua `mango_cls_224_merge01_4cls_grouped_ldam_ema_v30_probe20` sau khi resume den epoch `35`:
+
+| Metric | Retrain khong EMA | EMA |
+| --- | ---: | ---: |
+| Best epoch | `29` | `26` |
+| Val macro F1 | `0.818315` | `0.814180` |
+| Test accuracy | `0.760372` | `0.760372` |
+| Test macro F1 | `0.754891` | `0.756398` |
+| Late val-loss std | `0.0475` | `0.0292` |
+| Test class 1 F1 | `0.6435` | `0.6649` |
+| Test class 2 F1 | `0.7412` | `0.7523` |
+
+XAI EMA:
+
+- Attention foreground `0.9805`, background `0.0195`.
+- Grad-CAM border mass giam `0.4148 -> 0.3668`.
+- Rollout-border flags giam `15 -> 7`.
+- Object desaturate probability drop tang `0.1020 -> 0.1128`, xac nhan model van phu thuoc manh vao mau.
+- Register-CLS heatmap similarity van gan `1.0`; register token chua tao focus rieng ro.
+
+Ket luan:
+
+- EMA giam dao dong va cai thien hai class nham lan nhieu nhat, nhung khong giai quyet domain/color shift.
+- Cau hinh chinh moi giu nguyen LDAM v3, them EMA decay `0.995`, `epochs 45`, `patience 10`.
+- Khong tang them branch/backbone trong run chinh. Muc `0.98` van khong kha thi tren grouped split neu khong thay doi chat luong nhan hoac thu thap them du lieu.
+
+## Sang loc hoi tu som 256px - 2026-06-06
+
+Tieu chi sang loc: trong 5 epoch dau phai co it nhat mot epoch `val_macro_f1 >= 0.82`, `val_loss <= 0.70`; loss giam ro trong warm-up va khong dung pretrained weight.
+
+Ket qua:
+
+| Run | Ket qua som | Test canonical | Ket luan |
+| --- | --- | --- | --- |
+| `mango_cls_256_merge01_4cls_pad_batch32_decay_v42_probe20` | epoch 4: F1 `0.8341`, loss `0.6400` | accuracy `0.7629`, macro F1 `0.7563` | tot nhat, giu |
+| `mango_cls_256_merge01_4cls_pad_ordinal_v43b_probe5` | epoch 4: F1 `0.8373`, loss `0.6366` | macro F1 `0.7411` | ordinal khong tong quat hoa, loai |
+| `mango_cls_256_merge01_4cls_domainjitter_v46_probe5` | best F1 `0.8193`, loss `0.6824` | macro F1 `0.7388` | jitter mau manh hon, loai |
+
+Luu y du lieu:
+
+- Canonical: `cls_crops_merge01_4cls_grouped_seqsafe_w3`.
+- `cls_crops_grouped_seqsafe_w3_merge01_4cls` la split khac: chi trung `914/1615` ten anh test.
+- Mot lan evaluate nham split thu hai cho macro F1 `0.8016`; ket qua nay khong duoc dung de so sanh voi baseline tren canonical.
+- `evaluate.py` da co warning khi `--data` khac `data_yaml` luu trong checkpoint.
+
+Ket luan:
+
+- Cau hinh 256px, batch 32, LR `1.65e-4`, warm-up 4, cosine horizon 20 dat hoi tu som tot nhat.
+- `epochs=50` chi la tran. Dung `patience=6`; khong ep loss giam co dinh `0.05-0.1` sau khi da vao plateau.
+- Muc `0.92` tren canonical chua dat. Tran test lap lai hien tai quanh `0.756`; validation cao hon test la domain/sequence shift, khong the sua chi bang tang epoch.
+- Lenh chinh moi nam trong `D:\DataAI\AIEx\image_baseline_experiments\Train.md`.
+
+## Audit lai run lich su `mango_hybrid_224` - 2026-06-06
+
+Muc dich: chi tham khao ly do run cu co validation cao, khong quay lai cau truc `vit_registers_hybrid` va khong dung pretrained weight.
+
+Ket qua doc artifact:
+
+- Run: `D:\DataAI\AIEx\TRKH\runs\mango_hybrid_224`.
+- Data luu trong run: `D:\DataAI\AIEx\dataset\data.yaml`, khong phai bo `cls_crops*_grouped_seqsafe*` hien tai.
+- Checkpoint/run config la 4 class, trong khi `D:\DataAI\AIEx\dataset\data.yaml` hien tai da la 5 class. Vi vay `evaluate.py` hien tai tu choi evaluate checkpoint cu bang data.yaml moi do mismatch class count.
+- `best_metrics.json` la validation, khong phai test: support `[674, 541, 366, 594]` trung voi `val_class_counts`.
+- Best validation epoch `109`: accuracy `0.971034`, macro F1 `0.970986`, val loss `0.944368`, bbox IoU `0.814573`.
+- Train report: `valid_object_count=9392`, `selected_sample_count=7618`, `ignored_object_count=1774`, `multi_object_image_count=844`.
+- Val report: `valid_object_count=2751`, `selected_sample_count=2175`, `ignored_object_count=576`.
+- Test report: `valid_object_count=1292`, `selected_sample_count=1093`, `ignored_object_count=199`.
+
+Ly do run cu nhin hieu qua hon:
+
+- Bai toan khac: 4 class lich su, khong phai 5 class raw hoac 4-class merge grouped/sequence-safe hien tai.
+- Split khac va co kha nang de hon: khong co grouped/sequence-safe audit nhu bo hien tai, nen khong duoc dung lam bang chung cho muc tieu paper tren canonical grouped test.
+- Dataset cu chi chon mot object chinh moi anh; nhieu object hop le bi bo qua. Dieu nay lam bai toan phan loai sach/de hon nhung khong phan anh day du phan bo object.
+- Model cu co bbox auxiliary loss (`bbox_l1=5.0`, `bbox_giou=2.0`), nen nhan duoc tin hieu dinh vi vung doi tuong. Day la inductive bias huu ich, nhung khong phu hop neu bai bao chi muon classification-only sach.
+- Augmentation cu rat manh (`batch_mix=0.6`, `mosaic=0.25`, `mixup=0.45`, `cutmix=0.45`). Cac phep nay co the regularize validation cu, nhung da bi loai khoi lenh classification-only vi tron mau/nhan va khong sach cho thuc nghiem phan loai do chin.
+- LR cu cao hon nhieu (`1e-3`) va train dai (`139` epoch). No hoc nhanh tren validation cu: epoch 5 da dat macro F1 `0.9036`, epoch 109 dat `0.9710`.
+
+Dieu co the hoc theo ma khong copy lai cau truc cu:
+
+- Giu inductive bias object-centered: dung crop doi tuong chat luong cao, margin hop ly, va XAI/foreground audit de tranh focus vao nen.
+- Neu can thu tiep, chi nen them regularization/auxiliary train-only nhe dua tren foreground/part consistency; khong bat DETR decoder, objectness, bbox regression lam metric chinh.
+- Luon evaluate tren dung `data.yaml` luu trong checkpoint va tren canonical grouped split; khong so sanh validation cu voi grouped test hien tai.
+- Muc `0.97` cua run cu la moc tham khao ve split cu, khong phai bang chung rang current grouped classification-only co the dat `0.98` chi bang doi hyperparameter.
+
+## Recheck sau khi `D:\DataAI\AIEx\dataset\data.yaml` duoc chinh lai 4 class - 2026-06-06
+
+Dataset YOLO hien tai da duoc chinh thanh 4 class raw:
+
+- `0`: `Xoai_Song_Chua_KhoDap`
+- `1`: `Xoai_Chin_NgotThanh_DeDap`
+- `2`: `Xoai_ChinGia_NgotGat_KhongVanChuyen`
+- `3`: `Xoai_Hu_KhongAnDuoc`
+
+Da bo sung compatibility loader de doc lai checkpoint legacy `mango_hybrid_224`: checkpoint nay luu `model_type=vit_registers_hybrid`, co `head.*` va `bbox_head.*`, nhung khong co DETR decoder/query/objectness. Loader moi normalize ve `vit_registers` khi evaluate classification, bo qua `bbox_head.*` va `classification_head.*` legacy. `evaluate.py` cung xac dinh detection/classification mode sau khi build model de khong chon sai criterion.
+
+Ket qua evaluate lai run cu tren data 4-class hien tai:
+
+| Run/checkpoint | Dataset mode | Split | Accuracy | Macro F1 | Ghi chu |
+| --- | --- | --- | ---: | ---: | --- |
+| `mango_hybrid_224/best.pt` | primary image only | test | `0.8115` | `0.8129` | khong con dat muc validation cu |
+| `mango_hybrid_224/best.pt` | object crops | test | `0.8097` | `0.8069` | object-level cung khong tot hon |
+| `mango_hybrid_224/best.pt` | primary image only | val | `0.8028` | `0.8031` | validation hien tai khac artifact cu |
+
+Probe moi train tu dau tren YOLO object-crop 4-class:
+
+| Run | Epochs | Test accuracy | Test macro F1 | Test weighted F1 | Ket luan |
+| --- | ---: | ---: | ---: | ---: | --- |
+| `mango_cls_256_yolo4_objectcrops_v49_probe8` | `8` | `0.9370` | `0.9345` | `0.9369` | vuot run cu ro rang, chua overfit trong 8 epoch |
+
+Per-class F1 cua v49 tren test:
+
+- class 0: `0.9549`
+- class 1: `0.8896`
+- class 2: `0.9500`
+- class 3: `0.9434`
+
+Nhan dinh:
+
+- Loi the that cua huong moi khong phai do copy lai `vit_registers_hybrid`, ma do dung object-level crops day du, khong bo qua object trong anh nhieu nhan, va classifier-only ViT-register + CNN stem/fusion duoc regularize nhe hon.
+- `mango_hybrid_224` tung co validation cao tren artifact cu, nhung khi data.yaml da chinh lai va evaluate lai dung test hien tai thi chi quanh `0.81` macro F1.
+- v49 van yeu nhat o class 1, nham lan chinh la class 1 -> class 2/3 va class 2/3 -> class 1. Huong tiep theo nen keo dai v49 len 20-30 epoch, audit XAI tren class 1, va chi tang regularization/metric loss dong theo class gap thay vi hard-code class 1.
+
+Kiem tra code:
+
+- `python -m compileall trkh tests`: pass.
+- `python -m unittest discover -s tests -v`: pass `80/80`.
+
+## Single-object-only ablation cho canonical 4-class split - 2026-06-06
+
+Theo yeu cau tach khoi YOLO online de de so sanh voi cac baseline classification-folder, da tao bo:
+
+`D:\DataAI\AIEx\image_baseline_experiments\data\cls_crops_merge01_4cls_grouped_seqsafe_w3_singleobject`
+
+Cach tao:
+
+- Doc `manifest.csv` cua `cls_crops_merge01_4cls_grouped_seqsafe_w3`.
+- Dem `source_id`.
+- Chi giu cac row co `source_id` xuat hien dung 1 lan.
+- Loai toan bo crop tu source co nhieu box, vi do la anh goc nhieu object.
+- Dung hardlink, khong copy them data va khong dung pretrain.
+
+Thong ke:
+
+| Split | Class 0 | Class 1 | Class 2 | Class 3 | Total |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| train | `1997` | `1893` | `2763` | `1481` | `8134` |
+| val | `699` | `655` | `770` | `593` | `2717` |
+| test | `383` | `331` | `411` | `328` | `1453` |
+
+Tong quan:
+
+- Source rows: `16149`.
+- Kept rows: `12304`.
+- Removed rows: `3845`.
+- Removed multi-source IDs: `1243`.
+- Hard leak audit: exact duplicate `0`, source stem cross-split `0`, near-ID cross-split `0`.
+- Average-hash cross-split: `111` buckets / `265` files, tiep tuc xem la canh bao mem do xoai crop rat giong nhau.
+
+Tool moi:
+
+- `trkh.tools.filter_classification_single_source`
+- Unit test: `test_filter_classification_single_source_removes_multi_box_sources`.
+- Full tests sau khi them tool: `python -m unittest discover -s tests -v` pass `81/81`.
+
+Lenh train day du duoc ghi trong `D:\DataAI\AIEx\image_baseline_experiments\Train.md`, muc `TRKH 4-Class Single-Object-Only Ablation`.
+
+## Audit provenance va semantic label cua bo merge01 - 2026-06-06
+
+Da truy nguoc day du duong tao dataset:
+
+`AIEx\dataset` 5 class -> `cls_crops` -> grouped 5 class -> merge old `0+1` -> regroup canonical 4 class -> loc single-source.
+
+Ket qua doi chieu:
+
+- `16149` manifest rows.
+- `0` missing YOLO label.
+- `0` mismatch giua old-to-new mapping va nhan 4 class hien tai.
+- Mapping da dung: `0->0`, `1->0`, `2->1`, `3->2`, `4->3`.
+
+Do do khong co loi copy file hoac remap class ID trong pipeline. Rui ro nam o quy tac semantic: new class `0` gom ca `Xoai_Song_Chua_KhoDap` va `Xoai_Song_ChuaNhe_CoNguyCo`. Chuoi `Image_7002..7011` thuoc old class `1`, sau merge nam o new class `0`, co nhieu dom be mat va bi checkpoint v3 du doan new class `3` tren ca chuoi. Can human review theo dinh nghia nghiep vu truoc khi relabel; khong tu dong doi nhan val/test bang prediction cua model.
+
+Run `mango_cls_256_merge01_4cls_grouped_stable_v3_30e`:
+
+- best epoch `5`;
+- best validation macro F1 `0.8407`;
+- test accuracy `0.7418`;
+- test macro F1 `0.7357`;
+- test class `0 -> 3`: `88`;
+- test class `3 -> 0`: `36`.
+
+Lenh v4 trong `Train.md` da bo cac co che cu cua bai toan 5 class: imbalance auto-tune, class-aware augmentation, rare repeat/recall guard, LDAM, focal mixing, fair-loss va metric auxiliary. Cau hinh moi dung CE tuong duong, batch `48`, learning rate `1e-4` va regularization vua phai. Tuy nhien cau hinh khong the sua semantic label; label policy van la blocker lon nhat.

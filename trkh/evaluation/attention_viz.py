@@ -27,7 +27,7 @@ from trkh.models.feature_hooks import (
     summarize_register_attention,
 )
 from trkh.inference.inference import crop_with_yolo_bbox, load_model
-from trkh.models.model import extract_bbox_from_model_output
+from trkh.models.model import classification_logits_from_features, extract_bbox_from_model_output
 from trkh.core.utils import ensure_dir, json_dump, summarize_token_norms
 
 
@@ -81,9 +81,17 @@ def prepare_image_and_tensor(
     crop_margin: float = 0.05,
 ) -> Tuple[Image.Image, torch.Tensor]:
     image_size = int(checkpoint["model_config"]["image_size"])
+    augmentation_config = checkpoint.get("augmentation_config", {})
+    if not isinstance(augmentation_config, dict):
+        augmentation_config = {}
     transform = build_eval_transform(
         image_size=image_size,
-        resize_mode=checkpoint.get("augmentation_config", {}).get("resize_mode", "pad"),
+        resize_mode=augmentation_config.get("resize_mode", "pad"),
+        illumination_normalization=bool(augmentation_config.get("illumination_normalization", False)),
+        illumination_normalization_strength=float(augmentation_config.get("illumination_normalization_strength", 0.0) or 0.0),
+        background_suppression_mode=str(augmentation_config.get("background_suppression_mode", "none") or "none"),
+        background_suppression_margin=float(augmentation_config.get("background_suppression_margin", 0.08) or 0.08),
+        background_suppression_blur_radius=float(augmentation_config.get("background_suppression_blur_radius", 7.0) or 7.0),
     )
 
     with Image.open(image_path) as handle:
@@ -274,6 +282,7 @@ def _capture_forward(
             register_attention_summary = summarize_register_attention(
                 attentions=attentions,
                 prefix_tokens=prefix_tokens,
+                register_prefix_tokens=1 + int(getattr(model, "num_registers", 0)),
             )
 
     grad_rollout_heatmap = None
@@ -291,11 +300,7 @@ def _capture_forward(
                     if torch.is_tensor(attention):
                         attention.retain_grad()
                 if hasattr(model, "head_input_from_features") and hasattr(model, "head"):
-                    logits = model.head(model.head_input_from_features(features))
-                    if getattr(model, "cnn_fusion_head", None) is not None and "cnn_pooled" in features:
-                        cnn_features = model.cnn_fusion_norm(features["cnn_pooled"])
-                        cnn_features = model.cnn_fusion_dropout(cnn_features)
-                        logits = logits + model.cnn_fusion_head(cnn_features)
+                    logits = classification_logits_from_features(model, features)
                 elif hasattr(model, "forward_heads"):
                     logits, _ = extract_bbox_from_model_output(model.forward_heads(features))
                 else:
@@ -314,6 +319,7 @@ def _capture_forward(
                     register_attention_summary = summarize_register_attention(
                         attentions=attentions,
                         prefix_tokens=prefix_tokens,
+                        register_prefix_tokens=1 + int(getattr(model, "num_registers", 0)),
                     )
 
     result: Dict[str, object] = {

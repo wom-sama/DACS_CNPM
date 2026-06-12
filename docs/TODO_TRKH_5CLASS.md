@@ -1,0 +1,104 @@
+# TODO TRKH 5-Class
+
+## Da hoan thanh
+
+- [x] Audit kien truc cu: chua co token gating/pruning thuc.
+- [x] Them attention + foreground-prior hard token pruning.
+- [x] Them patch detail enhancer cho color/edge/texture cuc bo.
+- [x] Ket noi color/edge branch tokens va CNN residual logits.
+- [x] Sua color-stat logit path de tham gia train/evaluate.
+- [x] Them balanced epoch sampler chi dung train split.
+- [x] Uu tien `splits.train.classes` trong `canbang.yaml`.
+- [x] Tao trace 1 anh moi class qua tung block.
+- [x] Them unit test va benchmark tensor.
+- [x] Run chinh trong gioi han 30 epoch; completed 30 epoch, best epoch 27.
+- [x] Luu checkpoint best epoch 27 va ket qua test.
+- [x] Chay architecture trace bang checkpoint 5-class da train.
+- [x] Audit lai foreground/token-pruning bang XAI va trace checkpoint.
+- [x] Sua pseudo foreground mask de khong coi center padding la foreground.
+- [x] Sua token foreground prior trong model va foreground-consistency loss trong train.
+- [x] Tao hard-mining manifest train-only cho cac bien 0/1, 1/2, 2/3 va 4/rest.
+- [x] Sua wiring de hard-sample repeat van hoat dong khi strict balanced sampler bat.
+- [x] Smoke test hard-repeat + balanced sampler: effective samples 9524, exposure `[1906, 1906, 1906, 1906, 1906]`.
+- [x] Ghi audit toi uu tai `docs/TRKH_5CLASS_OPTIMIZATION_AUDIT_20260608.md`.
+- [x] Chay full train `mango_cls_256_5class_hardneg_maskfix_v4_30e`; test macro F1 `0.8823`, class 1 F1 `0.6545`.
+- [x] Chay XAI audit v4; foreground mass tot hon, background blur gan nhu khong anh huong prediction.
+- [x] Tao architecture trace v4 tai `runs/mango_cls_256_5class_hardneg_maskfix_v4_30e/architecture_trace_v4_checkpoint`.
+- [x] Them tool `trkh.tools.ensemble_predictions` de tao majority/weighted vote tu prediction CSV.
+- [x] Tao top-5 pretrained vote ensemble; macro F1 `0.9226`, accuracy `0.9526`.
+- [x] Export val/test probabilities cho top-5 pretrained experts.
+- [x] Them validation-only logistic selector; ket qua thap hon majority vote nen khong chon lam system chinh.
+- [x] Them AIDT class_f train wrapper co `-UsePretrained true/false`.
+- [x] Xac nhan architecture trace v4 da co du 1 mau moi class va anh qua tung block.
+- [x] Tich hop `--trace-architecture` vao TRKH train de tu tao `run_dir/architecture_trace` sau run.
+- [x] Them block preflight khong train vao `image_baseline_experiments/Train.md`.
+- [x] Ghi chan doan run bi dung tai `docs/TRKH_TRAIN_STOP_DIAGNOSIS_20260610.md`.
+- [x] Them `--pretrained/--no-pretrained` vao TRKH cho backbone torchvision; custom TRKH van mac dinh scratch va reject pretrained ro rang.
+- [x] Ghi resume audit tai `docs/TRKH_RESUME_AUDIT_20260610.md`.
+- [x] Chay smoke TRKH 1 train/1 val batch; trace sau train completed.
+- [x] Tao `trkh.tools.audit_class_confusions`.
+- [x] Tao class 1 audit va copy review images tai `runs/mango_cls_256_5class_hardneg_maskfix_v4_30e/class1_confusion_audit_20260611`.
+- [x] Chot khuyen nghi RTX 4060 8 GB: batch `64`, workers `4/2`; fallback batch `48`.
+- [x] Ghi audit dot pha tai `docs/TRKH_5CLASS_BREAKTHROUGH_ENSEMBLE_AUDIT_20260608.md`.
+- [x] Them ordinal maturity head chung cho class `0<1<2<3`; class 4 giu binary `4-rest`.
+- [x] Them `--train-scale-crop-probability` de random crop khong con bat buoc tren moi train sample.
+- [x] Mo rong architecture trace voi anh truoc preprocess, illumination-normalized va foreground-mask overlay.
+- [x] Chay ordinal probe train-only/val-only: test macro F1 `0.8823 -> 0.8907`, class 1 `0.6545 -> 0.6800`.
+- [x] Chay smoke v5 2 train/2 val batch voi workers `4/2`; ordinal loss finite, trace completed.
+- [x] Dat early stopping v5 `patience=3`; dung sau 3 epoch lien tiep khong cai thien `fair_macro_f1`.
+- [x] Hoan thanh full run `mango_cls_256_5class_ordinal_maskaudit_v5_30e`; early-stop epoch 8, best epoch 5, test macro F1 `0.8095`, class 1 F1 `0.5376`; reject.
+- [x] Them validation-only logit bias calibration; chi tang nhe test macro F1 `0.8823 -> 0.8866`, class 1 `0.6545 -> 0.6582`; reject lam huong chinh.
+- [x] Them CV prediction selector voi image quality features; OOF tot nhung test thap hon top-5 pretrained vote; reject.
+- [x] Them focus-class specialist cho class 1; test thap hon majority vote; reject.
+- [x] Them pretrained teacher distillation cho TRKH voi flag `--pretrained-distillation/--no-pretrained-distillation`.
+- [x] Them launcher `scripts/run_trkh_5class_distill_v6.ps1` co toggle distillation, batch size, workers, smoke, max batches va trace architecture.
+- [x] Smoke launcher v6: resume v4 best, MobileNetV3 teacher mapping `[4,3,1,0,2]`, batch `48`, workers `4/2`, trace completed.
+- [x] Them offline distillation CSV teacher cache cho TRKH; support `--distillation-teacher-csv` / `--offline-distillation-csv`.
+- [x] Tao `trkh.tools.build_ensemble_teacher_cache` de map probability experts ve class order cua TRKH.
+- [x] Tao top-5 teacher cache train/val/test va temperature-2 cache.
+- [x] Chay full v7 `mango_cls_256_5class_v4_top5_offline_distill_v7_30e`; early-stop epoch 4, best epoch 1, test macro F1 `0.8801`, class 1 F1 `0.6467`; reject.
+- [x] Xac nhan v7 khong treo; tong thoi gian `860.9s`, `launcher_status.json` exit code `0`.
+- [x] Export val/test probabilities cho 5 pretrained experts bo sung: EfficientNet-B0, ResNet50, MobileNetV2, InceptionV3, VGG16.
+- [x] Thu top-10 average teacher cache; test macro F1 `0.9117`; reject.
+- [x] Thu top-10 focus-class specialist; test macro/class1 khong doi `0.9183/0.7597`; reject.
+- [x] Them TTA flags vao `trkh.tools.export_timm_predictions`: horizontal flip, brightness deltas, contrast scales.
+- [x] Tao top-5 TTA teacher cache; test macro F1 `0.9248`, class 1 F1 `0.7786`.
+- [x] Mo rong `trkh.tools.audit_class_confusions` de doc CSV teacher probability voi `--data`.
+- [x] Tao class 1 audit cho top-5 TTA tai `runs/ensemble_top5_tta_teacher_cache_5class_v1/class1_confusion_audit_test`.
+- [x] Chay XAI audit nho cho v7 tai `runs/mango_cls_256_5class_v4_top5_offline_distill_v7_30e/xai_audit_test_small`.
+- [x] Ghi audit v7/TTA/fusion tai `docs/TRKH_5CLASS_V7_TTA_FUSION_AUDIT_20260611.md`.
+- [x] Nghien cuu ma chinh thuc WS-DAN, Pairwise Confusion, ELR, PMG va small-data ViT scratch.
+- [x] Ghi quyet dinh tai `docs/TRKH_NO_PRETRAIN_RESEARCH_DECISION_20260612.md`.
+- [x] Them attention-guided crop/drop classification training, mac dinh tat va cau hinh bang CLI.
+- [x] Tai su dung fine-grained patch attention, ho tro anh xa score sau token pruning.
+- [x] Them history audit cho attention view loss va crop/drop fraction.
+- [x] Compile va 12 unit/regression test attention/token/foreground/pairwise/ordinal pass.
+- [x] Ghi context recovery tai `docs/TRKH_CONTEXT_CHECKPOINT_20260612.md`.
+
+## Can tiep tuc
+
+- [x] Chay full test suite: `100 passed` voi pytest 8.4.2.
+- [x] Them `pytest==8.4.2` vao requirements de moi truong moi chay duoc test suite.
+- [ ] Chay preflight dataset/config/leak cho attention-view run.
+- [ ] Chay smoke attention crop/drop gioi han 1-2 train/val batch.
+- [ ] Xuat anh audit original/score-map/crop/drop cho 1 mau moi class.
+- [ ] Chi chay full 30 epoch neu smoke throughput/GPU utilization on dinh; patience `3`.
+- [ ] Sau full run, xuat class-1 confusion va XAI/background audit roi so sanh v4/top-5 TTA.
+- [ ] Neu attention-view khong vuot v4, audit nhan train-only va thu ELR warm-up; khong bat ELR tren test.
+- [x] Chay preflight khong train truoc smoke 2026-06-11.
+- [x] Chay smoke TRKH voi `--max-train-batches 1 --max-val-batches 1 --skip-final-test`.
+- [x] Tao audit list anh sai/confusion class 1 tu `final_test_detailed/predictions_detailed.csv`.
+- [ ] Review thu cong anh `0->1`, `2->1`, `1->0`, `1->2` trong class 1 audit; danh dau label dung/sai/ambiguous.
+- [x] Thiet ke run v5 tap trung ordinal boundary 0/1 va 1/2, khong tang oversampling class 1 vo dieu kien.
+- [ ] Review thu cong 22 false negative va 7 false positive class 1 trong `runs/ensemble_top5_tta_teacher_cache_5class_v1/class1_confusion_audit_test/review_images`.
+- [ ] Tao `ambiguous_boundary.csv` cho cac mau class 0/1/2 co label khong ro; khong dung test de train lai.
+- [ ] Neu label audit xac nhan nhan dung, train them expert pretrained manh hon (ViT/DeiT/Swin/ConvNeXt) hoac feature-level branch pretrained; khong lap lai distillation student v7.
+- [ ] Neu label audit xac nhan loi do nen/che khuat, thu object-tight segmentation/crop preprocessing roi export lai expert/TTA.
+- [ ] Neu can artifact inference manh tam thoi, dung `runs/ensemble_top5_tta_teacher_cache_5class_v1` lam best current teacher-level baseline.
+- [ ] Chay AIDT finalize/export chi khi chap nhan thoi gian dai; lan export probability inline da timeout sau 15 phut.
+- [ ] Neu van chua dat macro F1 `0.99` va class 1 F1 `0.96`, bao cao ro rang oracle hien tai: test class 1 any-expert recall `58/73`, oracle class 1 F1 `0.8722`.
+- [ ] So sanh confusion 0/1, 1/2, 2/3 va 4/rest voi v3 maskfix.
+- [ ] Neu class 1 precision van thap, audit label boundary cho mau 0->1 va 1->2 co confidence cao.
+- [ ] Chay ablation `token_keep_rates=0.75,0.50` vs `0.85,0.65` neu v4 cham nhung khong tang F1.
+- [ ] Can nhac ablation pretrained/frozen ViT chi khi chap nhan so sanh ngang voi MobileNetV3/ViT/AIDT pretrained.
+- [ ] Export ONNX/TensorRT sau khi chot checkpoint.
