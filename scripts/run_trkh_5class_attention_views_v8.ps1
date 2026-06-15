@@ -40,8 +40,11 @@ param(
     [int]$FrequencySelectiveTopK = 1,
     [double]$FrequencySelectiveBlend = 1.0,
     [double]$FrequencySelectiveForegroundThreshold = 0.35,
+    [bool]$PairwiseMarginRouting = $false,
+    [double]$PairwiseMarginRouteMaxProbabilityMargin = 0.20,
     [switch]$PreflightOnly,
     [switch]$Smoke,
+    [switch]$SkipFinalTest,
     [bool]$TraceArchitecture = $true
 )
 
@@ -136,6 +139,9 @@ if ($PreflightOnly) {
         frequency_selective_top_k = $FrequencySelectiveTopK
         frequency_selective_blend = $FrequencySelectiveBlend
         frequency_selective_foreground_threshold = $FrequencySelectiveForegroundThreshold
+        pairwise_margin_routing = [bool]$PairwiseMarginRouting
+        pairwise_margin_route_max_probability_margin = $PairwiseMarginRouteMaxProbabilityMargin
+        skip_final_test = [bool]$SkipFinalTest
     } | ConvertTo-Json -Depth 5
     exit 0
 }
@@ -352,7 +358,14 @@ try {
             "--frequency-selective-foreground-threshold", "$FrequencySelectiveForegroundThreshold"
         )
     }
-    if ($Smoke) {
+    if ($PairwiseMarginRouting) {
+        $TrainArgs += @(
+            "--pairwise-margin-routing",
+            "--pairwise-margin-route-max-probability-margin",
+            "$PairwiseMarginRouteMaxProbabilityMargin"
+        )
+    }
+    if ($Smoke -or $SkipFinalTest) {
         $TrainArgs += @("--skip-final-test")
     }
     if ($TraceArchitecture) {
@@ -367,6 +380,7 @@ try {
         run_name = $RunName
         started_at = $startedAt.ToString("o")
         smoke = [bool]$Smoke
+        skip_final_test = [bool]$SkipFinalTest
         no_pretrained = $true
         resume_checkpoint = $ResumeCheckpoint
         batch_size = $BatchSize
@@ -378,6 +392,8 @@ try {
         frequency_selective_top_k = $FrequencySelectiveTopK
         frequency_selective_blend = $FrequencySelectiveBlend
         frequency_selective_foreground_threshold = $FrequencySelectiveForegroundThreshold
+        pairwise_margin_routing = [bool]$PairwiseMarginRouting
+        pairwise_margin_route_max_probability_margin = $PairwiseMarginRouteMaxProbabilityMargin
         attention_view_loss_weight = $AttentionViewLossWeight
         attention_crop_probability = $AttentionCropProbability
         attention_drop_probability = $AttentionDropProbability

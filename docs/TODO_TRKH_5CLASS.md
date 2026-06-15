@@ -146,10 +146,15 @@
 - [x] Full regression V15: `116 passed`; preflight/smoke/probe exit `0`.
 - [x] Probe V15: val macro/class1 `0.8872/0.6788`, test `0.8975/0.6923`; khong full train vi class-1 val thap hon V12 va chua qua `0.70`.
 - [x] Xuat detailed predictions, class-1 audit va 1 trace moi class cho V15.
+- [x] Them routed pairwise specialist V16: pairwise margin head chi kich hoat khi top-2 logits khop boundary va probability margin du nho.
+- [x] Them `-SkipFinalTest` cho launcher V8/V12/V16 de probe khong bi timeout o final audit; test/trace co the chay rieng.
+- [x] V16 preflight/smoke/regression pass; probe 120 batch x 6 epoch chon epoch 3, val macro/class1 `0.8874/0.6866`.
+- [x] Xuat V16 test detailed, class-1 confusion audit va architecture trace thu cong sau automation timeout; test macro/class1 `0.8949/0.6923`.
+- [x] Khong full-train V16 vi class-1 validation F1 van duoi gate `0.70`; trace cho thay pseudo-mask van lay nen co mau gan qua.
 - [ ] Tao group-clean split theo qua goc/phien chup truoc khi dung metric de khang dinh generalization.
 - [ ] Tao train-only label-boundary review set cho 0/1/2, ghi label dung/sai/ambiguous va quality condition.
 - [ ] Thu learned object-tight localization/mask co supervision; khong tiep tuc siet pseudo-mask mau vi co/la xanh co the dinh vao qua.
-- [ ] Thu pairwise specialist/router chi kich hoat tren top-2 boundary, khong adjustment toan cuc.
+- [x] Thu pairwise specialist/router chi kich hoat tren top-2 boundary, khong adjustment toan cuc; cai thien nho nhung chua qua gate.
 - [ ] Neu tiep tuc ELR, chi thu ablation nho hon/lon hon (`0.03`, `0.20`) sau label audit; khong full train neu class-1 val F1 chua qua `0.70`.
 - [x] Chay preflight khong train truoc smoke 2026-06-11.
 - [x] Chay smoke TRKH voi `--max-train-batches 1 --max-val-batches 1 --skip-final-test`.

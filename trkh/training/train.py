@@ -343,6 +343,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--pairwise-margin-logit-scale", type=float, default=0.35)
     parser.add_argument("--pairwise-margin-dropout", type=float, default=0.05)
     parser.add_argument(
+        "--pairwise-margin-routing",
+        action="store_true",
+        default=False,
+        help=(
+            "Chi ap dung pairwise logit adjustment khi top-2 class trung boundary "
+            "va classifier chinh con mo ho."
+        ),
+    )
+    parser.add_argument(
+        "--pairwise-margin-route-max-probability-margin",
+        type=float,
+        default=0.20,
+        help="Tat routed adjustment khi top1-top2 probability margin vuot nguong nay.",
+    )
+    parser.add_argument(
         "--ordinal-maturity-head",
         action="store_true",
         default=False,
@@ -1298,6 +1313,10 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         raise ValueError("--pairwise-margin-logit-scale phai >= 0.")
     if args.pairwise_margin_dropout < 0.0:
         raise ValueError("--pairwise-margin-dropout phai >= 0.")
+    if args.pairwise_margin_route_max_probability_margin < 0.0:
+        raise ValueError(
+            "--pairwise-margin-route-max-probability-margin phai >= 0."
+        )
     if args.pairwise_margin_loss_weight < 0.0:
         raise ValueError("--pairwise-margin-loss-weight phai >= 0.")
     if args.ordinal_maturity_logit_scale < 0.0:
@@ -1437,6 +1456,10 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         pairwise_margin_pairs=args.pairwise_margin_pairs,
         pairwise_margin_logit_scale=args.pairwise_margin_logit_scale,
         pairwise_margin_dropout=args.pairwise_margin_dropout,
+        pairwise_margin_routing=bool(args.pairwise_margin_routing),
+        pairwise_margin_route_max_probability_margin=(
+            args.pairwise_margin_route_max_probability_margin
+        ),
         ordinal_maturity_head=bool(args.ordinal_maturity_head),
         ordinal_maturity_classes=args.ordinal_maturity_classes,
         ordinal_maturity_logit_scale=args.ordinal_maturity_logit_scale,

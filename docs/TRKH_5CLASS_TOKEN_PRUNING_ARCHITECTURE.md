@@ -368,3 +368,48 @@ Trace them `09h_frequency_selective_votes.png`. Probe V15 dung
 `0.8872/0.6788`, khong qua gate `0.70`. Vote van bam co/la xanh khi nen co mau
 gan qua, nen khong full-train. Chi tiet:
 `docs/TRKH_5CLASS_FREQUENCY_SELECTIVE_V15_AUDIT_20260612.md`.
+
+## V16 Routed Pairwise Specialist (2026-06-15)
+
+V16 doi pairwise margin head tu logit adjustment toan cuc sang adjustment co
+router. Muc tieu la chi kich hoat specialist khi classifier goc that su dang
+phan van giua cac bien class gan nhau.
+
+Input:
+
+- base logits `[B,5]`;
+- pooled feature `[B,256]`;
+- danh sach pair `0-1,1-2,2-3,4-rest`.
+
+Xu ly:
+
+1. Tinh probability tu base logits.
+2. Lay top-2 class va khoang cach probability giua top-1/top-2.
+3. Mot pair duoc mo neu top-2 khop pair khong phan biet thu tu. Rieng
+   `4-rest` mo khi class 4 nam trong top-2.
+4. Route weight:
+
+   `weight = clamp(1 - margin / route_max_probability_margin, 0, 1)`
+
+5. Pairwise score duoc nhan route weight truoc khi cong residual vao hai logit
+   cua pair.
+
+Output:
+
+- `pairwise_margin_route_weights [B,num_pairs]`;
+- pairwise logit adjustment `[B,5]`;
+- final logits la `base_logits + routed_pairwise_adjustment`.
+
+Config/CLI:
+
+- `pairwise_margin_routing`;
+- `pairwise_margin_route_max_probability_margin`;
+- `--pairwise-margin-routing`;
+- `--pairwise-margin-route-max-probability-margin`.
+
+Trace them `pairwise_margin_route_weights` trong `shapes.json`. Probe V16 dung
+`route_max_probability_margin=0.20`; validation macro/class-1 F1
+`0.8874/0.6866`, chua qua gate `0.70`. Test audit sau khi chon checkpoint bang
+validation dat macro/class-1 F1 `0.8949/0.6923`, nhung khong du de dao nguoc
+quyet dinh. Chi tiet:
+`docs/TRKH_5CLASS_ROUTED_PAIRWISE_V16_AUDIT_20260615.md`.

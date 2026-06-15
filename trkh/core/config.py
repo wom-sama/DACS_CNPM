@@ -165,6 +165,8 @@ class ModelConfig:
     pairwise_margin_pairs: str = "0-1,2-3,4-rest"
     pairwise_margin_logit_scale: float = 0.35
     pairwise_margin_dropout: float = 0.05
+    pairwise_margin_routing: bool = False
+    pairwise_margin_route_max_probability_margin: float = 0.20
     ordinal_maturity_head: bool = False
     ordinal_maturity_classes: str = "0,1,2,3"
     ordinal_maturity_logit_scale: float = 0.20

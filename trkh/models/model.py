@@ -1474,6 +1474,8 @@ class VisionTransformerWithRegisters(nn.Module):
         pairwise_margin_pairs: str = "0-1,2-3,4-rest",
         pairwise_margin_logit_scale: float = 0.35,
         pairwise_margin_dropout: float = 0.05,
+        pairwise_margin_routing: bool = False,
+        pairwise_margin_route_max_probability_margin: float = 0.20,
         ordinal_maturity_head: bool = False,
         ordinal_maturity_classes: str = "0,1,2,3",
         ordinal_maturity_logit_scale: float = 0.20,
@@ -1502,6 +1504,10 @@ class VisionTransformerWithRegisters(nn.Module):
         self.detail_patch_enhancement = bool(detail_patch_enhancement)
         self.pairwise_margin_head_enabled = bool(pairwise_margin_head)
         self.pairwise_margin_logit_scale = float(max(0.0, pairwise_margin_logit_scale))
+        self.pairwise_margin_routing = bool(pairwise_margin_routing)
+        self.pairwise_margin_route_max_probability_margin = float(
+            max(0.0, pairwise_margin_route_max_probability_margin)
+        )
         self.pairwise_margin_pairs = (
             _parse_pairwise_margin_pairs(pairwise_margin_pairs, num_classes)
             if self.pairwise_margin_head_enabled
@@ -2335,18 +2341,80 @@ class VisionTransformerWithRegisters(nn.Module):
         pairwise_input = self.pairwise_margin_dropout(pairwise_input)
         return self.pairwise_margin_head(pairwise_input)
 
-    def pairwise_margin_adjustment(self, pairwise_logits: Tensor, like_logits: Tensor) -> Tensor:
+    def pairwise_margin_route_weights(self, like_logits: Tensor) -> Tensor:
+        pair_count = len(self.pairwise_margin_pairs)
+        if like_logits.ndim != 2:
+            batch_size = 0
+        else:
+            batch_size = int(like_logits.size(0))
+        route_weights = like_logits.new_zeros((batch_size, pair_count))
+        if pair_count == 0:
+            return route_weights
+        if not self.pairwise_margin_routing:
+            return route_weights.fill_(1.0)
+        if like_logits.ndim != 2 or like_logits.size(1) < 2:
+            return route_weights
+
+        with torch.no_grad():
+            probabilities = like_logits.detach().float().softmax(dim=1)
+            top_probabilities, top_indices = probabilities.topk(k=2, dim=1)
+            probability_margin = top_probabilities[:, 0] - top_probabilities[:, 1]
+            max_margin = float(self.pairwise_margin_route_max_probability_margin)
+            if max_margin > 0.0:
+                ambiguity_weight = (
+                    1.0 - probability_margin / max_margin
+                ).clamp(min=0.0, max=1.0)
+            else:
+                ambiguity_weight = torch.ones_like(probability_margin)
+            top1 = top_indices[:, 0]
+            top2 = top_indices[:, 1]
+            for pair_index, (left_class, right_class) in enumerate(
+                self.pairwise_margin_pairs
+            ):
+                if int(left_class) < 0:
+                    route_match = (top1 == int(right_class)) | (
+                        top2 == int(right_class)
+                    )
+                else:
+                    route_match = (
+                        (top1 == int(left_class)) & (top2 == int(right_class))
+                    ) | (
+                        (top1 == int(right_class)) & (top2 == int(left_class))
+                    )
+                route_weights[:, pair_index] = (
+                    route_match.to(dtype=ambiguity_weight.dtype) * ambiguity_weight
+                ).to(dtype=route_weights.dtype)
+        return route_weights
+
+    def pairwise_margin_adjustment(
+        self,
+        pairwise_logits: Tensor,
+        like_logits: Tensor,
+        *,
+        return_route_weights: bool = False,
+    ):
         adjustment = like_logits.new_zeros(like_logits.shape)
         if not torch.is_tensor(pairwise_logits) or pairwise_logits.ndim != 2:
+            if return_route_weights:
+                return adjustment, like_logits.new_zeros(
+                    (like_logits.size(0), len(self.pairwise_margin_pairs))
+                )
             return adjustment
         scale = float(self.pairwise_margin_logit_scale)
         if scale <= 0.0:
+            if return_route_weights:
+                return adjustment, like_logits.new_zeros(
+                    (like_logits.size(0), len(self.pairwise_margin_pairs))
+                )
             return adjustment
+        route_weights = self.pairwise_margin_route_weights(like_logits)
         class_count = int(like_logits.size(1))
         for pair_index, (left_class, right_class) in enumerate(self.pairwise_margin_pairs):
             if pair_index >= int(pairwise_logits.size(1)):
                 break
             score = pairwise_logits[:, pair_index] * scale
+            if pair_index < int(route_weights.size(1)):
+                score = score * route_weights[:, pair_index]
             if int(left_class) < 0:
                 positive_class = int(right_class)
                 if 0 <= positive_class < class_count:
@@ -2361,6 +2429,8 @@ class VisionTransformerWithRegisters(nn.Module):
                 adjustment[:, int(left_class)] = adjustment[:, int(left_class)] - score
             if 0 <= int(right_class) < class_count:
                 adjustment[:, int(right_class)] = adjustment[:, int(right_class)] + score
+        if return_route_weights:
+            return adjustment, route_weights.detach()
         return adjustment
 
     def ordinal_maturity_score_from_head_input(self, head_input: Tensor) -> Optional[Tensor]:
@@ -2662,6 +2732,8 @@ class DETRVisionTransformerWithRegisters(VisionTransformerWithRegisters):
         pairwise_margin_pairs: str = "0-1,2-3,4-rest",
         pairwise_margin_logit_scale: float = 0.35,
         pairwise_margin_dropout: float = 0.05,
+        pairwise_margin_routing: bool = False,
+        pairwise_margin_route_max_probability_margin: float = 0.20,
         ordinal_maturity_head: bool = False,
         ordinal_maturity_classes: str = "0,1,2,3",
         ordinal_maturity_logit_scale: float = 0.20,
@@ -2737,6 +2809,10 @@ class DETRVisionTransformerWithRegisters(VisionTransformerWithRegisters):
             pairwise_margin_pairs=pairwise_margin_pairs,
             pairwise_margin_logit_scale=pairwise_margin_logit_scale,
             pairwise_margin_dropout=pairwise_margin_dropout,
+            pairwise_margin_routing=pairwise_margin_routing,
+            pairwise_margin_route_max_probability_margin=(
+                pairwise_margin_route_max_probability_margin
+            ),
             ordinal_maturity_head=ordinal_maturity_head,
             ordinal_maturity_classes=ordinal_maturity_classes,
             ordinal_maturity_logit_scale=ordinal_maturity_logit_scale,
@@ -2955,7 +3031,16 @@ def classification_logits_from_features(model: nn.Module, features: Dict[str, Te
         pairwise_logits = pairwise_fn(head_input)
         if torch.is_tensor(pairwise_logits):
             features["pairwise_margin_logits"] = pairwise_logits
-            logits = logits + adjust_fn(pairwise_logits, logits)
+            if isinstance(features.get("trace"), dict):
+                pairwise_adjustment, route_weights = adjust_fn(
+                    pairwise_logits,
+                    logits,
+                    return_route_weights=True,
+                )
+                features["trace"]["pairwise_margin_route_weights"] = route_weights
+            else:
+                pairwise_adjustment = adjust_fn(pairwise_logits, logits)
+            logits = logits + pairwise_adjustment
     ordinal_fn = getattr(model, "ordinal_maturity_score_from_head_input", None)
     ordinal_adjust_fn = getattr(model, "ordinal_maturity_adjustment", None)
     if callable(ordinal_fn) and callable(ordinal_adjust_fn):

@@ -1080,6 +1080,77 @@ class DetectionCalibrationTests(unittest.TestCase):
         self.assertGreater(float(pair_delta.mean()), 1.9)
         self.assertTrue(torch.isfinite(aux_loss).item())
 
+    def test_pairwise_margin_routing_only_opens_matching_ambiguous_expert(self):
+        model = create_model(
+            num_classes=5,
+            model_config=ModelConfig(
+                model_type="vit_registers",
+                image_size=32,
+                patch_size=8,
+                use_cnn_stem=False,
+                embed_dim=32,
+                depth=2,
+                num_heads=4,
+                num_registers=2,
+                dropout=0.0,
+                attention_dropout=0.0,
+                drop_path_rate=0.0,
+                pairwise_margin_head=True,
+                pairwise_margin_pairs="0-1,1-2,4-rest",
+                pairwise_margin_logit_scale=1.0,
+                pairwise_margin_dropout=0.0,
+                pairwise_margin_routing=True,
+                pairwise_margin_route_max_probability_margin=0.20,
+            ),
+        )
+        base_logits = torch.tensor(
+            [
+                [1.00, 0.95, 0.00, 0.00, 0.00],
+                [0.00, 1.00, 0.95, 0.00, 0.00],
+                [0.00, 0.00, 0.00, 0.95, 1.00],
+            ]
+        )
+        pairwise_logits = torch.ones(3, 3)
+        adjustment, routes = model.pairwise_margin_adjustment(
+            pairwise_logits,
+            base_logits,
+            return_route_weights=True,
+        )
+
+        self.assertGreater(float(routes[0, 0].item()), 0.0)
+        self.assertEqual(float(routes[0, 1].item()), 0.0)
+        self.assertEqual(float(routes[0, 2].item()), 0.0)
+        self.assertEqual(float(routes[1, 0].item()), 0.0)
+        self.assertGreater(float(routes[1, 1].item()), 0.0)
+        self.assertEqual(float(routes[1, 2].item()), 0.0)
+        self.assertEqual(float(routes[2, 0].item()), 0.0)
+        self.assertEqual(float(routes[2, 1].item()), 0.0)
+        self.assertGreater(float(routes[2, 2].item()), 0.0)
+        self.assertNotEqual(float(adjustment[0, 0].item()), 0.0)
+        self.assertEqual(float(adjustment[0, 2].item()), 0.0)
+
+    def test_pairwise_margin_routing_closes_on_high_confidence_margin(self):
+        model = create_model(
+            num_classes=5,
+            model_config=ModelConfig(
+                model_type="vit_registers",
+                image_size=32,
+                patch_size=8,
+                use_cnn_stem=False,
+                embed_dim=32,
+                depth=2,
+                num_heads=4,
+                num_registers=2,
+                pairwise_margin_head=True,
+                pairwise_margin_pairs="0-1",
+                pairwise_margin_routing=True,
+                pairwise_margin_route_max_probability_margin=0.05,
+            ),
+        )
+        base_logits = torch.tensor([[5.0, 0.0, -1.0, -1.0, -1.0]])
+        routes = model.pairwise_margin_route_weights(base_logits)
+        self.assertTrue(torch.equal(routes, torch.zeros_like(routes)))
+
     def test_ordinal_maturity_head_orders_non_defect_classes(self):
         model = create_model(
             num_classes=5,

@@ -35,9 +35,12 @@ param(
     [int]$FrequencySelectiveTopK = 1,
     [double]$FrequencySelectiveBlend = 1.0,
     [double]$FrequencySelectiveForegroundThreshold = 0.35,
+    [bool]$PairwiseMarginRouting = $false,
+    [double]$PairwiseMarginRouteMaxProbabilityMargin = 0.20,
     [switch]$Probe,
     [switch]$PreflightOnly,
     [switch]$Smoke,
+    [switch]$SkipFinalTest,
     [bool]$TraceArchitecture = $true
 )
 
@@ -100,6 +103,9 @@ $launcherArgs = @{
     FrequencySelectiveTopK = $FrequencySelectiveTopK
     FrequencySelectiveBlend = $FrequencySelectiveBlend
     FrequencySelectiveForegroundThreshold = $FrequencySelectiveForegroundThreshold
+    PairwiseMarginRouting = $PairwiseMarginRouting
+    PairwiseMarginRouteMaxProbabilityMargin = $PairwiseMarginRouteMaxProbabilityMargin
+    SkipFinalTest = [bool]$SkipFinalTest
     TraceArchitecture = $TraceArchitecture
 }
 if ($PreflightOnly) {

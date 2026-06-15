@@ -464,6 +464,12 @@ def main() -> None:
             record["frequency_selective_foreground_vote_mass"] = float(
                 frequency_votes[0][kept_foreground_prior >= 0.5].sum().item()
             )
+        pairwise_route_weights = trace.get("pairwise_margin_route_weights")
+        if torch.is_tensor(pairwise_route_weights):
+            record["pairwise_margin_route_weights"] = [
+                float(value)
+                for value in pairwise_route_weights[0].detach().cpu().tolist()
+            ]
         (class_dir / "shapes.json").write_text(
             json.dumps(record, indent=2, ensure_ascii=False),
             encoding="utf-8",
@@ -514,6 +520,7 @@ def main() -> None:
         "- `09f_foreground_surface_bright_spot.png`: diem qua sang/lo sang sau khi mask foreground.",
         "- `09g_bilinear_patch_attention.png`: trong so patch cua compact bilinear fusion sau pruning.",
         "- `09h_frequency_selective_votes.png`: ty le vote patch cua frequency-selective aggregation sau pruning.",
+        "- `pairwise_margin_route_weights` trong `shapes.json`: trong so router cho tung pairwise specialist.",
         "- `block_XX_token_norm.png`: norm token sau tung transformer block; o da prune de trong.",
         "- `prune_XX_after_layer_Y.png`: patch xanh duoc giu, patch toi bi loai.",
         "- `shapes.json`: shape va patch index chi tiet.",
