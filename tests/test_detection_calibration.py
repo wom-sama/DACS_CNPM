@@ -1,4 +1,5 @@
 import csv
+import importlib.util
 import json
 import math
 import os
@@ -9,7 +10,7 @@ from pathlib import Path
 
 import torch
 from torch import nn
-from PIL import Image
+from PIL import Image, ImageDraw
 
 import trkh.models.model as model_module
 from trkh.core.config import (
@@ -52,6 +53,7 @@ from trkh.data.dataset import (
     SampleWeightDataset,
     StrictBalancedBatchSampler,
     _apply_copypaste_detection_batch,
+    _grabcut_foreground_mask_array,
     _pseudo_foreground_mask_array,
     build_rare_class_repeat_factors,
     build_eval_transform,
@@ -1330,6 +1332,21 @@ class DetectionCalibrationTests(unittest.TestCase):
         self.assertLess(float(mask[:12].mean()), 0.05)
         self.assertLess(float(mask[52:].mean()), 0.05)
         self.assertGreater(float(mask[24:40, 18:46].mean()), 0.80)
+
+    def test_grabcut_foreground_mask_removes_border_background(self):
+        if importlib.util.find_spec("cv2") is None:
+            self.skipTest("OpenCV is not installed")
+        image = Image.new("RGB", (96, 72), (70, 150, 72))
+        draw = ImageDraw.Draw(image)
+        draw.ellipse((20, 12, 78, 62), fill=(170, 205, 70))
+        draw.ellipse((44, 30, 58, 44), fill=(95, 120, 36))
+
+        mask = _grabcut_foreground_mask_array(image, margin=0.05)
+
+        self.assertLess(float(mask[:, :8].mean()), 0.20)
+        self.assertLess(float(mask[:, -8:].mean()), 0.20)
+        self.assertGreater(float(mask[26:48, 36:62].mean()), 0.65)
+        self.assertLess(float(mask.mean()), 0.80)
 
     def test_training_pseudo_foreground_mask_excludes_imagenet_padding(self):
         mean = torch.tensor(IMAGENET_MEAN, dtype=torch.float32).view(1, 3, 1, 1)

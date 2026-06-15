@@ -986,7 +986,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--illumination-normalization-strength", type=float, default=0.0)
     parser.add_argument(
         "--background-suppression-mode",
-        choices=("none", "gray", "blur", "mean", "desaturate_blur", "blur_gray"),
+        choices=(
+            "none",
+            "gray",
+            "blur",
+            "mean",
+            "desaturate_blur",
+            "blur_gray",
+            "grabcut",
+            "grabcut_gray",
+            "grabcut_blur",
+            "grabcut_mean",
+            "grabcut_desaturate_blur",
+            "grabcut_blur_gray",
+        ),
         default="none",
     )
     parser.add_argument("--background-suppression-probability", type=float, default=0.0)

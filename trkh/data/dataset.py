@@ -105,6 +105,111 @@ def _soft_mask_image(mask: np.ndarray, radius: float = 3.0) -> Image.Image:
     return image
 
 
+def _largest_connected_component(mask: np.ndarray) -> np.ndarray:
+    mask = np.asarray(mask, dtype=bool)
+    if mask.size == 0 or not bool(mask.any()):
+        return mask
+    try:
+        import cv2  # type: ignore
+    except Exception:
+        return mask
+    labels_count, labels = cv2.connectedComponents(mask.astype(np.uint8), connectivity=8)
+    if labels_count <= 1:
+        return mask
+    counts = np.bincount(labels.reshape(-1), minlength=labels_count)
+    counts[0] = 0
+    largest_label = int(np.argmax(counts))
+    if largest_label <= 0 or int(counts[largest_label]) <= 0:
+        return mask
+    return labels == largest_label
+
+
+def _grabcut_foreground_mask_array(
+    image: Image.Image,
+    margin: float = 0.08,
+    iterations: int = 2,
+) -> np.ndarray:
+    """Refine the pseudo foreground mask with classical GrabCut.
+
+    This stays pretrained-free. If OpenCV is unavailable or GrabCut returns an
+    unstable mask, the function falls back to the existing pseudo mask.
+    """
+    base = image.convert("RGB")
+    pseudo_mask = _pseudo_foreground_mask_array(base, margin=margin)
+    try:
+        import cv2  # type: ignore
+    except Exception:
+        return pseudo_mask
+
+    rgb = np.asarray(base, dtype=np.uint8)
+    if rgb.ndim != 3 or rgb.shape[-1] != 3:
+        return pseudo_mask
+    height, width = rgb.shape[:2]
+    if height < 8 or width < 8:
+        return pseudo_mask
+
+    rgb_float = rgb.astype(np.float32) / 255.0
+    fill_rgb = np.asarray(_imagenet_fill(IMAGENET_MEAN), dtype=np.float32).reshape(1, 1, 3) / 255.0
+    fill_delta = np.abs(rgb_float - fill_rgb).mean(axis=2)
+    not_padding = fill_delta >= 0.035
+
+    yy, xx = np.mgrid[0:height, 0:width].astype(np.float32)
+    xx_norm = (xx + 0.5) / max(1.0, float(width)) * 2.0 - 1.0
+    yy_norm = (yy + 0.5) / max(1.0, float(height)) * 2.0 - 1.0
+    central = ((xx_norm / 0.88) ** 2 + (yy_norm / 0.92) ** 2) <= 1.0
+
+    init_mask = np.full((height, width), cv2.GC_PR_BGD, dtype=np.uint8)
+    init_mask[pseudo_mask & not_padding] = cv2.GC_PR_FGD
+
+    kernel_size = max(3, int(round(min(height, width) * 0.025)))
+    if kernel_size % 2 == 0:
+        kernel_size += 1
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size, kernel_size))
+    core = cv2.erode((pseudo_mask & central & not_padding).astype(np.uint8), kernel, iterations=1) > 0
+    min_core_pixels = max(16, int(round(height * width * 0.005)))
+    if int(core.sum()) < min_core_pixels:
+        core = pseudo_mask & central & not_padding
+    if int(core.sum()) < min_core_pixels:
+        return pseudo_mask
+    init_mask[core] = cv2.GC_FGD
+
+    border = np.zeros((height, width), dtype=bool)
+    border_width = max(2, int(round(min(height, width) * 0.025)))
+    border[:border_width, :] = True
+    border[-border_width:, :] = True
+    border[:, :border_width] = True
+    border[:, -border_width:] = True
+    init_mask[(~not_padding) | (border & ~central)] = cv2.GC_BGD
+
+    bgd_model = np.zeros((1, 65), np.float64)
+    fgd_model = np.zeros((1, 65), np.float64)
+    try:
+        cv2.grabCut(
+            cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR),
+            init_mask,
+            None,
+            bgd_model,
+            fgd_model,
+            max(1, int(iterations)),
+            cv2.GC_INIT_WITH_MASK,
+        )
+    except Exception:
+        return pseudo_mask
+
+    refined = ((init_mask == cv2.GC_FGD) | (init_mask == cv2.GC_PR_FGD)) & not_padding
+    refined = cv2.morphologyEx(refined.astype(np.uint8), cv2.MORPH_CLOSE, kernel, iterations=1) > 0
+    refined = cv2.morphologyEx(refined.astype(np.uint8), cv2.MORPH_OPEN, kernel, iterations=1) > 0
+    refined = _largest_connected_component(refined)
+
+    refined_area = float(refined.mean())
+    pseudo_area = max(1e-6, float(pseudo_mask.mean()))
+    if refined_area < 0.04 or refined_area > 0.90:
+        return pseudo_mask
+    if refined_area < pseudo_area * 0.20:
+        return pseudo_mask
+    return refined
+
+
 def _normalize_illumination_image(image: Image.Image, strength: float = 0.35) -> Image.Image:
     strength = max(0.0, min(1.0, float(strength)))
     if strength <= 0.0:
@@ -132,18 +237,24 @@ def _suppress_background_image(
     normalized_mode = str(mode or "none").strip().lower().replace("-", "_")
     if normalized_mode in {"", "none", "off", "false"}:
         return image
-    mask = _pseudo_foreground_mask_array(image, margin=margin)
+    use_grabcut = normalized_mode == "grabcut" or normalized_mode.startswith("grabcut_")
+    if use_grabcut:
+        mask_mode = normalized_mode[len("grabcut") :].lstrip("_") or "desaturate_blur"
+        mask = _grabcut_foreground_mask_array(image, margin=margin)
+    else:
+        mask_mode = normalized_mode
+        mask = _pseudo_foreground_mask_array(image, margin=margin)
     alpha = _soft_mask_image(mask, radius=max(1.0, float(blur_radius) * 0.25))
     base = image.convert("RGB")
-    if normalized_mode in {"gray", "background_gray"}:
+    if mask_mode in {"gray", "background_gray"}:
         background = ImageOps.grayscale(base).convert("RGB")
-    elif normalized_mode in {"blur", "background_blur"}:
+    elif mask_mode in {"blur", "background_blur"}:
         background = base.filter(ImageFilter.GaussianBlur(radius=max(0.1, float(blur_radius))))
-    elif normalized_mode in {"mean", "background_mean"}:
+    elif mask_mode in {"mean", "background_mean"}:
         rgb = np.asarray(base, dtype=np.float32)
         mean = np.median(rgb.reshape(-1, 3), axis=0).round().astype(np.uint8)
         background = Image.new("RGB", base.size, tuple(int(value) for value in mean.tolist()))
-    elif normalized_mode in {"desaturate_blur", "blur_gray"}:
+    elif mask_mode in {"desaturate_blur", "blur_gray"}:
         background = ImageOps.grayscale(base).convert("RGB").filter(
             ImageFilter.GaussianBlur(radius=max(0.1, float(blur_radius)))
         )

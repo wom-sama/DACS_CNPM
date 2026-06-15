@@ -1,7 +1,7 @@
 param(
     [string]$Python = "D:\DataAI\.venv\Scripts\python.exe",
     [string]$DataYaml = "D:\DataAI\AIEx\newdataset\class_f\data.yaml",
-    [string]$RunName = "mango_cls_256_5class_routed_pairwise_v16_30e",
+    [string]$RunName = "mango_cls_256_5class_grabcut_background_v17_30e",
     [string]$ResumeCheckpoint = "runs\mango_cls_256_5class_attention_views_bounded_v8_30e\checkpoints\best.pt",
     [string]$SampleWeightManifest = "runs\boundary_sample_weights_v11_train_only_20260612\sample_weights_train_only.csv",
     [int]$Epochs = 30,
@@ -14,7 +14,7 @@ param(
     [int]$MaxValBatches = 0,
     [double]$BoundaryContrastiveLossWeight = 0.08,
     [double]$PairwiseMarginRouteMaxProbabilityMargin = 0.20,
-    [string]$BackgroundSuppressionMode = "desaturate_blur",
+    [string]$BackgroundSuppressionMode = "grabcut_desaturate_blur",
     [double]$BackgroundSuppressionProbability = 0.80,
     [double]$BackgroundSuppressionMargin = 0.08,
     [double]$BackgroundSuppressionBlurRadius = 7.0,
@@ -25,11 +25,11 @@ param(
     [bool]$TraceArchitecture = $true
 )
 
-$launcher = Join-Path $PSScriptRoot "run_trkh_5class_boundary_contrastive_v12.ps1"
+$launcher = Join-Path $PSScriptRoot "run_trkh_5class_routed_pairwise_v16.ps1"
 
 if ($Probe) {
     if (-not $PSBoundParameters.ContainsKey("RunName")) {
-        $RunName = "probe_mango_cls_256_5class_routed_pairwise_v16_120b_6e"
+        $RunName = "probe_mango_cls_256_5class_grabcut_background_v17_120b_6e"
     }
     if (-not $PSBoundParameters.ContainsKey("Epochs")) {
         $Epochs = 6
@@ -60,17 +60,13 @@ $launcherArgs = @{
     MaxTrainBatches = $MaxTrainBatches
     MaxValBatches = $MaxValBatches
     BoundaryContrastiveLossWeight = $BoundaryContrastiveLossWeight
-    ForegroundSurfaceFusion = $false
-    BilinearPatchFusion = $false
-    FrequencySelectivePooling = $false
-    PairwiseMarginRouting = $true
     PairwiseMarginRouteMaxProbabilityMargin = $PairwiseMarginRouteMaxProbabilityMargin
     BackgroundSuppressionMode = $BackgroundSuppressionMode
     BackgroundSuppressionProbability = $BackgroundSuppressionProbability
     BackgroundSuppressionMargin = $BackgroundSuppressionMargin
     BackgroundSuppressionBlurRadius = $BackgroundSuppressionBlurRadius
-    SkipFinalTest = [bool]$SkipFinalTest
     TraceArchitecture = $TraceArchitecture
+    SkipFinalTest = [bool]$SkipFinalTest
 }
 if ($PreflightOnly) {
     $launcherArgs.PreflightOnly = $true

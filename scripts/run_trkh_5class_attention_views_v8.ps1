@@ -1,5 +1,6 @@
 param(
     [string]$Python = "D:\DataAI\.venv\Scripts\python.exe",
+    [string]$DataYaml = "D:\DataAI\AIEx\newdataset\class_f\data.yaml",
     [string]$RunName = "mango_cls_256_5class_attention_views_v8_30e",
     [string]$ResumeCheckpoint = "runs\mango_cls_256_5class_hardneg_maskfix_v4_30e\checkpoints\best.pt",
     [int]$Epochs = 30,
@@ -42,6 +43,10 @@ param(
     [double]$FrequencySelectiveForegroundThreshold = 0.35,
     [bool]$PairwiseMarginRouting = $false,
     [double]$PairwiseMarginRouteMaxProbabilityMargin = 0.20,
+    [string]$BackgroundSuppressionMode = "desaturate_blur",
+    [double]$BackgroundSuppressionProbability = 0.80,
+    [double]$BackgroundSuppressionMargin = 0.08,
+    [double]$BackgroundSuppressionBlurRadius = 7.0,
     [switch]$PreflightOnly,
     [switch]$Smoke,
     [switch]$SkipFinalTest,
@@ -76,7 +81,6 @@ if ($LASTEXITCODE -ne 0) {
     throw "Training CLI import/help preflight failed."
 }
 
-$DataYaml = "D:\DataAI\AIEx\newdataset\class_f\data.yaml"
 if (-not (Test-Path -LiteralPath $DataYaml)) {
     throw "Khong tim thay dataset YAML: $DataYaml"
 }
@@ -141,6 +145,10 @@ if ($PreflightOnly) {
         frequency_selective_foreground_threshold = $FrequencySelectiveForegroundThreshold
         pairwise_margin_routing = [bool]$PairwiseMarginRouting
         pairwise_margin_route_max_probability_margin = $PairwiseMarginRouteMaxProbabilityMargin
+        background_suppression_mode = $BackgroundSuppressionMode
+        background_suppression_probability = $BackgroundSuppressionProbability
+        background_suppression_margin = $BackgroundSuppressionMargin
+        background_suppression_blur_radius = $BackgroundSuppressionBlurRadius
         skip_final_test = [bool]$SkipFinalTest
     } | ConvertTo-Json -Depth 5
     exit 0
@@ -288,10 +296,10 @@ try {
         "--hue", "0.01",
         "--illumination-normalization",
         "--illumination-normalization-strength", "0.35",
-        "--background-suppression-mode", "desaturate_blur",
-        "--background-suppression-probability", "0.8",
-        "--background-suppression-margin", "0.08",
-        "--background-suppression-blur-radius", "7",
+        "--background-suppression-mode", "$BackgroundSuppressionMode",
+        "--background-suppression-probability", "$BackgroundSuppressionProbability",
+        "--background-suppression-margin", "$BackgroundSuppressionMargin",
+        "--background-suppression-blur-radius", "$BackgroundSuppressionBlurRadius",
         "--local-exposure-probability", "0.15",
         "--local-exposure-strength", "0.25",
         "--obstacle-probability", "0.04",
@@ -394,6 +402,10 @@ try {
         frequency_selective_foreground_threshold = $FrequencySelectiveForegroundThreshold
         pairwise_margin_routing = [bool]$PairwiseMarginRouting
         pairwise_margin_route_max_probability_margin = $PairwiseMarginRouteMaxProbabilityMargin
+        background_suppression_mode = $BackgroundSuppressionMode
+        background_suppression_probability = $BackgroundSuppressionProbability
+        background_suppression_margin = $BackgroundSuppressionMargin
+        background_suppression_blur_radius = $BackgroundSuppressionBlurRadius
         attention_view_loss_weight = $AttentionViewLossWeight
         attention_crop_probability = $AttentionCropProbability
         attention_drop_probability = $AttentionDropProbability

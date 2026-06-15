@@ -1,5 +1,6 @@
 param(
     [string]$Python = "D:\DataAI\.venv\Scripts\python.exe",
+    [string]$DataYaml = "D:\DataAI\AIEx\newdataset\class_f\data.yaml",
     [string]$RunName = "mango_cls_256_5class_boundary_contrastive_v12_30e",
     [string]$ResumeCheckpoint = "runs\mango_cls_256_5class_attention_views_bounded_v8_30e\checkpoints\best.pt",
     [string]$SampleWeightManifest = "runs\boundary_sample_weights_v11_train_only_20260612\sample_weights_train_only.csv",
@@ -37,6 +38,10 @@ param(
     [double]$FrequencySelectiveForegroundThreshold = 0.35,
     [bool]$PairwiseMarginRouting = $false,
     [double]$PairwiseMarginRouteMaxProbabilityMargin = 0.20,
+    [string]$BackgroundSuppressionMode = "desaturate_blur",
+    [double]$BackgroundSuppressionProbability = 0.80,
+    [double]$BackgroundSuppressionMargin = 0.08,
+    [double]$BackgroundSuppressionBlurRadius = 7.0,
     [switch]$Probe,
     [switch]$PreflightOnly,
     [switch]$Smoke,
@@ -66,6 +71,7 @@ if ($Probe) {
 
 $launcherArgs = @{
     Python = $Python
+    DataYaml = $DataYaml
     RunName = $RunName
     ResumeCheckpoint = $ResumeCheckpoint
     Epochs = $Epochs
@@ -105,6 +111,10 @@ $launcherArgs = @{
     FrequencySelectiveForegroundThreshold = $FrequencySelectiveForegroundThreshold
     PairwiseMarginRouting = $PairwiseMarginRouting
     PairwiseMarginRouteMaxProbabilityMargin = $PairwiseMarginRouteMaxProbabilityMargin
+    BackgroundSuppressionMode = $BackgroundSuppressionMode
+    BackgroundSuppressionProbability = $BackgroundSuppressionProbability
+    BackgroundSuppressionMargin = $BackgroundSuppressionMargin
+    BackgroundSuppressionBlurRadius = $BackgroundSuppressionBlurRadius
     SkipFinalTest = [bool]$SkipFinalTest
     TraceArchitecture = $TraceArchitecture
 }

@@ -151,6 +151,12 @@
 - [x] V16 preflight/smoke/regression pass; probe 120 batch x 6 epoch chon epoch 3, val macro/class1 `0.8874/0.6866`.
 - [x] Xuat V16 test detailed, class-1 confusion audit va architecture trace thu cong sau automation timeout; test macro/class1 `0.8949/0.6923`.
 - [x] Khong full-train V16 vi class-1 validation F1 van duoi gate `0.70`; trace cho thay pseudo-mask van lay nen co mau gan qua.
+- [x] Nghien cuu GrabCut/Cutout/Random Erasing/AugMix cho background/occlusion/robustness; codebase da co erasing/local exposure/obstacle nen uu tien mask.
+- [x] Them GrabCut background suppression modes `grabcut_*`, audit tool va preprocessing cache builder co `--dry-run`, `--max-samples-per-class`, `--workers`.
+- [x] Them `-DataYaml` cho launcher V8/V12/V16/V17 de co the tro toi preprocessing cache dataset.
+- [x] V17 mask audit: border foreground class 1 giam `0.3675 -> 0.0729`, nhung van giu mot phan nen xanh sat qua.
+- [x] V17 smoke exit `0`, trace completed; online GrabCut cham nhung khong treo.
+- [x] V17 probe 80 batch x 4 epoch: best val macro/class1 `0.8789/0.6405`; reject, khong full-train.
 - [ ] Tao group-clean split theo qua goc/phien chup truoc khi dung metric de khang dinh generalization.
 - [ ] Tao train-only label-boundary review set cho 0/1/2, ghi label dung/sai/ambiguous va quality condition.
 - [ ] Thu learned object-tight localization/mask co supervision; khong tiep tuc siet pseudo-mask mau vi co/la xanh co the dinh vao qua.

@@ -413,3 +413,46 @@ Trace them `pairwise_margin_route_weights` trong `shapes.json`. Probe V16 dung
 validation dat macro/class-1 F1 `0.8949/0.6923`, nhung khong du de dao nguoc
 quyet dinh. Chi tiet:
 `docs/TRKH_5CLASS_ROUTED_PAIRWISE_V16_AUDIT_20260615.md`.
+
+## V17 GrabCut Background Filtering (2026-06-15)
+
+V17 them foreground refinement classical bang GrabCut vao preprocessing, khong
+dung pretrained. No chi thay doi anh dau vao; kien truc model V16 giu nguyen.
+
+Input:
+
+- anh RGB sau resize-pad `[H,W,3]`;
+- pseudo foreground mask tu mau/detail/padding;
+- center prior va border/padding background prior.
+
+Xu ly:
+
+1. Khoi tao GrabCut mask tu pseudo foreground.
+2. Mark core central foreground va border/padding background.
+3. Chay OpenCV GrabCut bang `GC_INIT_WITH_MASK`.
+4. Lay foreground/probable foreground, morphology close/open va largest
+   connected component.
+5. Neu mask qua nho/qua lon/khong on dinh thi fallback ve pseudo mask.
+6. Dung mask de tao cac mode background suppression:
+   `grabcut_gray`, `grabcut_blur`, `grabcut_mean`,
+   `grabcut_desaturate_blur`, `grabcut_blur_gray`.
+
+Output:
+
+- anh RGB cung kich thuoc dau vao;
+- target/bbox khong bi doi vi khong crop geometry;
+- optional preprocessing cache dataset co cung split/class structure.
+
+Tools/CLI:
+
+- `trkh.tools.audit_grabcut_background`;
+- `trkh.tools.build_preprocessed_classification_cache`;
+- `--background-suppression-mode grabcut_desaturate_blur`;
+- launcher V17: `scripts/run_trkh_5class_grabcut_background_v17.ps1`;
+- launchers co `-DataYaml` de tro toi cache dataset neu build offline.
+
+Audit mask cho thay GrabCut giam foreground o border manh hon pseudo mask, nhung
+van co the giu nen xanh sat qua. Probe V17 80 batch x 4 epoch cho validation
+macro/class-1 F1 `0.8789/0.6405`, thap hon V16; online GrabCut cung cham
+~300s/epoch. Vi vay khong full-train V17. Chi tiet:
+`docs/TRKH_5CLASS_GRABCUT_BACKGROUND_V17_AUDIT_20260615.md`.
