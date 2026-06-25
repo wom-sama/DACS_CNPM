@@ -4,6 +4,8 @@ param(
     [string]$RunName = "mango_cls_256_5class_routed_pairwise_v16_30e",
     [string]$ResumeCheckpoint = "runs\mango_cls_256_5class_attention_views_bounded_v8_30e\checkpoints\best.pt",
     [string]$SampleWeightManifest = "runs\boundary_sample_weights_v11_train_only_20260612\sample_weights_train_only.csv",
+    [string]$HardSampleManifest = "runs\mango_cls_256_5class_defectstat_v3_30e\hard_mining_train_only\hard_samples_train_only.csv",
+    [double]$HardSampleRepeatFactor = 1.6,
     [int]$ImageSize = 256,
     [int]$Epochs = 30,
     [int]$Patience = 3,
@@ -103,6 +105,8 @@ $launcherArgs = @{
     RunName = $RunName
     ResumeCheckpoint = $ResumeCheckpoint
     SampleWeightManifest = $SampleWeightManifest
+    HardSampleManifest = $HardSampleManifest
+    HardSampleRepeatFactor = $HardSampleRepeatFactor
     ImageSize = $ImageSize
     Epochs = $Epochs
     Patience = $Patience

@@ -42,6 +42,8 @@ param(
     [bool]$PairwiseConfusionNormalize = $true,
     [double]$SampleWeightFactor = 1.0,
     [double]$SampleWeightMax = 2.50,
+    [string]$HardSampleManifest = "runs\mango_cls_256_5class_defectstat_v3_30e\hard_mining_train_only\hard_samples_train_only.csv",
+    [double]$HardSampleRepeatFactor = 1.6,
     [bool]$Sam = $false,
     [double]$SamRho = 0.03,
     [bool]$SamAdaptive = $false,
@@ -160,6 +162,8 @@ $launcherArgs = @{
     SampleWeightManifest = $SampleWeightManifest
     SampleWeightFactor = $SampleWeightFactor
     SampleWeightMax = $SampleWeightMax
+    HardSampleManifest = $HardSampleManifest
+    HardSampleRepeatFactor = $HardSampleRepeatFactor
     Sam = $Sam
     SamRho = $SamRho
     SamAdaptive = $SamAdaptive

@@ -187,8 +187,8 @@
 - [x] Doi chieu voi V16 `class_f`: cap loi uu tien hien tai la `0-1`, `2-3`, phu `1-2`; khong phai `3-4`.
 - [x] Chay validation-only pair calibration audit tren V16: `0-1` khong cai thien class 1; `1-2` chi tang class-1 F1 `0.6866 -> 0.6905`; chua qua gate `0.70`.
 - [x] Loai huong simple pairwise logit bias/calibration lam ung vien full train.
-- [ ] Tich hop forensic report vao evaluator/launcher chinh voi che do nhanh mac dinh va foreground mode co gioi han/cache.
-- [ ] Tao train-only ambiguous-boundary manifest tu low-margin/error-prone train predictions; uu tien cap `0-1`, `2-3`, `1-2`; khong dung val/test.
+- [x] Tich hop forensic/data-boundary workflow bang tool rieng `trkh.tools.build_boundary_review_manifest`; foreground stats chi tinh sau khi gioi han selected rows de tranh timeout.
+- [x] Tao train-only ambiguous-boundary manifest tu V16 train predictions tai `runs/boundary_review_v16_train_20260625`; uu tien cap `0-1`, `2-3`, `1-2`; khong dung val/test.
 - [x] Thu V25 background-neutralized prediction consistency nhe + ambiguous soft target train-only; probe best val macro/class1 `0.8858/0.6787`; reject, khong full train.
 - [x] Them V26 targeted directional margin train-only cho hard false-positive/false-negative quanh class 1; smoke trace completed.
 - [x] V26 probe 120 batch x 6 epoch: best val macro/class1 `0.8864/0.6805`; forensic `TP=115`, `FP=72`, `FN=36`; reject, khong full train.
@@ -202,6 +202,11 @@
 - [x] Them foreground object crop V30 (`foreground_crop_mode none|pseudo|grabcut`) vao transform/config/CLI/eval/XAI/trace va launcher rieng.
 - [x] V30 smoke trace completed, probe best val macro/class1 `0.8851/0.6786`; reject, khong full train.
 - [x] Ghi audit V27/V29/V30 tai `docs/TRKH_5CLASS_V27_V29_V30_AUDIT_20260625.md`.
-- [ ] Gate full train van la class-1 validation F1 `>=0.70`; V16 van la best no-pretrain probe hien tai (`0.6866`).
-- [ ] Huong tiep theo: tao boundary review manifest train/val voi nhan `correct/ambiguous/wrong/lighting/dirty/partial`, sau do moi quyet dinh loss/pretraining tiep.
-- [ ] Tao group-clean split theo source sequence truoc khi dung metric de khang dinh co the vuot pretrained baseline.
+- [ ] Gate full train van la class-1 validation F1 `>=0.70`; V16 van la best no-pretrain probe hien tai (`0.6866`) tren split cu.
+- [x] Tao boundary review manifest train/val voi cot `correct/ambiguous/wrong/lighting/dirty/partial` tai `runs/boundary_review_v16_train_20260625` va `runs/boundary_review_v16_val_20260625`.
+- [x] Tao group-clean split theo source sequence tai `D:\DataAI\AIEx\newdataset\class_f_groupclean_v1` va leak audit tai `runs/class_f_groupclean_v1_leak_audit_20260625`.
+- [x] Sua launcher preflight khong hard-code `class_f` khi dem split va them toggle `HardSampleManifest/HardSampleRepeatFactor` de tat manifest split cu.
+- [x] Chay preflight + smoke group-clean V16; trace completed tai `runs/smoke_groupclean_v16_20260625/architecture_trace`.
+- [ ] Chay probe group-clean V16 voi `-SampleWeightManifest " " -HardSampleManifest " "`; neu class-1 val F1 < `0.70` thi khong full train.
+- [ ] Review thu cong `runs/boundary_review_v16_train_20260625/boundary_review_manifest.csv`, dien `manual_label_status`, `quality_lighting`, `quality_dirty_obstacle`, `quality_partial_fruit`, `quality_background_mask`.
+- [ ] Sau manual review train-only, tao clean/ambiguous/ignore/soft-target manifest; khong dung val/test de tune.

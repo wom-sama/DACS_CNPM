@@ -47,6 +47,8 @@ param(
     [string]$SampleWeightManifest = "",
     [double]$SampleWeightFactor = 1.0,
     [double]$SampleWeightMax = 5.0,
+    [string]$HardSampleManifest = "runs\mango_cls_256_5class_defectstat_v3_30e\hard_mining_train_only\hard_samples_train_only.csv",
+    [double]$HardSampleRepeatFactor = 1.6,
     [string]$AmbiguousSoftTargetManifest = "",
     [double]$AmbiguousSoftTargetAlpha = 0.25,
     [string]$TargetedMarginManifest = "",
@@ -149,6 +151,9 @@ if (-not [string]::IsNullOrWhiteSpace($ResumeCheckpoint) -and -not (Test-Path -L
 if (-not [string]::IsNullOrWhiteSpace($SampleWeightManifest) -and -not (Test-Path -LiteralPath $SampleWeightManifest)) {
     throw "Khong tim thay sample weight manifest: $SampleWeightManifest"
 }
+if (-not [string]::IsNullOrWhiteSpace($HardSampleManifest) -and -not (Test-Path -LiteralPath $HardSampleManifest)) {
+    throw "Khong tim thay hard sample manifest: $HardSampleManifest"
+}
 if (-not [string]::IsNullOrWhiteSpace($AmbiguousSoftTargetManifest) -and -not (Test-Path -LiteralPath $AmbiguousSoftTargetManifest)) {
     throw "Khong tim thay ambiguous soft-target manifest: $AmbiguousSoftTargetManifest"
 }
@@ -156,16 +161,64 @@ if (-not [string]::IsNullOrWhiteSpace($TargetedMarginManifest) -and -not (Test-P
     throw "Khong tim thay targeted-margin manifest: $TargetedMarginManifest"
 }
 
-$SplitCounts = Get-ChildItem -Recurse -File "D:\DataAI\AIEx\newdataset\class_f" |
-    Where-Object { $_.Extension -match '^\.(jpg|jpeg|png|bmp|webp)$' } |
-    Group-Object { $_.Directory.Parent.Name + "/" + $_.Directory.Name } |
-    Sort-Object Name |
-    ForEach-Object {
-        [ordered]@{
-            split_class = $_.Name
-            count = $_.Count
+function Get-DataYamlScalar {
+    param(
+        [string]$YamlPath,
+        [string]$Key,
+        [string]$DefaultValue
+    )
+    $pattern = "^\s*" + [regex]::Escape($Key) + "\s*:\s*(.+?)\s*$"
+    $match = Select-String -LiteralPath $YamlPath -Pattern $pattern | Select-Object -First 1
+    if ($null -eq $match) {
+        return $DefaultValue
+    }
+    $value = $match.Matches[0].Groups[1].Value.Trim()
+    if (($value.StartsWith('"') -and $value.EndsWith('"')) -or ($value.StartsWith("'") -and $value.EndsWith("'"))) {
+        $value = $value.Substring(1, $value.Length - 2)
+    }
+    return $value
+}
+
+function Resolve-DataYamlPath {
+    param(
+        [string]$BasePath,
+        [string]$Value
+    )
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return $null
+    }
+    if ([System.IO.Path]::IsPathRooted($Value)) {
+        return [System.IO.Path]::GetFullPath($Value)
+    }
+    return [System.IO.Path]::GetFullPath((Join-Path $BasePath $Value))
+}
+
+$DataYamlResolved = (Resolve-Path -LiteralPath $DataYaml).Path
+$DataYamlDir = Split-Path -Parent $DataYamlResolved
+$DatasetRootValue = Get-DataYamlScalar -YamlPath $DataYamlResolved -Key "path" -DefaultValue "."
+$DatasetRoot = Resolve-DataYamlPath -BasePath $DataYamlDir -Value $DatasetRootValue
+$SplitCounts = @()
+foreach ($SplitEntry in @(
+    @{ Name = "test"; Value = Get-DataYamlScalar -YamlPath $DataYamlResolved -Key "test" -DefaultValue "" },
+    @{ Name = "train"; Value = Get-DataYamlScalar -YamlPath $DataYamlResolved -Key "train" -DefaultValue "train" },
+    @{ Name = "val"; Value = Get-DataYamlScalar -YamlPath $DataYamlResolved -Key "val" -DefaultValue "val" }
+)) {
+    $SplitRoot = Resolve-DataYamlPath -BasePath $DatasetRoot -Value $SplitEntry.Value
+    if ($null -eq $SplitRoot -or -not (Test-Path -LiteralPath $SplitRoot)) {
+        continue
+    }
+    foreach ($ClassDir in Get-ChildItem -LiteralPath $SplitRoot -Directory | Sort-Object Name) {
+        $ImageCount = (
+            Get-ChildItem -LiteralPath $ClassDir.FullName -Recurse -File |
+            Where-Object { $_.Extension -match '^\.(jpg|jpeg|png|bmp|webp)$' } |
+            Measure-Object
+        ).Count
+        $SplitCounts += [ordered]@{
+            split_class = $SplitEntry.Name + "/" + $ClassDir.Name
+            count = $ImageCount
         }
     }
+}
 $GpuStatus = & nvidia-smi `
     --query-gpu=name,memory.used,memory.total,utilization.gpu,temperature.gpu,pstate `
     --format=csv,noheader
@@ -215,6 +268,8 @@ if ($PreflightOnly) {
         sample_weight_manifest = $SampleWeightManifest
         sample_weight_factor = $SampleWeightFactor
         sample_weight_max = $SampleWeightMax
+        hard_sample_manifest = $HardSampleManifest
+        hard_sample_repeat_factor = $HardSampleRepeatFactor
         ambiguous_soft_target_manifest = $AmbiguousSoftTargetManifest
         ambiguous_soft_target_alpha = $AmbiguousSoftTargetAlpha
         targeted_margin_manifest = $TargetedMarginManifest
@@ -433,8 +488,6 @@ try {
         "--targeted-margin-max-weight", "$TargetedMarginMaxWeight",
         "--register-diversity-loss-weight", "0.0",
         "--pairwise-margin-loss-weight", "0.04",
-        "--hard-sample-manifest", "runs\mango_cls_256_5class_defectstat_v3_30e\hard_mining_train_only\hard_samples_train_only.csv",
-        "--hard-sample-repeat-factor", "1.6",
         "--resize-mode", "pad",
         "--train-scale-min", "0.88",
         "--train-scale-crop-probability", "0.35",
@@ -503,6 +556,15 @@ try {
             throw "Khong tim thay sample weight manifest: $SampleWeightManifest"
         }
         $TrainArgs += @("--sample-weight-manifest", $SampleWeightManifest)
+    }
+    if (-not [string]::IsNullOrWhiteSpace($HardSampleManifest)) {
+        if (-not (Test-Path -LiteralPath $HardSampleManifest)) {
+            throw "Khong tim thay hard sample manifest: $HardSampleManifest"
+        }
+        $TrainArgs += @(
+            "--hard-sample-manifest", $HardSampleManifest,
+            "--hard-sample-repeat-factor", "$HardSampleRepeatFactor"
+        )
     }
     if (-not [string]::IsNullOrWhiteSpace($AmbiguousSoftTargetManifest)) {
         if (-not (Test-Path -LiteralPath $AmbiguousSoftTargetManifest)) {
@@ -645,6 +707,8 @@ try {
         sample_weight_manifest = $SampleWeightManifest
         sample_weight_factor = $SampleWeightFactor
         sample_weight_max = $SampleWeightMax
+        hard_sample_manifest = $HardSampleManifest
+        hard_sample_repeat_factor = $HardSampleRepeatFactor
         ambiguous_soft_target_manifest = $AmbiguousSoftTargetManifest
         ambiguous_soft_target_alpha = $AmbiguousSoftTargetAlpha
         targeted_margin_manifest = $TargetedMarginManifest
