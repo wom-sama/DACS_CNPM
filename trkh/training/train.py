@@ -39,6 +39,7 @@ from trkh.core.config import (
     to_serializable,
 )
 from trkh.data.dataset import (
+    AmbiguousSoftTargetDataset,
     ClassificationFolderDataset,
     HardSampleRepeatDataset,
     IndexedSampleDataset,
@@ -47,6 +48,7 @@ from trkh.data.dataset import (
     RareClassRepeatDataset,
     SampleWeightDataset,
     StrictBalancedBatchSampler,
+    TargetedMarginDataset,
     TeacherProbabilityDataset,
     build_rare_class_repeat_factors,
     build_eval_transform,
@@ -284,6 +286,17 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=0.35,
     )
+    parser.add_argument(
+        "--mixstyle",
+        action="store_true",
+        default=False,
+        help=(
+            "Bat MixStyle sau CNN stem trong classification TRKH; train-time only, "
+            "khong tang chi phi inference."
+        ),
+    )
+    parser.add_argument("--mixstyle-probability", type=float, default=0.5)
+    parser.add_argument("--mixstyle-alpha", type=float, default=0.1)
     parser.add_argument(
         "--fine-grained-pooling",
         action="store_true",
@@ -663,6 +676,31 @@ def parse_args() -> argparse.Namespace:
         help="Nguong mem tao pseudo foreground tu anh da normalize; lon hon se mask chat hon.",
     )
     parser.add_argument(
+        "--background-counterfactual-consistency-weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Trong so KL consistency giua anh goc va view da trung hoa nen; "
+            "0 de tat. Khac foreground-consistency vi phat prediction thay doi do nen."
+        ),
+    )
+    parser.add_argument(
+        "--background-counterfactual-probability",
+        type=float,
+        default=0.0,
+        help="Xac suat moi sample duoc tao background-neutralized view trong train.",
+    )
+    parser.add_argument(
+        "--background-counterfactual-mode",
+        type=str,
+        choices=("gray", "blur", "mean", "desaturate_blur"),
+        default="desaturate_blur",
+        help="Kieu trung hoa nen cho consistency view.",
+    )
+    parser.add_argument("--background-counterfactual-margin", type=float, default=0.08)
+    parser.add_argument("--background-counterfactual-blur-kernel", type=int, default=15)
+    parser.add_argument("--background-counterfactual-temperature", type=float, default=1.0)
+    parser.add_argument(
         "--attention-view-loss-weight",
         type=float,
         default=0.0,
@@ -740,6 +778,125 @@ def parse_args() -> argparse.Namespace:
         help="Trong so SmoothL1 loss cho truc maturity co thu tu; chi tinh tren cac class da khai bao.",
     )
     parser.add_argument(
+        "--angular-margin-loss-weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Trong so auxiliary normalized cosine-margin CE tren feature truoc classifier; "
+            "0 de tat. Dung de tang tach bien cho class gan nhau ma khong doi inference."
+        ),
+    )
+    parser.add_argument(
+        "--angular-margin",
+        type=float,
+        default=0.12,
+        help="Cosine margin tru tren logit class dung trong angular-margin loss.",
+    )
+    parser.add_argument(
+        "--angular-margin-scale",
+        type=float,
+        default=16.0,
+        help="He so scale cho normalized cosine logits trong angular-margin loss.",
+    )
+    parser.add_argument(
+        "--angular-margin-start-epoch",
+        type=int,
+        default=2,
+        help="Epoch 1-based bat dau cong angular-margin loss; de CE/LDAM warm-up truoc.",
+    )
+    parser.add_argument(
+        "--angular-margin-classes",
+        type=str,
+        default="0,1,2,3",
+        help="Danh sach class ap dung angular-margin loss, vi du '0,1,2,3' hoac 'all'.",
+    )
+    parser.add_argument(
+        "--ordinal-boundary-loss-weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Trong so auxiliary ordinal-threshold BCE tren logits cho cac class co thu tu; "
+            "0 de tat. Huu ich khi loi nam o bien 0/1/2."
+        ),
+    )
+    parser.add_argument(
+        "--ordinal-boundary-classes",
+        type=str,
+        default="0,1,2,3",
+        help="Thu tu class cho ordinal-boundary loss, vi du '0,1,2,3'.",
+    )
+    parser.add_argument(
+        "--ordinal-boundary-threshold-weights",
+        type=str,
+        default="1.25,1.25,1.0",
+        help="Weight cho tung nguong ordinal; voi 4 class can 3 gia tri.",
+    )
+    parser.add_argument(
+        "--ordinal-boundary-temperature",
+        type=float,
+        default=1.0,
+        help="Nhiet do chia logit threshold truoc BCE; lon hon lam loss mem hon.",
+    )
+    parser.add_argument(
+        "--ordinal-boundary-start-epoch",
+        type=int,
+        default=1,
+        help="Epoch 1-based bat dau cong ordinal-boundary loss.",
+    )
+    parser.add_argument(
+        "--pairwise-confusion-loss-weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Trong so Pairwise Confusion regularization tren activation; 0 de tat. "
+            "Giam overfit artifact bang cach keo gan activation cua hai nua batch."
+        ),
+    )
+    parser.add_argument(
+        "--pairwise-confusion-sources",
+        type=str,
+        default="head",
+        help="Nguon activation cho pairwise confusion: head,patch,registers,logits,all.",
+    )
+    parser.add_argument(
+        "--pairwise-confusion-start-epoch",
+        type=int,
+        default=1,
+        help="Epoch 1-based bat dau cong pairwise-confusion loss.",
+    )
+    parser.add_argument(
+        "--disable-pairwise-confusion-normalize",
+        action="store_true",
+        help="Tat L2 normalize truoc pairwise confusion; mac dinh bat de scale on dinh.",
+    )
+    parser.add_argument(
+        "--mutual-channel-loss-weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Trong so Mutual-Channel style loss tren CNN stem; 0 de tat. "
+            "Ep channel hoc cue cuc bo phan biet va giam trung lap khong gian."
+        ),
+    )
+    parser.add_argument(
+        "--mutual-channel-top-k",
+        type=int,
+        default=8,
+        help="So channel manh nhat moi class group dung cho discriminability/diversity.",
+    )
+    parser.add_argument(
+        "--mutual-channel-diversity-weight",
+        type=float,
+        default=0.20,
+        help="Trong so diversity component ben trong mutual-channel loss.",
+    )
+    parser.add_argument(
+        "--mutual-channel-start-epoch",
+        type=int,
+        default=1,
+        help="Epoch 1-based bat dau cong mutual-channel loss.",
+    )
+    parser.add_argument(
         "--pretrained-distillation",
         dest="pretrained_distillation",
         action="store_true",
@@ -809,6 +966,54 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=5.0,
         help="Tran sample weight de tranh batch loss bi mot mau chi phoi.",
+    )
+    parser.add_argument(
+        "--ambiguous-soft-target-manifest",
+        type=Path,
+        default=None,
+        help=(
+            "CSV train-only co cot image_path/path va prob_0..prob_N hoac soft_target_index; "
+            "dung soft label noi sinh cho mau boundary ambiguous, khong dung val/test."
+        ),
+    )
+    parser.add_argument(
+        "--ambiguous-soft-target-alpha",
+        type=float,
+        default=0.25,
+        help="Alpha mac dinh neu manifest chi khai bao soft_target_index/prediction_index thay vi prob_*. ",
+    )
+    parser.add_argument(
+        "--targeted-margin-manifest",
+        type=Path,
+        default=None,
+        help=(
+            "CSV train-only co cot image_path/path, target_index va negative_index/prediction_index; "
+            "dung directional margin cho hard negatives/positives quanh class bien."
+        ),
+    )
+    parser.add_argument(
+        "--targeted-margin-loss-weight",
+        type=float,
+        default=0.0,
+        help="Trong so directional targeted-margin loss; 0 de tat.",
+    )
+    parser.add_argument(
+        "--targeted-margin-default-margin",
+        type=float,
+        default=0.12,
+        help="Margin logit mac dinh: logit target phai lon hon logit negative it nhat gia tri nay.",
+    )
+    parser.add_argument(
+        "--targeted-margin-default-weight",
+        type=float,
+        default=1.0,
+        help="Weight mac dinh cho dong manifest khong co cot targeted_margin_weight.",
+    )
+    parser.add_argument(
+        "--targeted-margin-max-weight",
+        type=float,
+        default=3.0,
+        help="Tran weight cua targeted-margin manifest de tranh mot nhom hard-negative chi phoi batch.",
     )
     parser.add_argument(
         "--balance-auto-max-repeat-factor",
@@ -1009,6 +1214,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--local-exposure-strength", type=float, default=0.25)
     parser.add_argument("--obstacle-probability", type=float, default=0.0)
     parser.add_argument("--obstacle-max-area", type=float, default=0.12)
+    parser.add_argument(
+        "--foreground-background-mix-probability",
+        type=float,
+        default=0.0,
+        help=(
+            "Xac suat RRDA-style train-time augmentation: giu pseudo foreground cua sample "
+            "va thay background bang background cua sample khac trong batch."
+        ),
+    )
+    parser.add_argument("--foreground-background-mix-margin", type=float, default=0.08)
+    parser.add_argument("--foreground-background-mix-min-foreground-fraction", type=float, default=0.06)
+    parser.add_argument("--foreground-background-mix-max-foreground-fraction", type=float, default=0.88)
+    parser.add_argument("--foreground-background-mix-softness", type=float, default=5.0)
     parser.add_argument("--random-erasing-probability", type=float, default=0.2)
     parser.add_argument("--random-affine-degrees", type=float, default=8.0)
     parser.add_argument("--random-affine-translate", type=float, default=0.05)
@@ -1108,6 +1326,10 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         raise ValueError(
             "--frequency-selective-foreground-threshold phai nam trong [0, 1]."
         )
+    if not 0.0 <= args.mixstyle_probability <= 1.0:
+        raise ValueError("--mixstyle-probability phai nam trong [0, 1].")
+    if args.mixstyle_alpha <= 0.0:
+        raise ValueError("--mixstyle-alpha phai > 0.")
     if args.fine_grained_pooling_dropout < 0.0:
         raise ValueError("--fine-grained-pooling-dropout phai >= 0.")
     if args.branch_token_dropout < 0.0:
@@ -1338,6 +1560,96 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         raise ValueError("--ordinal-maturity-dropout phai >= 0.")
     if args.ordinal_maturity_loss_weight < 0.0:
         raise ValueError("--ordinal-maturity-loss-weight phai >= 0.")
+    if args.angular_margin_loss_weight < 0.0:
+        raise ValueError("--angular-margin-loss-weight phai >= 0.")
+    if args.angular_margin < 0.0:
+        raise ValueError("--angular-margin phai >= 0.")
+    if args.angular_margin_scale <= 0.0:
+        raise ValueError("--angular-margin-scale phai > 0.")
+    if args.angular_margin_start_epoch < 0:
+        raise ValueError("--angular-margin-start-epoch phai >= 0.")
+    angular_margin_classes = str(args.angular_margin_classes or "").strip().lower()
+    if angular_margin_classes not in {"", "all", "*"}:
+        for token in angular_margin_classes.split(","):
+            token = token.strip()
+            if not token:
+                continue
+            try:
+                int(token)
+            except ValueError as exc:
+                raise ValueError(
+                    "--angular-margin-classes chi ho tro so nguyen cach nhau bang dau phay, "
+                    "hoac 'all'."
+                ) from exc
+    if args.ordinal_boundary_loss_weight < 0.0:
+        raise ValueError("--ordinal-boundary-loss-weight phai >= 0.")
+    ordinal_boundary_classes = str(args.ordinal_boundary_classes or "").strip()
+    if not ordinal_boundary_classes:
+        raise ValueError("--ordinal-boundary-classes khong duoc rong.")
+    ordinal_class_count = 0
+    for token in ordinal_boundary_classes.split(","):
+        token = token.strip()
+        if not token:
+            continue
+        try:
+            int(token)
+        except ValueError as exc:
+            raise ValueError(
+                "--ordinal-boundary-classes chi ho tro so nguyen cach nhau bang dau phay."
+            ) from exc
+        ordinal_class_count += 1
+    if ordinal_class_count < 2:
+        raise ValueError("--ordinal-boundary-classes can it nhat 2 class.")
+    threshold_weights = [
+        part.strip()
+        for part in str(args.ordinal_boundary_threshold_weights or "").split(",")
+        if part.strip()
+    ]
+    if not threshold_weights:
+        raise ValueError("--ordinal-boundary-threshold-weights khong duoc rong.")
+    if len(threshold_weights) not in {1, ordinal_class_count - 1}:
+        raise ValueError(
+            "--ordinal-boundary-threshold-weights can 1 gia tri hoac so gia tri bang so nguong."
+        )
+    for token in threshold_weights:
+        try:
+            weight_value = float(token)
+        except ValueError as exc:
+            raise ValueError("--ordinal-boundary-threshold-weights phai la so.") from exc
+        if weight_value < 0.0:
+            raise ValueError("--ordinal-boundary-threshold-weights phai >= 0.")
+    if args.ordinal_boundary_temperature <= 0.0:
+        raise ValueError("--ordinal-boundary-temperature phai > 0.")
+    if args.ordinal_boundary_start_epoch < 0:
+        raise ValueError("--ordinal-boundary-start-epoch phai >= 0.")
+    if args.pairwise_confusion_loss_weight < 0.0:
+        raise ValueError("--pairwise-confusion-loss-weight phai >= 0.")
+    if args.pairwise_confusion_start_epoch < 0:
+        raise ValueError("--pairwise-confusion-start-epoch phai >= 0.")
+    valid_pairwise_confusion_sources = {"head", "patch", "registers", "logits", "all"}
+    requested_pairwise_confusion_sources = {
+        part.strip().lower()
+        for part in str(args.pairwise_confusion_sources or "").split(",")
+        if part.strip()
+    }
+    if not requested_pairwise_confusion_sources:
+        raise ValueError("--pairwise-confusion-sources khong duoc rong.")
+    invalid_pairwise_confusion_sources = (
+        requested_pairwise_confusion_sources - valid_pairwise_confusion_sources
+    )
+    if invalid_pairwise_confusion_sources:
+        raise ValueError(
+            "--pairwise-confusion-sources chi ho tro head, patch, registers, logits, all; "
+            f"khong hop le: {sorted(invalid_pairwise_confusion_sources)}"
+        )
+    if args.mutual_channel_loss_weight < 0.0:
+        raise ValueError("--mutual-channel-loss-weight phai >= 0.")
+    if args.mutual_channel_top_k <= 0:
+        raise ValueError("--mutual-channel-top-k phai > 0.")
+    if args.mutual_channel_diversity_weight < 0.0:
+        raise ValueError("--mutual-channel-diversity-weight phai >= 0.")
+    if args.mutual_channel_start_epoch < 0:
+        raise ValueError("--mutual-channel-start-epoch phai >= 0.")
     if args.distillation_weight < 0.0:
         raise ValueError("--distillation-weight phai >= 0.")
     if args.distillation_temperature <= 0.0:
@@ -1361,6 +1673,20 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
     if args.sample_weight_manifest is not None and not args.sample_weight_manifest.is_file():
         raise FileNotFoundError(
             f"Khong tim thay sample weight manifest: {args.sample_weight_manifest}"
+        )
+    if args.targeted_margin_loss_weight < 0.0:
+        raise ValueError("--targeted-margin-loss-weight phai >= 0.")
+    if args.targeted_margin_default_margin < 0.0:
+        raise ValueError("--targeted-margin-default-margin phai >= 0.")
+    if args.targeted_margin_default_weight < 0.0:
+        raise ValueError("--targeted-margin-default-weight phai >= 0.")
+    if args.targeted_margin_max_weight <= 0.0:
+        raise ValueError("--targeted-margin-max-weight phai > 0.")
+    if args.targeted_margin_max_weight < args.targeted_margin_default_weight:
+        raise ValueError("--targeted-margin-max-weight phai >= --targeted-margin-default-weight.")
+    if args.targeted_margin_manifest is not None and not args.targeted_margin_manifest.is_file():
+        raise FileNotFoundError(
+            f"Khong tim thay targeted-margin manifest: {args.targeted_margin_manifest}"
         )
     if (
         args.pretrained_distillation
@@ -1413,6 +1739,7 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         "background_suppression_probability",
         "local_exposure_probability",
         "obstacle_probability",
+        "foreground_background_mix_probability",
     ):
         value = float(getattr(args, name))
         if not 0.0 <= value <= 1.0:
@@ -1427,6 +1754,21 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         raise ValueError("--local-exposure-strength phai >= 0.")
     if args.obstacle_max_area < 0.0:
         raise ValueError("--obstacle-max-area phai >= 0.")
+    if args.foreground_background_mix_margin < 0.0:
+        raise ValueError("--foreground-background-mix-margin phai >= 0.")
+    if not 0.0 <= args.foreground_background_mix_min_foreground_fraction <= 1.0:
+        raise ValueError("--foreground-background-mix-min-foreground-fraction phai nam trong [0, 1].")
+    if not 0.0 <= args.foreground_background_mix_max_foreground_fraction <= 1.0:
+        raise ValueError("--foreground-background-mix-max-foreground-fraction phai nam trong [0, 1].")
+    if (
+        args.foreground_background_mix_max_foreground_fraction
+        < args.foreground_background_mix_min_foreground_fraction
+    ):
+        raise ValueError(
+            "--foreground-background-mix-max-foreground-fraction phai >= min foreground fraction."
+        )
+    if args.foreground_background_mix_softness < 0.0:
+        raise ValueError("--foreground-background-mix-softness phai >= 0.")
 
     model_config = ModelConfig(
         model_type=args.model_type,
@@ -1452,6 +1794,9 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         frequency_selective_top_k=args.frequency_selective_top_k,
         frequency_selective_blend=args.frequency_selective_blend,
         frequency_selective_foreground_threshold=args.frequency_selective_foreground_threshold,
+        mixstyle=bool(args.mixstyle),
+        mixstyle_probability=args.mixstyle_probability,
+        mixstyle_alpha=args.mixstyle_alpha,
         fine_grained_pooling=bool(args.fine_grained_pooling),
         fine_grained_pooling_dropout=args.fine_grained_pooling_dropout,
         multi_branch_fusion=bool(args.multi_branch_fusion),
@@ -1571,6 +1916,12 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         boundary_contrastive_max_pairs=args.boundary_contrastive_max_pairs,
         foreground_consistency_loss_weight=args.foreground_consistency_loss_weight,
         foreground_consistency_margin=args.foreground_consistency_margin,
+        background_counterfactual_consistency_weight=args.background_counterfactual_consistency_weight,
+        background_counterfactual_probability=args.background_counterfactual_probability,
+        background_counterfactual_mode=args.background_counterfactual_mode,
+        background_counterfactual_margin=args.background_counterfactual_margin,
+        background_counterfactual_blur_kernel=args.background_counterfactual_blur_kernel,
+        background_counterfactual_temperature=args.background_counterfactual_temperature,
         attention_view_loss_weight=args.attention_view_loss_weight,
         attention_crop_probability=args.attention_crop_probability,
         attention_drop_probability=args.attention_drop_probability,
@@ -1588,6 +1939,24 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         register_diversity_loss_weight=args.register_diversity_loss_weight,
         pairwise_margin_loss_weight=args.pairwise_margin_loss_weight,
         ordinal_maturity_loss_weight=args.ordinal_maturity_loss_weight,
+        angular_margin_loss_weight=args.angular_margin_loss_weight,
+        angular_margin=args.angular_margin,
+        angular_margin_scale=args.angular_margin_scale,
+        angular_margin_start_epoch=args.angular_margin_start_epoch,
+        angular_margin_classes=args.angular_margin_classes,
+        ordinal_boundary_loss_weight=args.ordinal_boundary_loss_weight,
+        ordinal_boundary_classes=args.ordinal_boundary_classes,
+        ordinal_boundary_threshold_weights=args.ordinal_boundary_threshold_weights,
+        ordinal_boundary_temperature=args.ordinal_boundary_temperature,
+        ordinal_boundary_start_epoch=args.ordinal_boundary_start_epoch,
+        pairwise_confusion_loss_weight=args.pairwise_confusion_loss_weight,
+        pairwise_confusion_sources=args.pairwise_confusion_sources,
+        pairwise_confusion_start_epoch=args.pairwise_confusion_start_epoch,
+        pairwise_confusion_normalize=not args.disable_pairwise_confusion_normalize,
+        mutual_channel_loss_weight=args.mutual_channel_loss_weight,
+        mutual_channel_top_k=args.mutual_channel_top_k,
+        mutual_channel_diversity_weight=args.mutual_channel_diversity_weight,
+        mutual_channel_start_epoch=args.mutual_channel_start_epoch,
         pretrained_distillation=bool(
             args.pretrained_distillation or args.distillation_teacher_csv is not None
         ),
@@ -1607,6 +1976,13 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         sample_weight_manifest=str(args.sample_weight_manifest or ""),
         sample_weight_factor=args.sample_weight_factor,
         sample_weight_max=args.sample_weight_max,
+        ambiguous_soft_target_manifest=str(args.ambiguous_soft_target_manifest or ""),
+        ambiguous_soft_target_alpha=args.ambiguous_soft_target_alpha,
+        targeted_margin_manifest=str(args.targeted_margin_manifest or ""),
+        targeted_margin_loss_weight=args.targeted_margin_loss_weight,
+        targeted_margin_default_margin=args.targeted_margin_default_margin,
+        targeted_margin_default_weight=args.targeted_margin_default_weight,
+        targeted_margin_max_weight=args.targeted_margin_max_weight,
         balance_auto_max_repeat_factor=args.balance_auto_max_repeat_factor,
         fair_f1_gap_target=args.fair_f1_gap_target,
         fair_f1_gap_penalty=args.fair_f1_gap_penalty,
@@ -1706,6 +2082,15 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         local_exposure_strength=args.local_exposure_strength,
         obstacle_probability=args.obstacle_probability,
         obstacle_max_area=args.obstacle_max_area,
+        foreground_background_mix_probability=args.foreground_background_mix_probability,
+        foreground_background_mix_margin=args.foreground_background_mix_margin,
+        foreground_background_mix_min_foreground_fraction=(
+            args.foreground_background_mix_min_foreground_fraction
+        ),
+        foreground_background_mix_max_foreground_fraction=(
+            args.foreground_background_mix_max_foreground_fraction
+        ),
+        foreground_background_mix_softness=args.foreground_background_mix_softness,
         class_aware_augmentation=bool(args.class_aware_augmentation),
         class_augmentation_power=args.class_augmentation_power,
         class_augmentation_max_scale=args.class_augmentation_max_scale,
@@ -3095,6 +3480,110 @@ def _foreground_consistency_loss_from_features(
     return background_energy[valid].mean().to(dtype=patches.dtype)
 
 
+def _denormalize_classification_images(images: Tensor) -> Tensor:
+    mean = torch.tensor(IMAGENET_MEAN, device=images.device, dtype=images.dtype).view(1, 3, 1, 1)
+    std = torch.tensor(IMAGENET_STD, device=images.device, dtype=images.dtype).view(1, 3, 1, 1)
+    return (images * std + mean).clamp(0.0, 1.0)
+
+
+def _normalize_classification_images(images: Tensor) -> Tensor:
+    mean = torch.tensor(IMAGENET_MEAN, device=images.device, dtype=images.dtype).view(1, 3, 1, 1)
+    std = torch.tensor(IMAGENET_STD, device=images.device, dtype=images.dtype).view(1, 3, 1, 1)
+    return (images.clamp(0.0, 1.0) - mean) / std.clamp(min=1e-6)
+
+
+def _odd_kernel_size(value: int, minimum: int = 3) -> int:
+    kernel = max(int(minimum), int(value))
+    if kernel % 2 == 0:
+        kernel += 1
+    return kernel
+
+
+def _background_counterfactual_images(
+    images: Tensor,
+    *,
+    mode: str,
+    margin: float,
+    blur_kernel: int,
+) -> Tensor:
+    normalized_mode = str(mode or "desaturate_blur").strip().lower().replace("-", "_")
+    if normalized_mode not in {"gray", "blur", "mean", "desaturate_blur"}:
+        raise ValueError(
+            "background_counterfactual_mode chi ho tro gray, blur, mean, desaturate_blur."
+        )
+    with torch.no_grad():
+        foreground = _pseudo_foreground_mask_from_normalized_images(
+            images.detach(),
+            margin=margin,
+        ).to(device=images.device, dtype=images.dtype)
+        kernel = _odd_kernel_size(int(blur_kernel), minimum=3)
+        padding = kernel // 2
+        soft_mask = F.avg_pool2d(foreground, kernel_size=kernel, stride=1, padding=padding).clamp(0.0, 1.0)
+        rgb = _denormalize_classification_images(images.detach())
+        luminance = (
+            0.299 * rgb[:, 0:1]
+            + 0.587 * rgb[:, 1:2]
+            + 0.114 * rgb[:, 2:3]
+        )
+        if normalized_mode == "gray":
+            background = luminance.expand_as(rgb)
+        elif normalized_mode == "blur":
+            background = F.avg_pool2d(rgb, kernel_size=kernel, stride=1, padding=padding)
+        elif normalized_mode == "mean":
+            background = rgb.flatten(2).mean(dim=2).view(rgb.size(0), rgb.size(1), 1, 1).expand_as(rgb)
+        else:
+            gray = luminance.expand_as(rgb)
+            background = F.avg_pool2d(gray, kernel_size=kernel, stride=1, padding=padding)
+        counterfactual_rgb = (soft_mask * rgb + (1.0 - soft_mask) * background).clamp(0.0, 1.0)
+        return _normalize_classification_images(counterfactual_rgb).to(dtype=images.dtype)
+
+
+def _background_counterfactual_consistency_loss(
+    *,
+    model: nn.Module,
+    images: Tensor,
+    logits: Tensor,
+    probability: float,
+    mode: str,
+    margin: float,
+    blur_kernel: int,
+    temperature: float,
+    amp: bool,
+    device: torch.device,
+) -> Tuple[Tensor, float]:
+    probability = max(0.0, min(1.0, float(probability)))
+    if probability <= 0.0 or images.size(0) <= 0:
+        return logits.sum() * 0.0, 0.0
+    selected = torch.rand(images.size(0), device=images.device) < probability
+    if not bool(selected.any().item()):
+        return logits.sum() * 0.0, 0.0
+    selected_indices = selected.nonzero(as_tuple=False).flatten()
+    selected_images = images.index_select(0, selected_indices)
+    counterfactual_images = _background_counterfactual_images(
+        selected_images,
+        mode=mode,
+        margin=margin,
+        blur_kernel=blur_kernel,
+    )
+    with autocast_context(device, amp):
+        _, counterfactual_outputs = _forward_model_outputs(
+            model,
+            counterfactual_images,
+            image_valid_mask=None,
+        )
+        counterfactual_logits, _ = extract_bbox_from_model_output(counterfactual_outputs)
+    temperature = max(0.05, float(temperature))
+    source_logits = logits.index_select(0, selected_indices).detach()
+    target_probabilities = F.softmax(source_logits.float() / temperature, dim=1)
+    log_probabilities = F.log_softmax(counterfactual_logits.float() / temperature, dim=1)
+    loss = F.kl_div(
+        log_probabilities,
+        target_probabilities,
+        reduction="batchmean",
+    ) * (temperature ** 2)
+    return loss.to(dtype=logits.dtype), float(selected_indices.numel()) / float(images.size(0))
+
+
 def _normalize_attention_scores(scores: Tensor) -> Tensor:
     flattened = scores.flatten(1)
     minimum = flattened.amin(dim=1, keepdim=True)
@@ -3531,6 +4020,338 @@ def _ordinal_maturity_loss_from_features(
     return F.smooth_l1_loss(predicted, expected).to(dtype=maturity_score.dtype)
 
 
+def _parse_angular_margin_classes(
+    classes: Union[str, Sequence[int], None],
+    *,
+    num_classes: int,
+) -> List[int]:
+    if classes is None:
+        return list(range(max(0, int(num_classes))))
+    if isinstance(classes, str):
+        value = classes.strip().lower()
+        if value in {"", "all", "*"}:
+            return list(range(max(0, int(num_classes))))
+        raw_values = [part.strip() for part in value.split(",") if part.strip()]
+    else:
+        raw_values = [str(value).strip() for value in classes]
+
+    parsed: List[int] = []
+    seen = set()
+    for raw_value in raw_values:
+        class_index = int(raw_value)
+        if class_index < 0 or class_index >= int(num_classes):
+            raise ValueError(
+                f"angular margin class index {class_index} nam ngoai [0, {int(num_classes) - 1}]."
+            )
+        if class_index not in seen:
+            parsed.append(class_index)
+            seen.add(class_index)
+    return parsed
+
+
+def _classification_head_weight(model: nn.Module) -> Optional[Tensor]:
+    module = getattr(model, "module", model)
+    for head_name in ("head", "classification_head"):
+        head = getattr(module, head_name, None)
+        weight = getattr(head, "weight", None)
+        if torch.is_tensor(weight) and weight.ndim == 2:
+            return weight
+    return None
+
+
+def _angular_margin_loss_from_features(
+    *,
+    model: nn.Module,
+    features: Dict[str, Tensor],
+    targets: Tensor,
+    margin: float = 0.12,
+    scale: float = 16.0,
+    classes: Union[str, Sequence[int], None] = "0,1,2,3",
+) -> Tensor:
+    reference = next((value for value in features.values() if torch.is_tensor(value)), targets)
+    head_weight = _classification_head_weight(model)
+    try:
+        head_input = extract_head_input_from_features(model, features)
+    except KeyError:
+        return reference.sum() * 0.0
+    if (
+        head_weight is None
+        or not torch.is_tensor(head_input)
+        or head_input.ndim != 2
+        or head_weight.ndim != 2
+        or head_input.size(1) != head_weight.size(1)
+    ):
+        return reference.sum() * 0.0
+
+    num_classes = int(head_weight.size(0))
+    target_indices = targets.to(device=head_input.device, dtype=torch.long).view(-1)
+    valid = (target_indices >= 0) & (target_indices < num_classes)
+    selected_classes = _parse_angular_margin_classes(classes, num_classes=num_classes)
+    if selected_classes:
+        selected = torch.zeros(num_classes, device=head_input.device, dtype=torch.bool)
+        selected[torch.tensor(selected_classes, device=head_input.device, dtype=torch.long)] = True
+        valid = valid & selected.index_select(0, target_indices.clamp(0, max(0, num_classes - 1)))
+    if not bool(valid.any().item()):
+        return head_input.sum() * 0.0
+
+    normalized_features = F.normalize(head_input.float(), dim=1, eps=1e-6)
+    normalized_weight = F.normalize(head_weight.float(), dim=1, eps=1e-6)
+    cosine_logits = F.linear(normalized_features, normalized_weight).clamp(-1.0 + 1e-6, 1.0 - 1e-6)
+    cosine_logits = cosine_logits[valid].clone()
+    valid_targets = target_indices[valid]
+    rows = torch.arange(valid_targets.numel(), device=head_input.device)
+    cosine_logits[rows, valid_targets] = cosine_logits[rows, valid_targets] - float(margin)
+    angular_loss = F.cross_entropy(cosine_logits * float(scale), valid_targets)
+    return angular_loss.to(dtype=head_input.dtype)
+
+
+def _parse_ordinal_boundary_threshold_weights(
+    weights: Union[str, Sequence[float], None],
+    *,
+    num_thresholds: int,
+    device: torch.device,
+) -> Tensor:
+    if weights is None:
+        values = [1.0]
+    elif isinstance(weights, str):
+        values = [float(part.strip()) for part in weights.split(",") if part.strip()]
+    else:
+        values = [float(value) for value in weights]
+    if not values:
+        values = [1.0]
+    if len(values) == 1:
+        values = values * int(num_thresholds)
+    if len(values) != int(num_thresholds):
+        raise ValueError(
+            "ordinal boundary threshold weights phai co 1 gia tri hoac bang so nguong."
+        )
+    return torch.tensor(values, device=device, dtype=torch.float32).clamp_min(0.0)
+
+
+def _ordinal_boundary_loss_from_logits(
+    *,
+    logits: Tensor,
+    targets: Tensor,
+    classes: Union[str, Sequence[int], None] = "0,1,2,3",
+    threshold_weights: Union[str, Sequence[float], None] = "1.25,1.25,1.0",
+    temperature: float = 1.0,
+) -> Tensor:
+    if not torch.is_tensor(logits) or logits.ndim != 2:
+        return targets.sum() * 0.0
+    num_classes = int(logits.size(1))
+    ordered_classes = _parse_angular_margin_classes(classes, num_classes=num_classes)
+    if len(ordered_classes) < 2:
+        return logits.sum() * 0.0
+
+    target_indices = targets.to(device=logits.device, dtype=torch.long).view(-1)
+    rank_lookup = torch.full(
+        (num_classes,),
+        fill_value=-1,
+        device=logits.device,
+        dtype=torch.long,
+    )
+    for rank, class_index in enumerate(ordered_classes):
+        rank_lookup[int(class_index)] = int(rank)
+    valid_class_indices = target_indices.clamp(0, max(0, num_classes - 1))
+    target_ranks = rank_lookup.index_select(0, valid_class_indices)
+    valid = (target_indices >= 0) & (target_indices < num_classes) & (target_ranks >= 0)
+    if not bool(valid.any().item()):
+        return logits.sum() * 0.0
+
+    logits_float = logits.float()
+    valid_ranks = target_ranks[valid]
+    losses: List[Tensor] = []
+    for threshold_index in range(len(ordered_classes) - 1):
+        left_indices = torch.tensor(
+            ordered_classes[: threshold_index + 1],
+            device=logits.device,
+            dtype=torch.long,
+        )
+        right_indices = torch.tensor(
+            ordered_classes[threshold_index + 1 :],
+            device=logits.device,
+            dtype=torch.long,
+        )
+        left_score = torch.logsumexp(logits_float.index_select(1, left_indices), dim=1)
+        right_score = torch.logsumexp(logits_float.index_select(1, right_indices), dim=1)
+        boundary_logit = (right_score - left_score) / float(max(1e-6, temperature))
+        boundary_target = (valid_ranks > int(threshold_index)).to(dtype=boundary_logit.dtype)
+        losses.append(
+            F.binary_cross_entropy_with_logits(
+                boundary_logit[valid],
+                boundary_target,
+                reduction="none",
+            )
+        )
+    if not losses:
+        return logits.sum() * 0.0
+    loss_matrix = torch.stack(losses, dim=1)
+    weights_tensor = _parse_ordinal_boundary_threshold_weights(
+        threshold_weights,
+        num_thresholds=loss_matrix.size(1),
+        device=logits.device,
+    )
+    weight_sum = weights_tensor.sum().clamp_min(1e-6)
+    ordinal_loss = (loss_matrix * weights_tensor.unsqueeze(0)).sum(dim=1) / weight_sum
+    return ordinal_loss.mean().to(dtype=logits.dtype)
+
+
+def _parse_pairwise_confusion_sources(sources: Union[str, Sequence[str]]) -> List[str]:
+    if isinstance(sources, str):
+        requested = [part.strip().lower() for part in sources.split(",") if part.strip()]
+    else:
+        requested = [str(part).strip().lower() for part in sources if str(part).strip()]
+    if not requested:
+        requested = ["head"]
+    if "all" in requested:
+        requested = ["head", "patch", "registers", "logits"]
+    parsed: List[str] = []
+    for source in requested:
+        if source not in {"head", "patch", "registers", "logits"}:
+            raise ValueError(f"pairwise confusion source khong hop le: {source}")
+        if source not in parsed:
+            parsed.append(source)
+    return parsed
+
+
+def _pairwise_confusion_loss_from_features(
+    *,
+    model: nn.Module,
+    features: Optional[Dict[str, Tensor]],
+    logits: Optional[Tensor],
+    sources: Union[str, Sequence[str]] = "head",
+    normalize: bool = True,
+) -> Tensor:
+    reference = logits
+    if features:
+        reference = next((value for value in features.values() if torch.is_tensor(value)), reference)
+    if reference is None:
+        return torch.tensor(0.0)
+
+    embeddings: List[Tensor] = []
+    requested_sources = _parse_pairwise_confusion_sources(sources)
+    if features is not None and "head" in requested_sources:
+        try:
+            head_input = extract_head_input_from_features(model, features)
+            if torch.is_tensor(head_input) and head_input.ndim == 2:
+                embeddings.append(head_input)
+        except KeyError:
+            pass
+    if features is not None and "patch" in requested_sources:
+        patches = features.get("patches")
+        if torch.is_tensor(patches) and patches.ndim == 3:
+            key_padding_mask = features.get("memory_key_padding_mask")
+            if torch.is_tensor(key_padding_mask) and key_padding_mask.shape[:2] == patches.shape[:2]:
+                valid = (~key_padding_mask.to(device=patches.device, dtype=torch.bool)).unsqueeze(-1)
+                denom = valid.sum(dim=1).clamp_min(1).to(dtype=patches.dtype)
+                patch_embedding = (patches * valid.to(dtype=patches.dtype)).sum(dim=1) / denom
+            else:
+                patch_embedding = patches.mean(dim=1)
+            embeddings.append(patch_embedding)
+    if features is not None and "registers" in requested_sources:
+        registers = features.get("registers")
+        if torch.is_tensor(registers) and registers.ndim == 3 and int(registers.size(1)) > 0:
+            embeddings.append(registers.mean(dim=1))
+    if logits is not None and "logits" in requested_sources:
+        embeddings.append(logits)
+
+    losses: List[Tensor] = []
+    for embedding in embeddings:
+        if not torch.is_tensor(embedding) or embedding.ndim != 2 or int(embedding.size(0)) < 2:
+            continue
+        even_count = int(embedding.size(0)) - (int(embedding.size(0)) % 2)
+        if even_count < 2:
+            continue
+        embedding_float = embedding[:even_count].float()
+        if normalize:
+            embedding_float = F.normalize(embedding_float, dim=1, eps=1e-6)
+        half = even_count // 2
+        distance = torch.linalg.vector_norm(
+            embedding_float[:half] - embedding_float[half:even_count],
+            ord=2,
+            dim=1,
+        )
+        losses.append(distance.mean())
+    if not losses:
+        return reference.sum() * 0.0
+    return torch.stack(losses).mean().to(dtype=reference.dtype)
+
+
+def _mutual_channel_loss_from_features(
+    *,
+    features: Optional[Dict[str, Tensor]],
+    targets: Tensor,
+    num_classes: int,
+    top_k: int = 8,
+    diversity_weight: float = 0.20,
+) -> Tensor:
+    reference = targets
+    if features:
+        reference = next((value for value in features.values() if torch.is_tensor(value)), targets)
+    stem = features.get("stem_features") if isinstance(features, dict) else None
+    if not torch.is_tensor(stem) or stem.ndim != 4 or int(stem.size(0)) == 0:
+        return reference.float().sum() * 0.0 if torch.is_tensor(reference) else torch.tensor(0.0)
+
+    batch_size, channels, height, width = [int(value) for value in stem.shape]
+    if batch_size != int(targets.numel()) or channels < int(num_classes) or int(num_classes) <= 1:
+        return stem.sum() * 0.0
+    target_indices = targets.to(device=stem.device, dtype=torch.long).view(-1)
+    valid = (target_indices >= 0) & (target_indices < int(num_classes))
+    if not bool(valid.any().item()):
+        return stem.sum() * 0.0
+
+    activations = F.relu(stem.float())
+    channel_strength = activations.flatten(2).mean(dim=2)
+    channel_indices = torch.arange(channels, device=stem.device)
+    class_groups = torch.chunk(channel_indices, int(num_classes))
+    group_scores: List[Tensor] = []
+    k = max(1, int(top_k))
+    for group in class_groups:
+        group_values = channel_strength.index_select(1, group)
+        selected_count = min(k, int(group_values.size(1)))
+        selected = torch.topk(group_values, k=selected_count, dim=1, largest=True, sorted=False).values
+        group_scores.append(torch.log(selected.mean(dim=1).clamp_min(1e-6)))
+    score_logits = torch.stack(group_scores, dim=1)
+    discriminability_loss = F.cross_entropy(
+        score_logits[valid],
+        target_indices[valid],
+    )
+
+    diversity_terms: List[Tensor] = []
+    flat_activations = activations.flatten(2)
+    for sample_index in torch.nonzero(valid, as_tuple=False).flatten():
+        class_index = int(target_indices[sample_index].detach().cpu().item())
+        group = class_groups[class_index]
+        if int(group.numel()) < 2:
+            continue
+        sample_strength = channel_strength[sample_index].index_select(0, group)
+        selected_count = min(k, int(group.numel()))
+        selected_local = torch.topk(
+            sample_strength,
+            k=selected_count,
+            largest=True,
+            sorted=False,
+        ).indices
+        selected_channels = group.index_select(0, selected_local)
+        maps = flat_activations[sample_index].index_select(0, selected_channels)
+        maps = F.normalize(maps, dim=1, eps=1e-6)
+        similarity = torch.matmul(maps, maps.T).pow(2)
+        off_diagonal = ~torch.eye(
+            int(similarity.size(0)),
+            device=similarity.device,
+            dtype=torch.bool,
+        )
+        if bool(off_diagonal.any().item()):
+            diversity_terms.append(similarity[off_diagonal].mean())
+    if diversity_terms:
+        diversity_loss = torch.stack(diversity_terms).mean()
+    else:
+        diversity_loss = stem.sum() * 0.0
+    return (
+        discriminability_loss + float(diversity_weight) * diversity_loss
+    ).to(dtype=stem.dtype)
+
+
 def _build_pretrained_distillation_teacher(
     *,
     checkpoint_path: Path,
@@ -3824,6 +4645,65 @@ def _classification_loss_with_sample_weights(
     return weighted_loss.to(dtype=logits.dtype), weights.mean().detach()
 
 
+def _targeted_margin_loss_from_logits(
+    *,
+    logits: Tensor,
+    hard_labels: Optional[Tensor],
+    targets,
+    negative_indices: Optional[Tensor],
+    weights: Optional[Tensor],
+    margins: Optional[Tensor],
+    default_margin: float,
+) -> Tuple[Tensor, Tensor, float]:
+    zero = logits.sum() * 0.0
+    if negative_indices is None or not torch.is_tensor(negative_indices) or logits.ndim != 2:
+        return zero, zero.detach(), 0.0
+    if hard_labels is not None and torch.is_tensor(hard_labels):
+        target_indices = hard_labels.to(device=logits.device, dtype=torch.long).view(-1)
+    else:
+        target_indices = _classification_target_indices(targets, logits)
+    if target_indices is None:
+        return zero, zero.detach(), 0.0
+
+    negatives = negative_indices.to(device=logits.device, dtype=torch.long).view(-1)
+    if target_indices.numel() != logits.size(0) or negatives.numel() != logits.size(0):
+        return zero, zero.detach(), 0.0
+    valid = (
+        (target_indices >= 0)
+        & (target_indices < int(logits.size(1)))
+        & (negatives >= 0)
+        & (negatives < int(logits.size(1)))
+        & (negatives != target_indices)
+    )
+    if weights is not None and torch.is_tensor(weights):
+        sample_weights = weights.to(device=logits.device, dtype=logits.dtype).view(-1)
+        if sample_weights.numel() != logits.size(0):
+            sample_weights = torch.ones_like(negatives, dtype=logits.dtype)
+    else:
+        sample_weights = torch.ones_like(negatives, dtype=logits.dtype)
+    sample_weights = sample_weights.clamp(min=0.0)
+    valid = valid & (sample_weights > 0)
+    if not bool(valid.any().item()):
+        return zero, sample_weights.detach().mean() if sample_weights.numel() else zero.detach(), 0.0
+
+    if margins is not None and torch.is_tensor(margins):
+        sample_margins = margins.to(device=logits.device, dtype=logits.dtype).view(-1)
+        if sample_margins.numel() != logits.size(0):
+            sample_margins = logits.new_full((logits.size(0),), float(default_margin))
+    else:
+        sample_margins = logits.new_full((logits.size(0),), float(default_margin))
+    sample_margins = sample_margins.clamp(min=0.0)
+
+    row_indices = torch.arange(logits.size(0), device=logits.device)
+    target_logits = logits[row_indices[valid], target_indices[valid]]
+    negative_logits = logits[row_indices[valid], negatives[valid]]
+    per_sample = F.relu(sample_margins[valid] + negative_logits - target_logits)
+    valid_weights = sample_weights[valid]
+    loss = (per_sample * valid_weights).sum() / valid_weights.sum().clamp(min=1e-12)
+    fraction = float(valid.float().mean().detach().cpu().item())
+    return loss.to(dtype=logits.dtype), sample_weights.detach().mean(), fraction
+
+
 def _stack_image_masks_from_targets(targets) -> Optional[Tensor]:
     if not _is_detection_targets(targets):
         return None
@@ -3858,6 +4738,12 @@ def _forward_train_loss(
     boundary_contrastive_max_pairs: int = 128,
     foreground_consistency_loss_weight: float = 0.0,
     foreground_consistency_margin: float = 0.08,
+    background_counterfactual_consistency_weight: float = 0.0,
+    background_counterfactual_probability: float = 0.0,
+    background_counterfactual_mode: str = "desaturate_blur",
+    background_counterfactual_margin: float = 0.08,
+    background_counterfactual_blur_kernel: int = 15,
+    background_counterfactual_temperature: float = 1.0,
     attention_view_loss_weight: float = 0.0,
     attention_crop_probability: float = 0.50,
     attention_drop_probability: float = 0.25,
@@ -3876,6 +4762,24 @@ def _forward_train_loss(
     register_diversity_loss_weight: float = 0.0,
     pairwise_margin_loss_weight: float = 0.0,
     ordinal_maturity_loss_weight: float = 0.0,
+    angular_margin_loss_weight: float = 0.0,
+    angular_margin: float = 0.12,
+    angular_margin_scale: float = 16.0,
+    angular_margin_start_epoch: int = 2,
+    angular_margin_classes: Union[str, Sequence[int]] = "0,1,2,3",
+    ordinal_boundary_loss_weight: float = 0.0,
+    ordinal_boundary_classes: Union[str, Sequence[int]] = "0,1,2,3",
+    ordinal_boundary_threshold_weights: Union[str, Sequence[float]] = "1.25,1.25,1.0",
+    ordinal_boundary_temperature: float = 1.0,
+    ordinal_boundary_start_epoch: int = 1,
+    pairwise_confusion_loss_weight: float = 0.0,
+    pairwise_confusion_sources: Union[str, Sequence[str]] = "head",
+    pairwise_confusion_start_epoch: int = 1,
+    pairwise_confusion_normalize: bool = True,
+    mutual_channel_loss_weight: float = 0.0,
+    mutual_channel_top_k: int = 8,
+    mutual_channel_diversity_weight: float = 0.20,
+    mutual_channel_start_epoch: int = 1,
     distillation_teacher: Optional[nn.Module] = None,
     distillation_class_indices: Optional[Tensor] = None,
     distillation_loss_weight: float = 0.0,
@@ -3885,6 +4789,11 @@ def _forward_train_loss(
     offline_teacher_probabilities: Optional[Tensor] = None,
     sample_indices: Optional[Tensor] = None,
     sample_weights: Optional[Tensor] = None,
+    targeted_margin_negative_indices: Optional[Tensor] = None,
+    targeted_margin_weights: Optional[Tensor] = None,
+    targeted_margin_margins: Optional[Tensor] = None,
+    targeted_margin_loss_weight: float = 0.0,
+    targeted_margin_default_margin: float = 0.12,
     elr_target_state: Optional[Tensor] = None,
     elr_loss_weight: float = 0.0,
     elr_beta: float = 0.70,
@@ -3908,6 +4817,8 @@ def _forward_train_loss(
             boundary_contrastive_loss = logits.sum() * 0.0
             boundary_contrastive_terms = 0
             foreground_consistency_loss = logits.sum() * 0.0
+            background_counterfactual_consistency_loss = logits.sum() * 0.0
+            background_counterfactual_fraction = 0.0
             attention_view_loss = logits.sum() * 0.0
             attention_view_stats = {
                 "attention_view_fraction": 0.0,
@@ -3918,8 +4829,15 @@ def _forward_train_loss(
             register_diversity_loss = logits.sum() * 0.0
             pairwise_margin_loss = logits.sum() * 0.0
             ordinal_maturity_loss = logits.sum() * 0.0
+            angular_margin_loss = logits.sum() * 0.0
+            ordinal_boundary_loss = logits.sum() * 0.0
+            pairwise_confusion_loss = logits.sum() * 0.0
+            mutual_channel_loss = logits.sum() * 0.0
             distillation_loss = logits.sum() * 0.0
             elr_loss = logits.sum() * 0.0
+            targeted_margin_loss = logits.sum() * 0.0
+            targeted_margin_weight_mean = logits.new_tensor(0.0)
+            targeted_margin_fraction = 0.0
             if (
                 metric_learning_criterion is not None
                 and float(metric_learning_loss_weight) > 0.0
@@ -3966,6 +4884,27 @@ def _forward_train_loss(
                     margin=foreground_consistency_margin,
                 )
                 loss = loss + float(foreground_consistency_loss_weight) * foreground_consistency_loss
+            if float(background_counterfactual_consistency_weight) > 0.0:
+                (
+                    background_counterfactual_consistency_loss,
+                    background_counterfactual_fraction,
+                ) = _background_counterfactual_consistency_loss(
+                    model=model,
+                    images=images,
+                    logits=logits,
+                    probability=background_counterfactual_probability,
+                    mode=background_counterfactual_mode,
+                    margin=background_counterfactual_margin,
+                    blur_kernel=background_counterfactual_blur_kernel,
+                    temperature=background_counterfactual_temperature,
+                    amp=amp,
+                    device=device,
+                )
+                loss = (
+                    loss
+                    + float(background_counterfactual_consistency_weight)
+                    * background_counterfactual_consistency_loss
+                )
             if (
                 features is not None
                 and torch.is_tensor(targets)
@@ -4024,6 +4963,79 @@ def _forward_train_loss(
                         targets=target_indices,
                     )
                     loss = loss + float(ordinal_maturity_loss_weight) * ordinal_maturity_loss
+            if (
+                features is not None
+                and float(angular_margin_loss_weight) > 0.0
+                and int(epoch_index) >= int(angular_margin_start_epoch)
+            ):
+                target_indices = _classification_target_indices(targets, logits)
+                if target_indices is not None:
+                    angular_margin_loss = _angular_margin_loss_from_features(
+                        model=model,
+                        features=features,
+                        targets=target_indices,
+                        margin=angular_margin,
+                        scale=angular_margin_scale,
+                        classes=angular_margin_classes,
+                    )
+                    loss = loss + float(angular_margin_loss_weight) * angular_margin_loss
+            if (
+                torch.is_tensor(targets)
+                and float(ordinal_boundary_loss_weight) > 0.0
+                and int(epoch_index) >= int(ordinal_boundary_start_epoch)
+            ):
+                target_indices = _classification_target_indices(targets, logits)
+                if target_indices is not None:
+                    ordinal_boundary_loss = _ordinal_boundary_loss_from_logits(
+                        logits=logits,
+                        targets=target_indices,
+                        classes=ordinal_boundary_classes,
+                        threshold_weights=ordinal_boundary_threshold_weights,
+                        temperature=ordinal_boundary_temperature,
+                    )
+                    loss = loss + float(ordinal_boundary_loss_weight) * ordinal_boundary_loss
+            if (
+                float(pairwise_confusion_loss_weight) > 0.0
+                and int(epoch_index) >= int(pairwise_confusion_start_epoch)
+            ):
+                pairwise_confusion_loss = _pairwise_confusion_loss_from_features(
+                    model=model,
+                    features=features,
+                    logits=logits,
+                    sources=pairwise_confusion_sources,
+                    normalize=pairwise_confusion_normalize,
+                )
+                loss = loss + float(pairwise_confusion_loss_weight) * pairwise_confusion_loss
+            if (
+                torch.is_tensor(targets)
+                and float(mutual_channel_loss_weight) > 0.0
+                and int(epoch_index) >= int(mutual_channel_start_epoch)
+            ):
+                target_indices = _classification_target_indices(targets, logits)
+                if target_indices is not None:
+                    mutual_channel_loss = _mutual_channel_loss_from_features(
+                        features=features,
+                        targets=target_indices,
+                        num_classes=int(logits.size(1)),
+                        top_k=mutual_channel_top_k,
+                        diversity_weight=mutual_channel_diversity_weight,
+                    )
+                    loss = loss + float(mutual_channel_loss_weight) * mutual_channel_loss
+            if float(targeted_margin_loss_weight) > 0.0:
+                (
+                    targeted_margin_loss,
+                    targeted_margin_weight_mean,
+                    targeted_margin_fraction,
+                ) = _targeted_margin_loss_from_logits(
+                    logits=logits,
+                    hard_labels=labels,
+                    targets=targets,
+                    negative_indices=targeted_margin_negative_indices,
+                    weights=targeted_margin_weights,
+                    margins=targeted_margin_margins,
+                    default_margin=targeted_margin_default_margin,
+                )
+                loss = loss + float(targeted_margin_loss_weight) * targeted_margin_loss
             if (
                 distillation_teacher is not None
                 and distillation_class_indices is not None
@@ -4087,10 +5099,35 @@ def _forward_train_loss(
                         - float(metric_learning_loss_weight) * metric_learning_loss
                         - float(boundary_contrastive_loss_weight) * boundary_contrastive_loss
                         - float(foreground_consistency_loss_weight) * foreground_consistency_loss
+                        - (
+                            float(background_counterfactual_consistency_weight)
+                            * background_counterfactual_consistency_loss
+                        )
                         - float(attention_view_loss_weight) * attention_view_loss
                         - float(register_diversity_loss_weight) * register_diversity_loss
                         - float(pairwise_margin_loss_weight) * pairwise_margin_loss
                         - float(ordinal_maturity_loss_weight) * ordinal_maturity_loss
+                        - (
+                            float(angular_margin_loss_weight) * angular_margin_loss
+                            if int(epoch_index) >= int(angular_margin_start_epoch)
+                            else 0.0
+                        )
+                        - (
+                            float(ordinal_boundary_loss_weight) * ordinal_boundary_loss
+                            if int(epoch_index) >= int(ordinal_boundary_start_epoch)
+                            else 0.0
+                        )
+                        - (
+                            float(pairwise_confusion_loss_weight) * pairwise_confusion_loss
+                            if int(epoch_index) >= int(pairwise_confusion_start_epoch)
+                            else 0.0
+                        )
+                        - (
+                            float(mutual_channel_loss_weight) * mutual_channel_loss
+                            if int(epoch_index) >= int(mutual_channel_start_epoch)
+                            else 0.0
+                        )
+                        - float(targeted_margin_loss_weight) * targeted_margin_loss
                         - float(distillation_loss_weight) * distillation_loss
                         - (
                             float(elr_loss_weight) * elr_loss
@@ -4106,11 +5143,24 @@ def _forward_train_loss(
                 "boundary_contrastive_loss": float(boundary_contrastive_loss.detach().cpu().item()),
                 "boundary_contrastive_terms": float(boundary_contrastive_terms),
                 "foreground_consistency_loss": float(foreground_consistency_loss.detach().cpu().item()),
+                "background_counterfactual_consistency_loss": float(
+                    background_counterfactual_consistency_loss.detach().cpu().item()
+                ),
+                "background_counterfactual_fraction": float(background_counterfactual_fraction),
                 "attention_view_loss": float(attention_view_loss.detach().cpu().item()),
                 **attention_view_stats,
                 "register_diversity_loss": float(register_diversity_loss.detach().cpu().item()),
                 "pairwise_margin_loss": float(pairwise_margin_loss.detach().cpu().item()),
                 "ordinal_maturity_loss": float(ordinal_maturity_loss.detach().cpu().item()),
+                "angular_margin_loss": float(angular_margin_loss.detach().cpu().item()),
+                "ordinal_boundary_loss": float(ordinal_boundary_loss.detach().cpu().item()),
+                "pairwise_confusion_loss": float(pairwise_confusion_loss.detach().cpu().item()),
+                "mutual_channel_loss": float(mutual_channel_loss.detach().cpu().item()),
+                "targeted_margin_loss": float(targeted_margin_loss.detach().cpu().item()),
+                "targeted_margin_weight_mean": float(
+                    targeted_margin_weight_mean.detach().cpu().item()
+                ),
+                "targeted_margin_fraction": float(targeted_margin_fraction),
                 "distillation_loss": float(distillation_loss.detach().cpu().item()),
                 "elr_loss": float(elr_loss.detach().cpu().item()),
                 "sample_weight_mean": float(sample_weight_mean.detach().cpu().item()),
@@ -4267,6 +5317,12 @@ def train_one_epoch(
     boundary_contrastive_max_pairs: int = 128,
     foreground_consistency_loss_weight: float = 0.0,
     foreground_consistency_margin: float = 0.08,
+    background_counterfactual_consistency_weight: float = 0.0,
+    background_counterfactual_probability: float = 0.0,
+    background_counterfactual_mode: str = "desaturate_blur",
+    background_counterfactual_margin: float = 0.08,
+    background_counterfactual_blur_kernel: int = 15,
+    background_counterfactual_temperature: float = 1.0,
     attention_view_loss_weight: float = 0.0,
     attention_crop_probability: float = 0.50,
     attention_drop_probability: float = 0.25,
@@ -4284,12 +5340,32 @@ def train_one_epoch(
     register_diversity_loss_weight: float = 0.0,
     pairwise_margin_loss_weight: float = 0.0,
     ordinal_maturity_loss_weight: float = 0.0,
+    angular_margin_loss_weight: float = 0.0,
+    angular_margin: float = 0.12,
+    angular_margin_scale: float = 16.0,
+    angular_margin_start_epoch: int = 2,
+    angular_margin_classes: Union[str, Sequence[int]] = "0,1,2,3",
+    ordinal_boundary_loss_weight: float = 0.0,
+    ordinal_boundary_classes: Union[str, Sequence[int]] = "0,1,2,3",
+    ordinal_boundary_threshold_weights: Union[str, Sequence[float]] = "1.25,1.25,1.0",
+    ordinal_boundary_temperature: float = 1.0,
+    ordinal_boundary_start_epoch: int = 1,
+    pairwise_confusion_loss_weight: float = 0.0,
+    pairwise_confusion_sources: Union[str, Sequence[str]] = "head",
+    pairwise_confusion_start_epoch: int = 1,
+    pairwise_confusion_normalize: bool = True,
+    mutual_channel_loss_weight: float = 0.0,
+    mutual_channel_top_k: int = 8,
+    mutual_channel_diversity_weight: float = 0.20,
+    mutual_channel_start_epoch: int = 1,
     distillation_teacher: Optional[nn.Module] = None,
     distillation_class_indices: Optional[Tensor] = None,
     distillation_loss_weight: float = 0.0,
     distillation_temperature: float = 2.0,
     distillation_focus_class_index: int = 1,
     distillation_focus_class_weight: float = 1.0,
+    targeted_margin_loss_weight: float = 0.0,
+    targeted_margin_default_margin: float = 0.12,
     elr_target_state: Optional[Tensor] = None,
     elr_loss_weight: float = 0.0,
     elr_beta: float = 0.70,
@@ -4322,6 +5398,8 @@ def train_one_epoch(
         "boundary_contrastive_loss": 0.0,
         "boundary_contrastive_terms": 0.0,
         "foreground_consistency_loss": 0.0,
+        "background_counterfactual_consistency_loss": 0.0,
+        "background_counterfactual_fraction": 0.0,
         "attention_view_loss": 0.0,
         "attention_view_fraction": 0.0,
         "attention_crop_fraction": 0.0,
@@ -4330,6 +5408,13 @@ def train_one_epoch(
         "register_diversity_loss": 0.0,
         "pairwise_margin_loss": 0.0,
         "ordinal_maturity_loss": 0.0,
+        "angular_margin_loss": 0.0,
+        "ordinal_boundary_loss": 0.0,
+        "pairwise_confusion_loss": 0.0,
+        "mutual_channel_loss": 0.0,
+        "targeted_margin_loss": 0.0,
+        "targeted_margin_weight_mean": 0.0,
+        "targeted_margin_fraction": 0.0,
         "distillation_loss": 0.0,
         "elr_loss": 0.0,
         "sample_weight_mean": 0.0,
@@ -4365,6 +5450,9 @@ def train_one_epoch(
             offline_teacher_probabilities = None
             sample_indices = None
             sample_weights = None
+            targeted_margin_negative_indices = None
+            targeted_margin_weights = None
+            targeted_margin_margins = None
             if len(batch) == 2 and _is_detection_targets(batch[1]):
                 batch_images, batch_targets = batch
                 labels = None
@@ -4389,6 +5477,27 @@ def train_one_epoch(
                             dtype=torch.float32,
                             non_blocking=True,
                         )
+                    targeted_negative_value = moved_batch_targets.get("targeted_margin_negative")
+                    if torch.is_tensor(targeted_negative_value):
+                        targeted_margin_negative_indices = targeted_negative_value.to(
+                            device=device,
+                            dtype=torch.long,
+                            non_blocking=True,
+                        )
+                    targeted_weight_value = moved_batch_targets.get("targeted_margin_weight")
+                    if torch.is_tensor(targeted_weight_value):
+                        targeted_margin_weights = targeted_weight_value.to(
+                            device=device,
+                            dtype=torch.float32,
+                            non_blocking=True,
+                        )
+                    targeted_margin_value = moved_batch_targets.get("targeted_margin_margin")
+                    if torch.is_tensor(targeted_margin_value):
+                        targeted_margin_margins = targeted_margin_value.to(
+                            device=device,
+                            dtype=torch.float32,
+                            non_blocking=True,
+                        )
                     teacher_value = moved_batch_targets.get("teacher_probs")
                     if torch.is_tensor(teacher_value):
                         offline_teacher_probabilities = teacher_value.to(
@@ -4396,7 +5505,15 @@ def train_one_epoch(
                             dtype=torch.float32,
                             non_blocking=True,
                         )
-                    targets = labels if labels is not None else moved_batch_targets
+                    soft_target_value = moved_batch_targets.get("soft_target")
+                    if torch.is_tensor(soft_target_value):
+                        targets = soft_target_value.to(
+                            device=device,
+                            dtype=torch.float32,
+                            non_blocking=True,
+                        )
+                    else:
+                        targets = labels if labels is not None else moved_batch_targets
                 else:
                     targets = moved_batch_targets
             else:
@@ -4420,6 +5537,12 @@ def train_one_epoch(
                 boundary_contrastive_max_pairs=boundary_contrastive_max_pairs,
                 foreground_consistency_loss_weight=foreground_consistency_loss_weight,
                 foreground_consistency_margin=foreground_consistency_margin,
+                background_counterfactual_consistency_weight=background_counterfactual_consistency_weight,
+                background_counterfactual_probability=background_counterfactual_probability,
+                background_counterfactual_mode=background_counterfactual_mode,
+                background_counterfactual_margin=background_counterfactual_margin,
+                background_counterfactual_blur_kernel=background_counterfactual_blur_kernel,
+                background_counterfactual_temperature=background_counterfactual_temperature,
                 attention_view_loss_weight=attention_view_loss_weight,
                 attention_crop_probability=attention_crop_probability,
                 attention_drop_probability=attention_drop_probability,
@@ -4438,6 +5561,24 @@ def train_one_epoch(
                 register_diversity_loss_weight=register_diversity_loss_weight,
                 pairwise_margin_loss_weight=pairwise_margin_loss_weight,
                 ordinal_maturity_loss_weight=ordinal_maturity_loss_weight,
+                angular_margin_loss_weight=angular_margin_loss_weight,
+                angular_margin=angular_margin,
+                angular_margin_scale=angular_margin_scale,
+                angular_margin_start_epoch=angular_margin_start_epoch,
+                angular_margin_classes=angular_margin_classes,
+                ordinal_boundary_loss_weight=ordinal_boundary_loss_weight,
+                ordinal_boundary_classes=ordinal_boundary_classes,
+                ordinal_boundary_threshold_weights=ordinal_boundary_threshold_weights,
+                ordinal_boundary_temperature=ordinal_boundary_temperature,
+                ordinal_boundary_start_epoch=ordinal_boundary_start_epoch,
+                pairwise_confusion_loss_weight=pairwise_confusion_loss_weight,
+                pairwise_confusion_sources=pairwise_confusion_sources,
+                pairwise_confusion_start_epoch=pairwise_confusion_start_epoch,
+                pairwise_confusion_normalize=pairwise_confusion_normalize,
+                mutual_channel_loss_weight=mutual_channel_loss_weight,
+                mutual_channel_top_k=mutual_channel_top_k,
+                mutual_channel_diversity_weight=mutual_channel_diversity_weight,
+                mutual_channel_start_epoch=mutual_channel_start_epoch,
                 distillation_teacher=distillation_teacher,
                 distillation_class_indices=distillation_class_indices,
                 distillation_loss_weight=distillation_loss_weight,
@@ -4447,6 +5588,11 @@ def train_one_epoch(
                 offline_teacher_probabilities=offline_teacher_probabilities,
                 sample_indices=sample_indices,
                 sample_weights=sample_weights,
+                targeted_margin_negative_indices=targeted_margin_negative_indices,
+                targeted_margin_weights=targeted_margin_weights,
+                targeted_margin_margins=targeted_margin_margins,
+                targeted_margin_loss_weight=targeted_margin_loss_weight,
+                targeted_margin_default_margin=targeted_margin_default_margin,
                 elr_target_state=elr_target_state,
                 elr_loss_weight=elr_loss_weight,
                 elr_beta=elr_beta,
@@ -4529,6 +5675,9 @@ def train_one_epoch(
                         replay_offline_teacher_probabilities = None
                         replay_sample_indices = None
                         replay_sample_weights = None
+                        replay_targeted_margin_negative_indices = None
+                        replay_targeted_margin_weights = None
+                        replay_targeted_margin_margins = None
                         if len(replay_batch) == 2 and _is_detection_targets(replay_batch[1]):
                             replay_targets = _move_batch_item_to_device(replay_batch[1], device)
                         elif len(replay_batch) == 3:
@@ -4549,6 +5698,27 @@ def train_one_epoch(
                                         dtype=torch.float32,
                                         non_blocking=True,
                                     )
+                                targeted_negative_value = replay_moved_targets.get("targeted_margin_negative")
+                                if torch.is_tensor(targeted_negative_value):
+                                    replay_targeted_margin_negative_indices = targeted_negative_value.to(
+                                        device=device,
+                                        dtype=torch.long,
+                                        non_blocking=True,
+                                    )
+                                targeted_weight_value = replay_moved_targets.get("targeted_margin_weight")
+                                if torch.is_tensor(targeted_weight_value):
+                                    replay_targeted_margin_weights = targeted_weight_value.to(
+                                        device=device,
+                                        dtype=torch.float32,
+                                        non_blocking=True,
+                                    )
+                                targeted_margin_value = replay_moved_targets.get("targeted_margin_margin")
+                                if torch.is_tensor(targeted_margin_value):
+                                    replay_targeted_margin_margins = targeted_margin_value.to(
+                                        device=device,
+                                        dtype=torch.float32,
+                                        non_blocking=True,
+                                    )
                                 teacher_value = replay_moved_targets.get("teacher_probs")
                                 if torch.is_tensor(teacher_value):
                                     replay_offline_teacher_probabilities = teacher_value.to(
@@ -4556,7 +5726,15 @@ def train_one_epoch(
                                         dtype=torch.float32,
                                         non_blocking=True,
                                     )
-                                replay_targets = replay_labels if replay_labels is not None else replay_moved_targets
+                                replay_soft_target_value = replay_moved_targets.get("soft_target")
+                                if torch.is_tensor(replay_soft_target_value):
+                                    replay_targets = replay_soft_target_value.to(
+                                        device=device,
+                                        dtype=torch.float32,
+                                        non_blocking=True,
+                                    )
+                                else:
+                                    replay_targets = replay_labels if replay_labels is not None else replay_moved_targets
                             else:
                                 replay_targets = replay_moved_targets
                         else:
@@ -4575,6 +5753,12 @@ def train_one_epoch(
                             boundary_contrastive_max_pairs=boundary_contrastive_max_pairs,
                             foreground_consistency_loss_weight=foreground_consistency_loss_weight,
                             foreground_consistency_margin=foreground_consistency_margin,
+                            background_counterfactual_consistency_weight=background_counterfactual_consistency_weight,
+                            background_counterfactual_probability=background_counterfactual_probability,
+                            background_counterfactual_mode=background_counterfactual_mode,
+                            background_counterfactual_margin=background_counterfactual_margin,
+                            background_counterfactual_blur_kernel=background_counterfactual_blur_kernel,
+                            background_counterfactual_temperature=background_counterfactual_temperature,
                             attention_view_loss_weight=attention_view_loss_weight,
                             attention_crop_probability=attention_crop_probability,
                             attention_drop_probability=attention_drop_probability,
@@ -4593,6 +5777,24 @@ def train_one_epoch(
                             register_diversity_loss_weight=register_diversity_loss_weight,
                             pairwise_margin_loss_weight=pairwise_margin_loss_weight,
                             ordinal_maturity_loss_weight=ordinal_maturity_loss_weight,
+                            angular_margin_loss_weight=angular_margin_loss_weight,
+                            angular_margin=angular_margin,
+                            angular_margin_scale=angular_margin_scale,
+                            angular_margin_start_epoch=angular_margin_start_epoch,
+                            angular_margin_classes=angular_margin_classes,
+                            ordinal_boundary_loss_weight=ordinal_boundary_loss_weight,
+                            ordinal_boundary_classes=ordinal_boundary_classes,
+                            ordinal_boundary_threshold_weights=ordinal_boundary_threshold_weights,
+                            ordinal_boundary_temperature=ordinal_boundary_temperature,
+                            ordinal_boundary_start_epoch=ordinal_boundary_start_epoch,
+                            pairwise_confusion_loss_weight=pairwise_confusion_loss_weight,
+                            pairwise_confusion_sources=pairwise_confusion_sources,
+                            pairwise_confusion_start_epoch=pairwise_confusion_start_epoch,
+                            pairwise_confusion_normalize=pairwise_confusion_normalize,
+                            mutual_channel_loss_weight=mutual_channel_loss_weight,
+                            mutual_channel_top_k=mutual_channel_top_k,
+                            mutual_channel_diversity_weight=mutual_channel_diversity_weight,
+                            mutual_channel_start_epoch=mutual_channel_start_epoch,
                             distillation_teacher=distillation_teacher,
                             distillation_class_indices=distillation_class_indices,
                             distillation_loss_weight=distillation_loss_weight,
@@ -4602,6 +5804,11 @@ def train_one_epoch(
                             offline_teacher_probabilities=replay_offline_teacher_probabilities,
                             sample_indices=replay_sample_indices,
                             sample_weights=replay_sample_weights,
+                            targeted_margin_negative_indices=replay_targeted_margin_negative_indices,
+                            targeted_margin_weights=replay_targeted_margin_weights,
+                            targeted_margin_margins=replay_targeted_margin_margins,
+                            targeted_margin_loss_weight=targeted_margin_loss_weight,
+                            targeted_margin_default_margin=targeted_margin_default_margin,
                             elr_target_state=elr_target_state,
                             elr_loss_weight=elr_loss_weight,
                             elr_beta=elr_beta,
@@ -4933,6 +6140,289 @@ def _load_sample_weight_manifest(
     return weights_by_path, summary
 
 
+def _row_path_value(row: Dict[str, str]) -> str:
+    return (
+        str(row.get("image_path", "") or "").strip()
+        or str(row.get("path", "") or "").strip()
+        or str(row.get("sample_path", "") or "").strip()
+    )
+
+
+def _path_looks_like_non_train_split(path_text: str) -> bool:
+    normalized = str(path_text or "").replace("\\", "/").lower()
+    parts = [part for part in normalized.split("/") if part]
+    return "val" in parts or "valid" in parts or "validation" in parts or "test" in parts
+
+
+def _row_probability_value(
+    row: Dict[str, str],
+    fieldnames: Sequence[str],
+    class_index: int,
+) -> Optional[float]:
+    prefixes = (
+        f"soft_{class_index}",
+        f"soft_prob_{class_index}",
+        f"soft_target_{class_index}",
+        f"target_prob_{class_index}",
+        f"prob_{class_index}",
+    )
+    for name in fieldnames:
+        normalized = str(name or "").strip().lower()
+        if any(normalized == prefix or normalized.startswith(prefix + "_") for prefix in prefixes):
+            value_text = str(row.get(name, "") or "").strip()
+            if not value_text:
+                continue
+            try:
+                return float(value_text)
+            except ValueError:
+                return None
+    return None
+
+
+def _load_ambiguous_soft_target_manifest(
+    path_text: str,
+    *,
+    num_classes: int,
+    default_alpha: float,
+) -> Tuple[Dict[str, List[float]], Dict[str, object]]:
+    summary: Dict[str, object] = {
+        "enabled": False,
+        "manifest": str(path_text or ""),
+    }
+    if not str(path_text or "").strip():
+        return {}, summary
+    manifest_path = Path(path_text).expanduser()
+    if not manifest_path.exists():
+        raise FileNotFoundError(f"Missing ambiguous soft-target manifest: {manifest_path}")
+    num_classes = max(1, int(num_classes))
+    default_alpha = max(0.0, min(1.0, float(default_alpha)))
+    targets_by_path: Dict[str, List[float]] = {}
+    by_reason: Counter[str] = Counter()
+    by_pair: Counter[str] = Counter()
+    duplicate_rows = 0
+    invalid_rows = 0
+    leakage_rows = 0
+    with manifest_path.open("r", encoding="utf-8-sig", newline="") as handle:
+        reader = csv.DictReader(handle)
+        if reader.fieldnames is None:
+            raise ValueError(f"Ambiguous soft-target manifest phai la CSV co header: {manifest_path}")
+        fieldnames = list(reader.fieldnames)
+        for row in reader:
+            raw_path = _row_path_value(row)
+            if not raw_path:
+                invalid_rows += 1
+                continue
+            if _path_looks_like_non_train_split(raw_path):
+                leakage_rows += 1
+                continue
+
+            probabilities: List[float] = []
+            for class_index in range(num_classes):
+                value = _row_probability_value(row, fieldnames, class_index)
+                probabilities.append(float(value) if value is not None else float("nan"))
+            has_explicit_probabilities = all(math.isfinite(value) for value in probabilities)
+            if has_explicit_probabilities:
+                total = float(sum(max(0.0, value) for value in probabilities))
+                if total <= 0.0:
+                    invalid_rows += 1
+                    continue
+                probabilities = [max(0.0, value) / total for value in probabilities]
+            else:
+                target_text = str(row.get("target_index", "") or row.get("y_true", "") or "").strip()
+                soft_text = (
+                    str(row.get("soft_target_index", "") or "").strip()
+                    or str(row.get("ambiguous_index", "") or "").strip()
+                    or str(row.get("top2_index", "") or "").strip()
+                    or str(row.get("prediction_index", "") or row.get("y_pred", "") or "").strip()
+                )
+                if not target_text or not soft_text:
+                    invalid_rows += 1
+                    continue
+                try:
+                    target_index = int(float(target_text))
+                    soft_index = int(float(soft_text))
+                except ValueError:
+                    invalid_rows += 1
+                    continue
+                if not (0 <= target_index < num_classes) or not (0 <= soft_index < num_classes):
+                    invalid_rows += 1
+                    continue
+                raw_alpha = str(row.get("alpha", "") or row.get("soft_alpha", "") or "").strip()
+                try:
+                    alpha = float(raw_alpha) if raw_alpha else default_alpha
+                except ValueError:
+                    alpha = default_alpha
+                alpha = max(0.0, min(1.0, float(alpha)))
+                probabilities = [0.0 for _ in range(num_classes)]
+                probabilities[target_index] = 1.0
+                if soft_index != target_index and alpha > 0.0:
+                    probabilities[target_index] = 1.0 - alpha
+                    probabilities[soft_index] += alpha
+
+            key = str(Path(raw_path).resolve()).lower()
+            if key in targets_by_path:
+                duplicate_rows += 1
+            targets_by_path[key] = probabilities
+            reason = str(row.get("reason", "") or "").strip()
+            if reason:
+                by_reason[reason] += 1
+            target = str(row.get("target_index", "") or row.get("y_true", "") or "").strip()
+            soft = (
+                str(row.get("soft_target_index", "") or "").strip()
+                or str(row.get("prediction_index", "") or row.get("y_pred", "") or "").strip()
+            )
+            if target or soft:
+                by_pair[f"{target}->{soft}"] += 1
+    if leakage_rows > 0:
+        raise ValueError(
+            "Ambiguous soft-target manifest chi duoc dung train split; "
+            f"found_non_train_rows={leakage_rows} manifest={manifest_path}"
+        )
+    if not targets_by_path:
+        raise ValueError(f"Ambiguous soft-target manifest khong co dong hop le: {manifest_path}")
+    summary = {
+        "enabled": True,
+        "manifest": str(manifest_path.resolve()),
+        "paths": int(len(targets_by_path)),
+        "duplicate_rows": int(duplicate_rows),
+        "invalid_rows": int(invalid_rows),
+        "leakage_rows": int(leakage_rows),
+        "num_classes": int(num_classes),
+        "default_alpha": float(default_alpha),
+        "by_reason": dict(by_reason),
+        "by_target_soft_pair": dict(by_pair),
+    }
+    return targets_by_path, summary
+
+
+def _load_targeted_margin_manifest(
+    path_text: str,
+    *,
+    num_classes: int,
+    default_margin: float,
+    default_weight: float,
+    max_weight: float,
+) -> Tuple[Dict[str, Dict[str, float]], Dict[str, object]]:
+    summary: Dict[str, object] = {
+        "enabled": False,
+        "manifest": str(path_text or ""),
+    }
+    if not str(path_text or "").strip():
+        return {}, summary
+    manifest_path = Path(path_text).expanduser()
+    if not manifest_path.exists():
+        raise FileNotFoundError(f"Missing targeted-margin manifest: {manifest_path}")
+    num_classes = max(1, int(num_classes))
+    default_margin = max(0.0, float(default_margin))
+    default_weight = max(0.0, float(default_weight))
+    max_weight = max(default_weight, float(max_weight))
+    specs_by_path: Dict[str, Dict[str, float]] = {}
+    by_reason: Counter[str] = Counter()
+    by_pair: Counter[str] = Counter()
+    duplicate_rows = 0
+    invalid_rows = 0
+    leakage_rows = 0
+    with manifest_path.open("r", encoding="utf-8-sig", newline="") as handle:
+        reader = csv.DictReader(handle)
+        if reader.fieldnames is None:
+            raise ValueError(f"Targeted-margin manifest phai la CSV co header: {manifest_path}")
+        for row in reader:
+            raw_path = _row_path_value(row)
+            if not raw_path:
+                invalid_rows += 1
+                continue
+            if _path_looks_like_non_train_split(raw_path):
+                leakage_rows += 1
+                continue
+            target_text = str(row.get("target_index", "") or row.get("y_true", "") or "").strip()
+            negative_text = (
+                str(row.get("negative_index", "") or "").strip()
+                or str(row.get("targeted_negative_index", "") or "").strip()
+                or str(row.get("prediction_index", "") or row.get("y_pred", "") or "").strip()
+            )
+            if not target_text or not negative_text:
+                invalid_rows += 1
+                continue
+            try:
+                target_index = int(float(target_text))
+                negative_index = int(float(negative_text))
+            except ValueError:
+                invalid_rows += 1
+                continue
+            if (
+                target_index < 0
+                or target_index >= num_classes
+                or negative_index < 0
+                or negative_index >= num_classes
+                or negative_index == target_index
+            ):
+                invalid_rows += 1
+                continue
+            raw_margin = (
+                str(row.get("targeted_margin", "") or "").strip()
+                or str(row.get("target_margin", "") or "").strip()
+                or str(row.get("loss_margin", "") or "").strip()
+            )
+            raw_weight = (
+                str(row.get("targeted_margin_weight", "") or "").strip()
+                or str(row.get("margin_weight", "") or "").strip()
+                or str(row.get("sample_weight", "") or row.get("weight", "") or "").strip()
+            )
+            try:
+                margin = float(raw_margin) if raw_margin else default_margin
+                weight = float(raw_weight) if raw_weight else default_weight
+            except ValueError:
+                invalid_rows += 1
+                continue
+            if not math.isfinite(margin) or not math.isfinite(weight) or weight <= 0.0:
+                invalid_rows += 1
+                continue
+            margin = max(0.0, float(margin))
+            weight = min(max_weight, max(1e-6, float(weight)))
+            key = str(Path(raw_path).resolve()).lower()
+            if key in specs_by_path:
+                duplicate_rows += 1
+                previous = specs_by_path[key]
+                if weight < float(previous.get("weight", 0.0)):
+                    continue
+            specs_by_path[key] = {
+                "target_index": float(target_index),
+                "negative_index": float(negative_index),
+                "margin": float(margin),
+                "weight": float(weight),
+            }
+            reason = str(row.get("reason", "") or "").strip()
+            if reason:
+                by_reason[reason] += 1
+            by_pair[f"{target_index}->{negative_index}"] += 1
+    if leakage_rows > 0:
+        raise ValueError(
+            "Targeted-margin manifest chi duoc dung train split; "
+            f"found_non_train_rows={leakage_rows} manifest={manifest_path}"
+        )
+    if not specs_by_path:
+        raise ValueError(f"Targeted-margin manifest khong co dong hop le: {manifest_path}")
+    weights = [float(spec["weight"]) for spec in specs_by_path.values()]
+    margins = [float(spec["margin"]) for spec in specs_by_path.values()]
+    summary = {
+        "enabled": True,
+        "manifest": str(manifest_path.resolve()),
+        "paths": int(len(specs_by_path)),
+        "duplicate_rows": int(duplicate_rows),
+        "invalid_rows": int(invalid_rows),
+        "leakage_rows": int(leakage_rows),
+        "num_classes": int(num_classes),
+        "default_margin": float(default_margin),
+        "default_weight": float(default_weight),
+        "max_weight": float(max_weight),
+        "mean_manifest_weight": float(sum(weights) / max(1, len(weights))),
+        "mean_manifest_margin": float(sum(margins) / max(1, len(margins))),
+        "by_reason": dict(by_reason),
+        "by_target_negative_pair": dict(by_pair),
+    }
+    return specs_by_path, summary
+
+
 def _build_eval_loader(
     dataset: MangoYOLOCropDataset,
     batch_size: int,
@@ -5212,6 +6702,8 @@ def make_train_transform(
         enabled_augmentations.append("local_exposure")
     if augmentation_config.obstacle_probability > 0.0:
         enabled_augmentations.append("obstacle")
+    if augmentation_config.foreground_background_mix_probability > 0.0:
+        enabled_augmentations.append("foreground_background_mix")
     if augmentation_config.class_aware_augmentation:
         enabled_augmentations.append("class_aware_intensity")
         if not augmentation_config.class_aware_photometric_augmentation:
@@ -5234,7 +6726,8 @@ def make_train_transform(
         "class_aware=%s class_power=%.4f class_max_scale=%.4f "
         "class_photometric=%s "
         "randaugment_ops=%s randaugment_magnitude=%s illumination_norm=%s "
-        "background_mode=%s background_prob=%.4f local_exposure=%.4f obstacle=%.4f temporal_frames=%s",
+        "background_mode=%s background_prob=%.4f local_exposure=%.4f obstacle=%.4f "
+        "fg_bg_mix=%.4f temporal_frames=%s",
         augmentation_config.resize_mode,
         augmentation_config.random_resized_crop_scale_min,
         augmentation_config.random_resized_crop_probability,
@@ -5261,6 +6754,7 @@ def make_train_transform(
         augmentation_config.background_suppression_probability,
         augmentation_config.local_exposure_probability,
         augmentation_config.obstacle_probability,
+        augmentation_config.foreground_background_mix_probability,
         model_config.temporal_frames,
     )
 
@@ -5695,6 +7189,46 @@ def main() -> None:
         sample_weight_summary.update(train_dataset.sample_weight_summary())
         print({"sample_weight_manifest": sample_weight_summary}, flush=True)
 
+    ambiguous_soft_target_summary: Dict[str, object] = {"enabled": False}
+    if str(train_config.ambiguous_soft_target_manifest or "").strip():
+        if detection_mode:
+            raise ValueError("Ambiguous soft-target manifest hien chi ho tro classification-only train.")
+        soft_targets, ambiguous_soft_target_summary = _load_ambiguous_soft_target_manifest(
+            str(train_config.ambiguous_soft_target_manifest),
+            num_classes=data_spec.num_classes,
+            default_alpha=float(train_config.ambiguous_soft_target_alpha),
+        )
+        train_dataset = AmbiguousSoftTargetDataset(
+            train_dataset,
+            soft_targets,
+            num_classes=data_spec.num_classes,
+            default_alpha=float(train_config.ambiguous_soft_target_alpha),
+        )
+        ambiguous_soft_target_summary.update(train_dataset.soft_target_summary())
+        print({"ambiguous_soft_target_manifest": ambiguous_soft_target_summary}, flush=True)
+
+    targeted_margin_summary: Dict[str, object] = {"enabled": False}
+    if str(train_config.targeted_margin_manifest or "").strip():
+        if detection_mode:
+            raise ValueError("Targeted-margin manifest hien chi ho tro classification-only train.")
+        margin_specs, targeted_margin_summary = _load_targeted_margin_manifest(
+            str(train_config.targeted_margin_manifest),
+            num_classes=data_spec.num_classes,
+            default_margin=float(train_config.targeted_margin_default_margin),
+            default_weight=float(train_config.targeted_margin_default_weight),
+            max_weight=float(train_config.targeted_margin_max_weight),
+        )
+        train_dataset = TargetedMarginDataset(
+            train_dataset,
+            margin_specs,
+            default_weight=float(train_config.targeted_margin_default_weight),
+            default_margin=float(train_config.targeted_margin_default_margin),
+            max_weight=float(train_config.targeted_margin_max_weight),
+        )
+        targeted_margin_summary.update(train_dataset.targeted_margin_summary())
+        targeted_margin_summary["loss_weight"] = float(train_config.targeted_margin_loss_weight)
+        print({"targeted_margin_manifest": targeted_margin_summary}, flush=True)
+
     if balance_auto_summary.get("enabled"):
         rare_class_repeat_factors = [
             float(value)
@@ -5941,6 +7475,17 @@ def main() -> None:
         targeted_copy_paste_class_scales=class_target_scales,
         targeted_copy_paste_scale_threshold=train_config.targeted_copy_paste_scale_threshold,
         targeted_copy_paste_probability=train_config.targeted_copy_paste_probability,
+        foreground_background_mix_probability=(
+            augmentation_config.foreground_background_mix_probability
+        ),
+        foreground_background_mix_margin=augmentation_config.foreground_background_mix_margin,
+        foreground_background_mix_min_foreground_fraction=(
+            augmentation_config.foreground_background_mix_min_foreground_fraction
+        ),
+        foreground_background_mix_max_foreground_fraction=(
+            augmentation_config.foreground_background_mix_max_foreground_fraction
+        ),
+        foreground_background_mix_softness=augmentation_config.foreground_background_mix_softness,
     )
     logger.info(
         "Creating train DataLoader: batch_size=%s requested_workers=%s "
@@ -6377,6 +7922,8 @@ def main() -> None:
         "rare_class_repeat": rare_class_repeat_summary,
         "hard_sample_repeat": hard_sample_repeat_summary,
         "sample_weight_manifest": sample_weight_summary,
+        "ambiguous_soft_target_manifest": ambiguous_soft_target_summary,
+        "targeted_margin_manifest": targeted_margin_summary,
         "class_crop_margin": class_crop_margin_summary,
         "targeted_copy_paste": targeted_copy_paste_summary,
         "val_dataset_report": val_dataset_report,
@@ -6612,6 +8159,14 @@ def main() -> None:
                     boundary_contrastive_max_pairs=train_config.boundary_contrastive_max_pairs,
                     foreground_consistency_loss_weight=train_config.foreground_consistency_loss_weight,
                     foreground_consistency_margin=train_config.foreground_consistency_margin,
+                    background_counterfactual_consistency_weight=(
+                        train_config.background_counterfactual_consistency_weight
+                    ),
+                    background_counterfactual_probability=train_config.background_counterfactual_probability,
+                    background_counterfactual_mode=train_config.background_counterfactual_mode,
+                    background_counterfactual_margin=train_config.background_counterfactual_margin,
+                    background_counterfactual_blur_kernel=train_config.background_counterfactual_blur_kernel,
+                    background_counterfactual_temperature=train_config.background_counterfactual_temperature,
                     attention_view_loss_weight=train_config.attention_view_loss_weight,
                     attention_crop_probability=train_config.attention_crop_probability,
                     attention_drop_probability=train_config.attention_drop_probability,
@@ -6629,12 +8184,32 @@ def main() -> None:
                     register_diversity_loss_weight=train_config.register_diversity_loss_weight,
                     pairwise_margin_loss_weight=train_config.pairwise_margin_loss_weight,
                     ordinal_maturity_loss_weight=train_config.ordinal_maturity_loss_weight,
+                    angular_margin_loss_weight=train_config.angular_margin_loss_weight,
+                    angular_margin=train_config.angular_margin,
+                    angular_margin_scale=train_config.angular_margin_scale,
+                    angular_margin_start_epoch=train_config.angular_margin_start_epoch,
+                    angular_margin_classes=train_config.angular_margin_classes,
+                    ordinal_boundary_loss_weight=train_config.ordinal_boundary_loss_weight,
+                    ordinal_boundary_classes=train_config.ordinal_boundary_classes,
+                    ordinal_boundary_threshold_weights=train_config.ordinal_boundary_threshold_weights,
+                    ordinal_boundary_temperature=train_config.ordinal_boundary_temperature,
+                    ordinal_boundary_start_epoch=train_config.ordinal_boundary_start_epoch,
+                    pairwise_confusion_loss_weight=train_config.pairwise_confusion_loss_weight,
+                    pairwise_confusion_sources=train_config.pairwise_confusion_sources,
+                    pairwise_confusion_start_epoch=train_config.pairwise_confusion_start_epoch,
+                    pairwise_confusion_normalize=train_config.pairwise_confusion_normalize,
+                    mutual_channel_loss_weight=train_config.mutual_channel_loss_weight,
+                    mutual_channel_top_k=train_config.mutual_channel_top_k,
+                    mutual_channel_diversity_weight=train_config.mutual_channel_diversity_weight,
+                    mutual_channel_start_epoch=train_config.mutual_channel_start_epoch,
                     distillation_teacher=distillation_teacher,
                     distillation_class_indices=distillation_class_indices,
                     distillation_loss_weight=train_config.distillation_weight,
                     distillation_temperature=train_config.distillation_temperature,
                     distillation_focus_class_index=train_config.distillation_focus_class_index,
                     distillation_focus_class_weight=train_config.distillation_focus_class_weight,
+                    targeted_margin_loss_weight=train_config.targeted_margin_loss_weight,
+                    targeted_margin_default_margin=train_config.targeted_margin_default_margin,
                     elr_target_state=elr_target_state,
                     elr_loss_weight=train_config.elr_loss_weight,
                     elr_beta=train_config.elr_beta,
@@ -6754,6 +8329,14 @@ def main() -> None:
                         "foreground_consistency_loss",
                         0.0,
                     ),
+                    "train_background_counterfactual_consistency_loss": train_artifact_stats.get(
+                        "background_counterfactual_consistency_loss",
+                        0.0,
+                    ),
+                    "train_background_counterfactual_fraction": train_artifact_stats.get(
+                        "background_counterfactual_fraction",
+                        0.0,
+                    ),
                     "train_attention_view_loss": train_artifact_stats.get(
                         "attention_view_loss",
                         0.0,
@@ -6781,6 +8364,34 @@ def main() -> None:
                     "train_pairwise_margin_loss": train_artifact_stats.get("pairwise_margin_loss", 0.0),
                     "train_ordinal_maturity_loss": train_artifact_stats.get(
                         "ordinal_maturity_loss",
+                        0.0,
+                    ),
+                    "train_angular_margin_loss": train_artifact_stats.get(
+                        "angular_margin_loss",
+                        0.0,
+                    ),
+                    "train_ordinal_boundary_loss": train_artifact_stats.get(
+                        "ordinal_boundary_loss",
+                        0.0,
+                    ),
+                    "train_pairwise_confusion_loss": train_artifact_stats.get(
+                        "pairwise_confusion_loss",
+                        0.0,
+                    ),
+                    "train_mutual_channel_loss": train_artifact_stats.get(
+                        "mutual_channel_loss",
+                        0.0,
+                    ),
+                    "train_targeted_margin_loss": train_artifact_stats.get(
+                        "targeted_margin_loss",
+                        0.0,
+                    ),
+                    "train_targeted_margin_fraction": train_artifact_stats.get(
+                        "targeted_margin_fraction",
+                        0.0,
+                    ),
+                    "train_targeted_margin_weight_mean": train_artifact_stats.get(
+                        "targeted_margin_weight_mean",
                         0.0,
                     ),
                     "train_distillation_loss": train_artifact_stats.get(
@@ -7170,6 +8781,8 @@ def main() -> None:
                         "train_boundary_contrastive_loss",
                         "train_boundary_contrastive_terms",
                         "train_foreground_consistency_loss",
+                        "train_background_counterfactual_consistency_loss",
+                        "train_background_counterfactual_fraction",
                         "train_attention_view_loss",
                         "train_attention_view_fraction",
                         "train_attention_crop_fraction",
@@ -7178,6 +8791,13 @@ def main() -> None:
                         "train_register_diversity_loss",
                         "train_pairwise_margin_loss",
                         "train_ordinal_maturity_loss",
+                        "train_angular_margin_loss",
+                        "train_ordinal_boundary_loss",
+                        "train_pairwise_confusion_loss",
+                        "train_mutual_channel_loss",
+                        "train_targeted_margin_loss",
+                        "train_targeted_margin_fraction",
+                        "train_targeted_margin_weight_mean",
                         "train_distillation_loss",
                         "train_elr_loss",
                         "train_sample_weight_mean",

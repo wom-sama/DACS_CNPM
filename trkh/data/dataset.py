@@ -305,6 +305,136 @@ def _apply_cutmix_batch(
     return mixed_images, mixed_targets
 
 
+def _pseudo_foreground_mask_from_tensor_images(
+    images: Tensor,
+    *,
+    margin: float = 0.08,
+    min_fraction: float = 0.05,
+    max_fraction: float = 0.92,
+    mean: Sequence[float] = IMAGENET_MEAN,
+    std: Sequence[float] = IMAGENET_STD,
+) -> Tensor:
+    if images.ndim != 4 or images.size(1) != 3:
+        raise ValueError("images phai co shape [B, 3, H, W].")
+    device = images.device
+    dtype = images.dtype
+    mean_tensor = torch.tensor(mean, device=device, dtype=dtype).view(1, 3, 1, 1)
+    std_tensor = torch.tensor(std, device=device, dtype=dtype).view(1, 3, 1, 1)
+    rgb = (images * std_tensor + mean_tensor).clamp(0.0, 1.0)
+    batch_size, _, height, width = rgb.shape
+    flat_rgb = rgb.flatten(2)
+    median_rgb = flat_rgb.median(dim=2).values.view(batch_size, 3, 1, 1)
+    gray = rgb.mean(dim=1, keepdim=True)
+    median_gray = gray.flatten(2).median(dim=2).values.view(batch_size, 1, 1, 1)
+    color_delta = (rgb - median_rgb).abs().mean(dim=1, keepdim=True)
+    intensity_delta = (gray - median_gray).abs()
+
+    edge_delta = torch.zeros_like(gray)
+    edge_delta[:, :, :, 1:] = torch.maximum(
+        edge_delta[:, :, :, 1:],
+        (gray[:, :, :, 1:] - gray[:, :, :, :-1]).abs(),
+    )
+    edge_delta[:, :, 1:, :] = torch.maximum(
+        edge_delta[:, :, 1:, :],
+        (gray[:, :, 1:, :] - gray[:, :, :-1, :]).abs(),
+    )
+    score = color_delta + intensity_delta + 0.5 * edge_delta
+
+    max_channel = rgb.max(dim=1, keepdim=True).values
+    min_channel = rgb.min(dim=1, keepdim=True).values
+    delta = max_channel - min_channel
+    saturation = torch.where(
+        max_channel > 1e-6,
+        delta / torch.clamp(max_channel, min=1e-6),
+        torch.zeros_like(delta),
+    )
+
+    fill_rgb = torch.tensor(_imagenet_fill(mean), device=device, dtype=dtype).view(1, 3, 1, 1) / 255.0
+    fill_delta = (rgb - fill_rgb).abs().mean(dim=1, keepdim=True)
+    not_padding = (fill_delta >= 0.035) | (edge_delta >= 0.025)
+
+    yy, xx = torch.meshgrid(
+        torch.linspace(-1.0, 1.0, height, device=device, dtype=dtype),
+        torch.linspace(-1.0, 1.0, width, device=device, dtype=dtype),
+        indexing="ij",
+    )
+    central = (((xx / 0.92) ** 2 + (yy / 0.96) ** 2) <= 1.0).view(1, 1, height, width)
+
+    # Keep the tensor variant intentionally conservative. It is used for train-time
+    # background recombination, so ambiguous green/yellow regions are only trusted
+    # when they differ from the image median or lie inside the central object prior.
+    colorful = (saturation >= 0.08) & (max_channel >= 0.10)
+    detail_center = central & (score > max(0.035, float(margin)))
+    mask = not_padding & (colorful | detail_center)
+    mask = F.max_pool2d(mask.float(), kernel_size=5, stride=1, padding=2) > 0.5
+    mask = -(F.max_pool2d((-mask.float()), kernel_size=5, stride=1, padding=2)) > 0.5
+
+    fractions = mask.float().flatten(1).mean(dim=1)
+    fallback = not_padding & central
+    fallback_fraction = fallback.float().flatten(1).mean(dim=1)
+    too_small = fractions < float(min_fraction)
+    if bool(too_small.any().item()):
+        use_fallback = too_small & (fallback_fraction >= max(0.03, float(min_fraction) * 0.5))
+        mask = torch.where(use_fallback.view(batch_size, 1, 1, 1), fallback, mask)
+        fractions = mask.float().flatten(1).mean(dim=1)
+    too_large = fractions > float(max_fraction)
+    if bool(too_large.any().item()):
+        stricter = not_padding & central & (score > max(0.05, float(margin) * 1.25))
+        mask = torch.where(too_large.view(batch_size, 1, 1, 1), stricter, mask)
+    return mask.to(dtype=torch.bool)
+
+
+def _apply_foreground_background_mix_batch(
+    images: Tensor,
+    *,
+    probability: float,
+    margin: float = 0.08,
+    min_foreground_fraction: float = 0.06,
+    max_foreground_fraction: float = 0.88,
+    softness: float = 5.0,
+    mean: Sequence[float] = IMAGENET_MEAN,
+    std: Sequence[float] = IMAGENET_STD,
+) -> Tensor:
+    probability = max(0.0, min(1.0, float(probability)))
+    if probability <= 0.0 or images.ndim != 4 or images.size(0) < 2:
+        return images
+    if torch.rand(1).item() >= probability:
+        return images
+
+    masks = _pseudo_foreground_mask_from_tensor_images(
+        images,
+        margin=margin,
+        min_fraction=min_foreground_fraction,
+        max_fraction=max_foreground_fraction,
+        mean=mean,
+        std=std,
+    )
+    fractions = masks.float().flatten(1).mean(dim=1)
+    valid = (fractions >= float(min_foreground_fraction)) & (
+        fractions <= float(max_foreground_fraction)
+    )
+    if not bool(valid.any().item()):
+        return images
+
+    batch_size = images.size(0)
+    shift = int(torch.randint(1, batch_size, (1,)).item())
+    indices = (torch.arange(batch_size, device=images.device) + shift) % batch_size
+    alpha = masks.to(dtype=images.dtype)
+    if softness > 0.0:
+        kernel_size = max(3, int(round(float(softness))))
+        if kernel_size % 2 == 0:
+            kernel_size += 1
+        alpha = F.max_pool2d(alpha, kernel_size=5, stride=1, padding=2)
+        alpha = F.avg_pool2d(alpha, kernel_size=kernel_size, stride=1, padding=kernel_size // 2)
+        alpha = alpha.clamp(0.0, 1.0)
+    alpha = torch.where(
+        valid.view(batch_size, 1, 1, 1),
+        alpha,
+        torch.ones_like(alpha),
+    )
+    return images * alpha + images[indices] * (1.0 - alpha)
+
+
 def _apply_mosaic_batch(
     images: Tensor,
     targets: Tensor,
@@ -946,6 +1076,11 @@ class TrainBatchCollator:
     targeted_copy_paste_class_scales: Optional[Sequence[float]] = None
     targeted_copy_paste_scale_threshold: float = 1.5
     targeted_copy_paste_probability: float = 1.0
+    foreground_background_mix_probability: float = 0.0
+    foreground_background_mix_margin: float = 0.08
+    foreground_background_mix_min_foreground_fraction: float = 0.06
+    foreground_background_mix_max_foreground_fraction: float = 0.88
+    foreground_background_mix_softness: float = 5.0
 
     def __post_init__(self) -> None:
         self.num_classes = max(1, int(self.num_classes))
@@ -970,11 +1105,38 @@ class TrainBatchCollator:
             max(float(self.targeted_copy_paste_probability), 0.0),
             1.0,
         )
+        self.foreground_background_mix_probability = min(
+            max(float(self.foreground_background_mix_probability), 0.0),
+            1.0,
+        )
+        self.foreground_background_mix_margin = max(0.0, float(self.foreground_background_mix_margin))
+        self.foreground_background_mix_min_foreground_fraction = min(
+            max(float(self.foreground_background_mix_min_foreground_fraction), 0.0),
+            1.0,
+        )
+        self.foreground_background_mix_max_foreground_fraction = min(
+            max(
+                float(self.foreground_background_mix_max_foreground_fraction),
+                self.foreground_background_mix_min_foreground_fraction,
+            ),
+            1.0,
+        )
+        self.foreground_background_mix_softness = max(0.0, float(self.foreground_background_mix_softness))
         if self.targeted_copy_paste_class_scales is not None:
             self.targeted_copy_paste_class_scales = torch.tensor(
                 list(self.targeted_copy_paste_class_scales),
                 dtype=torch.float32,
             ).clamp(min=1.0)
+
+    def _apply_classification_background_mix(self, images: Tensor) -> Tensor:
+        return _apply_foreground_background_mix_batch(
+            images,
+            probability=self.foreground_background_mix_probability,
+            margin=self.foreground_background_mix_margin,
+            min_foreground_fraction=self.foreground_background_mix_min_foreground_fraction,
+            max_foreground_fraction=self.foreground_background_mix_max_foreground_fraction,
+            softness=self.foreground_background_mix_softness,
+        )
 
     def __call__(self, batch) -> Tuple[Tensor, Tensor]:
         if not batch:
@@ -1064,6 +1226,11 @@ class TrainBatchCollator:
                     [sample[2]["teacher_probs"] for sample in batch],
                     dim=0,
                 ).to(dtype=torch.float32)
+            if "soft_target" in batch[0][2]:
+                metadata["soft_target"] = torch.stack(
+                    [sample[2]["soft_target"] for sample in batch],
+                    dim=0,
+                ).to(dtype=torch.float32)
             if "sample_index" in batch[0][2]:
                 metadata["sample_index"] = torch.as_tensor(
                     [int(sample[2]["sample_index"]) for sample in batch],
@@ -1074,10 +1241,27 @@ class TrainBatchCollator:
                     [float(sample[2]["sample_weight"]) for sample in batch],
                     dtype=torch.float32,
                 )
+            if "targeted_margin_negative" in batch[0][2]:
+                metadata["targeted_margin_negative"] = torch.as_tensor(
+                    [int(sample[2]["targeted_margin_negative"]) for sample in batch],
+                    dtype=torch.long,
+                )
+            if "targeted_margin_weight" in batch[0][2]:
+                metadata["targeted_margin_weight"] = torch.as_tensor(
+                    [float(sample[2]["targeted_margin_weight"]) for sample in batch],
+                    dtype=torch.float32,
+                )
+            if "targeted_margin_margin" in batch[0][2]:
+                metadata["targeted_margin_margin"] = torch.as_tensor(
+                    [float(sample[2]["targeted_margin_margin"]) for sample in batch],
+                    dtype=torch.float32,
+                )
             if metadata:
+                images = self._apply_classification_background_mix(images)
                 return images, labels, metadata
 
         targets = F.one_hot(labels, num_classes=self.num_classes).to(dtype=torch.float32)
+        images = self._apply_classification_background_mix(images)
 
         if self.batch_mix_probability <= 0.0:
             return images, targets
@@ -1127,6 +1311,11 @@ def build_train_collate_fn(
     targeted_copy_paste_class_scales: Optional[Sequence[float]] = None,
     targeted_copy_paste_scale_threshold: float = 1.5,
     targeted_copy_paste_probability: float = 1.0,
+    foreground_background_mix_probability: float = 0.0,
+    foreground_background_mix_margin: float = 0.08,
+    foreground_background_mix_min_foreground_fraction: float = 0.06,
+    foreground_background_mix_max_foreground_fraction: float = 0.88,
+    foreground_background_mix_softness: float = 5.0,
 ) -> Callable:
     return TrainBatchCollator(
         num_classes=num_classes,
@@ -1146,6 +1335,11 @@ def build_train_collate_fn(
         targeted_copy_paste_class_scales=targeted_copy_paste_class_scales,
         targeted_copy_paste_scale_threshold=targeted_copy_paste_scale_threshold,
         targeted_copy_paste_probability=targeted_copy_paste_probability,
+        foreground_background_mix_probability=foreground_background_mix_probability,
+        foreground_background_mix_margin=foreground_background_mix_margin,
+        foreground_background_mix_min_foreground_fraction=foreground_background_mix_min_foreground_fraction,
+        foreground_background_mix_max_foreground_fraction=foreground_background_mix_max_foreground_fraction,
+        foreground_background_mix_softness=foreground_background_mix_softness,
     )
 
 
@@ -2629,6 +2823,246 @@ class SampleWeightDataset(Dataset):
         if len(item) >= 3 and isinstance(item[2], dict):
             metadata = dict(item[2])
             metadata["sample_weight"] = sample_weight
+            return item[0], item[1], metadata
+        return item
+
+
+class AmbiguousSoftTargetDataset(Dataset):
+    def __init__(
+        self,
+        dataset: Dataset,
+        soft_targets_by_path: Mapping[str, Sequence[float]],
+        *,
+        num_classes: int,
+        default_alpha: float = 0.0,
+    ) -> None:
+        self.dataset = dataset
+        self.num_classes = int(num_classes)
+        self.default_alpha = max(0.0, min(1.0, float(default_alpha)))
+        self.soft_targets_by_path = {
+            str(Path(path).resolve()).lower(): torch.tensor(
+                list(probabilities),
+                dtype=torch.float32,
+            )
+            for path, probabilities in soft_targets_by_path.items()
+            if str(path).strip()
+        }
+        self._sample_paths = self._collect_sample_paths()
+        self._labels = self._collect_labels()
+        invalid_paths = [
+            path
+            for path, probabilities in self.soft_targets_by_path.items()
+            if probabilities.numel() != self.num_classes
+            or not torch.isfinite(probabilities).all()
+            or float(probabilities.sum().item()) <= 0.0
+        ]
+        if invalid_paths:
+            raise ValueError(
+                "Ambiguous soft-target manifest co dong khong hop le: "
+                f"count={len(invalid_paths)} preview={invalid_paths[:5]}"
+            )
+
+    def __len__(self) -> int:
+        return len(self.dataset)
+
+    def __getattr__(self, name: str):
+        if name.startswith("__") and name.endswith("__"):
+            raise AttributeError(name)
+        dataset = self.__dict__.get("dataset")
+        if dataset is None:
+            raise AttributeError(name)
+        return getattr(dataset, name)
+
+    def _collect_sample_paths(self) -> List[Path]:
+        sample_paths_fn = getattr(self.dataset, "sample_paths", None)
+        if callable(sample_paths_fn):
+            return list(sample_paths_fn())
+        samples = getattr(self.dataset, "samples", None)
+        if samples is None:
+            return []
+        return [
+            Path(getattr(sample, "image_path"))
+            for sample in samples
+            if getattr(sample, "image_path", None) is not None
+        ]
+
+    def _collect_labels(self) -> List[int]:
+        labels_fn = getattr(self.dataset, "labels", None)
+        if callable(labels_fn):
+            return [int(value) for value in labels_fn()]
+        samples = getattr(self.dataset, "samples", None)
+        if samples is not None:
+            return [
+                int(getattr(sample, "label"))
+                for sample in samples
+                if getattr(sample, "label", None) is not None
+            ]
+        return []
+
+    def sample_paths(self) -> List[Path]:
+        return list(self._sample_paths)
+
+    def _hard_target_for_index(self, index: int, label: int) -> Tensor:
+        target = torch.zeros(self.num_classes, dtype=torch.float32)
+        if 0 <= int(label) < self.num_classes:
+            target[int(label)] = 1.0
+        return target
+
+    def soft_target_summary(self) -> Dict[str, object]:
+        matched = sum(
+            1
+            for path in self._sample_paths
+            if str(Path(path).resolve()).lower() in self.soft_targets_by_path
+        )
+        return {
+            "enabled": True,
+            "samples": int(len(self._sample_paths)),
+            "num_classes": int(self.num_classes),
+            "manifest_paths": int(len(self.soft_targets_by_path)),
+            "matched_samples": int(matched),
+            "default_alpha": float(self.default_alpha),
+        }
+
+    def quality_report(self) -> Dict[str, object]:
+        quality_fn = getattr(self.dataset, "quality_report", None)
+        report = quality_fn() if callable(quality_fn) else {}
+        report = dict(report)
+        report["ambiguous_soft_targets"] = self.soft_target_summary()
+        return report
+
+    def __getitem__(self, index: int):
+        item = self.dataset[int(index)]
+        sample_path = self._sample_paths[int(index)] if int(index) < len(self._sample_paths) else None
+        key = str(Path(sample_path).resolve()).lower() if sample_path is not None else ""
+        label = int(item[1]) if len(item) >= 2 else 0
+        if key in self.soft_targets_by_path:
+            soft_target = self.soft_targets_by_path[key].clone()
+            soft_target = soft_target / soft_target.sum().clamp(min=1e-12)
+        else:
+            soft_target = self._hard_target_for_index(int(index), label)
+        if len(item) == 2:
+            image, label = item
+            return image, label, {"soft_target": soft_target}
+        if len(item) >= 3 and isinstance(item[2], dict):
+            metadata = dict(item[2])
+            metadata["soft_target"] = soft_target
+            return item[0], item[1], metadata
+        return item
+
+
+class TargetedMarginDataset(Dataset):
+    def __init__(
+        self,
+        dataset: Dataset,
+        margin_specs_by_path: Mapping[str, Mapping[str, float]],
+        *,
+        default_weight: float = 1.0,
+        default_margin: float = 0.12,
+        max_weight: float = 3.0,
+    ) -> None:
+        self.dataset = dataset
+        self.default_weight = max(0.0, float(default_weight))
+        self.default_margin = max(0.0, float(default_margin))
+        self.max_weight = max(self.default_weight, float(max_weight))
+        self.margin_specs_by_path: Dict[str, Dict[str, float]] = {}
+        for path, spec in margin_specs_by_path.items():
+            if not str(path).strip():
+                continue
+            negative_index = int(spec.get("negative_index", -1))
+            if negative_index < 0:
+                continue
+            weight = float(spec.get("weight", self.default_weight))
+            margin = float(spec.get("margin", self.default_margin))
+            self.margin_specs_by_path[str(Path(path).resolve()).lower()] = {
+                "negative_index": float(negative_index),
+                "weight": float(min(self.max_weight, max(0.0, weight))),
+                "margin": float(max(0.0, margin)),
+            }
+        self._sample_paths = self._collect_sample_paths()
+
+    def __len__(self) -> int:
+        return len(self.dataset)
+
+    def __getattr__(self, name: str):
+        if name.startswith("__") and name.endswith("__"):
+            raise AttributeError(name)
+        dataset = self.__dict__.get("dataset")
+        if dataset is None:
+            raise AttributeError(name)
+        return getattr(dataset, name)
+
+    def _collect_sample_paths(self) -> List[Path]:
+        sample_paths_fn = getattr(self.dataset, "sample_paths", None)
+        if callable(sample_paths_fn):
+            return list(sample_paths_fn())
+        samples = getattr(self.dataset, "samples", None)
+        if samples is None:
+            return []
+        return [
+            Path(getattr(sample, "image_path"))
+            for sample in samples
+            if getattr(sample, "image_path", None) is not None
+        ]
+
+    def sample_paths(self) -> List[Path]:
+        return list(self._sample_paths)
+
+    def targeted_margin_summary(self) -> Dict[str, object]:
+        matched = 0
+        weights: List[float] = []
+        margins: List[float] = []
+        for path in self._sample_paths:
+            spec = self.margin_specs_by_path.get(str(Path(path).resolve()).lower())
+            if spec is None:
+                continue
+            matched += 1
+            weights.append(float(spec["weight"]))
+            margins.append(float(spec["margin"]))
+        weight_tensor = torch.tensor(weights, dtype=torch.float32) if weights else torch.tensor([])
+        margin_tensor = torch.tensor(margins, dtype=torch.float32) if margins else torch.tensor([])
+        return {
+            "enabled": True,
+            "samples": int(len(self._sample_paths)),
+            "manifest_paths": int(len(self.margin_specs_by_path)),
+            "matched_samples": int(matched),
+            "default_weight": float(self.default_weight),
+            "default_margin": float(self.default_margin),
+            "max_weight": float(self.max_weight),
+            "mean_weight": float(weight_tensor.mean().item()) if weight_tensor.numel() else 0.0,
+            "mean_margin": float(margin_tensor.mean().item()) if margin_tensor.numel() else 0.0,
+        }
+
+    def quality_report(self) -> Dict[str, object]:
+        quality_fn = getattr(self.dataset, "quality_report", None)
+        report = quality_fn() if callable(quality_fn) else {}
+        report = dict(report)
+        report["targeted_margin"] = self.targeted_margin_summary()
+        return report
+
+    def __getitem__(self, index: int):
+        item = self.dataset[int(index)]
+        sample_path = self._sample_paths[int(index)] if int(index) < len(self._sample_paths) else None
+        key = str(Path(sample_path).resolve()).lower() if sample_path is not None else ""
+        spec = self.margin_specs_by_path.get(key)
+        if spec is None:
+            negative_index = torch.tensor(-1, dtype=torch.long)
+            weight = torch.tensor(0.0, dtype=torch.float32)
+            margin = torch.tensor(self.default_margin, dtype=torch.float32)
+        else:
+            negative_index = torch.tensor(int(spec["negative_index"]), dtype=torch.long)
+            weight = torch.tensor(float(spec["weight"]), dtype=torch.float32)
+            margin = torch.tensor(float(spec["margin"]), dtype=torch.float32)
+        metadata_update = {
+            "targeted_margin_negative": negative_index,
+            "targeted_margin_weight": weight,
+            "targeted_margin_margin": margin,
+        }
+        if len(item) == 2:
+            image, label = item
+            return image, label, metadata_update
+        if len(item) >= 3 and isinstance(item[2], dict):
+            metadata = dict(item[2])
+            metadata.update(metadata_update)
             return item[0], item[1], metadata
         return item
 

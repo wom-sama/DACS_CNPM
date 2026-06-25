@@ -45,6 +45,7 @@ from trkh.models.feature_hooks import (
     summarize_register_attention,
 )
 from trkh.data.dataset import (
+    AmbiguousSoftTargetDataset,
     ClassificationFolderDataset,
     HardSampleRepeatDataset,
     IndexedSampleDataset,
@@ -52,9 +53,12 @@ from trkh.data.dataset import (
     RareClassRepeatDataset,
     SampleWeightDataset,
     StrictBalancedBatchSampler,
+    TargetedMarginDataset,
     _apply_copypaste_detection_batch,
+    _apply_foreground_background_mix_batch,
     _grabcut_foreground_mask_array,
     _pseudo_foreground_mask_array,
+    _pseudo_foreground_mask_from_tensor_images,
     build_rare_class_repeat_factors,
     build_eval_transform,
     build_train_collate_fn,
@@ -99,7 +103,10 @@ from trkh.training.train import (
     _build_attention_guided_views,
     _attention_guided_score_map,
     _classification_loss_with_sample_weights,
+    _background_counterfactual_images,
+    _background_counterfactual_consistency_loss,
     _early_learning_regularization_loss,
+    _angular_margin_loss_from_features,
     _boundary_contrastive_loss_from_features,
     _parse_boundary_contrastive_pairs,
     _bounded_attention_drop_mask,
@@ -107,10 +114,16 @@ from trkh.training.train import (
     _foreground_consistency_loss_from_features,
     _metric_learning_loss_from_features,
     _ordinal_maturity_loss_from_features,
+    _ordinal_boundary_loss_from_logits,
     _pairwise_margin_loss_from_features,
     _register_diversity_loss_from_features,
     _pseudo_foreground_mask_from_normalized_images,
     _parse_metric_learning_sources,
+    _pairwise_confusion_loss_from_features,
+    _mutual_channel_loss_from_features,
+    _load_ambiguous_soft_target_manifest,
+    _load_targeted_margin_manifest,
+    _targeted_margin_loss_from_logits,
     train_one_epoch,
 )
 from trkh.core.utils import (
@@ -126,6 +139,12 @@ from trkh.core.utils import (
 
 
 class DetectionCalibrationTests(unittest.TestCase):
+    @staticmethod
+    def _normalized_rgb_tensor(rgb: torch.Tensor) -> torch.Tensor:
+        mean = torch.tensor(IMAGENET_MEAN, dtype=rgb.dtype).view(3, 1, 1)
+        std = torch.tensor(IMAGENET_STD, dtype=rgb.dtype).view(3, 1, 1)
+        return (rgb - mean) / std
+
     def test_checkpoint_data_path_mismatch_detects_different_split_roots(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -1192,6 +1211,170 @@ class DetectionCalibrationTests(unittest.TestCase):
         self.assertTrue(torch.allclose(delta[:, 4], torch.zeros_like(delta[:, 4])))
         self.assertTrue(torch.isfinite(aux_loss).item())
 
+    def test_angular_margin_loss_is_finite_and_backpropagates(self):
+        model = create_model(
+            num_classes=5,
+            model_config=ModelConfig(
+                model_type="vit_registers",
+                image_size=64,
+                patch_size=16,
+                stem_channels=8,
+                embed_dim=32,
+                depth=1,
+                num_heads=4,
+                num_registers=2,
+            ),
+        )
+        images = torch.randn(4, 3, 64, 64)
+        features = model.forward_features(images)
+        loss = _angular_margin_loss_from_features(
+            model=model,
+            features=features,
+            targets=torch.tensor([0, 1, 2, 3], dtype=torch.long),
+            margin=0.10,
+            scale=8.0,
+            classes="0,1,2,3",
+        )
+        loss.backward()
+
+        self.assertTrue(torch.isfinite(loss).item())
+        self.assertGreater(float(loss.item()), 0.0)
+        self.assertIsNotNone(model.head.weight.grad)
+
+    def test_angular_margin_loss_ignores_unselected_classes(self):
+        model = create_model(
+            num_classes=5,
+            model_config=ModelConfig(
+                model_type="vit_registers",
+                image_size=64,
+                patch_size=16,
+                stem_channels=8,
+                embed_dim=32,
+                depth=1,
+                num_heads=4,
+                num_registers=2,
+            ),
+        )
+        images = torch.randn(3, 3, 64, 64)
+        features = model.forward_features(images)
+        selected_loss = _angular_margin_loss_from_features(
+            model=model,
+            features=features,
+            targets=torch.tensor([0, 1, 4], dtype=torch.long),
+            margin=0.10,
+            scale=8.0,
+            classes="0,1",
+        )
+        ignored_loss = _angular_margin_loss_from_features(
+            model=model,
+            features=features,
+            targets=torch.tensor([4, 4, 4], dtype=torch.long),
+            margin=0.10,
+            scale=8.0,
+            classes="0,1",
+        )
+
+        self.assertTrue(torch.isfinite(selected_loss).item())
+        self.assertGreater(float(selected_loss.item()), 0.0)
+        self.assertEqual(float(ignored_loss.item()), 0.0)
+
+    def test_ordinal_boundary_loss_is_finite_and_backpropagates(self):
+        logits = torch.tensor(
+            [
+                [2.0, 1.0, -1.0, -2.0, 0.0],
+                [0.4, 1.3, 0.7, -0.5, 0.0],
+                [-1.0, 0.3, 1.5, 0.5, 0.0],
+                [-2.0, -0.5, 0.4, 1.6, 0.0],
+                [0.0, 0.0, 0.0, 0.0, 2.0],
+            ],
+            dtype=torch.float32,
+            requires_grad=True,
+        )
+        targets = torch.tensor([0, 1, 2, 3, 4], dtype=torch.long)
+        loss = _ordinal_boundary_loss_from_logits(
+            logits=logits,
+            targets=targets,
+            classes="0,1,2,3",
+            threshold_weights="1.25,1.25,1.0",
+            temperature=1.0,
+        )
+        loss.backward()
+
+        self.assertTrue(torch.isfinite(loss).item())
+        self.assertGreater(float(loss.item()), 0.0)
+        self.assertIsNotNone(logits.grad)
+
+    def test_ordinal_boundary_loss_ignores_non_ordinal_targets(self):
+        logits = torch.zeros(3, 5, dtype=torch.float32, requires_grad=True)
+        loss = _ordinal_boundary_loss_from_logits(
+            logits=logits,
+            targets=torch.tensor([4, 4, 4], dtype=torch.long),
+            classes="0,1,2,3",
+            threshold_weights="1.0",
+            temperature=1.0,
+        )
+
+        self.assertEqual(float(loss.item()), 0.0)
+
+    def test_pairwise_confusion_loss_is_finite_and_backpropagates(self):
+        model = create_model(
+            num_classes=5,
+            model_config=ModelConfig(
+                model_type="vit_registers",
+                image_size=64,
+                patch_size=16,
+                stem_channels=8,
+                embed_dim=32,
+                depth=1,
+                num_heads=4,
+                num_registers=2,
+            ),
+        )
+        images = torch.randn(4, 3, 64, 64)
+        features = model.forward_features(images)
+        logits = classification_logits_from_features(model, features)
+        loss = _pairwise_confusion_loss_from_features(
+            model=model,
+            features=features,
+            logits=logits,
+            sources="head,patch,registers,logits",
+            normalize=True,
+        )
+        loss.backward()
+
+        self.assertTrue(torch.isfinite(loss).item())
+        self.assertGreater(float(loss.item()), 0.0)
+        self.assertIsNotNone(model.head.weight.grad)
+
+    def test_mutual_channel_loss_is_finite_and_backpropagates(self):
+        stem_features = torch.rand(6, 20, 4, 4, dtype=torch.float32, requires_grad=True)
+        features = {"stem_features": stem_features}
+        targets = torch.tensor([0, 1, 2, 3, 4, 1], dtype=torch.long)
+        loss = _mutual_channel_loss_from_features(
+            features=features,
+            targets=targets,
+            num_classes=5,
+            top_k=3,
+            diversity_weight=0.2,
+        )
+        loss.backward()
+
+        self.assertTrue(torch.isfinite(loss).item())
+        self.assertGreater(float(loss.item()), 0.0)
+        self.assertIsNotNone(stem_features.grad)
+
+    def test_mutual_channel_loss_returns_zero_without_stem_features(self):
+        targets = torch.tensor([0, 1, 2], dtype=torch.long)
+        loss = _mutual_channel_loss_from_features(
+            features={},
+            targets=targets,
+            num_classes=5,
+            top_k=2,
+            diversity_weight=0.2,
+        )
+
+        self.assertEqual(float(loss.item()), 0.0)
+
     def test_hybrid_model_accepts_classification_extension_config_keys(self):
         model = create_model(
             num_classes=3,
@@ -1215,6 +1398,23 @@ class DetectionCalibrationTests(unittest.TestCase):
         output = model(torch.randn(2, 3, 64, 64))
         self.assertIn("logits", output)
         self.assertEqual(tuple(output["logits"].shape[:2]), (2, 4))
+
+    def test_mixstyle_is_train_only_and_preserves_shape(self):
+        mixstyle = model_module.MixStyle(probability=1.0, alpha=0.1)
+        features = torch.zeros(4, 3, 8, 8, dtype=torch.float32)
+        features[1] = 1.0
+        features[2] = 2.0
+        features[3] = 3.0
+
+        torch.manual_seed(123)
+        mixstyle.train()
+        mixed = mixstyle(features)
+        mixstyle.eval()
+        restored = mixstyle(features)
+
+        self.assertEqual(tuple(mixed.shape), tuple(features.shape))
+        self.assertFalse(torch.allclose(mixed, features))
+        self.assertTrue(torch.allclose(restored, features))
 
     def test_plot_dataset_color_audit_writes_png_and_json(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -2906,6 +3106,66 @@ dataset_balance:
 
         self.assertFalse(transform.scale_photometric_with_augmentation)
 
+    def test_foreground_background_mix_preserves_foreground_and_swaps_background(self):
+        rgb0 = torch.full((3, 32, 32), 0.18, dtype=torch.float32)
+        rgb1 = torch.full((3, 32, 32), 0.76, dtype=torch.float32)
+        rgb0[:, 9:23, 9:23] = torch.tensor([0.28, 0.76, 0.12]).view(3, 1, 1)
+        rgb1[:, 9:23, 9:23] = torch.tensor([0.80, 0.68, 0.10]).view(3, 1, 1)
+        images = torch.stack(
+            [self._normalized_rgb_tensor(rgb0), self._normalized_rgb_tensor(rgb1)],
+            dim=0,
+        )
+
+        mask = _pseudo_foreground_mask_from_tensor_images(
+            images,
+            margin=0.05,
+            min_fraction=0.04,
+            max_fraction=0.90,
+        )
+        mixed = _apply_foreground_background_mix_batch(
+            images,
+            probability=1.0,
+            margin=0.05,
+            min_foreground_fraction=0.04,
+            max_foreground_fraction=0.90,
+            softness=0.0,
+        )
+
+        self.assertGreater(float(mask[:, :, 12:20, 12:20].float().mean().item()), 0.90)
+        self.assertLess(float(mask[:, :, :4, :4].float().mean().item()), 0.05)
+        self.assertTrue(torch.allclose(mixed[0, :, 12:20, 12:20], images[0, :, 12:20, 12:20]))
+        self.assertTrue(torch.allclose(mixed[0, :, :4, :4], images[1, :, :4, :4]))
+
+    def test_foreground_background_mix_collate_preserves_metadata_labels(self):
+        rgb0 = torch.full((3, 32, 32), 0.18, dtype=torch.float32)
+        rgb1 = torch.full((3, 32, 32), 0.76, dtype=torch.float32)
+        rgb0[:, 9:23, 9:23] = torch.tensor([0.28, 0.76, 0.12]).view(3, 1, 1)
+        rgb1[:, 9:23, 9:23] = torch.tensor([0.80, 0.68, 0.10]).view(3, 1, 1)
+        image0 = self._normalized_rgb_tensor(rgb0)
+        image1 = self._normalized_rgb_tensor(rgb1)
+        collate = build_train_collate_fn(
+            num_classes=2,
+            batch_mix_probability=0.0,
+            foreground_background_mix_probability=1.0,
+            foreground_background_mix_margin=0.05,
+            foreground_background_mix_min_foreground_fraction=0.04,
+            foreground_background_mix_max_foreground_fraction=0.90,
+            foreground_background_mix_softness=0.0,
+        )
+
+        images, labels, metadata = collate(
+            [
+                (image0, 0, {"sample_index": 10, "sample_weight": 1.25}),
+                (image1, 1, {"sample_index": 11, "sample_weight": 0.75}),
+            ]
+        )
+
+        self.assertEqual(labels.tolist(), [0, 1])
+        self.assertEqual(metadata["sample_index"].tolist(), [10, 11])
+        self.assertTrue(torch.allclose(metadata["sample_weight"], torch.tensor([1.25, 0.75])))
+        self.assertTrue(torch.allclose(images[0, :, 12:20, 12:20], image0[:, 12:20, 12:20]))
+        self.assertTrue(torch.allclose(images[0, :, :4, :4], image1[:, :4, :4]))
+
     def test_classification_overfit_guard_reduces_cls_weight_when_detection_lags(self):
         train_config = TrainConfig(
             classification_overfit_guard=True,
@@ -3585,6 +3845,239 @@ dataset_balance:
         )
         self.assertGreater(float(weighted.item()), float(unweighted.item()))
         self.assertTrue(torch.allclose(mean_weight, torch.tensor(1.75)))
+
+    def test_targeted_margin_dataset_loader_and_loss(self):
+        class _TinyDataset(torch.utils.data.Dataset):
+            def __init__(self, root: Path):
+                self.paths = [
+                    root / "train" / "class0" / "a.jpg",
+                    root / "train" / "class1" / "b.jpg",
+                ]
+                for path in self.paths:
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    Image.new("RGB", (8, 8), color=(128, 128, 128)).save(path)
+
+            def __len__(self):
+                return len(self.paths)
+
+            def sample_paths(self):
+                return list(self.paths)
+
+            def __getitem__(self, index):
+                return torch.zeros(3, 8, 8), int(index)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            dataset = _TinyDataset(root)
+            manifest_path = root / "targeted_margin.csv"
+            with manifest_path.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.DictWriter(
+                    handle,
+                    fieldnames=[
+                        "image_path",
+                        "target_index",
+                        "negative_index",
+                        "targeted_margin",
+                        "targeted_margin_weight",
+                    ],
+                )
+                writer.writeheader()
+                writer.writerow(
+                    {
+                        "image_path": str(dataset.paths[0]),
+                        "target_index": 0,
+                        "negative_index": 1,
+                        "targeted_margin": 0.2,
+                        "targeted_margin_weight": 1.5,
+                    }
+                )
+            specs, summary = _load_targeted_margin_manifest(
+                str(manifest_path),
+                num_classes=2,
+                default_margin=0.12,
+                default_weight=1.0,
+                max_weight=2.0,
+            )
+            wrapped = TargetedMarginDataset(
+                dataset,
+                specs,
+                default_margin=0.12,
+                default_weight=1.0,
+                max_weight=2.0,
+            )
+            collate = build_train_collate_fn(num_classes=2, batch_mix_probability=0.0)
+            _, labels, metadata = collate([wrapped[0], wrapped[1]])
+
+            self.assertTrue(summary["enabled"])
+            self.assertIn("targeted_margin_negative", metadata)
+            self.assertTrue(torch.equal(metadata["targeted_margin_negative"], torch.tensor([1, -1])))
+            self.assertTrue(torch.allclose(metadata["targeted_margin_weight"], torch.tensor([1.5, 0.0])))
+
+            logits = torch.tensor([[0.1, 0.4], [0.2, 1.0]], dtype=torch.float32, requires_grad=True)
+            loss, mean_weight, fraction = _targeted_margin_loss_from_logits(
+                logits=logits,
+                hard_labels=labels,
+                targets=labels,
+                negative_indices=metadata["targeted_margin_negative"],
+                weights=metadata["targeted_margin_weight"],
+                margins=metadata["targeted_margin_margin"],
+                default_margin=0.12,
+            )
+            self.assertTrue(torch.isfinite(loss).item())
+            self.assertAlmostEqual(float(loss.item()), 0.5, places=5)
+            self.assertAlmostEqual(float(mean_weight.item()), 0.75, places=5)
+            self.assertAlmostEqual(float(fraction), 0.5, places=5)
+            loss.backward()
+            self.assertIsNotNone(logits.grad)
+
+            leak_manifest = root / "targeted_margin_leak.csv"
+            leak_path = root / "test" / "class0" / "x.jpg"
+            leak_path.parent.mkdir(parents=True, exist_ok=True)
+            with leak_manifest.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.DictWriter(
+                    handle,
+                    fieldnames=["image_path", "target_index", "negative_index"],
+                )
+                writer.writeheader()
+                writer.writerow(
+                    {
+                        "image_path": str(leak_path),
+                        "target_index": 0,
+                        "negative_index": 1,
+                    }
+                )
+            with self.assertRaises(ValueError):
+                _load_targeted_margin_manifest(
+                    str(leak_manifest),
+                    num_classes=2,
+                    default_margin=0.12,
+                    default_weight=1.0,
+                    max_weight=2.0,
+                )
+
+    def test_ambiguous_soft_target_dataset_and_loader_rejects_non_train(self):
+        class _TinyDataset(torch.utils.data.Dataset):
+            def __init__(self, root: Path):
+                self.paths = [
+                    root / "train" / "class0" / "a.jpg",
+                    root / "train" / "class1" / "b.jpg",
+                ]
+                for path in self.paths:
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    Image.new("RGB", (8, 8), color=(128, 128, 128)).save(path)
+
+            def __len__(self):
+                return len(self.paths)
+
+            def sample_paths(self):
+                return list(self.paths)
+
+            def labels(self):
+                return [0, 1]
+
+            def __getitem__(self, index):
+                return torch.zeros(3, 8, 8), int(index)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            dataset = _TinyDataset(root)
+            manifest_path = root / "ambiguous.csv"
+            with manifest_path.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.DictWriter(
+                    handle,
+                    fieldnames=["image_path", "target_index", "soft_target_index", "alpha"],
+                )
+                writer.writeheader()
+                writer.writerow(
+                    {
+                        "image_path": str(dataset.paths[0]),
+                        "target_index": 0,
+                        "soft_target_index": 1,
+                        "alpha": 0.25,
+                    }
+                )
+            soft_targets, summary = _load_ambiguous_soft_target_manifest(
+                str(manifest_path),
+                num_classes=2,
+                default_alpha=0.20,
+            )
+            wrapped = AmbiguousSoftTargetDataset(
+                dataset,
+                soft_targets,
+                num_classes=2,
+                default_alpha=0.20,
+            )
+            collate = build_train_collate_fn(num_classes=2, batch_mix_probability=0.0)
+            _, labels, metadata = collate([wrapped[0], wrapped[1]])
+
+            self.assertTrue(summary["enabled"])
+            self.assertTrue(torch.equal(labels, torch.tensor([0, 1], dtype=torch.long)))
+            self.assertIn("soft_target", metadata)
+            self.assertTrue(
+                torch.allclose(
+                    metadata["soft_target"],
+                    torch.tensor([[0.75, 0.25], [0.0, 1.0]], dtype=torch.float32),
+                )
+            )
+
+            leak_manifest = root / "leak.csv"
+            leak_path = root / "val" / "class0" / "x.jpg"
+            leak_path.parent.mkdir(parents=True, exist_ok=True)
+            with leak_manifest.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.DictWriter(
+                    handle,
+                    fieldnames=["image_path", "target_index", "soft_target_index"],
+                )
+                writer.writeheader()
+                writer.writerow(
+                    {
+                        "image_path": str(leak_path),
+                        "target_index": 0,
+                        "soft_target_index": 1,
+                    }
+                )
+            with self.assertRaises(ValueError):
+                _load_ambiguous_soft_target_manifest(
+                    str(leak_manifest),
+                    num_classes=2,
+                    default_alpha=0.25,
+                )
+
+    def test_background_counterfactual_consistency_loss_is_finite(self):
+        class _TinyClassifier(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.head = nn.Linear(3, 2)
+
+            def forward(self, images):
+                return self.head(images.mean(dim=(2, 3)))
+
+        model = _TinyClassifier()
+        images = torch.randn(4, 3, 16, 16)
+        logits = model(images)
+        counterfactual = _background_counterfactual_images(
+            images,
+            mode="desaturate_blur",
+            margin=0.08,
+            blur_kernel=5,
+        )
+        self.assertEqual(tuple(counterfactual.shape), tuple(images.shape))
+        self.assertTrue(torch.isfinite(counterfactual).all().item())
+
+        loss, fraction = _background_counterfactual_consistency_loss(
+            model=model,
+            images=images,
+            logits=logits,
+            probability=1.0,
+            mode="desaturate_blur",
+            margin=0.08,
+            blur_kernel=5,
+            temperature=1.0,
+            amp=False,
+            device=torch.device("cpu"),
+        )
+        self.assertTrue(torch.isfinite(loss).item())
+        self.assertEqual(fraction, 1.0)
 
 if __name__ == "__main__":
     unittest.main()

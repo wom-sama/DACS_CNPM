@@ -189,5 +189,10 @@
 - [x] Loai huong simple pairwise logit bias/calibration lam ung vien full train.
 - [ ] Tich hop forensic report vao evaluator/launcher chinh voi che do nhanh mac dinh va foreground mode co gioi han/cache.
 - [ ] Tao train-only ambiguous-boundary manifest tu low-margin/error-prone train predictions; uu tien cap `0-1`, `2-3`, `1-2`; khong dung val/test.
-- [ ] Thu V25 background-neutralized prediction consistency nhe, khong dung hard pseudo-mask nhu segmentation label.
-- [ ] Neu V25 smoke/probe khong dat class-1 val F1 `>=0.70`, khong gui lenh full train.
+- [x] Thu V25 background-neutralized prediction consistency nhe + ambiguous soft target train-only; probe best val macro/class1 `0.8858/0.6787`; reject, khong full train.
+- [x] Them V26 targeted directional margin train-only cho hard false-positive/false-negative quanh class 1; smoke trace completed.
+- [x] V26 probe 120 batch x 6 epoch: best val macro/class1 `0.8864/0.6805`; forensic `TP=115`, `FP=72`, `FN=36`; reject, khong full train.
+- [x] Xac nhan V19 ordinal boundary va V20 pairwise confusion probe da co ket qua thap hon V16; khong lap lai.
+- [x] Ghi audit V25/V26 tai `docs/TRKH_5CLASS_V25_V26_AUDIT_20260625.md`.
+- [ ] Gate full train van la class-1 validation F1 `>=0.70`; V16 van la best no-pretrain probe hien tai (`0.6866`).
+- [ ] Huong tiep theo: uu tien label-boundary audit va group-clean split truoc khi them loss moi.

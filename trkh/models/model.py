@@ -166,6 +166,41 @@ class HybridConvStem(nn.Module):
         return self.blocks(x)
 
 
+class MixStyle(nn.Module):
+    """Training-only feature-statistic mixing for domain/style robustness."""
+
+    def __init__(
+        self,
+        probability: float = 0.5,
+        alpha: float = 0.1,
+        eps: float = 1e-6,
+    ) -> None:
+        super().__init__()
+        self.probability = float(min(max(probability, 0.0), 1.0))
+        self.alpha = float(max(alpha, 1e-6))
+        self.eps = float(max(eps, 1e-12))
+
+    def forward(self, x: Tensor) -> Tensor:
+        if (
+            not self.training
+            or self.probability <= 0.0
+            or x.ndim != 4
+            or int(x.size(0)) < 2
+            or torch.rand(1, device=x.device).item() >= self.probability
+        ):
+            return x
+        mean = x.mean(dim=(-2, -1), keepdim=True).detach()
+        std = x.var(dim=(-2, -1), keepdim=True, unbiased=False).add(self.eps).sqrt().detach()
+        normalized = (x - mean) / std
+
+        beta = torch.distributions.Beta(self.alpha, self.alpha)
+        lam = beta.sample((int(x.size(0)), 1, 1, 1)).to(device=x.device, dtype=x.dtype)
+        perm = torch.randperm(int(x.size(0)), device=x.device)
+        mixed_mean = lam * mean + (1.0 - lam) * mean[perm]
+        mixed_std = lam * std + (1.0 - lam) * std[perm]
+        return normalized * mixed_std + mixed_mean
+
+
 class FineGrainedPatchPooling(nn.Module):
     def __init__(
         self,
@@ -1447,6 +1482,9 @@ class VisionTransformerWithRegisters(nn.Module):
         frequency_selective_top_k: int = 1,
         frequency_selective_blend: float = 1.0,
         frequency_selective_foreground_threshold: float = 0.35,
+        mixstyle: bool = False,
+        mixstyle_probability: float = 0.5,
+        mixstyle_alpha: float = 0.1,
         num_classes: int = 4,
         embed_dim: int = 256,
         depth: int = 8,
@@ -1501,6 +1539,7 @@ class VisionTransformerWithRegisters(nn.Module):
         self.frequency_selective_blend = float(
             min(max(frequency_selective_blend, 0.0), 1.0)
         )
+        self.mixstyle_enabled = bool(mixstyle and use_cnn_stem)
         self.detail_patch_enhancement = bool(detail_patch_enhancement)
         self.pairwise_margin_head_enabled = bool(pairwise_margin_head)
         self.pairwise_margin_logit_scale = float(max(0.0, pairwise_margin_logit_scale))
@@ -1555,6 +1594,14 @@ class VisionTransformerWithRegisters(nn.Module):
             patch_embed_image_size = image_size
             patch_embed_patch_size = patch_size
             patch_embed_channels = in_channels
+        self.mixstyle = (
+            MixStyle(
+                probability=mixstyle_probability,
+                alpha=mixstyle_alpha,
+            )
+            if self.mixstyle_enabled
+            else nn.Identity()
+        )
 
         self.patch_embed = PatchEmbedding(
             image_size=patch_embed_image_size,
@@ -2044,6 +2091,7 @@ class VisionTransformerWithRegisters(nn.Module):
         input_spatial_size = tuple(int(value) for value in x.shape[-2:])
         input_image = x
         x = self.stem(x)
+        x = self.mixstyle(x)
         stem_features = x
         batch_size = x.shape[0]
         grid_size = (
@@ -2168,6 +2216,8 @@ class VisionTransformerWithRegisters(nn.Module):
             "patch_indices": patch_indices,
             "pooled": self.pool_tokens_for_head(cls_out, reg_out, branch_out),
         }
+        if self.training:
+            features["stem_features"] = stem_features
         if pruning_enabled or return_trace:
             features["patch_keep_mask"] = F.one_hot(
                 patch_indices,
@@ -2705,6 +2755,9 @@ class DETRVisionTransformerWithRegisters(VisionTransformerWithRegisters):
         frequency_selective_top_k: int = 1,
         frequency_selective_blend: float = 1.0,
         frequency_selective_foreground_threshold: float = 0.35,
+        mixstyle: bool = False,
+        mixstyle_probability: float = 0.5,
+        mixstyle_alpha: float = 0.1,
         num_classes: int = 4,
         embed_dim: int = 256,
         depth: int = 8,
@@ -2782,6 +2835,9 @@ class DETRVisionTransformerWithRegisters(VisionTransformerWithRegisters):
             frequency_selective_top_k=frequency_selective_top_k,
             frequency_selective_blend=frequency_selective_blend,
             frequency_selective_foreground_threshold=frequency_selective_foreground_threshold,
+            mixstyle=mixstyle,
+            mixstyle_probability=mixstyle_probability,
+            mixstyle_alpha=mixstyle_alpha,
             num_classes=num_classes,
             embed_dim=embed_dim,
             depth=depth,

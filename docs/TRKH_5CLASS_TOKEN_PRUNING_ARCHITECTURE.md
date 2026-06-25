@@ -456,3 +456,107 @@ van co the giu nen xanh sat qua. Probe V17 80 batch x 4 epoch cho validation
 macro/class-1 F1 `0.8789/0.6405`, thap hon V16; online GrabCut cung cham
 ~300s/epoch. Vi vay khong full-train V17. Chi tiet:
 `docs/TRKH_5CLASS_GRABCUT_BACKGROUND_V17_AUDIT_20260615.md`.
+
+## V25 Background Counterfactual + Ambiguous Soft Target (2026-06-25)
+
+V25 them hai khoi train-only, mac dinh tat:
+
+1. `AmbiguousSoftTargetDataset` cho mau boundary train-only.
+2. Background-counterfactual consistency tren tensor da normalize.
+
+Input ambiguous soft target:
+
+- sample train `(image, hard_label, metadata)`;
+- manifest train-only co `image_path`, `target_index`, `soft_target_index`
+  hoac `soft_0..soft_4`.
+
+Xu ly:
+
+1. Dataset wrapper gan `metadata["soft_target"] [5]` cho sample co trong
+   manifest.
+2. Sample khong co manifest duoc gan hard one-hot target.
+3. Collator stack thanh `soft_target [B,5]`.
+4. Train loop dung soft target cho classification loss, nhung van giu hard
+   label rieng de audit/metadata khac.
+
+Output:
+
+- `soft_target [B,5]` trong metadata;
+- loss classification nhan target dang probability distribution.
+
+Input background counterfactual:
+
+- image tensor normalized `[B,3,H,W]`;
+- pseudo foreground mask tu mau/detail/padding;
+- logits goc `[B,5]`.
+
+Xu ly:
+
+1. Tao anh counterfactual bang cach thay doi nen: `gray`, `blur`, `mean`,
+   hoac `desaturate_blur`.
+2. Forward lai model tren anh counterfactual.
+3. Tinh KL consistency giua probability goc va counterfactual co temperature.
+
+Output:
+
+- `train_background_counterfactual_consistency_loss`;
+- `train_background_counterfactual_fraction`.
+
+CLI:
+
+- `--ambiguous-soft-target-manifest`;
+- `--ambiguous-soft-target-alpha`;
+- `--background-counterfactual-consistency-weight`;
+- `--background-counterfactual-probability`;
+- `--background-counterfactual-mode`;
+- `--background-counterfactual-margin`;
+- `--background-counterfactual-blur-kernel`;
+- `--background-counterfactual-temperature`.
+
+Probe V25 dat validation macro/class-1 F1 `0.8858/0.6787`, thap hon V16 va
+khong qua gate `0.70`; khong full-train. Chi tiet:
+`docs/TRKH_5CLASS_V25_V26_AUDIT_20260625.md`.
+
+## V26 Targeted Directional Margin (2026-06-25)
+
+V26 them loss train-only cho hard false-positive/false-negative quanh class 1,
+khong tang sample class 1 toan cuc.
+
+Input:
+
+- logits `[B,5]`;
+- hard labels `[B]`;
+- manifest train-only co `image_path`, `target_index`, `negative_index`;
+- metadata collated:
+  - `targeted_margin_negative [B]`;
+  - `targeted_margin_weight [B]`;
+  - `targeted_margin_margin [B]`.
+
+Xu ly:
+
+1. Dataset wrapper `TargetedMarginDataset` gan negative class cho sample co
+   trong manifest; sample khong co manifest dung `negative=-1`, `weight=0`.
+2. Train loop tinh directional hinge:
+
+   `max(0, margin + logit_negative - logit_target)`
+
+3. Loss chi active voi sample co `negative>=0` va `weight>0`.
+
+Output:
+
+- `train_targeted_margin_loss`;
+- `train_targeted_margin_fraction`;
+- `train_targeted_margin_weight_mean`.
+
+CLI/tool:
+
+- `trkh.tools.build_targeted_margin_manifest`;
+- `--targeted-margin-manifest`;
+- `--targeted-margin-loss-weight`;
+- `--targeted-margin-default-margin`;
+- `--targeted-margin-default-weight`;
+- `--targeted-margin-max-weight`.
+
+Probe V26 dat validation macro/class-1 F1 `0.8864/0.6805`, van thap hon V16.
+Forensic cho thay `0->1` tang len `51`, nen khong tang weight va khong
+full-train. Chi tiet: `docs/TRKH_5CLASS_V25_V26_AUDIT_20260625.md`.

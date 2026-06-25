@@ -29,9 +29,40 @@ param(
     [double]$BoundaryContrastiveMargin = 0.12,
     [double]$BoundaryContrastiveTemperature = 0.20,
     [int]$BoundaryContrastiveMaxPairs = 128,
+    [double]$AngularMarginLossWeight = 0.0,
+    [double]$AngularMargin = 0.12,
+    [double]$AngularMarginScale = 16.0,
+    [int]$AngularMarginStartEpoch = 2,
+    [string]$AngularMarginClasses = "0,1,2,3",
+    [double]$OrdinalBoundaryLossWeight = 0.0,
+    [string]$OrdinalBoundaryClasses = "0,1,2,3",
+    [string]$OrdinalBoundaryThresholdWeights = "1.25,1.25,1.0",
+    [double]$OrdinalBoundaryTemperature = 1.0,
+    [int]$OrdinalBoundaryStartEpoch = 1,
+    [double]$PairwiseConfusionLossWeight = 0.0,
+    [string]$PairwiseConfusionSources = "head",
+    [int]$PairwiseConfusionStartEpoch = 1,
+    [bool]$PairwiseConfusionNormalize = $true,
     [string]$SampleWeightManifest = "",
     [double]$SampleWeightFactor = 1.0,
     [double]$SampleWeightMax = 5.0,
+    [string]$AmbiguousSoftTargetManifest = "",
+    [double]$AmbiguousSoftTargetAlpha = 0.25,
+    [string]$TargetedMarginManifest = "",
+    [double]$TargetedMarginLossWeight = 0.0,
+    [double]$TargetedMarginDefaultMargin = 0.12,
+    [double]$TargetedMarginDefaultWeight = 1.0,
+    [double]$TargetedMarginMaxWeight = 3.0,
+    [double]$BackgroundCounterfactualConsistencyWeight = 0.0,
+    [double]$BackgroundCounterfactualProbability = 0.0,
+    [ValidateSet("gray", "blur", "mean", "desaturate_blur")]
+    [string]$BackgroundCounterfactualMode = "desaturate_blur",
+    [double]$BackgroundCounterfactualMargin = 0.08,
+    [int]$BackgroundCounterfactualBlurKernel = 15,
+    [double]$BackgroundCounterfactualTemperature = 1.0,
+    [bool]$Sam = $false,
+    [double]$SamRho = 0.03,
+    [bool]$SamAdaptive = $false,
     [bool]$ForegroundSurfaceFusion = $false,
     [double]$ForegroundSurfaceFusionDropout = 0.08,
     [bool]$BilinearPatchFusion = $false,
@@ -41,12 +72,32 @@ param(
     [int]$FrequencySelectiveTopK = 1,
     [double]$FrequencySelectiveBlend = 1.0,
     [double]$FrequencySelectiveForegroundThreshold = 0.35,
+    [bool]$MixStyle = $false,
+    [double]$MixStyleProbability = 0.5,
+    [double]$MixStyleAlpha = 0.1,
     [bool]$PairwiseMarginRouting = $false,
     [double]$PairwiseMarginRouteMaxProbabilityMargin = 0.20,
+    [ValidateSet("ldam_focal", "balanced_softmax")]
+    [string]$ClassificationLoss = "ldam_focal",
+    [double]$BalancedSoftmaxTau = 1.0,
+    [double]$FocalLossGamma = 1.0,
+    [double]$FocalLossMix = 0.10,
+    [double]$LabelSmoothing = 0.02,
+    [double]$LdamMaxMargin = 0.30,
+    [double]$LdamScale = 18.0,
+    [double]$MutualChannelLossWeight = 0.0,
+    [int]$MutualChannelTopK = 8,
+    [double]$MutualChannelDiversityWeight = 0.20,
+    [int]$MutualChannelStartEpoch = 1,
     [string]$BackgroundSuppressionMode = "desaturate_blur",
     [double]$BackgroundSuppressionProbability = 0.80,
     [double]$BackgroundSuppressionMargin = 0.08,
     [double]$BackgroundSuppressionBlurRadius = 7.0,
+    [double]$ForegroundBackgroundMixProbability = 0.0,
+    [double]$ForegroundBackgroundMixMargin = 0.08,
+    [double]$ForegroundBackgroundMixMinForegroundFraction = 0.06,
+    [double]$ForegroundBackgroundMixMaxForegroundFraction = 0.88,
+    [double]$ForegroundBackgroundMixSoftness = 5.0,
     [switch]$PreflightOnly,
     [switch]$Smoke,
     [switch]$SkipFinalTest,
@@ -89,6 +140,12 @@ if (-not [string]::IsNullOrWhiteSpace($ResumeCheckpoint) -and -not (Test-Path -L
 }
 if (-not [string]::IsNullOrWhiteSpace($SampleWeightManifest) -and -not (Test-Path -LiteralPath $SampleWeightManifest)) {
     throw "Khong tim thay sample weight manifest: $SampleWeightManifest"
+}
+if (-not [string]::IsNullOrWhiteSpace($AmbiguousSoftTargetManifest) -and -not (Test-Path -LiteralPath $AmbiguousSoftTargetManifest)) {
+    throw "Khong tim thay ambiguous soft-target manifest: $AmbiguousSoftTargetManifest"
+}
+if (-not [string]::IsNullOrWhiteSpace($TargetedMarginManifest) -and -not (Test-Path -LiteralPath $TargetedMarginManifest)) {
+    throw "Khong tim thay targeted-margin manifest: $TargetedMarginManifest"
 }
 
 $SplitCounts = Get-ChildItem -Recurse -File "D:\DataAI\AIEx\newdataset\class_f" |
@@ -133,9 +190,39 @@ if ($PreflightOnly) {
         boundary_contrastive_margin = $BoundaryContrastiveMargin
         boundary_contrastive_temperature = $BoundaryContrastiveTemperature
         boundary_contrastive_max_pairs = $BoundaryContrastiveMaxPairs
+        angular_margin_loss_weight = $AngularMarginLossWeight
+        angular_margin = $AngularMargin
+        angular_margin_scale = $AngularMarginScale
+        angular_margin_start_epoch = $AngularMarginStartEpoch
+        angular_margin_classes = $AngularMarginClasses
+        ordinal_boundary_loss_weight = $OrdinalBoundaryLossWeight
+        ordinal_boundary_classes = $OrdinalBoundaryClasses
+        ordinal_boundary_threshold_weights = $OrdinalBoundaryThresholdWeights
+        ordinal_boundary_temperature = $OrdinalBoundaryTemperature
+        ordinal_boundary_start_epoch = $OrdinalBoundaryStartEpoch
+        pairwise_confusion_loss_weight = $PairwiseConfusionLossWeight
+        pairwise_confusion_sources = $PairwiseConfusionSources
+        pairwise_confusion_start_epoch = $PairwiseConfusionStartEpoch
+        pairwise_confusion_normalize = [bool]$PairwiseConfusionNormalize
         sample_weight_manifest = $SampleWeightManifest
         sample_weight_factor = $SampleWeightFactor
         sample_weight_max = $SampleWeightMax
+        ambiguous_soft_target_manifest = $AmbiguousSoftTargetManifest
+        ambiguous_soft_target_alpha = $AmbiguousSoftTargetAlpha
+        targeted_margin_manifest = $TargetedMarginManifest
+        targeted_margin_loss_weight = $TargetedMarginLossWeight
+        targeted_margin_default_margin = $TargetedMarginDefaultMargin
+        targeted_margin_default_weight = $TargetedMarginDefaultWeight
+        targeted_margin_max_weight = $TargetedMarginMaxWeight
+        background_counterfactual_consistency_weight = $BackgroundCounterfactualConsistencyWeight
+        background_counterfactual_probability = $BackgroundCounterfactualProbability
+        background_counterfactual_mode = $BackgroundCounterfactualMode
+        background_counterfactual_margin = $BackgroundCounterfactualMargin
+        background_counterfactual_blur_kernel = $BackgroundCounterfactualBlurKernel
+        background_counterfactual_temperature = $BackgroundCounterfactualTemperature
+        sam = [bool]$Sam
+        sam_rho = $SamRho
+        sam_adaptive = [bool]$SamAdaptive
         bilinear_patch_fusion = [bool]$BilinearPatchFusion
         bilinear_patch_rank = $BilinearPatchRank
         bilinear_patch_dropout = $BilinearPatchDropout
@@ -143,12 +230,31 @@ if ($PreflightOnly) {
         frequency_selective_top_k = $FrequencySelectiveTopK
         frequency_selective_blend = $FrequencySelectiveBlend
         frequency_selective_foreground_threshold = $FrequencySelectiveForegroundThreshold
+        mixstyle = [bool]$MixStyle
+        mixstyle_probability = $MixStyleProbability
+        mixstyle_alpha = $MixStyleAlpha
         pairwise_margin_routing = [bool]$PairwiseMarginRouting
         pairwise_margin_route_max_probability_margin = $PairwiseMarginRouteMaxProbabilityMargin
+        classification_loss = $ClassificationLoss
+        balanced_softmax_tau = $BalancedSoftmaxTau
+        focal_loss_gamma = $FocalLossGamma
+        focal_loss_mix = $FocalLossMix
+        label_smoothing = $LabelSmoothing
+        ldam_max_margin = $LdamMaxMargin
+        ldam_scale = $LdamScale
+        mutual_channel_loss_weight = $MutualChannelLossWeight
+        mutual_channel_top_k = $MutualChannelTopK
+        mutual_channel_diversity_weight = $MutualChannelDiversityWeight
+        mutual_channel_start_epoch = $MutualChannelStartEpoch
         background_suppression_mode = $BackgroundSuppressionMode
         background_suppression_probability = $BackgroundSuppressionProbability
         background_suppression_margin = $BackgroundSuppressionMargin
         background_suppression_blur_radius = $BackgroundSuppressionBlurRadius
+        foreground_background_mix_probability = $ForegroundBackgroundMixProbability
+        foreground_background_mix_margin = $ForegroundBackgroundMixMargin
+        foreground_background_mix_min_foreground_fraction = $ForegroundBackgroundMixMinForegroundFraction
+        foreground_background_mix_max_foreground_fraction = $ForegroundBackgroundMixMaxForegroundFraction
+        foreground_background_mix_softness = $ForegroundBackgroundMixSoftness
         skip_final_test = [bool]$SkipFinalTest
     } | ConvertTo-Json -Depth 5
     exit 0
@@ -247,12 +353,13 @@ try {
         "--disable-rare-class-recall-guard",
         "--best-metric", "fair_macro_f1",
         "--fair-f1-gap-target", "0.08",
-        "--classification-loss", "ldam_focal",
-        "--ldam-max-margin", "0.30",
-        "--ldam-scale", "18",
-        "--focal-loss-gamma", "1.0",
-        "--focal-loss-mix", "0.10",
-        "--label-smoothing", "0.02",
+        "--classification-loss", "$ClassificationLoss",
+        "--balanced-softmax-tau", "$BalancedSoftmaxTau",
+        "--ldam-max-margin", "$LdamMaxMargin",
+        "--ldam-scale", "$LdamScale",
+        "--focal-loss-gamma", "$FocalLossGamma",
+        "--focal-loss-mix", "$FocalLossMix",
+        "--label-smoothing", "$LabelSmoothing",
         "--metric-learning-loss-weight", "0.04",
         "--metric-learning-temperature", "0.16",
         "--metric-learning-sources", "head,patch",
@@ -262,8 +369,31 @@ try {
         "--boundary-contrastive-margin", "$BoundaryContrastiveMargin",
         "--boundary-contrastive-temperature", "$BoundaryContrastiveTemperature",
         "--boundary-contrastive-max-pairs", "$BoundaryContrastiveMaxPairs",
+        "--angular-margin-loss-weight", "$AngularMarginLossWeight",
+        "--angular-margin", "$AngularMargin",
+        "--angular-margin-scale", "$AngularMarginScale",
+        "--angular-margin-start-epoch", "$AngularMarginStartEpoch",
+        "--angular-margin-classes", "$AngularMarginClasses",
+        "--ordinal-boundary-loss-weight", "$OrdinalBoundaryLossWeight",
+        "--ordinal-boundary-classes", "$OrdinalBoundaryClasses",
+        "--ordinal-boundary-threshold-weights", "$OrdinalBoundaryThresholdWeights",
+        "--ordinal-boundary-temperature", "$OrdinalBoundaryTemperature",
+        "--ordinal-boundary-start-epoch", "$OrdinalBoundaryStartEpoch",
+        "--pairwise-confusion-loss-weight", "$PairwiseConfusionLossWeight",
+        "--pairwise-confusion-sources", "$PairwiseConfusionSources",
+        "--pairwise-confusion-start-epoch", "$PairwiseConfusionStartEpoch",
+        "--mutual-channel-loss-weight", "$MutualChannelLossWeight",
+        "--mutual-channel-top-k", "$MutualChannelTopK",
+        "--mutual-channel-diversity-weight", "$MutualChannelDiversityWeight",
+        "--mutual-channel-start-epoch", "$MutualChannelStartEpoch",
         "--foreground-consistency-loss-weight", "0.025",
         "--foreground-consistency-margin", "0.07",
+        "--background-counterfactual-consistency-weight", "$BackgroundCounterfactualConsistencyWeight",
+        "--background-counterfactual-probability", "$BackgroundCounterfactualProbability",
+        "--background-counterfactual-mode", "$BackgroundCounterfactualMode",
+        "--background-counterfactual-margin", "$BackgroundCounterfactualMargin",
+        "--background-counterfactual-blur-kernel", "$BackgroundCounterfactualBlurKernel",
+        "--background-counterfactual-temperature", "$BackgroundCounterfactualTemperature",
         "--attention-view-loss-weight", "$AttentionViewLossWeight",
         "--attention-crop-probability", "$AttentionCropProbability",
         "--attention-drop-probability", "$AttentionDropProbability",
@@ -283,6 +413,10 @@ try {
         "--elr-start-epoch", "$ElrStartEpoch",
         "--sample-weight-factor", "$SampleWeightFactor",
         "--sample-weight-max", "$SampleWeightMax",
+        "--targeted-margin-loss-weight", "$TargetedMarginLossWeight",
+        "--targeted-margin-default-margin", "$TargetedMarginDefaultMargin",
+        "--targeted-margin-default-weight", "$TargetedMarginDefaultWeight",
+        "--targeted-margin-max-weight", "$TargetedMarginMaxWeight",
         "--register-diversity-loss-weight", "0.0",
         "--pairwise-margin-loss-weight", "0.04",
         "--hard-sample-manifest", "runs\mango_cls_256_5class_defectstat_v3_30e\hard_mining_train_only\hard_samples_train_only.csv",
@@ -300,6 +434,11 @@ try {
         "--background-suppression-probability", "$BackgroundSuppressionProbability",
         "--background-suppression-margin", "$BackgroundSuppressionMargin",
         "--background-suppression-blur-radius", "$BackgroundSuppressionBlurRadius",
+        "--foreground-background-mix-probability", "$ForegroundBackgroundMixProbability",
+        "--foreground-background-mix-margin", "$ForegroundBackgroundMixMargin",
+        "--foreground-background-mix-min-foreground-fraction", "$ForegroundBackgroundMixMinForegroundFraction",
+        "--foreground-background-mix-max-foreground-fraction", "$ForegroundBackgroundMixMaxForegroundFraction",
+        "--foreground-background-mix-softness", "$ForegroundBackgroundMixSoftness",
         "--local-exposure-probability", "0.15",
         "--local-exposure-strength", "0.25",
         "--obstacle-probability", "0.04",
@@ -345,6 +484,27 @@ try {
         }
         $TrainArgs += @("--sample-weight-manifest", $SampleWeightManifest)
     }
+    if (-not [string]::IsNullOrWhiteSpace($AmbiguousSoftTargetManifest)) {
+        if (-not (Test-Path -LiteralPath $AmbiguousSoftTargetManifest)) {
+            throw "Khong tim thay ambiguous soft-target manifest: $AmbiguousSoftTargetManifest"
+        }
+        $TrainArgs += @(
+            "--ambiguous-soft-target-manifest", $AmbiguousSoftTargetManifest,
+            "--ambiguous-soft-target-alpha", "$AmbiguousSoftTargetAlpha"
+        )
+    }
+    if (-not [string]::IsNullOrWhiteSpace($TargetedMarginManifest)) {
+        if (-not (Test-Path -LiteralPath $TargetedMarginManifest)) {
+            throw "Khong tim thay targeted-margin manifest: $TargetedMarginManifest"
+        }
+        $TrainArgs += @("--targeted-margin-manifest", $TargetedMarginManifest)
+    }
+    if ($Sam) {
+        $TrainArgs += @("--sam", "--sam-rho", "$SamRho")
+        if ($SamAdaptive) {
+            $TrainArgs += @("--sam-adaptive")
+        }
+    }
     if ($ForegroundSurfaceFusion) {
         $TrainArgs += @(
             "--foreground-surface-fusion",
@@ -366,12 +526,22 @@ try {
             "--frequency-selective-foreground-threshold", "$FrequencySelectiveForegroundThreshold"
         )
     }
+    if ($MixStyle) {
+        $TrainArgs += @(
+            "--mixstyle",
+            "--mixstyle-probability", "$MixStyleProbability",
+            "--mixstyle-alpha", "$MixStyleAlpha"
+        )
+    }
     if ($PairwiseMarginRouting) {
         $TrainArgs += @(
             "--pairwise-margin-routing",
             "--pairwise-margin-route-max-probability-margin",
             "$PairwiseMarginRouteMaxProbabilityMargin"
         )
+    }
+    if (-not $PairwiseConfusionNormalize) {
+        $TrainArgs += @("--disable-pairwise-confusion-normalize")
     }
     if ($Smoke -or $SkipFinalTest) {
         $TrainArgs += @("--skip-final-test")
@@ -400,8 +570,22 @@ try {
         frequency_selective_top_k = $FrequencySelectiveTopK
         frequency_selective_blend = $FrequencySelectiveBlend
         frequency_selective_foreground_threshold = $FrequencySelectiveForegroundThreshold
+        mixstyle = [bool]$MixStyle
+        mixstyle_probability = $MixStyleProbability
+        mixstyle_alpha = $MixStyleAlpha
         pairwise_margin_routing = [bool]$PairwiseMarginRouting
         pairwise_margin_route_max_probability_margin = $PairwiseMarginRouteMaxProbabilityMargin
+        classification_loss = $ClassificationLoss
+        balanced_softmax_tau = $BalancedSoftmaxTau
+        focal_loss_gamma = $FocalLossGamma
+        focal_loss_mix = $FocalLossMix
+        label_smoothing = $LabelSmoothing
+        ldam_max_margin = $LdamMaxMargin
+        ldam_scale = $LdamScale
+        mutual_channel_loss_weight = $MutualChannelLossWeight
+        mutual_channel_top_k = $MutualChannelTopK
+        mutual_channel_diversity_weight = $MutualChannelDiversityWeight
+        mutual_channel_start_epoch = $MutualChannelStartEpoch
         background_suppression_mode = $BackgroundSuppressionMode
         background_suppression_probability = $BackgroundSuppressionProbability
         background_suppression_margin = $BackgroundSuppressionMargin
@@ -423,9 +607,39 @@ try {
         boundary_contrastive_margin = $BoundaryContrastiveMargin
         boundary_contrastive_temperature = $BoundaryContrastiveTemperature
         boundary_contrastive_max_pairs = $BoundaryContrastiveMaxPairs
+        angular_margin_loss_weight = $AngularMarginLossWeight
+        angular_margin = $AngularMargin
+        angular_margin_scale = $AngularMarginScale
+        angular_margin_start_epoch = $AngularMarginStartEpoch
+        angular_margin_classes = $AngularMarginClasses
+        ordinal_boundary_loss_weight = $OrdinalBoundaryLossWeight
+        ordinal_boundary_classes = $OrdinalBoundaryClasses
+        ordinal_boundary_threshold_weights = $OrdinalBoundaryThresholdWeights
+        ordinal_boundary_temperature = $OrdinalBoundaryTemperature
+        ordinal_boundary_start_epoch = $OrdinalBoundaryStartEpoch
+        pairwise_confusion_loss_weight = $PairwiseConfusionLossWeight
+        pairwise_confusion_sources = $PairwiseConfusionSources
+        pairwise_confusion_start_epoch = $PairwiseConfusionStartEpoch
+        pairwise_confusion_normalize = [bool]$PairwiseConfusionNormalize
         sample_weight_manifest = $SampleWeightManifest
         sample_weight_factor = $SampleWeightFactor
         sample_weight_max = $SampleWeightMax
+        ambiguous_soft_target_manifest = $AmbiguousSoftTargetManifest
+        ambiguous_soft_target_alpha = $AmbiguousSoftTargetAlpha
+        targeted_margin_manifest = $TargetedMarginManifest
+        targeted_margin_loss_weight = $TargetedMarginLossWeight
+        targeted_margin_default_margin = $TargetedMarginDefaultMargin
+        targeted_margin_default_weight = $TargetedMarginDefaultWeight
+        targeted_margin_max_weight = $TargetedMarginMaxWeight
+        background_counterfactual_consistency_weight = $BackgroundCounterfactualConsistencyWeight
+        background_counterfactual_probability = $BackgroundCounterfactualProbability
+        background_counterfactual_mode = $BackgroundCounterfactualMode
+        background_counterfactual_margin = $BackgroundCounterfactualMargin
+        background_counterfactual_blur_kernel = $BackgroundCounterfactualBlurKernel
+        background_counterfactual_temperature = $BackgroundCounterfactualTemperature
+        sam = [bool]$Sam
+        sam_rho = $SamRho
+        sam_adaptive = [bool]$SamAdaptive
         foreground_surface_fusion = [bool]$ForegroundSurfaceFusion
         foreground_surface_fusion_dropout = $ForegroundSurfaceFusionDropout
         bilinear_patch_fusion = [bool]$BilinearPatchFusion
