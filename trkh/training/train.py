@@ -610,6 +610,15 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--balanced-softmax-tau", type=float, default=1.0)
     parser.add_argument(
+        "--class-loss-multipliers",
+        type=str,
+        default="",
+        help=(
+            "Comma-separated per-class multipliers applied to classification loss, "
+            "for example 1,0.65,1,1,1. Empty disables manual multipliers."
+        ),
+    )
+    parser.add_argument(
         "--metric-learning-loss-weight",
         type=float,
         default=0.0,
@@ -1926,6 +1935,7 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         ldam_scale=args.ldam_scale,
         classification_loss=args.classification_loss,
         balanced_softmax_tau=args.balanced_softmax_tau,
+        class_loss_multipliers=args.class_loss_multipliers,
         metric_learning_loss_weight=args.metric_learning_loss_weight,
         metric_learning_temperature=args.metric_learning_temperature,
         metric_learning_class_balanced=not args.disable_metric_learning_class_balanced,
@@ -2274,6 +2284,25 @@ def compute_class_weights(
     blend = float(min(max(blend, 0.0), 1.0))
     weights = torch.lerp(torch.ones_like(weights), weights, blend)
     return weights.to(dtype=torch.float32)
+
+
+def parse_class_loss_multipliers(value: str, num_classes: int) -> Optional[Tensor]:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    parts = [part.strip() for part in text.replace(";", ",").split(",") if part.strip()]
+    if len(parts) != int(num_classes):
+        raise ValueError(
+            "--class-loss-multipliers phai co dung so class: "
+            f"got {len(parts)}, expected {num_classes}."
+        )
+    values = []
+    for part in parts:
+        parsed = float(part)
+        if not math.isfinite(parsed) or parsed < 0.0:
+            raise ValueError("--class-loss-multipliers chi nhan gia tri huu han >= 0.")
+        values.append(parsed)
+    return torch.tensor(values, dtype=torch.float32)
 
 
 def build_weighted_sampler(
@@ -7807,6 +7836,21 @@ def main() -> None:
             },
             flush=True,
         )
+    manual_class_loss_multipliers = parse_class_loss_multipliers(
+        train_config.class_loss_multipliers,
+        data_spec.num_classes,
+    )
+    manual_class_loss_multiplier_summary = {
+        "enabled": manual_class_loss_multipliers is not None,
+        "multipliers": (
+            manual_class_loss_multipliers.tolist()
+            if manual_class_loss_multipliers is not None
+            else [1.0 for _ in range(data_spec.num_classes)]
+        ),
+        "note": "Multiplies classification loss per target class; input sampler remains unchanged.",
+    }
+    if manual_class_loss_multipliers is not None:
+        print({"manual_class_loss_multipliers": manual_class_loss_multiplier_summary}, flush=True)
     metric_learning_criterion: Optional[nn.Module] = None
     if (not detection_mode) and float(train_config.metric_learning_loss_weight) > 0.0:
         metric_learning_criterion = SupervisedContrastiveLoss(
@@ -7968,6 +8012,7 @@ def main() -> None:
         "sample_weight_manifest": sample_weight_summary,
         "ambiguous_soft_target_manifest": ambiguous_soft_target_summary,
         "targeted_margin_manifest": targeted_margin_summary,
+        "manual_class_loss_multipliers": manual_class_loss_multiplier_summary,
         "class_crop_margin": class_crop_margin_summary,
         "targeted_copy_paste": targeted_copy_paste_summary,
         "val_dataset_report": val_dataset_report,
@@ -8170,12 +8215,18 @@ def main() -> None:
                     _configure_detection_criterion(criterion, stage_config)
                     _configure_detection_criterion(eval_criterion, stage_config)
                 if hasattr(criterion, "set_class_weight_multipliers"):
-                    criterion.set_class_weight_multipliers(
-                        torch.tensor(
-                            rare_class_recall_guard.get("multipliers", [1.0] * data_spec.num_classes),
-                            dtype=torch.float32,
+                    active_class_loss_multipliers = torch.tensor(
+                        rare_class_recall_guard.get("multipliers", [1.0] * data_spec.num_classes),
+                        dtype=torch.float32,
+                        device=device,
+                    )
+                    if manual_class_loss_multipliers is not None:
+                        active_class_loss_multipliers = active_class_loss_multipliers * manual_class_loss_multipliers.to(
                             device=device,
+                            dtype=torch.float32,
                         )
+                    criterion.set_class_weight_multipliers(
+                        active_class_loss_multipliers
                     )
                 if eval_criterion is not criterion and hasattr(eval_criterion, "reset_class_weight_multipliers"):
                     eval_criterion.reset_class_weight_multipliers()

@@ -95,6 +95,7 @@ param(
     [double]$LabelSmoothing = 0.02,
     [double]$LdamMaxMargin = 0.30,
     [double]$LdamScale = 18.0,
+    [string]$ClassLossMultipliers = "",
     [double]$MutualChannelLossWeight = 0.0,
     [int]$MutualChannelTopK = 8,
     [double]$MutualChannelDiversityWeight = 0.20,
@@ -108,6 +109,12 @@ param(
     [double]$ForegroundBackgroundMixMinForegroundFraction = 0.06,
     [double]$ForegroundBackgroundMixMaxForegroundFraction = 0.88,
     [double]$ForegroundBackgroundMixSoftness = 5.0,
+    [double]$LocalExposureProbability = 0.15,
+    [double]$LocalExposureStrength = 0.25,
+    [double]$ObstacleProbability = 0.04,
+    [double]$ObstacleMaxArea = 0.08,
+    [int]$RandAugmentNumOps = 0,
+    [int]$RandAugmentMagnitude = 0,
     [switch]$PreflightOnly,
     [switch]$Smoke,
     [switch]$SkipFinalTest,
@@ -283,6 +290,7 @@ if ($PreflightOnly) {
         background_counterfactual_margin = $BackgroundCounterfactualMargin
         background_counterfactual_blur_kernel = $BackgroundCounterfactualBlurKernel
         background_counterfactual_temperature = $BackgroundCounterfactualTemperature
+        class_loss_multipliers = $ClassLossMultipliers
         foreground_crop_mode = $ForegroundCropMode
         foreground_crop_probability = $ForegroundCropProbability
         foreground_crop_margin_ratio = $ForegroundCropMarginRatio
@@ -324,6 +332,12 @@ if ($PreflightOnly) {
         foreground_background_mix_min_foreground_fraction = $ForegroundBackgroundMixMinForegroundFraction
         foreground_background_mix_max_foreground_fraction = $ForegroundBackgroundMixMaxForegroundFraction
         foreground_background_mix_softness = $ForegroundBackgroundMixSoftness
+        local_exposure_probability = $LocalExposureProbability
+        local_exposure_strength = $LocalExposureStrength
+        obstacle_probability = $ObstacleProbability
+        obstacle_max_area = $ObstacleMaxArea
+        randaugment_num_ops = $RandAugmentNumOps
+        randaugment_magnitude = $RandAugmentMagnitude
         skip_final_test = [bool]$SkipFinalTest
     } | ConvertTo-Json -Depth 5
     exit 0
@@ -429,6 +443,7 @@ try {
         "--focal-loss-gamma", "$FocalLossGamma",
         "--focal-loss-mix", "$FocalLossMix",
         "--label-smoothing", "$LabelSmoothing",
+        "--class-loss-multipliers", "$ClassLossMultipliers",
         "--metric-learning-loss-weight", "0.04",
         "--metric-learning-temperature", "0.16",
         "--metric-learning-sources", "head,patch",
@@ -512,10 +527,12 @@ try {
         "--foreground-background-mix-min-foreground-fraction", "$ForegroundBackgroundMixMinForegroundFraction",
         "--foreground-background-mix-max-foreground-fraction", "$ForegroundBackgroundMixMaxForegroundFraction",
         "--foreground-background-mix-softness", "$ForegroundBackgroundMixSoftness",
-        "--local-exposure-probability", "0.15",
-        "--local-exposure-strength", "0.25",
-        "--obstacle-probability", "0.04",
-        "--obstacle-max-area", "0.08",
+        "--local-exposure-probability", "$LocalExposureProbability",
+        "--local-exposure-strength", "$LocalExposureStrength",
+        "--obstacle-probability", "$ObstacleProbability",
+        "--obstacle-max-area", "$ObstacleMaxArea",
+        "--randaugment-num-ops", "$RandAugmentNumOps",
+        "--randaugment-magnitude", "$RandAugmentMagnitude",
         "--random-erasing-probability", "0",
         "--random-affine-degrees", "3",
         "--random-affine-translate", "0.02",
@@ -722,6 +739,13 @@ try {
         background_counterfactual_margin = $BackgroundCounterfactualMargin
         background_counterfactual_blur_kernel = $BackgroundCounterfactualBlurKernel
         background_counterfactual_temperature = $BackgroundCounterfactualTemperature
+        class_loss_multipliers = $ClassLossMultipliers
+        local_exposure_probability = $LocalExposureProbability
+        local_exposure_strength = $LocalExposureStrength
+        obstacle_probability = $ObstacleProbability
+        obstacle_max_area = $ObstacleMaxArea
+        randaugment_num_ops = $RandAugmentNumOps
+        randaugment_magnitude = $RandAugmentMagnitude
         sam = [bool]$Sam
         sam_rho = $SamRho
         sam_adaptive = [bool]$SamAdaptive

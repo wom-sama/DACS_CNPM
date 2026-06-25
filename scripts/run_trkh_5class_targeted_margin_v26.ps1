@@ -4,6 +4,8 @@ param(
     [string]$RunName = "mango_cls_256_5class_targeted_margin_v26_30e",
     [string]$ResumeCheckpoint = "runs\mango_cls_256_5class_attention_views_bounded_v8_30e\checkpoints\best.pt",
     [string]$SampleWeightManifest = "runs\boundary_sample_weights_v11_train_only_20260612\sample_weights_train_only.csv",
+    [string]$HardSampleManifest = "runs\mango_cls_256_5class_defectstat_v3_30e\hard_mining_train_only\hard_samples_train_only.csv",
+    [double]$HardSampleRepeatFactor = 1.6,
     [string]$TrainPredictionsCsv = "runs\mango_cls_256_5class_defectstat_v3_30e\train_maskfix_for_hard_mining\predictions_detailed.csv",
     [string]$TargetedMarginManifest = "runs\targeted_margin_v26_train_only_20260625\targeted_margin_train_only.csv",
     [string]$TargetedPairs = "0-1,1-2,1-4",
@@ -16,6 +18,7 @@ param(
     [int]$TargetedMaxSamples = 320,
     [int]$TargetedMaxPerPair = 180,
     [switch]$SkipBuildTargetedManifest,
+    [int]$ImageSize = 256,
     [int]$Epochs = 30,
     [int]$Patience = 3,
     [int]$BatchSize = 32,
@@ -31,6 +34,29 @@ param(
     [double]$BackgroundCounterfactualMargin = 0.08,
     [int]$BackgroundCounterfactualBlurKernel = 15,
     [double]$BackgroundCounterfactualTemperature = 1.0,
+    [ValidateSet("ldam_focal", "balanced_softmax")]
+    [string]$ClassificationLoss = "ldam_focal",
+    [double]$BalancedSoftmaxTau = 1.0,
+    [double]$FocalLossGamma = 1.0,
+    [double]$FocalLossMix = 0.10,
+    [double]$LabelSmoothing = 0.015,
+    [double]$LdamMaxMargin = 0.28,
+    [double]$LdamScale = 18.0,
+    [string]$ClassLossMultipliers = "",
+    [bool]$MixStyle = $false,
+    [double]$MixStyleProbability = 0.5,
+    [double]$MixStyleAlpha = 0.1,
+    [bool]$ForegroundSurfaceFusion = $false,
+    [double]$ForegroundSurfaceFusionDropout = 0.08,
+    [bool]$Sam = $false,
+    [double]$SamRho = 0.03,
+    [bool]$SamAdaptive = $false,
+    [double]$LocalExposureProbability = 0.15,
+    [double]$LocalExposureStrength = 0.25,
+    [double]$ObstacleProbability = 0.04,
+    [double]$ObstacleMaxArea = 0.08,
+    [int]$RandAugmentNumOps = 0,
+    [int]$RandAugmentMagnitude = 0,
     [switch]$Probe,
     [switch]$PreflightOnly,
     [switch]$Smoke,
@@ -95,7 +121,10 @@ $LauncherArgs = @{
     DataYaml = $DataYaml
     RunName = $RunName
     ResumeCheckpoint = $ResumeCheckpoint
+    ImageSize = $ImageSize
     SampleWeightManifest = $SampleWeightManifest
+    HardSampleManifest = $HardSampleManifest
+    HardSampleRepeatFactor = $HardSampleRepeatFactor
     SampleWeightFactor = 1.0
     SampleWeightMax = 2.5
     TargetedMarginManifest = $TargetedMarginManifest
@@ -127,12 +156,14 @@ $LauncherArgs = @{
     BoundaryContrastiveMaxPairs = 128
     PairwiseMarginRouting = $true
     PairwiseMarginRouteMaxProbabilityMargin = 0.20
-    ClassificationLoss = "ldam_focal"
-    FocalLossGamma = 1.0
-    FocalLossMix = 0.10
-    LabelSmoothing = 0.015
-    LdamMaxMargin = 0.28
-    LdamScale = 18.0
+    ClassificationLoss = $ClassificationLoss
+    BalancedSoftmaxTau = $BalancedSoftmaxTau
+    FocalLossGamma = $FocalLossGamma
+    FocalLossMix = $FocalLossMix
+    LabelSmoothing = $LabelSmoothing
+    LdamMaxMargin = $LdamMaxMargin
+    LdamScale = $LdamScale
+    ClassLossMultipliers = $ClassLossMultipliers
     BackgroundSuppressionMode = "desaturate_blur"
     BackgroundSuppressionProbability = 0.65
     BackgroundSuppressionMargin = 0.08
@@ -144,7 +175,20 @@ $LauncherArgs = @{
     BackgroundCounterfactualBlurKernel = $BackgroundCounterfactualBlurKernel
     BackgroundCounterfactualTemperature = $BackgroundCounterfactualTemperature
     ForegroundBackgroundMixProbability = 0.0
-    Sam = $false
+    MixStyle = $MixStyle
+    MixStyleProbability = $MixStyleProbability
+    MixStyleAlpha = $MixStyleAlpha
+    ForegroundSurfaceFusion = $ForegroundSurfaceFusion
+    ForegroundSurfaceFusionDropout = $ForegroundSurfaceFusionDropout
+    Sam = $Sam
+    SamRho = $SamRho
+    SamAdaptive = $SamAdaptive
+    LocalExposureProbability = $LocalExposureProbability
+    LocalExposureStrength = $LocalExposureStrength
+    ObstacleProbability = $ObstacleProbability
+    ObstacleMaxArea = $ObstacleMaxArea
+    RandAugmentNumOps = $RandAugmentNumOps
+    RandAugmentMagnitude = $RandAugmentMagnitude
     TraceArchitecture = $TraceArchitecture
 }
 

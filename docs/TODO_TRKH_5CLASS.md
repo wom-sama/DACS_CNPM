@@ -207,6 +207,19 @@
 - [x] Tao group-clean split theo source sequence tai `D:\DataAI\AIEx\newdataset\class_f_groupclean_v1` va leak audit tai `runs/class_f_groupclean_v1_leak_audit_20260625`.
 - [x] Sua launcher preflight khong hard-code `class_f` khi dem split va them toggle `HardSampleManifest/HardSampleRepeatFactor` de tat manifest split cu.
 - [x] Chay preflight + smoke group-clean V16; trace completed tai `runs/smoke_groupclean_v16_20260625/architecture_trace`.
-- [ ] Chay probe group-clean V16 voi `-SampleWeightManifest " " -HardSampleManifest " "`; neu class-1 val F1 < `0.70` thi khong full train.
+- [x] Chay probe group-clean V16/V26 warm-start va xac nhan chi dung diagnostic do checkpoint cu overlap source-sequence voi group-clean val/test.
+- [x] Chay scratch group-clean V26 baseline: class1 val F1 `0.3360`; khong full train.
+- [x] Them `--class-loss-multipliers`, reroute calibration tool va unit test; class1 loss `0.65` tang scratch group-clean len macro/class1 `0.7278/0.3780` nhung chua qua gate.
+- [x] Thu balanced softmax tren group-clean scratch; class1 FP tang, reject.
+- [x] Thu bundle ket hop MixStyle + foreground surface fusion + background-counterfactual consistency + RandAugment/local exposure/obstacle; macro/class1 `0.7081/0.3379`, reject.
+- [x] Thu probe dai hon c1loss065 180 batch x 12e; early stop epoch 6, best macro/class1 `0.7131/0.3557`, reject.
+- [x] Them `ImageSize` cho V26 va thu high-res 320 c1loss065; macro/class1 `0.7136/0.3478`, reject.
+- [x] Chay train->val reroute/logit-bias/focus-specialist diagnostic; deu khong generalize du, reject.
+- [x] Tao forensic audit val group-clean tai `runs/forensics_val_groupclean_c1loss065_20260625`; loi chinh la low-margin boundary, khong phai nen don thuan.
+- [x] Ghi audit tong hop tai `docs/TRKH_5CLASS_GROUPCLEAN_SCRATCH_BUNDLE_AUDIT_20260625.md`.
+- [ ] Gate full train group-clean van la class-1 validation F1 `>=0.70`; best clean scratch hien tai chi `0.3780`, nen khong full train.
+- [ ] Them training-dynamics/data-cartography logger cho train/val boundary samples de tach easy/ambiguous/hard-label-error.
+- [ ] Tao train-only quality-group manifest tu lighting/background/partial buckets va thu group-aware/worst-group loss nhe.
+- [ ] Nghien cuu va thu self-supervised pretrain noi bo tren `class_f_groupclean_v1/train` neu data-cartography xac nhan representation thieu, khong dung external pretrained.
 - [ ] Review thu cong `runs/boundary_review_v16_train_20260625/boundary_review_manifest.csv`, dien `manual_label_status`, `quality_lighting`, `quality_dirty_obstacle`, `quality_partial_fruit`, `quality_background_mask`.
 - [ ] Sau manual review train-only, tao clean/ambiguous/ignore/soft-target manifest; khong dung val/test de tune.

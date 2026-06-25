@@ -254,6 +254,7 @@ class TrainConfig:
     ldam_scale: float = 30.0
     classification_loss: str = "ldam_focal"
     balanced_softmax_tau: float = 1.0
+    class_loss_multipliers: str = ""
     metric_learning_loss_weight: float = 0.0
     metric_learning_temperature: float = 0.12
     metric_learning_class_balanced: bool = True
