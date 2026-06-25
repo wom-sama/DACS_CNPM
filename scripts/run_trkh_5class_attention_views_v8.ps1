@@ -3,6 +3,7 @@ param(
     [string]$DataYaml = "D:\DataAI\AIEx\newdataset\class_f\data.yaml",
     [string]$RunName = "mango_cls_256_5class_attention_views_v8_30e",
     [string]$ResumeCheckpoint = "runs\mango_cls_256_5class_hardneg_maskfix_v4_30e\checkpoints\best.pt",
+    [int]$ImageSize = 256,
     [int]$Epochs = 30,
     [int]$Patience = 3,
     [int]$BatchSize = 32,
@@ -60,6 +61,13 @@ param(
     [double]$BackgroundCounterfactualMargin = 0.08,
     [int]$BackgroundCounterfactualBlurKernel = 15,
     [double]$BackgroundCounterfactualTemperature = 1.0,
+    [ValidateSet("none", "pseudo", "grabcut")]
+    [string]$ForegroundCropMode = "none",
+    [double]$ForegroundCropProbability = 0.0,
+    [double]$ForegroundCropMarginRatio = 0.08,
+    [double]$ForegroundCropMinMaskAreaRatio = 0.03,
+    [double]$ForegroundCropMaxMaskAreaRatio = 0.92,
+    [double]$ForegroundCropMaxCropAreaRatio = 0.98,
     [bool]$Sam = $false,
     [double]$SamRho = 0.03,
     [bool]$SamAdaptive = $false,
@@ -220,6 +228,12 @@ if ($PreflightOnly) {
         background_counterfactual_margin = $BackgroundCounterfactualMargin
         background_counterfactual_blur_kernel = $BackgroundCounterfactualBlurKernel
         background_counterfactual_temperature = $BackgroundCounterfactualTemperature
+        foreground_crop_mode = $ForegroundCropMode
+        foreground_crop_probability = $ForegroundCropProbability
+        foreground_crop_margin_ratio = $ForegroundCropMarginRatio
+        foreground_crop_min_mask_area_ratio = $ForegroundCropMinMaskAreaRatio
+        foreground_crop_max_mask_area_ratio = $ForegroundCropMaxMaskAreaRatio
+        foreground_crop_max_crop_area_ratio = $ForegroundCropMaxCropAreaRatio
         sam = [bool]$Sam
         sam_rho = $SamRho
         sam_adaptive = [bool]$SamAdaptive
@@ -296,7 +310,7 @@ try {
         "--model-type", "vit_registers",
         "--no-pretrained",
         "--no-pretrained-distillation",
-        "--image-size", "256",
+        "--image-size", "$ImageSize",
         "--patch-size", "16",
         "--stem-channels", "32",
         "--cnn-feature-fusion",
@@ -430,6 +444,12 @@ try {
         "--hue", "0.01",
         "--illumination-normalization",
         "--illumination-normalization-strength", "0.35",
+        "--foreground-crop-mode", "$ForegroundCropMode",
+        "--foreground-crop-probability", "$ForegroundCropProbability",
+        "--foreground-crop-margin-ratio", "$ForegroundCropMarginRatio",
+        "--foreground-crop-min-mask-area-ratio", "$ForegroundCropMinMaskAreaRatio",
+        "--foreground-crop-max-mask-area-ratio", "$ForegroundCropMaxMaskAreaRatio",
+        "--foreground-crop-max-crop-area-ratio", "$ForegroundCropMaxCropAreaRatio",
         "--background-suppression-mode", "$BackgroundSuppressionMode",
         "--background-suppression-probability", "$BackgroundSuppressionProbability",
         "--background-suppression-margin", "$BackgroundSuppressionMargin",
@@ -562,6 +582,7 @@ try {
         no_pretrained = $true
         resume_checkpoint = $ResumeCheckpoint
         batch_size = $BatchSize
+        image_size = $ImageSize
         grad_accum_steps = $GradAccumSteps
         effective_batch_size = $BatchSize * $GradAccumSteps
         num_workers = $NumWorkers

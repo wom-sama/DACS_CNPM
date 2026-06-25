@@ -194,5 +194,14 @@
 - [x] V26 probe 120 batch x 6 epoch: best val macro/class1 `0.8864/0.6805`; forensic `TP=115`, `FP=72`, `FN=36`; reject, khong full train.
 - [x] Xac nhan V19 ordinal boundary va V20 pairwise confusion probe da co ket qua thap hon V16; khong lap lai.
 - [x] Ghi audit V25/V26 tai `docs/TRKH_5CLASS_V25_V26_AUDIT_20260625.md`.
+- [x] Them data-centric sample-weight builder V27 co guard train-only, dry-run, max issue/pair, copy review images va unit test.
+- [x] V27 probe tu manifest V3 stale: best val macro/class1 `0.8842/0.6746`; reject, khong full train.
+- [x] Export V16 train detailed predictions de mining moi, nhung dry-run cho thay low-self-confidence khong on dinh vi V16 under-confident; chua dung lam run chinh.
+- [x] Them `ImageSize` cho launcher V8/V12/V16/V27; V29 high-res 384 smoke/probe pass nhung best val macro/class1 `0.8788/0.6524`; reject.
+- [x] Chay V29 validation forensic va review anh; xac nhan loi class 1 chu yeu do ranh label/illumination/object surface, khong phai nen don thuan.
+- [x] Them foreground object crop V30 (`foreground_crop_mode none|pseudo|grabcut`) vao transform/config/CLI/eval/XAI/trace va launcher rieng.
+- [x] V30 smoke trace completed, probe best val macro/class1 `0.8851/0.6786`; reject, khong full train.
+- [x] Ghi audit V27/V29/V30 tai `docs/TRKH_5CLASS_V27_V29_V30_AUDIT_20260625.md`.
 - [ ] Gate full train van la class-1 validation F1 `>=0.70`; V16 van la best no-pretrain probe hien tai (`0.6866`).
-- [ ] Huong tiep theo: uu tien label-boundary audit va group-clean split truoc khi them loss moi.
+- [ ] Huong tiep theo: tao boundary review manifest train/val voi nhan `correct/ambiguous/wrong/lighting/dirty/partial`, sau do moi quyet dinh loss/pretraining tiep.
+- [ ] Tao group-clean split theo source sequence truoc khi dung metric de khang dinh co the vuot pretrained baseline.

@@ -71,6 +71,17 @@ def _build_dataset(data_spec, split: str, augmentation_config: Dict[str, object]
         illumination_normalization_strength=float(
             augmentation_config.get("illumination_normalization_strength", 0.0) or 0.0
         ),
+        foreground_crop_mode=str(augmentation_config.get("foreground_crop_mode", "none") or "none"),
+        foreground_crop_margin_ratio=float(augmentation_config.get("foreground_crop_margin_ratio", 0.08) or 0.08),
+        foreground_crop_min_mask_area_ratio=float(
+            augmentation_config.get("foreground_crop_min_mask_area_ratio", 0.03) or 0.03
+        ),
+        foreground_crop_max_mask_area_ratio=float(
+            augmentation_config.get("foreground_crop_max_mask_area_ratio", 0.92) or 0.92
+        ),
+        foreground_crop_max_crop_area_ratio=float(
+            augmentation_config.get("foreground_crop_max_crop_area_ratio", 0.98) or 0.98
+        ),
         background_suppression_mode=str(
             augmentation_config.get("background_suppression_mode", "none") or "none"
         ),

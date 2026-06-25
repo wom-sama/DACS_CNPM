@@ -1190,6 +1190,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--illumination-normalization", action="store_true", default=False)
     parser.add_argument("--illumination-normalization-strength", type=float, default=0.0)
     parser.add_argument(
+        "--foreground-crop-mode",
+        choices=("none", "pseudo", "grabcut"),
+        default="none",
+        help="Optional object-tight crop before resize. Uses train-only image content; default off.",
+    )
+    parser.add_argument("--foreground-crop-probability", type=float, default=0.0)
+    parser.add_argument("--foreground-crop-margin-ratio", type=float, default=0.08)
+    parser.add_argument("--foreground-crop-min-mask-area-ratio", type=float, default=0.03)
+    parser.add_argument("--foreground-crop-max-mask-area-ratio", type=float, default=0.92)
+    parser.add_argument("--foreground-crop-max-crop-area-ratio", type=float, default=0.98)
+    parser.add_argument(
         "--background-suppression-mode",
         choices=(
             "none",
@@ -1737,6 +1748,7 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         raise ValueError("--eval-adaptive-min-detections phai >= 0.")
     for name in (
         "background_suppression_probability",
+        "foreground_crop_probability",
         "local_exposure_probability",
         "obstacle_probability",
         "foreground_background_mix_probability",
@@ -1746,6 +1758,16 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
             raise ValueError(f"--{name.replace('_', '-')} phai nam trong [0, 1].")
     if args.illumination_normalization_strength < 0.0:
         raise ValueError("--illumination-normalization-strength phai >= 0.")
+    if args.foreground_crop_margin_ratio < 0.0:
+        raise ValueError("--foreground-crop-margin-ratio phai >= 0.")
+    if not 0.0 <= args.foreground_crop_min_mask_area_ratio <= 1.0:
+        raise ValueError("--foreground-crop-min-mask-area-ratio phai nam trong [0, 1].")
+    if not 0.0 <= args.foreground_crop_max_mask_area_ratio <= 1.0:
+        raise ValueError("--foreground-crop-max-mask-area-ratio phai nam trong [0, 1].")
+    if args.foreground_crop_max_mask_area_ratio < args.foreground_crop_min_mask_area_ratio:
+        raise ValueError("--foreground-crop-max-mask-area-ratio phai >= min.")
+    if not 0.0 < args.foreground_crop_max_crop_area_ratio <= 1.0:
+        raise ValueError("--foreground-crop-max-crop-area-ratio phai nam trong (0, 1].")
     if args.background_suppression_margin < 0.0:
         raise ValueError("--background-suppression-margin phai >= 0.")
     if args.background_suppression_blur_radius <= 0.0:
@@ -2074,6 +2096,12 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         lighting_probability=args.lighting_probability,
         illumination_normalization=bool(args.illumination_normalization),
         illumination_normalization_strength=args.illumination_normalization_strength,
+        foreground_crop_mode=args.foreground_crop_mode,
+        foreground_crop_probability=args.foreground_crop_probability,
+        foreground_crop_margin_ratio=args.foreground_crop_margin_ratio,
+        foreground_crop_min_mask_area_ratio=args.foreground_crop_min_mask_area_ratio,
+        foreground_crop_max_mask_area_ratio=args.foreground_crop_max_mask_area_ratio,
+        foreground_crop_max_crop_area_ratio=args.foreground_crop_max_crop_area_ratio,
         background_suppression_mode=args.background_suppression_mode,
         background_suppression_probability=args.background_suppression_probability,
         background_suppression_margin=args.background_suppression_margin,
@@ -6696,6 +6724,8 @@ def make_train_transform(
         enabled_augmentations.append("lighting")
     if augmentation_config.illumination_normalization:
         enabled_augmentations.append("illumination_normalization")
+    if augmentation_config.foreground_crop_mode not in {"", "none", "off", "false"}:
+        enabled_augmentations.append(f"foreground_crop_{augmentation_config.foreground_crop_mode}")
     if augmentation_config.background_suppression_mode not in {"", "none", "off", "false"}:
         enabled_augmentations.append(f"background_{augmentation_config.background_suppression_mode}")
     if augmentation_config.local_exposure_probability > 0.0:
@@ -6726,7 +6756,8 @@ def make_train_transform(
         "class_aware=%s class_power=%.4f class_max_scale=%.4f "
         "class_photometric=%s "
         "randaugment_ops=%s randaugment_magnitude=%s illumination_norm=%s "
-        "background_mode=%s background_prob=%.4f local_exposure=%.4f obstacle=%.4f "
+        "foreground_crop=%s foreground_crop_prob=%.4f background_mode=%s background_prob=%.4f "
+        "local_exposure=%.4f obstacle=%.4f "
         "fg_bg_mix=%.4f temporal_frames=%s",
         augmentation_config.resize_mode,
         augmentation_config.random_resized_crop_scale_min,
@@ -6750,6 +6781,8 @@ def make_train_transform(
         augmentation_config.randaugment_num_ops,
         augmentation_config.randaugment_magnitude,
         augmentation_config.illumination_normalization,
+        augmentation_config.foreground_crop_mode,
+        augmentation_config.foreground_crop_probability,
         augmentation_config.background_suppression_mode,
         augmentation_config.background_suppression_probability,
         augmentation_config.local_exposure_probability,
@@ -6779,6 +6812,12 @@ def make_train_transform(
         randaugment_magnitude=augmentation_config.randaugment_magnitude,
         illumination_normalization=augmentation_config.illumination_normalization,
         illumination_normalization_strength=augmentation_config.illumination_normalization_strength,
+        foreground_crop_mode=augmentation_config.foreground_crop_mode,
+        foreground_crop_probability=augmentation_config.foreground_crop_probability,
+        foreground_crop_margin_ratio=augmentation_config.foreground_crop_margin_ratio,
+        foreground_crop_min_mask_area_ratio=augmentation_config.foreground_crop_min_mask_area_ratio,
+        foreground_crop_max_mask_area_ratio=augmentation_config.foreground_crop_max_mask_area_ratio,
+        foreground_crop_max_crop_area_ratio=augmentation_config.foreground_crop_max_crop_area_ratio,
         background_suppression_mode=augmentation_config.background_suppression_mode,
         background_suppression_probability=augmentation_config.background_suppression_probability,
         background_suppression_margin=augmentation_config.background_suppression_margin,
@@ -6943,6 +6982,11 @@ def main() -> None:
         resize_mode=augmentation_config.resize_mode,
         illumination_normalization=augmentation_config.illumination_normalization,
         illumination_normalization_strength=augmentation_config.illumination_normalization_strength,
+        foreground_crop_mode=augmentation_config.foreground_crop_mode,
+        foreground_crop_margin_ratio=augmentation_config.foreground_crop_margin_ratio,
+        foreground_crop_min_mask_area_ratio=augmentation_config.foreground_crop_min_mask_area_ratio,
+        foreground_crop_max_mask_area_ratio=augmentation_config.foreground_crop_max_mask_area_ratio,
+        foreground_crop_max_crop_area_ratio=augmentation_config.foreground_crop_max_crop_area_ratio,
         background_suppression_mode=augmentation_config.background_suppression_mode,
         background_suppression_margin=augmentation_config.background_suppression_margin,
         background_suppression_blur_radius=augmentation_config.background_suppression_blur_radius,

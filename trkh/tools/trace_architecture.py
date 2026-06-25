@@ -209,6 +209,17 @@ def main() -> None:
         illumination_normalization_strength=float(
             augmentation_config.get("illumination_normalization_strength", 0.0) or 0.0
         ),
+        foreground_crop_mode=str(augmentation_config.get("foreground_crop_mode", "none") or "none"),
+        foreground_crop_margin_ratio=float(augmentation_config.get("foreground_crop_margin_ratio", 0.08) or 0.08),
+        foreground_crop_min_mask_area_ratio=float(
+            augmentation_config.get("foreground_crop_min_mask_area_ratio", 0.03) or 0.03
+        ),
+        foreground_crop_max_mask_area_ratio=float(
+            augmentation_config.get("foreground_crop_max_mask_area_ratio", 0.92) or 0.92
+        ),
+        foreground_crop_max_crop_area_ratio=float(
+            augmentation_config.get("foreground_crop_max_crop_area_ratio", 0.98) or 0.98
+        ),
         background_suppression_mode=str(augmentation_config.get("background_suppression_mode", "none") or "none"),
         background_suppression_margin=float(augmentation_config.get("background_suppression_margin", 0.08) or 0.08),
         background_suppression_blur_radius=float(
@@ -265,6 +276,19 @@ def main() -> None:
         input_image = _tensor_to_image(tensor)
         with Image.open(sample.image_path) as source:
             original = source.convert("RGB").copy()
+        transform_meta: Dict[str, object] = {}
+        dataset_transform = getattr(dataset, "transform", None)
+        if dataset_transform is not None:
+            try:
+                transformed_with_meta = dataset_transform(original, return_meta=True)
+                if (
+                    isinstance(transformed_with_meta, tuple)
+                    and len(transformed_with_meta) >= 2
+                    and isinstance(transformed_with_meta[1], dict)
+                ):
+                    transform_meta = dict(transformed_with_meta[1])
+            except TypeError:
+                transform_meta = {}
         raw_tensor = raw_transform(original)
         raw_input_image = _tensor_to_image(raw_tensor)
         illumination_image = raw_input_image
@@ -421,6 +445,7 @@ def main() -> None:
             "class_name": class_name,
             "label_from_dataset": int(label),
             "source_image": str(sample.image_path.resolve()),
+            "foreground_crop_box": transform_meta.get("foreground_crop_box"),
             "foreground_mask_fraction": float(foreground_mask.mean()),
             "attention_drop_area_fraction": float(
                 attention_drop_mask.float().mean().item()

@@ -19,6 +19,7 @@ Rang buoc thiet ke:
 
 | Khoi | Input | Output chinh | Cong dung |
 |---|---|---|---|
+| Optional foreground object crop | Anh RGB truoc resize | Anh RGB crop quanh pseudo foreground | Tang ty le qua/anh va giam padding/nen nhung giu mau goc; mac dinh tat. |
 | Resize-pad + normalize | Anh RGB bat ky | `B x 3 x 256 x 256` | Giu ty le anh, khong crop mat dau hieu nho. |
 | CNN stem | `B x 3 x 256 x 256` | `B x 256 x 32 x 32` | Lay bien, texture va mau cuc bo voi inductive bias cua CNN. |
 | Patch embedding | Stem feature | `B x 256 x 256` | Tao grid `16 x 16`, moi patch la vector 256 chieu. |
@@ -114,6 +115,27 @@ Theo micro-benchmark tren RTX 4060 Laptop, batch 16, BF16:
 
 Day la micro-benchmark compute, khong bao gom toc do doc dia.
 
+## Optional foreground object crop
+
+Tu V30, preprocessing co them crop object-tight co the cau hinh bang:
+
+- `--foreground-crop-mode none|pseudo|grabcut`;
+- `--foreground-crop-probability`;
+- `--foreground-crop-margin-ratio`;
+- `--foreground-crop-min-mask-area-ratio`;
+- `--foreground-crop-max-mask-area-ratio`;
+- `--foreground-crop-max-crop-area-ratio`.
+
+Input la anh RGB truoc resize. Neu co target mask/bbox thi crop theo union target mask; neu khong co thi dung pseudo foreground mask hoac GrabCut. Output van la anh RGB, sau do moi resize-pad ve kich thuoc model.
+
+Muc tieu cua block nay khac V17 background suppression:
+
+- khong doi mau nen bang gray/blur;
+- khong xoa texture goc;
+- chi tang ty le vung qua va giam padding/nen ngoai object.
+
+V30 probe cho thay block nay chay on dinh nhung chua vuot V16: val macro/class-1 F1 `0.8851/0.6786`, nen hien tai giu default `none` va khong dung lam cau hinh full train.
+
 ## Can bang 5 class khong leakage
 
 Can bang chi dung label cua `train`:
@@ -141,6 +163,24 @@ Manifest hien tai:
 `runs\mango_cls_256_5class_defectstat_v3_30e\hard_mining_train_only\hard_samples_train_only.csv`
 
 Co `501` mau train-only. Khi lap lai voi factor `1.6`, smoke run tao `9524` effective samples va strict balanced sampler van giu exposure `[1906, 1906, 1906, 1906, 1906]`, gap `0%`.
+
+## Data-centric weighting audit
+
+Tu V27 co tool `trkh.tools.build_data_centric_sample_weights` de tao sample-weight manifest train-only tu prediction CSV:
+
+- guard mac dinh bo qua path khong thuoc train split;
+- ho tro `--dry-run`, `--max-issues`, `--max-per-reason`, `--max-per-pair`;
+- copy anh review theo reason khi can audit;
+- merge voi sample-weight manifest cu de tranh duplicate row vo hieu hoa downweight.
+
+Output chinh:
+
+- `sample_weights_train_only.csv`;
+- `label_issue_review_train_only.csv`;
+- `summary.json`;
+- optional `review_images/`.
+
+V27 dung manifest mined tu V3 stale nen probe thap hon V16. Tool van giu lai de phuc vu label-boundary audit, nhung khong dung output V27 lam full-train candidate.
 
 ## Loss va hoi tu 30 epoch
 

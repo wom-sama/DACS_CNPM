@@ -3433,6 +3433,90 @@ def _center_crop_square_pair(
     return image, mask, (left, top, right, bottom)
 
 
+def _bbox_from_bool_mask_or_none(mask: np.ndarray) -> Optional[Tuple[int, int, int, int]]:
+    mask = np.asarray(mask, dtype=bool)
+    if mask.ndim != 2 or mask.size == 0 or not bool(mask.any()):
+        return None
+    ys, xs = np.where(mask)
+    if xs.size == 0 or ys.size == 0:
+        return None
+    left = int(xs.min())
+    top = int(ys.min())
+    right = int(xs.max()) + 1
+    bottom = int(ys.max()) + 1
+    if right <= left or bottom <= top:
+        return None
+    return left, top, right, bottom
+
+
+def _crop_to_foreground_bbox_pair(
+    image: Image.Image,
+    masks: Optional[List[Image.Image]] = None,
+    *,
+    mode: str = "none",
+    margin_ratio: float = 0.08,
+    min_mask_area_ratio: float = 0.03,
+    max_mask_area_ratio: float = 0.92,
+    max_crop_area_ratio: float = 0.98,
+) -> Tuple[Image.Image, Optional[List[Image.Image]], Optional[Tuple[int, int, int, int]]]:
+    normalized_mode = str(mode or "none").strip().lower().replace("-", "_")
+    if normalized_mode in {"", "none", "off", "false"}:
+        return image, masks, None
+
+    width, height = image.size
+    if width <= 4 or height <= 4:
+        return image, masks, None
+
+    mask_array: Optional[np.ndarray] = None
+    if masks:
+        target_union = np.zeros((height, width), dtype=bool)
+        for mask in masks:
+            if mask.size != image.size:
+                continue
+            target_union |= np.asarray(mask, dtype=np.uint8) > 0
+        if bool(target_union.any()):
+            mask_array = target_union
+
+    if mask_array is None:
+        if normalized_mode == "grabcut":
+            mask_array = _grabcut_foreground_mask_array(image)
+        elif normalized_mode == "pseudo":
+            mask_array = _pseudo_foreground_mask_array(image)
+        else:
+            raise ValueError(f"foreground_crop_mode khong hop le: {mode}")
+
+    mask_fraction = float(np.asarray(mask_array, dtype=bool).mean())
+    if mask_fraction < float(min_mask_area_ratio) or mask_fraction > float(max_mask_area_ratio):
+        return image, masks, None
+
+    bbox = _bbox_from_bool_mask_or_none(mask_array)
+    if bbox is None:
+        return image, masks, None
+    left, top, right, bottom = bbox
+    box_width = max(1, right - left)
+    box_height = max(1, bottom - top)
+    margin_x = int(round(box_width * max(0.0, float(margin_ratio))))
+    margin_y = int(round(box_height * max(0.0, float(margin_ratio))))
+    left = max(0, left - margin_x)
+    top = max(0, top - margin_y)
+    right = min(width, right + margin_x)
+    bottom = min(height, bottom + margin_y)
+    if right <= left or bottom <= top:
+        return image, masks, None
+
+    crop_area_ratio = float((right - left) * (bottom - top)) / max(1.0, float(width * height))
+    if crop_area_ratio > float(max_crop_area_ratio):
+        return image, masks, None
+    if (right - left) >= width - 1 and (bottom - top) >= height - 1:
+        return image, masks, None
+
+    crop_box = (left, top, right, bottom)
+    image = image.crop(crop_box)
+    if masks is not None:
+        masks = [mask.crop(crop_box) for mask in masks]
+    return image, masks, crop_box
+
+
 class HybridImageTransform:
     def __init__(
         self,
@@ -3455,6 +3539,12 @@ class HybridImageTransform:
         lighting_probability: float = 0.15,
         illumination_normalization: bool = False,
         illumination_normalization_strength: float = 0.0,
+        foreground_crop_mode: str = "none",
+        foreground_crop_probability: float = 0.0,
+        foreground_crop_margin_ratio: float = 0.08,
+        foreground_crop_min_mask_area_ratio: float = 0.03,
+        foreground_crop_max_mask_area_ratio: float = 0.92,
+        foreground_crop_max_crop_area_ratio: float = 0.98,
         background_suppression_mode: str = "none",
         background_suppression_probability: float = 0.0,
         background_suppression_margin: float = 0.08,
@@ -3493,6 +3583,15 @@ class HybridImageTransform:
         self.scale_photometric_with_augmentation = bool(scale_photometric_with_augmentation)
         self.illumination_normalization = bool(illumination_normalization)
         self.illumination_normalization_strength = max(0.0, min(1.0, float(illumination_normalization_strength)))
+        self.foreground_crop_mode = str(foreground_crop_mode or "none").strip().lower().replace("-", "_")
+        self.foreground_crop_probability = max(0.0, min(1.0, float(foreground_crop_probability)))
+        self.foreground_crop_margin_ratio = max(0.0, float(foreground_crop_margin_ratio))
+        self.foreground_crop_min_mask_area_ratio = max(0.0, min(1.0, float(foreground_crop_min_mask_area_ratio)))
+        self.foreground_crop_max_mask_area_ratio = max(
+            self.foreground_crop_min_mask_area_ratio,
+            min(1.0, float(foreground_crop_max_mask_area_ratio)),
+        )
+        self.foreground_crop_max_crop_area_ratio = max(0.01, min(1.0, float(foreground_crop_max_crop_area_ratio)))
         self.background_suppression_mode = str(background_suppression_mode or "none").strip().lower()
         self.background_suppression_probability = max(0.0, min(1.0, float(background_suppression_probability)))
         self.background_suppression_margin = max(0.0, float(background_suppression_margin))
@@ -3703,6 +3802,32 @@ class HybridImageTransform:
                 )
         return image
 
+    def _apply_foreground_crop(
+        self,
+        image: Image.Image,
+        masks: Optional[List[Image.Image]],
+        augmentation_scale: float = 1.0,
+    ) -> Tuple[Image.Image, Optional[List[Image.Image]], Optional[Tuple[int, int, int, int]]]:
+        if self.foreground_crop_mode in {"", "none", "off", "false"}:
+            return image, masks, None
+        probability = 1.0
+        if self.train:
+            probability = min(
+                1.0,
+                self.foreground_crop_probability * math.sqrt(max(1.0, float(augmentation_scale))),
+            )
+        if probability <= 0.0 or (self.train and torch.rand(1).item() >= probability):
+            return image, masks, None
+        return _crop_to_foreground_bbox_pair(
+            image,
+            masks,
+            mode=self.foreground_crop_mode,
+            margin_ratio=self.foreground_crop_margin_ratio,
+            min_mask_area_ratio=self.foreground_crop_min_mask_area_ratio,
+            max_mask_area_ratio=self.foreground_crop_max_mask_area_ratio,
+            max_crop_area_ratio=self.foreground_crop_max_crop_area_ratio,
+        )
+
     def _apply_local_exposure_aug(self, image: Image.Image, augmentation_scale: float = 1.0) -> Image.Image:
         if not self.train or self.local_exposure_probability <= 0.0:
             return image
@@ -3875,8 +4000,18 @@ class HybridImageTransform:
         image, masks = self._apply_vertical_flip(image, masks, augmentation_scale=augmentation_scale)
         image, masks = self._apply_rotate90(image, masks, augmentation_scale=augmentation_scale)
         image, masks = self._apply_random_scale_crop(image, masks, augmentation_scale=augmentation_scale)
+        image, masks, foreground_crop_box = self._apply_foreground_crop(
+            image,
+            masks,
+            augmentation_scale=augmentation_scale,
+        )
         image, masks, meta = self._apply_resize(image, masks)
         meta["augmentation_scale"] = float(augmentation_scale)
+        meta["foreground_crop_box"] = (
+            tuple(int(value) for value in foreground_crop_box)
+            if foreground_crop_box is not None
+            else None
+        )
         image = self._apply_input_preprocess(image)
         image = self._apply_local_exposure_aug(image, augmentation_scale=augmentation_scale)
         image = self._apply_obstacle_aug(image, augmentation_scale=augmentation_scale)
@@ -4012,6 +4147,12 @@ def build_train_transform(
     randaugment_magnitude: int = 10,
     illumination_normalization: bool = False,
     illumination_normalization_strength: float = 0.0,
+    foreground_crop_mode: str = "none",
+    foreground_crop_probability: float = 0.0,
+    foreground_crop_margin_ratio: float = 0.08,
+    foreground_crop_min_mask_area_ratio: float = 0.03,
+    foreground_crop_max_mask_area_ratio: float = 0.92,
+    foreground_crop_max_crop_area_ratio: float = 0.98,
     background_suppression_mode: str = "none",
     background_suppression_probability: float = 0.0,
     background_suppression_margin: float = 0.08,
@@ -4044,6 +4185,12 @@ def build_train_transform(
         lighting_probability=lighting_probability,
         illumination_normalization=illumination_normalization,
         illumination_normalization_strength=illumination_normalization_strength,
+        foreground_crop_mode=foreground_crop_mode,
+        foreground_crop_probability=foreground_crop_probability,
+        foreground_crop_margin_ratio=foreground_crop_margin_ratio,
+        foreground_crop_min_mask_area_ratio=foreground_crop_min_mask_area_ratio,
+        foreground_crop_max_mask_area_ratio=foreground_crop_max_mask_area_ratio,
+        foreground_crop_max_crop_area_ratio=foreground_crop_max_crop_area_ratio,
         background_suppression_mode=background_suppression_mode,
         background_suppression_probability=background_suppression_probability,
         background_suppression_margin=background_suppression_margin,
@@ -4063,6 +4210,11 @@ def build_eval_transform(
     resize_mode: str = "pad",
     illumination_normalization: bool = False,
     illumination_normalization_strength: float = 0.0,
+    foreground_crop_mode: str = "none",
+    foreground_crop_margin_ratio: float = 0.08,
+    foreground_crop_min_mask_area_ratio: float = 0.03,
+    foreground_crop_max_mask_area_ratio: float = 0.92,
+    foreground_crop_max_crop_area_ratio: float = 0.98,
     background_suppression_mode: str = "none",
     background_suppression_margin: float = 0.08,
     background_suppression_blur_radius: float = 7.0,
@@ -4075,6 +4227,12 @@ def build_eval_transform(
         train=False,
         illumination_normalization=illumination_normalization,
         illumination_normalization_strength=illumination_normalization_strength,
+        foreground_crop_mode=foreground_crop_mode,
+        foreground_crop_probability=1.0,
+        foreground_crop_margin_ratio=foreground_crop_margin_ratio,
+        foreground_crop_min_mask_area_ratio=foreground_crop_min_mask_area_ratio,
+        foreground_crop_max_mask_area_ratio=foreground_crop_max_mask_area_ratio,
+        foreground_crop_max_crop_area_ratio=foreground_crop_max_crop_area_ratio,
         background_suppression_mode=background_suppression_mode,
         background_suppression_probability=1.0,
         background_suppression_margin=background_suppression_margin,
