@@ -179,3 +179,15 @@
 - [ ] Chay ablation `token_keep_rates=0.75,0.50` vs `0.85,0.65` neu v4 cham nhung khong tang F1.
 - [ ] Can nhac ablation pretrained/frozen ViT chi khi chap nhan so sanh ngang voi MobileNetV3/ViT/AIDT pretrained.
 - [ ] Export ONNX/TensorRT sau khi chot checkpoint.
+
+## Cap nhat 2026-06-25
+
+- [x] Doc `D:\deep-research-report-11-clean.md` va ghi audit hanh dong tai `docs/TRKH_DEEP_RESEARCH_11_ACTION_AUDIT_20260625.md`.
+- [x] Xac nhan huong bao cao huu ich nhat la forensic/decision-layer, counterfactual consistency va ambiguity handling; khong phai them head/loss chung chung.
+- [x] Doi chieu voi V16 `class_f`: cap loi uu tien hien tai la `0-1`, `2-3`, phu `1-2`; khong phai `3-4`.
+- [x] Chay validation-only pair calibration audit tren V16: `0-1` khong cai thien class 1; `1-2` chi tang class-1 F1 `0.6866 -> 0.6905`; chua qua gate `0.70`.
+- [x] Loai huong simple pairwise logit bias/calibration lam ung vien full train.
+- [ ] Tich hop forensic report vao evaluator/launcher chinh voi che do nhanh mac dinh va foreground mode co gioi han/cache.
+- [ ] Tao train-only ambiguous-boundary manifest tu low-margin/error-prone train predictions; uu tien cap `0-1`, `2-3`, `1-2`; khong dung val/test.
+- [ ] Thu V25 background-neutralized prediction consistency nhe, khong dung hard pseudo-mask nhu segmentation label.
+- [ ] Neu V25 smoke/probe khong dat class-1 val F1 `>=0.70`, khong gui lenh full train.
