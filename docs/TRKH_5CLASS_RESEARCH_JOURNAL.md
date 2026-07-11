@@ -14035,3 +14035,87 @@ Date: 2026-07-02
   `git diff --check`, and explicit protected-path worktree review. Current-best
   command SHA-256 remains
   `3c71813000970a9776cfde974895358be2dda214ca9d6eb0e6a89dbc31d657dd`.
+
+## Diagnostic 2026-07-12 - BioCLIP Domain Representation Rejected Before Transfer Smoke
+
+- Re-read the primary [BioCLIP CVPR 2024 paper](https://openaccess.thecvf.com/content/CVPR2024/html/Stevens_BioCLIP_A_Vision_Foundation_Model_for_the_Tree_of_Life_CVPR_2024_paper.html),
+  [official repository](https://github.com/Imageomics/bioclip), official
+  [Hugging Face release](https://huggingface.co/imageomics/bioclip), and
+  [OpenCLIP](https://github.com/mlfoundations/open_clip). This stage asks one
+  narrow question: does TreeOfLife-10M domain adaptation add a transferable
+  biological surface signal beyond a capacity- and pixel-matched OpenAI CLIP
+  control? It is a frozen diagnostic, not a proposal to replace scratch TRKH
+  with a pretrained final model.
+- Added `trkh.tools.audit_bioclip_domain_feature_readiness`, nine focused
+  tests, and locked `open_clip_torch==2.32.0`. The exact official revisions are
+  OpenAI control `977e3dd0ec55ab8da155f2fbeb6b5f54948b6e3d` and BioCLIP
+  `ce901ab3c6a913f9e9ef94ce6d27761069f4f01c`; checkpoint SHA-256 values are
+  `4b869929...02b820f` and `e380384f...5f0ef4`. Both vision towers have
+  `86,192,640` parameters, emit normalized 512D features, and use bit-identical
+  224px transforms. Loading now fails closed if either downloaded checkpoint
+  hash differs or if a non-class1 focus is requested. The official OpenAI
+  release uses QuickGELU while BioCLIP
+  uses GELU, so the comparison is capacity/pixel matched but not claimed to
+  isolate training domain from activation choice.
+- Protocol self-review caught two alignment hazards before accepting evidence.
+  `ImageFolder` numeric class IDs cannot be compared directly with YOLO IDs
+  because folder order is alphabetical; the guard now compares canonical class
+  names. Source groups are also canonicalized case-insensitively before overlap
+  checks. The final run covers all `9,215/2,606` train/validation objects and
+  `8,064/2,577` source groups, with zero train/validation and fold fit/hold
+  overlap. Test, raw-data writes, prompts, class weights, validation selection,
+  model/checkpoint output, and trainable manifests are absent.
+- BioCLIP looks mildly better only inside grouped train OOF. OpenAI versus
+  BioCLIP OOF macro/class1 is `0.832440/0.447581 -> 0.839207/0.474383`, gains
+  `+0.006767/+0.026803`, with four of five folds improving class1. The effect
+  reverses on independent validation: `0.851003/0.552448 ->
+  0.819665/0.444444`, while direct keeper remains `0.884073/0.684058`.
+  BioCLIP class1 precision/recall is only `0.467153/0.423841` versus keeper
+  `0.608247/0.781457`.
+- Full transitions reject transfer. Against keeper, BioCLIP changes 281 rows
+  with `93/169` corrections/harms, removes/creates class1 FP `49/46`, and
+  rescues/breaks only `8/62` FN/TP. BioCLIP-minus-OpenAI class1 probability does
+  show stable FN-versus-FP AUROC `0.828627/0.854911` on OOF/validation, but this
+  is a control-relative direction. It is not evidence that the same delta is a
+  valid keeper-relative action.
+- A post-audit inventory verified that
+  `runs\yolof_oof_folds_train5_20260704` contains five source-grouped hardlink
+  data splits only. There are no fold checkpoints or prediction payloads for
+  the exact current keeper, and the reusable keeper train cache is explicitly
+  in-sample. A BioCLIP residual/router fitted against those keeper probabilities
+  would therefore be protocol-invalid. The attractive domain-direction AUROC
+  does not authorize another residual, router, threshold, or distillation
+  smoke.
+- Reviewed the complete 12-row mean-occlusion contact sheet. OpenAI positive
+  class1 evidence has mean center mass `0.442268`; BioCLIP falls to `0.162520`.
+  OpenAI usually uses central fruit surface, whereas BioCLIP frequently shifts
+  evidence to fruit edges, corners, outer context, or diffuse periphery. It can
+  rescue isolated class1 cases but breaks many real class1 examples and creates
+  class1 predictions on yellow/overripe fruit. The learned bias is consistent
+  with organism taxonomy/shape, not a stable mango-ripeness interior-surface
+  cue.
+- Decision: nine fixed checks fail and
+  `representation_transfer_smoke_permission=false`. Do not sweep BioCLIP
+  versions/image sizes, prompts, readout C/class weights/folds, residual
+  coefficients, routers/validation thresholds, or feature-distillation
+  adapters. Reopen only after true source-grouped current-keeper OOF
+  predictions exist and a fixed train-only keeper-relative action independently
+  preserves validation class1 recall.
+- Final evidence remains at
+  `runs\diagnostic_bioclip_domain_feature_full_20260712`: nine payloads,
+  `5,908,596` bytes, manifest SHA-256
+  `3ebb6b8a0f90e96ceb0908d0fa005e97c2b964450caeaeb97893f3ad7ec4b1c1`,
+  no model/checkpoint/test payload. Guarded cleanup
+  `runs\cleanup_manifest_20260712_bioclip_embedding_cache_rejected.json`
+  removed only the reproducible 34,215,279-byte feature matrix, with observed
+  free-space gain `34,140,160` bytes. Retention
+  `runs\artifact_retention_audit_after_bioclip_domain_cleanup_20260712` passed
+  over 574 directories with `blockers=[]`. Keeper and current-best command are
+  unchanged; command SHA-256 remains
+  `3c71813000970a9776cfde974895358be2dda214ca9d6eb0e6a89dbc31d657dd`.
+- Closure passed py-compile, compileall, focused BioCLIP tests `9/9`, complete
+  pytest `697/697`, JSON/payload-hash verification, `git diff --check`, and
+  explicit protected-path review. No full train, test evaluation, deploy
+  pointer, or current-best command update was permitted. `pip check` reports
+  only the already documented shared-environment MambaVision pin mismatches and
+  OpenCV's NumPy>=2 requirement; OpenCLIP introduced no additional conflict.

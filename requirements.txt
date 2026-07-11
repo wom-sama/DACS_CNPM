@@ -7,6 +7,7 @@ torchvision==0.21.0
 tqdm
 scipy==1.13.1
 scikit-image==0.24.0
+open_clip_torch==2.32.0
 pytest==8.4.2
 cleanlab==2.7.1
 kymatio==0.3.0
