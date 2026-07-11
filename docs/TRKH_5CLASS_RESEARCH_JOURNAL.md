@@ -13162,3 +13162,19 @@ Date: 2026-07-02
   research runtime`): 275 files, `+105,611/-6,030`. Worktree status entries
   fell from 302 to 28 with an empty index. No behavior, dataset, checkpoint,
   selected recipe, or current-best command was changed by the commit itself.
+- Batch 02 selected the remaining 21 TRKH documentation paths and continued to
+  exclude the five `BaoCao/*` files plus root reports 9/10. UTF-8, conflict,
+  relative-link, companion-hash, ZIP entry, and all 266 payload stream hashes
+  passed. Reports 14/15 matched their archived copies byte-for-byte. The only
+  raw `git diff --check` findings were 15 intentional Markdown hard breaks in
+  the verbatim imported report 15; all non-source whitespace findings were
+  fixed before commit.
+- Created documentation commit
+  `7548c1f72ad7837d0adbb10b99bc3be4f81cdef9` (`docs: preserve TRKH research
+  evidence and hygiene record`): 21 files and 18,990 added lines, including the
+  8.537 MiB verified reference pack. Worktree entries fell from 28 to the seven
+  explicitly protected untracked files, with an empty index.
+- Pushed both commits to `origin/classification-only-research` and independently
+  resolved the remote ref. Local and remote heads matched at `7548c1f`, with
+  ahead/behind `0/0`. GitHub therefore contains the verified runtime, VS Code
+  commands, current research records, reports 14/15, and reference pack.

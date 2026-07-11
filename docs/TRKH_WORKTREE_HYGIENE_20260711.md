@@ -76,3 +76,19 @@ passes the independent locked-validation promotion gate.
   `+105,611/-6,030`.
 - Result: worktree entries `302 -> 28`, staged entries `0`. Research docs and
   unclear user-owned files remained outside the index.
+
+### Batch 02 - Research evidence and documentation
+
+- Scope: 21 explicit paths under `docs`; all `BaoCao/*` and root reports 9/10
+  remained excluded.
+- Verification: UTF-8/conflict/relative-link checks passed; ZIP companion hash
+  matched; all 266 payload stream hashes and 267 entries passed; reports 14/15
+  matched their embedded copies byte-for-byte. Fifteen intentional Markdown
+  hard breaks in verbatim report 15 were the complete whitespace allowlist.
+- Commit: `7548c1f72ad7837d0adbb10b99bc3be4f81cdef9`, 21 files and 18,990 added
+  lines.
+- Push: local and `origin/classification-only-research` both resolved to
+  `7548c1f`; ahead/behind `0/0`.
+- Result: seven deliberately protected untracked paths remain, staged entries
+  `0`. They are not deleted, ignored, staged, or reclassified without a later
+  ownership decision.
