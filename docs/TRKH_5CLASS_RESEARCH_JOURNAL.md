@@ -14223,3 +14223,49 @@ Date: 2026-07-02
   `717/717`, artifact/cleanup/retention hash verification, staged
   `git diff --check`, and explicit protected-path review. Keeper and current-best
   command SHA values remain unchanged.
+
+## Diagnostic 2026-07-12 - Original-Resolution Surface Tiles Rejected
+
+- No-repeat architecture triage rejected a blind FastViT-SA12 launch. Local
+  `timm 1.0.27` defines layers `2/2/6/2`, RepMixer in the first three stages,
+  attention only in the last stage, and default RepMixer kernel 3. It is another
+  staged stock hybrid after the controlled stock-backbone closure, not a new
+  class1-positive target.
+- The retained hypothesis tested whether the keeper's 256 px global crop loses
+  local source-resolution evidence. The fixed no-test tool uses exact global
+  checkpoint preprocessing plus five 70%-scale original-resolution bbox-crop
+  tiles. Bbox/crop-bbox/valid-mask/token-prior metadata remain aligned; no model,
+  threshold, or weight is fitted. Fixed fusion is equal global/tile-mean
+  probability averaging.
+- Full coverage is `9215/2606` rows and `8064/2577` source groups with zero
+  train/validation overlap. Global validation reproduces keeper macro/class1
+  `0.884675/0.686046`; tile mean reaches only `0.862581/0.629080`, and fixed
+  fusion falls to `0.880824/0.666667`, class1 P/R `0.601064/0.748344`.
+- Fusion changes 48 validation decisions: 21 corrections, 24 harms, and 3
+  neutral changes. It removes/creates class1 FP `10/10`, rescues/breaks FN/TP
+  `0/5`, and fails six behavioral gates. Core smoke permission is false.
+- Tile-minus-global p1 direction is stable but non-actionable: FN-vs-FP AUROC
+  is `0.844347/0.840000` train/validation, while mean FN/FP deltas are
+  `+0.003567/-0.034688` and `+0.011426/-0.029362`. A fixed matched binary
+  readout sanity check remains below keeper (`0.869291/0.640212` validation),
+  so the AUROC does not authorize a router or residual.
+- Contact-sheet review shows correct geometry and magnified fruit surface,
+  spots, color transitions, lesions, glare, stems, and crop context, but no
+  stable class1-positive tile. Only `9.27%` of validation class1 crops have raw
+  minimum side at least 384 px, and class1 FN are not concentrated in small
+  crops. Global resize loss is not the missing signal.
+- Decision: do not sweep tile fraction/positions/count, fusion weight, image
+  size, crop thresholds, or tile routers. A next local route must change the
+  spatial objective itself; Finer-CAM-style target-versus-confuser attribution
+  is distinct enough for a locked no-test readiness audit before training.
+- Evidence `runs\diagnostic_highres_surface_tiles_full_20260712` contains eight
+  payloads (`8462921` bytes), SHA
+  `010d368e87ab3214a5b1f09f0bcc048032890e5c8663bc901a191a85e0760de2`,
+  no model/checkpoint/test. The superseded preflight was deleted after full
+  preservation. Its cleanup manifest retains an explicit PowerShell 5.1
+  provenance warning because the first hash-capture script used an unavailable
+  API; no hashes were fabricated.
+- Closure passed py-compile, compileall, focused tests `7/7`, full pytest
+  `724/724`, stable payload-manifest verification, and retention across 580
+  run directories with `blockers=[]`. Keeper and current-best command hashes
+  remain unchanged.
