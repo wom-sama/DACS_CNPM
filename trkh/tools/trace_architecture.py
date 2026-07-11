@@ -15,8 +15,11 @@ from trkh.core.config import IMAGENET_MEAN, IMAGENET_STD, ModelConfig, load_data
 from trkh.core.utils import load_checkpoint
 from trkh.data.dataset import (
     ClassificationFolderDataset,
+    MangoYOLOCropDataset,
+    _amplify_surface_detail_image,
     _normalize_illumination_image,
     _pseudo_foreground_mask_array,
+    _surface_detail_foreground_mask_array,
     build_eval_transform,
 )
 from trkh.models.model import (
@@ -87,6 +90,8 @@ def _proposed_model_config(image_size: int) -> ModelConfig:
         token_prune_layers="2,5",
         token_keep_rates="0.75,0.50",
         token_prune_foreground_weight=0.35,
+        token_prune_bbox_weight=0.0,
+        token_prune_bbox_margin_ratio=0.04,
         embed_dim=256,
         depth=8,
         num_heads=8,
@@ -162,6 +167,30 @@ def _overlay_foreground_mask(image: Image.Image, mask: np.ndarray) -> Image.Imag
     return canvas.convert("RGB")
 
 
+def _overlay_normalized_box(
+    image: Image.Image,
+    box: Sequence[float],
+    *,
+    outline: Tuple[int, int, int] = (255, 190, 30),
+    width: int = 3,
+) -> Image.Image:
+    if len(box) != 4:
+        return image.copy()
+    x0, y0, x1, y1 = [float(value) for value in box]
+    left = int(round(x0 * image.width))
+    top = int(round(y0 * image.height))
+    right = int(round(x1 * image.width))
+    bottom = int(round(y1 * image.height))
+    left = max(0, min(image.width - 1, left))
+    top = max(0, min(image.height - 1, top))
+    right = max(left + 1, min(image.width, right))
+    bottom = max(top + 1, min(image.height, bottom))
+    canvas = image.copy().convert("RGB")
+    draw = ImageDraw.Draw(canvas)
+    draw.rectangle((left, top, right, bottom), outline=outline, width=width)
+    return canvas
+
+
 def _scatter_patch_values(
     indices: torch.Tensor,
     values: torch.Tensor,
@@ -201,6 +230,21 @@ def main() -> None:
         raw_train_config = checkpoint.get("train_config", {})
         if isinstance(raw_train_config, dict):
             train_config = raw_train_config
+    if checkpoint is not None:
+        raw_model_config = checkpoint.get("model_config", {})
+        model_config_for_dataset = (
+            raw_model_config
+            if isinstance(raw_model_config, dict)
+            else to_serializable(raw_model_config)
+        )
+        if not isinstance(model_config_for_dataset, dict):
+            model_config_for_dataset = {}
+    else:
+        model_config_for_dataset = to_serializable(
+            _proposed_model_config(int(args.image_size))
+        )
+        if not isinstance(model_config_for_dataset, dict):
+            model_config_for_dataset = {}
 
     transform = build_eval_transform(
         image_size=int(args.image_size),
@@ -225,17 +269,76 @@ def main() -> None:
         background_suppression_blur_radius=float(
             augmentation_config.get("background_suppression_blur_radius", 7.0) or 7.0
         ),
+        surface_detail_amplification_mode=str(
+            augmentation_config.get("surface_detail_amplification_mode", "none") or "none"
+        ),
+        surface_detail_amplification_strength=float(
+            augmentation_config.get("surface_detail_amplification_strength", 0.0) or 0.0
+        ),
+        surface_detail_amplification_blur_radius=float(
+            augmentation_config.get("surface_detail_amplification_blur_radius", 1.25) or 1.25
+        ),
+        surface_detail_amplification_foreground_weight=float(
+            augmentation_config.get("surface_detail_amplification_foreground_weight", 0.85) or 0.85
+        ),
+        eval_surface_detail_amplification=bool(
+            augmentation_config.get("eval_surface_detail_amplification", False)
+        ),
     )
     raw_transform = build_eval_transform(
         image_size=int(args.image_size),
         resize_mode=str(augmentation_config.get("resize_mode", "pad") or "pad"),
     )
-    dataset = ClassificationFolderDataset.from_data_spec(
-        data_spec=data_spec,
-        split="train",
-        transform=transform,
-        class_aware_augmentation=False,
-    )
+    classification_source_context = bool(augmentation_config.get("classification_source_context", False))
+    if data_spec.data_format == "classification_folder":
+        dataset = ClassificationFolderDataset.from_data_spec(
+            data_spec=data_spec,
+            split="train",
+            transform=transform,
+            class_aware_augmentation=False,
+        )
+    else:
+        dataset = MangoYOLOCropDataset.from_data_spec(
+            data_spec=data_spec,
+            split="train",
+            transform=transform,
+            crop_margin_ratio=float(
+                augmentation_config.get("crop_margin_ratio", 0.05) or 0.05
+            ),
+            crop_to_primary_object=not classification_source_context,
+            classification_target=True,
+            classification_object_crops=True,
+            class_aware_augmentation=False,
+            classification_source_context=classification_source_context,
+            classification_source_context_mode=str(
+                augmentation_config.get("classification_source_context_mode", "desaturate_blur")
+                or "desaturate_blur"
+            ),
+            classification_source_context_layout=str(
+                augmentation_config.get("classification_source_context_layout", "full")
+                or "full"
+            ),
+            classification_source_context_margin_ratio=float(
+                augmentation_config.get("classification_source_context_margin_ratio", 0.12)
+                or 0.12
+            ),
+            classification_source_context_background_alpha=float(
+                augmentation_config.get("classification_source_context_background_alpha", 0.35)
+                or 0.35
+            ),
+            classification_source_context_blur_radius=float(
+                augmentation_config.get("classification_source_context_blur_radius", 7.0)
+                or 7.0
+            ),
+            classification_source_context_inset_scale=float(
+                augmentation_config.get("classification_source_context_inset_scale", 0.34)
+                or 0.34
+            ),
+            classification_bbox_metadata=bool(
+                model_config_for_dataset.get("bbox_spatial_fusion", False)
+                or train_config.get("bbox_token_prior_source", "bbox") == "crop_bbox"
+            ),
+        )
     class_to_indices: Dict[int, List[int]] = {index: [] for index in range(data_spec.num_classes)}
     for sample_index, label in enumerate(dataset.labels()):
         class_to_indices[int(label)].append(int(sample_index))
@@ -258,7 +361,7 @@ def main() -> None:
             num_classes=data_spec.num_classes,
             override_image_size=int(args.image_size),
         )
-        model_config = checkpoint.get("model_config", {})
+        model_config = model_config_for_dataset
         weights_description = str(checkpoint_path)
     else:
         model_config = _proposed_model_config(int(args.image_size))
@@ -272,7 +375,12 @@ def main() -> None:
     for class_index, class_name in enumerate(data_spec.class_names):
         sample_index = random.choice(class_to_indices[class_index])
         sample = dataset.samples[sample_index]
-        tensor, label = dataset[sample_index]
+        sample_item = dataset[sample_index]
+        if len(sample_item) == 3:
+            tensor, label, sample_metadata = sample_item
+        else:
+            tensor, label = sample_item
+            sample_metadata = {}
         input_image = _tensor_to_image(tensor)
         with Image.open(sample.image_path) as source:
             original = source.convert("RGB").copy()
@@ -303,12 +411,46 @@ def main() -> None:
             illumination_image,
             margin=float(augmentation_config.get("background_suppression_margin", 0.08) or 0.08),
         )
+        surface_detail_mask = _surface_detail_foreground_mask_array(
+            illumination_image,
+            margin=float(augmentation_config.get("background_suppression_margin", 0.08) or 0.08),
+        )
+        surface_detail_image = _amplify_surface_detail_image(
+            illumination_image,
+            mode=str(augmentation_config.get("surface_detail_amplification_mode", "none") or "none"),
+            strength=float(augmentation_config.get("surface_detail_amplification_strength", 0.0) or 0.0),
+            blur_radius=float(
+                augmentation_config.get("surface_detail_amplification_blur_radius", 1.25) or 1.25
+            ),
+            foreground_margin=float(
+                augmentation_config.get("background_suppression_margin", 0.08) or 0.08
+            ),
+            foreground_weight=float(
+                augmentation_config.get("surface_detail_amplification_foreground_weight", 0.85) or 0.85
+            ),
+        )
         model_input = tensor.unsqueeze(0).to(device)
         with torch.inference_mode():
+            bbox_value = sample_metadata.get("bbox") if isinstance(sample_metadata, dict) else None
+            crop_bbox_value = sample_metadata.get("crop_bbox") if isinstance(sample_metadata, dict) else None
+            bbox_token_prior = (
+                bbox_value.unsqueeze(0).to(device=device, dtype=torch.float32)
+                if torch.is_tensor(bbox_value)
+                else None
+            )
+            if (
+                str(train_config.get("bbox_token_prior_source", "bbox") or "bbox").strip().lower()
+                == "crop_bbox"
+                and torch.is_tensor(crop_bbox_value)
+            ):
+                bbox_token_prior = crop_bbox_value.unsqueeze(0).to(device=device, dtype=torch.float32)
             features = model.forward_features(
                 model_input,
+                bbox_token_prior=bbox_token_prior,
                 return_trace=True,
             )
+            if torch.is_tensor(bbox_value):
+                features["bbox"] = bbox_value.unsqueeze(0).to(device=device, dtype=torch.float32)
             classification_logits_from_features(model, features)
             attention_score = _attention_guided_score_map(
                 images=model_input,
@@ -368,11 +510,20 @@ def main() -> None:
         _overlay_foreground_mask(illumination_image, foreground_mask).save(
             class_dir / "01c_foreground_mask_overlay.png"
         )
+        _overlay_foreground_mask(illumination_image, surface_detail_mask).save(
+            class_dir / "01d_surface_detail_mask_overlay.png"
+        )
+        surface_detail_image.save(class_dir / "01e_surface_detail_amplified.png")
         input_image.save(class_dir / "01_model_input.png")
         stem = trace["stem_activation"][0, 0]
         _heatmap_image(stem, input_image.size).save(class_dir / "02_stem_activation.png")
         patch_norm = trace["patch_token_norm"][0].view(grid_size)
         _heatmap_image(patch_norm, input_image.size).save(class_dir / "03_patch_embedding_norm.png")
+        shifted_patch_norm = trace.get("shifted_patch_residual_norm")
+        if torch.is_tensor(shifted_patch_norm):
+            _heatmap_image(shifted_patch_norm[0].view(grid_size), input_image.size).save(
+                class_dir / "03b_shifted_patch_residual_norm.png"
+            )
         detail_map = trace.get("detail_map")
         if torch.is_tensor(detail_map):
             _heatmap_image(detail_map[0, 0], input_image.size).save(class_dir / "04_detail_map.png")
@@ -394,7 +545,43 @@ def main() -> None:
         for filename, trace_key in surface_map_specs:
             surface_map = trace.get(trace_key)
             if torch.is_tensor(surface_map):
-                _heatmap_image(surface_map[0], input_image.size).save(class_dir / filename)
+                heatmap_tensor = surface_map[0]
+                if heatmap_tensor.ndim == 3:
+                    heatmap_tensor = heatmap_tensor[0]
+                _heatmap_image(heatmap_tensor, input_image.size).save(class_dir / filename)
+        interior_boundary_map_specs = (
+            ("09s_interior_boundary_foreground_mask.png", "interior_boundary_foreground_mask"),
+            ("09t_interior_boundary_interior_mask.png", "interior_boundary_interior_mask"),
+            ("09u_interior_boundary_boundary_mask.png", "interior_boundary_boundary_mask"),
+            ("09v0_interior_boundary_bbox_mask.png", "interior_boundary_bbox_mask"),
+            (
+                "09v_interior_boundary_interior_weight.png",
+                "interior_boundary_interior_weight_map",
+            ),
+            (
+                "09w_interior_boundary_boundary_weight.png",
+                "interior_boundary_boundary_weight_map",
+            ),
+            (
+                "09x_interior_boundary_boundary_edge.png",
+                "interior_boundary_boundary_edge_detail",
+            ),
+            (
+                "09y_interior_boundary_dark_spot.png",
+                "interior_boundary_interior_dark_spot",
+            ),
+            (
+                "09z_interior_boundary_boundary_brown.png",
+                "interior_boundary_boundary_brown_spot",
+            ),
+        )
+        for filename, trace_key in interior_boundary_map_specs:
+            interior_map = trace.get(trace_key)
+            if torch.is_tensor(interior_map):
+                heatmap_tensor = interior_map[0]
+                if heatmap_tensor.ndim == 3:
+                    heatmap_tensor = heatmap_tensor[0]
+                _heatmap_image(heatmap_tensor, input_image.size).save(class_dir / filename)
         bilinear_attention = trace.get("bilinear_patch_attention")
         if torch.is_tensor(bilinear_attention):
             bilinear_map = _scatter_patch_values(
@@ -415,6 +602,135 @@ def main() -> None:
             _heatmap_image(frequency_vote_map, input_image.size).save(
                 class_dir / "09h_frequency_selective_votes.png"
             )
+        micro_detail_attention = trace.get("micro_detail_attention")
+        if torch.is_tensor(micro_detail_attention):
+            micro_detail_map = _scatter_patch_values(
+                features["patch_indices"][0],
+                micro_detail_attention[0],
+                grid_size,
+            )
+            _heatmap_image(micro_detail_map, input_image.size).save(
+                class_dir / "09i_micro_detail_attention.png"
+            )
+        patch_objectness_attention = trace.get("patch_objectness_attention")
+        if torch.is_tensor(patch_objectness_attention):
+            patch_objectness_map = _scatter_patch_values(
+                features["patch_indices"][0],
+                patch_objectness_attention[0],
+                grid_size,
+            )
+            _heatmap_image(patch_objectness_map, input_image.size).save(
+                class_dir / "09i1_patch_objectness_attention.png"
+            )
+        patch_objectness_probability = trace.get("patch_objectness_probability")
+        if torch.is_tensor(patch_objectness_probability):
+            patch_objectness_probability_map = _scatter_patch_values(
+                features["patch_indices"][0],
+                patch_objectness_probability[0],
+                grid_size,
+            )
+            _heatmap_image(patch_objectness_probability_map, input_image.size).save(
+                class_dir / "09i2_patch_objectness_probability.png"
+            )
+        bbox_context_object_attention = trace.get("bbox_prior_patch_object_attention")
+        if torch.is_tensor(bbox_context_object_attention):
+            bbox_context_object_map = _scatter_patch_values(
+                features["patch_indices"][0],
+                bbox_context_object_attention[0],
+                grid_size,
+            )
+            _heatmap_image(bbox_context_object_map, input_image.size).save(
+                class_dir / "09i3_bbox_prior_object_attention.png"
+            )
+        bbox_context_background_attention = trace.get(
+            "bbox_prior_patch_background_attention"
+        )
+        if torch.is_tensor(bbox_context_background_attention):
+            bbox_context_background_map = _scatter_patch_values(
+                features["patch_indices"][0],
+                bbox_context_background_attention[0],
+                grid_size,
+            )
+            _heatmap_image(bbox_context_background_map, input_image.size).save(
+                class_dir / "09i4_bbox_prior_background_attention.png"
+            )
+        part_token_attention = trace.get("part_token_attention")
+        if torch.is_tensor(part_token_attention) and part_token_attention.ndim == 3:
+            part_mean_map = _scatter_patch_values(
+                features["patch_indices"][0],
+                part_token_attention[0].mean(dim=0),
+                grid_size,
+            )
+            _heatmap_image(part_mean_map, input_image.size).save(
+                class_dir / "09q_part_token_attention_mean.png"
+            )
+            part_count = int(part_token_attention.size(1))
+            for part_index in range(part_count):
+                part_map = _scatter_patch_values(
+                    features["patch_indices"][0],
+                    part_token_attention[0, part_index],
+                    grid_size,
+                )
+                _heatmap_image(part_map, input_image.size).save(
+                    class_dir / f"09q_part_token_{part_index + 1:02d}_attention.png"
+                )
+        part_token_pairwise_attention = trace.get("part_token_pairwise_attention")
+        if torch.is_tensor(part_token_pairwise_attention) and part_token_pairwise_attention.ndim == 3:
+            part_pairwise_mean_map = _scatter_patch_values(
+                features["patch_indices"][0],
+                part_token_pairwise_attention[0].mean(dim=0),
+                grid_size,
+            )
+            _heatmap_image(part_pairwise_mean_map, input_image.size).save(
+                class_dir / "09r_part_token_pairwise_attention_mean.png"
+            )
+            part_pairwise_count = int(part_token_pairwise_attention.size(1))
+            for part_index in range(part_pairwise_count):
+                part_pairwise_map = _scatter_patch_values(
+                    features["patch_indices"][0],
+                    part_token_pairwise_attention[0, part_index],
+                    grid_size,
+                )
+                _heatmap_image(part_pairwise_map, input_image.size).save(
+                    class_dir
+                    / f"09r_part_token_pairwise_{part_index + 1:02d}_attention.png"
+                )
+        local_zoom_score = trace.get("local_zoom_score_map")
+        if torch.is_tensor(local_zoom_score):
+            _heatmap_image(local_zoom_score[0, 0], input_image.size).save(
+                class_dir / "09j_local_zoom_score.png"
+            )
+        local_zoom_boxes = trace.get("local_zoom_crop_boxes")
+        if torch.is_tensor(local_zoom_boxes):
+            _overlay_normalized_box(
+                input_image,
+                local_zoom_boxes[0].detach().cpu().tolist(),
+            ).save(class_dir / "09k_local_zoom_crop_box.png")
+        high_frequency_maps = (
+            ("09l_high_frequency_high_pass.png", "high_frequency_texture_high_pass"),
+            ("09m_high_frequency_gradient.png", "high_frequency_texture_gradient"),
+            ("09n_high_frequency_laplacian.png", "high_frequency_texture_laplacian"),
+            (
+                "09o_high_frequency_foreground_detail.png",
+                "high_frequency_texture_foreground_detail",
+            ),
+            (
+                "09p_high_frequency_foreground_weight.png",
+                "high_frequency_texture_foreground_weight",
+            ),
+        )
+        for filename, trace_key in high_frequency_maps:
+            high_frequency_map = trace.get(trace_key)
+            if torch.is_tensor(high_frequency_map):
+                _heatmap_image(high_frequency_map[0, 0], input_image.size).save(
+                    class_dir / filename
+                )
+        concurrent_local_activation = trace.get("concurrent_local_activation")
+        if torch.is_tensor(concurrent_local_activation):
+            _heatmap_image(
+                concurrent_local_activation[0, 0],
+                input_image.size,
+            ).save(class_dir / "03c_concurrent_local_activation.png")
 
         block_shapes = trace["block_token_shapes"]
         block_indices = trace["block_patch_indices"]
@@ -424,6 +740,18 @@ def main() -> None:
             _heatmap_image(block_map, input_image.size).save(
                 class_dir / f"block_{block_index:02d}_token_norm.png"
             )
+        relative_position_layers = trace.get("relative_position_attention_layers")
+        relative_position_center_maps = trace.get("relative_position_attention_center_map")
+        if torch.is_tensor(relative_position_layers) and torch.is_tensor(
+            relative_position_center_maps
+        ):
+            for layer, center_map in zip(
+                relative_position_layers.detach().cpu().tolist(),
+                relative_position_center_maps,
+            ):
+                _heatmap_image(center_map.view(grid_size), input_image.size).save(
+                    class_dir / f"07b_relative_position_layer_{int(layer):02d}_center.png"
+                )
 
         pruning_records = []
         for prune_index, prune_info in enumerate(trace["pruning"], start=1):
@@ -447,6 +775,7 @@ def main() -> None:
             "source_image": str(sample.image_path.resolve()),
             "foreground_crop_box": transform_meta.get("foreground_crop_box"),
             "foreground_mask_fraction": float(foreground_mask.mean()),
+            "surface_detail_mask_fraction": float(surface_detail_mask.mean()),
             "attention_drop_area_fraction": float(
                 attention_drop_mask.float().mean().item()
             ),
@@ -460,15 +789,105 @@ def main() -> None:
             "grid_size": list(grid_size),
             "pruning": pruning_records,
         }
+        shifted_patch_norm = trace.get("shifted_patch_residual_norm")
+        if torch.is_tensor(shifted_patch_norm):
+            record["shifted_patch_residual_norm_mean"] = float(
+                shifted_patch_norm[0].float().mean().item()
+            )
+            record["shifted_patch_residual_norm_max"] = float(
+                shifted_patch_norm[0].float().max().item()
+            )
+        if torch.is_tensor(relative_position_layers):
+            record["relative_position_attention_layers"] = [
+                int(value) for value in relative_position_layers.detach().cpu().tolist()
+            ]
+            for trace_key, record_key in (
+                ("relative_position_attention_gate", "relative_position_attention_gate"),
+                (
+                    "relative_position_attention_raw_gate",
+                    "relative_position_attention_raw_gate",
+                ),
+                (
+                    "relative_position_attention_position_distance",
+                    "relative_position_attention_position_distance",
+                ),
+                (
+                    "relative_position_attention_content_distance",
+                    "relative_position_attention_content_distance",
+                ),
+                (
+                    "relative_position_attention_mixed_distance",
+                    "relative_position_attention_mixed_distance",
+                ),
+                (
+                    "relative_position_attention_local_mass",
+                    "relative_position_attention_local_mass",
+                ),
+            ):
+                values = trace.get(trace_key)
+                if torch.is_tensor(values):
+                    record[record_key] = values.detach().cpu().float().tolist()
+        concurrent_layers = trace.get("concurrent_local_global_layers")
+        if torch.is_tensor(concurrent_layers):
+            record["concurrent_local_global_layers"] = [
+                int(value) for value in concurrent_layers.detach().cpu().tolist()
+            ]
+            for trace_key, record_key in (
+                ("concurrent_local_state_norm", "concurrent_local_state_norm"),
+                ("concurrent_token_residual_norm", "concurrent_token_residual_norm"),
+                ("concurrent_token_to_local_scale", "concurrent_token_to_local_scale"),
+                ("concurrent_local_update_scale", "concurrent_local_update_scale"),
+                ("concurrent_local_to_token_scale", "concurrent_local_to_token_scale"),
+            ):
+                values = trace.get(trace_key)
+                if torch.is_tensor(values):
+                    record[record_key] = values[0].detach().cpu().float().tolist()
+            if torch.is_tensor(concurrent_local_activation):
+                record["concurrent_local_activation_shape"] = list(
+                    concurrent_local_activation.shape
+                )
         surface_stats = trace.get("foreground_surface_stats")
         if torch.is_tensor(surface_stats):
             record["foreground_surface_stats_shape"] = list(surface_stats.shape)
+        surface_pairwise_stats = trace.get("foreground_surface_pairwise_stats")
+        if torch.is_tensor(surface_pairwise_stats):
+            record["foreground_surface_pairwise_stats_shape"] = list(
+                surface_pairwise_stats.shape
+            )
         surface_weight_map = trace.get("foreground_surface_weight_map")
         if torch.is_tensor(surface_weight_map):
             record["foreground_surface_weight_map_shape"] = list(surface_weight_map.shape)
         surface_mask = trace.get("foreground_surface_mask")
         if torch.is_tensor(surface_mask):
             record["foreground_surface_mask_shape"] = list(surface_mask.shape)
+        interior_boundary_stats = trace.get("interior_boundary_pairwise_stats")
+        if torch.is_tensor(interior_boundary_stats):
+            record["interior_boundary_pairwise_stats_shape"] = list(
+                interior_boundary_stats.shape
+            )
+        interior_boundary_foreground = trace.get("interior_boundary_foreground_mask")
+        if torch.is_tensor(interior_boundary_foreground):
+            record["interior_boundary_foreground_mask_shape"] = list(
+                interior_boundary_foreground.shape
+            )
+            record["interior_boundary_foreground_fraction"] = float(
+                interior_boundary_foreground[0].detach().cpu().float().mean().item()
+            )
+        interior_boundary_interior = trace.get("interior_boundary_interior_mask")
+        if torch.is_tensor(interior_boundary_interior):
+            record["interior_boundary_interior_fraction"] = float(
+                interior_boundary_interior[0].detach().cpu().float().mean().item()
+            )
+        interior_boundary_boundary = trace.get("interior_boundary_boundary_mask")
+        if torch.is_tensor(interior_boundary_boundary):
+            record["interior_boundary_boundary_fraction"] = float(
+                interior_boundary_boundary[0].detach().cpu().float().mean().item()
+            )
+        interior_boundary_bbox_mask = trace.get("interior_boundary_bbox_mask")
+        if torch.is_tensor(interior_boundary_bbox_mask):
+            record["interior_boundary_bbox_fraction"] = float(
+                interior_boundary_bbox_mask[0].detach().cpu().float().mean().item()
+            )
         bilinear_descriptor = trace.get("bilinear_patch_descriptor")
         if torch.is_tensor(bilinear_descriptor):
             record["bilinear_patch_descriptor_shape"] = list(bilinear_descriptor.shape)
@@ -489,11 +908,327 @@ def main() -> None:
             record["frequency_selective_foreground_vote_mass"] = float(
                 frequency_votes[0][kept_foreground_prior >= 0.5].sum().item()
             )
+        micro_detail_descriptor = trace.get("micro_detail_descriptor")
+        if torch.is_tensor(micro_detail_descriptor):
+            record["micro_detail_descriptor_shape"] = list(micro_detail_descriptor.shape)
+        if torch.is_tensor(micro_detail_attention):
+            record["micro_detail_attention_shape"] = list(micro_detail_attention.shape)
+            record["micro_detail_attention_sum"] = float(
+                micro_detail_attention[0].sum().item()
+            )
+        micro_detail_selected = trace.get("micro_detail_selected_indices")
+        if torch.is_tensor(micro_detail_selected):
+            record["micro_detail_selected_indices"] = [
+                int(value)
+                for value in micro_detail_selected[0].detach().cpu().tolist()
+            ]
+        micro_detail_route_weights = trace.get("micro_detail_route_weights")
+        if torch.is_tensor(micro_detail_route_weights):
+            record["micro_detail_route_weight"] = float(
+                micro_detail_route_weights[0].detach().cpu().item()
+            )
+        patch_objectness_descriptor = trace.get("patch_objectness_descriptor")
+        if torch.is_tensor(patch_objectness_descriptor):
+            record["patch_objectness_descriptor_shape"] = list(
+                patch_objectness_descriptor.shape
+            )
+        if torch.is_tensor(patch_objectness_attention):
+            record["patch_objectness_attention_shape"] = list(
+                patch_objectness_attention.shape
+            )
+            record["patch_objectness_attention_sum"] = float(
+                patch_objectness_attention[0].detach().cpu().float().sum().item()
+            )
+        patch_objectness_logits = trace.get("patch_objectness_logits")
+        if torch.is_tensor(patch_objectness_logits):
+            record["patch_objectness_logits_shape"] = list(patch_objectness_logits.shape)
+            record["patch_objectness_logit_mean"] = float(
+                patch_objectness_logits[0].detach().cpu().float().mean().item()
+            )
+        if torch.is_tensor(patch_objectness_probability):
+            patch_objectness_prob_cpu = (
+                patch_objectness_probability[0].detach().cpu().float()
+            )
+            record["patch_objectness_probability_shape"] = list(
+                patch_objectness_probability.shape
+            )
+            record["patch_objectness_probability_max"] = float(
+                patch_objectness_prob_cpu.max().item()
+            )
+            record["patch_objectness_probability_mean"] = float(
+                patch_objectness_prob_cpu.mean().item()
+            )
+        patch_objectness_stats = trace.get("patch_objectness_stats")
+        if torch.is_tensor(patch_objectness_stats):
+            record["patch_objectness_stats"] = [
+                float(value)
+                for value in patch_objectness_stats[0].detach().cpu().float().tolist()
+            ]
+        bbox_context_descriptor = trace.get("bbox_prior_patch_descriptor")
+        if torch.is_tensor(bbox_context_descriptor):
+            record["bbox_prior_patch_descriptor_shape"] = list(
+                bbox_context_descriptor.shape
+            )
+        bbox_context_object_attention = trace.get("bbox_prior_patch_object_attention")
+        if torch.is_tensor(bbox_context_object_attention):
+            object_attention_cpu = (
+                bbox_context_object_attention[0].detach().cpu().float()
+            )
+            record["bbox_prior_patch_object_attention_shape"] = list(
+                bbox_context_object_attention.shape
+            )
+            record["bbox_prior_patch_object_attention_sum"] = float(
+                object_attention_cpu.sum().item()
+            )
+            record["bbox_prior_patch_object_attention_max"] = float(
+                object_attention_cpu.max().item()
+            )
+        bbox_context_background_attention = trace.get(
+            "bbox_prior_patch_background_attention"
+        )
+        if torch.is_tensor(bbox_context_background_attention):
+            background_attention_cpu = (
+                bbox_context_background_attention[0].detach().cpu().float()
+            )
+            record["bbox_prior_patch_background_attention_shape"] = list(
+                bbox_context_background_attention.shape
+            )
+            record["bbox_prior_patch_background_attention_sum"] = float(
+                background_attention_cpu.sum().item()
+            )
+            record["bbox_prior_patch_background_attention_max"] = float(
+                background_attention_cpu.max().item()
+            )
+        bbox_context_stats = trace.get("bbox_prior_patch_stats")
+        if torch.is_tensor(bbox_context_stats):
+            record["bbox_prior_patch_stats"] = [
+                float(value)
+                for value in bbox_context_stats[0].detach().cpu().float().tolist()
+            ]
+        part_token_descriptor = trace.get("part_token_descriptor")
+        if torch.is_tensor(part_token_descriptor):
+            record["part_token_descriptor_shape"] = list(part_token_descriptor.shape)
+        if torch.is_tensor(part_token_attention):
+            record["part_token_attention_shape"] = list(part_token_attention.shape)
+            record["part_token_attention_sum_per_part"] = [
+                float(value)
+                for value in part_token_attention[0].detach().cpu().float().sum(dim=1).tolist()
+            ]
+        part_token_foreground_mass = trace.get("part_token_foreground_mass")
+        if torch.is_tensor(part_token_foreground_mass):
+            record["part_token_foreground_mass"] = [
+                float(value)
+                for value in part_token_foreground_mass[0].detach().cpu().float().tolist()
+            ]
+        part_token_max_weight = trace.get("part_token_max_weight")
+        if torch.is_tensor(part_token_max_weight):
+            record["part_token_max_weight"] = [
+                float(value)
+                for value in part_token_max_weight[0].detach().cpu().float().tolist()
+            ]
+        part_token_route_weights = trace.get("part_token_route_weights")
+        if torch.is_tensor(part_token_route_weights):
+            record["part_token_route_weight"] = float(
+                part_token_route_weights[0].detach().cpu().item()
+            )
+        part_token_pairwise_descriptor = trace.get("part_token_pairwise_descriptor")
+        if torch.is_tensor(part_token_pairwise_descriptor):
+            record["part_token_pairwise_descriptor_shape"] = list(
+                part_token_pairwise_descriptor.shape
+            )
+        if torch.is_tensor(part_token_pairwise_attention):
+            record["part_token_pairwise_attention_shape"] = list(
+                part_token_pairwise_attention.shape
+            )
+            record["part_token_pairwise_attention_sum_per_part"] = [
+                float(value)
+                for value in part_token_pairwise_attention[0]
+                .detach()
+                .cpu()
+                .float()
+                .sum(dim=1)
+                .tolist()
+            ]
+        part_token_pairwise_foreground_mass = trace.get(
+            "part_token_pairwise_foreground_mass"
+        )
+        if torch.is_tensor(part_token_pairwise_foreground_mass):
+            record["part_token_pairwise_foreground_mass"] = [
+                float(value)
+                for value in part_token_pairwise_foreground_mass[0]
+                .detach()
+                .cpu()
+                .float()
+                .tolist()
+            ]
+        part_token_pairwise_max_weight = trace.get("part_token_pairwise_max_weight")
+        if torch.is_tensor(part_token_pairwise_max_weight):
+            record["part_token_pairwise_max_weight"] = [
+                float(value)
+                for value in part_token_pairwise_max_weight[0]
+                .detach()
+                .cpu()
+                .float()
+                .tolist()
+            ]
+        part_token_pairwise_route_weights = trace.get("part_token_pairwise_route_weights")
+        if torch.is_tensor(part_token_pairwise_route_weights):
+            record["part_token_pairwise_route_weights"] = [
+                float(value)
+                for value in part_token_pairwise_route_weights[0]
+                .detach()
+                .cpu()
+                .float()
+                .tolist()
+            ]
+        if torch.is_tensor(local_zoom_score):
+            record["local_zoom_score_map_shape"] = list(local_zoom_score.shape)
+            record["local_zoom_score_max"] = float(
+                local_zoom_score[0].detach().cpu().float().max().item()
+            )
+            record["local_zoom_score_mean"] = float(
+                local_zoom_score[0].detach().cpu().float().mean().item()
+            )
+        if torch.is_tensor(local_zoom_boxes):
+            record["local_zoom_crop_box"] = [
+                float(value) for value in local_zoom_boxes[0].detach().cpu().tolist()
+            ]
+        local_zoom_descriptor = trace.get("local_zoom_descriptor")
+        if torch.is_tensor(local_zoom_descriptor):
+            record["local_zoom_descriptor_shape"] = list(local_zoom_descriptor.shape)
+        local_zoom_logits = trace.get("local_zoom_logits")
+        if torch.is_tensor(local_zoom_logits):
+            record["local_zoom_logits"] = [
+                float(value) for value in local_zoom_logits[0].detach().cpu().tolist()
+            ]
+        local_zoom_route_weights = trace.get("local_zoom_route_weights")
+        if torch.is_tensor(local_zoom_route_weights):
+            record["local_zoom_route_weight"] = float(
+                local_zoom_route_weights[0].detach().cpu().item()
+            )
+        high_frequency_descriptor = trace.get("high_frequency_texture_descriptor")
+        if torch.is_tensor(high_frequency_descriptor):
+            record["high_frequency_texture_descriptor_shape"] = list(
+                high_frequency_descriptor.shape
+            )
+        high_frequency_logits = trace.get("high_frequency_texture_logits")
+        if torch.is_tensor(high_frequency_logits):
+            record["high_frequency_texture_logits"] = [
+                float(value)
+                for value in high_frequency_logits[0].detach().cpu().tolist()
+            ]
+        high_frequency_route_weights = trace.get(
+            "high_frequency_texture_route_weights"
+        )
+        if torch.is_tensor(high_frequency_route_weights):
+            record["high_frequency_texture_route_weight"] = float(
+                high_frequency_route_weights[0].detach().cpu().item()
+            )
+        high_frequency_foreground_detail = trace.get(
+            "high_frequency_texture_foreground_detail"
+        )
+        if torch.is_tensor(high_frequency_foreground_detail):
+            record["high_frequency_texture_foreground_detail_shape"] = list(
+                high_frequency_foreground_detail.shape
+            )
+            record["high_frequency_texture_foreground_detail_max"] = float(
+                high_frequency_foreground_detail[0].detach().cpu().float().max().item()
+            )
+            record["high_frequency_texture_foreground_detail_mean"] = float(
+                high_frequency_foreground_detail[0].detach().cpu().float().mean().item()
+            )
+        multi_granularity_layers = trace.get("multi_granularity_layers")
+        if torch.is_tensor(multi_granularity_layers):
+            record["multi_granularity_layers"] = [
+                int(value)
+                for value in multi_granularity_layers.detach().cpu().tolist()
+            ]
+        multi_granularity_logits = features.get("multi_granularity_logits")
+        if isinstance(multi_granularity_logits, dict) and multi_granularity_logits:
+            record["multi_granularity_logits_shapes"] = {
+                str(layer): list(logits.shape)
+                for layer, logits in multi_granularity_logits.items()
+                if torch.is_tensor(logits)
+            }
+            record["multi_granularity_logits_sample0"] = {
+                str(layer): [
+                    float(value)
+                    for value in logits[0].detach().cpu().tolist()
+                ]
+                for layer, logits in multi_granularity_logits.items()
+                if torch.is_tensor(logits) and logits.ndim == 2 and logits.size(0) > 0
+            }
         pairwise_route_weights = trace.get("pairwise_margin_route_weights")
         if torch.is_tensor(pairwise_route_weights):
             record["pairwise_margin_route_weights"] = [
                 float(value)
                 for value in pairwise_route_weights[0].detach().cpu().tolist()
+            ]
+        topk_reassessment_logits = features.get("topk_reassessment_logits")
+        if torch.is_tensor(topk_reassessment_logits):
+            record["topk_reassessment_logits"] = [
+                float(value)
+                for value in topk_reassessment_logits[0].detach().cpu().tolist()
+            ]
+        topk_reassessment_route_weights = trace.get("topk_reassessment_route_weights")
+        if torch.is_tensor(topk_reassessment_route_weights):
+            record["topk_reassessment_route_weight"] = float(
+                topk_reassessment_route_weights[0].detach().cpu().item()
+            )
+        topk_reassessment_adjustment = trace.get("topk_reassessment_adjustment")
+        if torch.is_tensor(topk_reassessment_adjustment):
+            record["topk_reassessment_adjustment"] = [
+                float(value)
+                for value in topk_reassessment_adjustment[0].detach().cpu().tolist()
+            ]
+        cumulative_ordinal_logits = features.get("cumulative_ordinal_logits")
+        if torch.is_tensor(cumulative_ordinal_logits):
+            record["cumulative_ordinal_logits"] = [
+                float(value)
+                for value in cumulative_ordinal_logits[0].detach().cpu().tolist()
+            ]
+        bbox_spatial_logits = features.get("bbox_spatial_logits")
+        if torch.is_tensor(bbox_spatial_logits):
+            record["bbox_spatial_logits"] = [
+                float(value)
+                for value in bbox_spatial_logits[0].detach().cpu().tolist()
+            ]
+        bbox_spatial_stats = trace.get("bbox_spatial_stats")
+        if torch.is_tensor(bbox_spatial_stats):
+            record["bbox_spatial_stats"] = [
+                float(value)
+                for value in bbox_spatial_stats[0].detach().cpu().tolist()
+            ]
+        surface_pairwise_logits = features.get("foreground_surface_pairwise_logits")
+        if torch.is_tensor(surface_pairwise_logits):
+            record["foreground_surface_pairwise_logits"] = [
+                float(value)
+                for value in surface_pairwise_logits[0].detach().cpu().tolist()
+            ]
+        surface_pairwise_route_weights = trace.get(
+            "foreground_surface_pairwise_route_weights"
+        )
+        if torch.is_tensor(surface_pairwise_route_weights):
+            record["foreground_surface_pairwise_route_weights"] = [
+                float(value)
+                for value in surface_pairwise_route_weights[0].detach().cpu().tolist()
+            ]
+        interior_boundary_pairwise_logits = features.get("interior_boundary_pairwise_logits")
+        if torch.is_tensor(interior_boundary_pairwise_logits):
+            record["interior_boundary_pairwise_logits"] = [
+                float(value)
+                for value in interior_boundary_pairwise_logits[0].detach().cpu().tolist()
+            ]
+        interior_boundary_pairwise_route_weights = trace.get(
+            "interior_boundary_pairwise_route_weights"
+        )
+        if torch.is_tensor(interior_boundary_pairwise_route_weights):
+            record["interior_boundary_pairwise_route_weights"] = [
+                float(value)
+                for value in interior_boundary_pairwise_route_weights[0]
+                .detach()
+                .cpu()
+                .tolist()
             ]
         (class_dir / "shapes.json").write_text(
             json.dumps(record, indent=2, ensure_ascii=False),
@@ -529,13 +1264,17 @@ def main() -> None:
         "- `01a_resized_before_preprocess.png`: anh sau resize-pad, truoc normalization/loc nen.",
         "- `01b_illumination_normalized.png`: anh sau chuan hoa sang/toi.",
         "- `01c_foreground_mask_overlay.png`: vung xanh la pseudo foreground duoc giu.",
+        "- `01d_surface_detail_mask_overlay.png`: mask chuyen dung cho surface-detail amplification.",
+        "- `01e_surface_detail_amplified.png`: anh sau khuech dai residual/high-frequency foreground.",
         "- `01_model_input.png`: anh sau resize-pad va denormalize de xem.",
         "- `02_stem_activation.png`: mean absolute activation cua CNN stem.",
         "- `03_patch_embedding_norm.png`: norm patch token truoc transformer.",
+        "- `03b_shifted_patch_residual_norm.png`: norm residual SPT bon huong tai patch embedding.",
         "- `04_detail_map.png`: local color/high-frequency/edge map.",
         "- `05_foreground_prior.png`: prior dung cung attention khi xep hang token.",
         "- `06_attention_view_score.png`: score source theo train config ket hop foreground prior.",
         "- `07_attention_crop.png`: crop salient dung lam view phu khi train.",
+        "- `07b_relative_position_layer_XX_center.png`: GPSA-style positional map tu patch gan tam theo tung layer.",
         "- `08_attention_drop.png`: vung salient bi blur de ep model tim dau hieu phu.",
         "- `09a_foreground_surface_weight.png`: mask mem foreground-only cua surface fusion head.",
         "- `09b_foreground_surface_mask.png`: mask cung dung de cat nen cho audit map.",
@@ -545,7 +1284,17 @@ def main() -> None:
         "- `09f_foreground_surface_bright_spot.png`: diem qua sang/lo sang sau khi mask foreground.",
         "- `09g_bilinear_patch_attention.png`: trong so patch cua compact bilinear fusion sau pruning.",
         "- `09h_frequency_selective_votes.png`: ty le vote patch cua frequency-selective aggregation sau pruning.",
+        "- `09i_micro_detail_attention.png`: top-K patch chi tiet foreground cua micro-detail expert.",
+        "- `09i1`/`09i2`: attention va probability cua patch-objectness head hoc tu bbox prior.",
+        "- `09i3`/`09i4`: object/background patch pooling co dinh theo bbox prior.",
+        "- `09q_part_token_attention_mean.png` / `09q_part_token_XX_attention.png`: attention cua learned part-token tren patch foreground/bbox.",
+        "- `09r_part_token_pairwise_attention_mean.png` / `09r_part_token_pairwise_XX_attention.png`: attention cua part-token pairwise margin head.",
+        "- `09j_local_zoom_score.png` / `09k_local_zoom_crop_box.png`: score map va vung crop cua local-zoom expert.",
+        "- `09l`-`09p`: ban do high-pass/gradient/laplacian va foreground-detail cua high-frequency texture expert.",
+        "- `09s`-`09z`: bbox/foreground/interior-boundary mask/weight va boundary edge/brown maps cua pairwise head moi.",
+        "- `multi_granularity_*` trong `shapes.json`: logits phu o cac transformer layer trung gian.",
         "- `pairwise_margin_route_weights` trong `shapes.json`: trong so router cho tung pairwise specialist.",
+        "- `cumulative_ordinal_logits` trong `shapes.json`: threshold logits cho cac bien ordinal 0|1, 1|2, 2|3.",
         "- `block_XX_token_norm.png`: norm token sau tung transformer block; o da prune de trong.",
         "- `prune_XX_after_layer_Y.png`: patch xanh duoc giu, patch toi bi loai.",
         "- `shapes.json`: shape va patch index chi tiet.",

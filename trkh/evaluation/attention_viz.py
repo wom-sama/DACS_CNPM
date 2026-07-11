@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import inspect
 from pathlib import Path
 from typing import Dict, Iterable, Optional, Tuple
 
@@ -11,6 +12,7 @@ import torch.nn.functional as F
 from PIL import Image
 
 from trkh.data.dataset import build_eval_transform
+from trkh.evaluation.input_normalization import checkpoint_input_normalization
 from trkh.models.feature_hooks import (
     HookRecorder,
     build_attention_heatmap,
@@ -29,6 +31,33 @@ from trkh.models.feature_hooks import (
 from trkh.inference.inference import crop_with_yolo_bbox, load_model
 from trkh.models.model import classification_logits_from_features, extract_bbox_from_model_output
 from trkh.core.utils import ensure_dir, json_dump, summarize_token_norms
+
+
+def _supports_trkh_feature_metadata(model) -> bool:
+    forward_features = getattr(model, "forward_features", None)
+    if forward_features is None:
+        return False
+    try:
+        signature = inspect.signature(forward_features)
+    except (TypeError, ValueError):
+        return False
+    parameters = signature.parameters
+    if any(parameter.kind == inspect.Parameter.VAR_KEYWORD for parameter in parameters.values()):
+        return True
+    return "image_valid_mask" in parameters or "bbox_token_prior" in parameters
+
+
+def _disable_inplace_modules_for_hooks(model) -> list[str]:
+    changed: list[str] = []
+    for name, module in model.named_modules():
+        if getattr(module, "inplace", False) is not True:
+            continue
+        try:
+            module.inplace = False
+        except (AttributeError, TypeError):
+            continue
+        changed.append(name or "<root>")
+    return changed
 
 
 def parse_args() -> argparse.Namespace:
@@ -84,6 +113,7 @@ def prepare_image_and_tensor(
     augmentation_config = checkpoint.get("augmentation_config", {})
     if not isinstance(augmentation_config, dict):
         augmentation_config = {}
+    input_mean, input_std = checkpoint_input_normalization(checkpoint)
     transform = build_eval_transform(
         image_size=image_size,
         resize_mode=augmentation_config.get("resize_mode", "pad"),
@@ -103,6 +133,23 @@ def prepare_image_and_tensor(
         background_suppression_mode=str(augmentation_config.get("background_suppression_mode", "none") or "none"),
         background_suppression_margin=float(augmentation_config.get("background_suppression_margin", 0.08) or 0.08),
         background_suppression_blur_radius=float(augmentation_config.get("background_suppression_blur_radius", 7.0) or 7.0),
+        surface_detail_amplification_mode=str(
+            augmentation_config.get("surface_detail_amplification_mode", "none") or "none"
+        ),
+        surface_detail_amplification_strength=float(
+            augmentation_config.get("surface_detail_amplification_strength", 0.0) or 0.0
+        ),
+        surface_detail_amplification_blur_radius=float(
+            augmentation_config.get("surface_detail_amplification_blur_radius", 1.25) or 1.25
+        ),
+        surface_detail_amplification_foreground_weight=float(
+            augmentation_config.get("surface_detail_amplification_foreground_weight", 0.85) or 0.85
+        ),
+        eval_surface_detail_amplification=bool(
+            augmentation_config.get("eval_surface_detail_amplification", False)
+        ),
+        mean=input_mean,
+        std=input_std,
     )
 
     with Image.open(image_path) as handle:
@@ -254,17 +301,47 @@ def _capture_forward(
     target_class: Optional[int],
     feature_source: str = "auto",
     rollout_start_layer: int = 0,
+    bbox_metadata: Optional[torch.Tensor] = None,
+    bbox_token_prior: Optional[torch.Tensor] = None,
+    image_valid_mask: Optional[torch.Tensor] = None,
 ) -> Dict[str, object]:
     feature_spec = resolve_feature_hook(model, feature_source=feature_source)
     attention_spec = resolve_attention_hook(model, layer_index)
     need_grad = method in ("gradcam", "both", "all")
     need_rollout = method in ("rollout", "all")
     need_grad_rollout = method in ("grad_rollout", "all")
+    supports_trkh_metadata = _supports_trkh_feature_metadata(model)
+    disabled_inplace_modules = _disable_inplace_modules_for_hooks(model) if need_grad or need_grad_rollout else []
 
     with HookRecorder(feature_spec=feature_spec, attention_spec=attention_spec) as recorder:
         model.zero_grad(set_to_none=True)
         with torch.enable_grad() if need_grad else torch.no_grad():
-            logits, _ = extract_bbox_from_model_output(model(tensor))
+            if (
+                (bbox_metadata is not None or bbox_token_prior is not None or image_valid_mask is not None)
+                and supports_trkh_metadata
+                and (hasattr(model, "head") or hasattr(model, "forward_heads"))
+            ):
+                effective_bbox_token_prior = (
+                    bbox_token_prior
+                    if bbox_token_prior is not None and torch.is_tensor(bbox_token_prior)
+                    else bbox_metadata
+                )
+                features = model.forward_features(
+                    tensor,
+                    image_valid_mask=image_valid_mask,
+                    bbox_token_prior=effective_bbox_token_prior,
+                )
+                if isinstance(features, dict):
+                    if bbox_metadata is not None:
+                        features["bbox"] = bbox_metadata.to(device=tensor.device)
+                    if hasattr(model, "head"):
+                        logits = classification_logits_from_features(model, features)
+                    else:
+                        logits, _ = extract_bbox_from_model_output(model.forward_heads(features))
+                else:
+                    logits, _ = extract_bbox_from_model_output(model(tensor))
+            else:
+                logits, _ = extract_bbox_from_model_output(model(tensor))
             probabilities = F.softmax(logits.float(), dim=1)[0].detach().cpu()
             predicted_class = int(logits.argmax(dim=1)[0].item())
             selected_class = predicted_class if target_class is None else int(target_class)
@@ -273,9 +350,20 @@ def _capture_forward(
 
     rollout_heatmap = None
     register_attention_summary = None
-    if need_rollout and hasattr(model, "forward_features"):
+    if need_rollout and supports_trkh_metadata:
         with torch.no_grad():
-            features = model.forward_features(tensor, return_attention=True)
+            features = model.forward_features(
+                tensor,
+                image_valid_mask=image_valid_mask,
+                bbox_token_prior=(
+                    bbox_token_prior
+                    if bbox_token_prior is not None and torch.is_tensor(bbox_token_prior)
+                    else bbox_metadata
+                ),
+                return_attention=True,
+            )
+            if isinstance(features, dict) and bbox_metadata is not None:
+                features["bbox"] = bbox_metadata.to(device=tensor.device)
         attentions = features.get("attentions") if isinstance(features, dict) else None
         grid_size = features.get("grid_size") if isinstance(features, dict) else None
         prefix_tokens = attention_spec.prefix_tokens if attention_spec is not None else int(
@@ -297,10 +385,21 @@ def _capture_forward(
             )
 
     grad_rollout_heatmap = None
-    if need_grad_rollout and hasattr(model, "forward_features"):
+    if need_grad_rollout and supports_trkh_metadata:
         model.zero_grad(set_to_none=True)
         with torch.enable_grad():
-            features = model.forward_features(tensor, return_attention=True)
+            features = model.forward_features(
+                tensor,
+                image_valid_mask=image_valid_mask,
+                bbox_token_prior=(
+                    bbox_token_prior
+                    if bbox_token_prior is not None and torch.is_tensor(bbox_token_prior)
+                    else bbox_metadata
+                ),
+                return_attention=True,
+            )
+            if isinstance(features, dict) and bbox_metadata is not None:
+                features["bbox"] = bbox_metadata.to(device=tensor.device)
             attentions = features.get("attentions") if isinstance(features, dict) else None
             grid_size = features.get("grid_size") if isinstance(features, dict) else None
             prefix_tokens = attention_spec.prefix_tokens if attention_spec is not None else int(
@@ -340,6 +439,8 @@ def _capture_forward(
         "feature_source": feature_spec.source,
         "grid_size": list(recorder.grid_size) if recorder.grid_size is not None else None,
     }
+    if disabled_inplace_modules:
+        result["disabled_inplace_modules"] = disabled_inplace_modules
     if rollout_heatmap is not None:
         result["rollout_heatmap"] = rollout_heatmap
     if grad_rollout_heatmap is not None:
@@ -399,6 +500,9 @@ def analyze_tensor(
     query_tokens: str = "cls_register_mean",
     feature_source: str = "auto",
     rollout_start_layer: int = 0,
+    bbox_metadata: Optional[torch.Tensor] = None,
+    bbox_token_prior: Optional[torch.Tensor] = None,
+    image_valid_mask: Optional[torch.Tensor] = None,
 ) -> Dict[str, object]:
     capture = _capture_forward(
         model=model,
@@ -411,6 +515,9 @@ def analyze_tensor(
         target_class=target_class,
         feature_source=feature_source,
         rollout_start_layer=rollout_start_layer,
+        bbox_metadata=bbox_metadata,
+        bbox_token_prior=bbox_token_prior,
+        image_valid_mask=image_valid_mask,
     )
     optional_token_features = extract_optional_token_features(model, tensor)
 
@@ -426,6 +533,8 @@ def analyze_tensor(
     }
     if capture.get("grid_size") is not None:
         result["grid_size"] = capture["grid_size"]
+    if capture.get("disabled_inplace_modules"):
+        result["disabled_inplace_modules"] = capture["disabled_inplace_modules"]
     if optional_token_features is not None:
         artifact_stats = summarize_token_norms(optional_token_features)
         if artifact_stats:

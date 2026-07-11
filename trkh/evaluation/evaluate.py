@@ -6,7 +6,7 @@ import math
 import time
 from itertools import islice
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
 import torch
 import torch.nn.functional as F
@@ -39,12 +39,14 @@ from trkh.evaluation.metrics import (
     plot_per_class_metrics,
     plot_pr_curve,
 )
+from trkh.evaluation.input_normalization import checkpoint_input_normalization
 from trkh.models.model import (
     build_model_from_checkpoint,
     classification_logits_from_features,
     extract_bbox_from_model_output,
     extract_detection_from_model_output,
     extract_head_input_from_features,
+    source_context_fused_logits_from_features,
 )
 from trkh.core.utils import (
     autocast_context,
@@ -141,6 +143,11 @@ def _move_targets_to_device(targets, device: torch.device):
 
 
 def _stack_image_masks_from_targets(targets) -> Optional[torch.Tensor]:
+    if isinstance(targets, dict):
+        image_mask = targets.get("image_mask")
+        if torch.is_tensor(image_mask):
+            return image_mask.to(dtype=torch.bool)
+        return None
     if not _is_detection_targets(targets):
         return None
     masks = []
@@ -168,6 +175,41 @@ def _dataset_sample_paths(dataset) -> List[str]:
     return paths
 
 
+def _dataset_sample_metadata(dataset) -> List[Dict[str, object]]:
+    samples = getattr(dataset, "samples", None)
+    if samples is None:
+        return []
+    metadata_rows: List[Dict[str, object]] = []
+    for sample in samples:
+        row: Dict[str, object] = {}
+        image_path = getattr(sample, "image_path", None)
+        label_path = getattr(sample, "label_path", None)
+        if image_path is not None:
+            image_path = Path(image_path)
+            row["source_stem"] = image_path.stem
+        if label_path is not None:
+            label_path = Path(label_path)
+            row["label_path"] = str(label_path)
+            row.setdefault("source_stem", label_path.stem)
+        if hasattr(sample, "primary_object_index"):
+            row["object_index"] = int(getattr(sample, "primary_object_index"))
+        if hasattr(sample, "primary_label"):
+            row["primary_label"] = int(getattr(sample, "primary_label"))
+        objects = getattr(sample, "objects", None)
+        primary_object_index = row.get("object_index")
+        if objects is not None and primary_object_index is not None:
+            for obj in objects:
+                if int(getattr(obj, "object_index", -1)) != int(primary_object_index):
+                    continue
+                bbox = getattr(obj, "bbox", None)
+                if bbox is not None:
+                    for axis_index, value in enumerate(bbox):
+                        row[f"bbox_{axis_index}"] = float(value)
+                break
+        metadata_rows.append(row)
+    return metadata_rows
+
+
 def _build_prediction_records(
     *,
     targets: torch.Tensor,
@@ -175,6 +217,8 @@ def _build_prediction_records(
     probabilities: torch.Tensor,
     class_names: Sequence[str],
     sample_paths: Sequence[str],
+    sample_metadata: Optional[Sequence[Mapping[str, object]]] = None,
+    abstention_probabilities: Optional[torch.Tensor] = None,
 ) -> List[Dict[str, object]]:
     targets = targets.detach().cpu().to(dtype=torch.long).view(-1)
     predictions = predictions.detach().cpu().to(dtype=torch.long).view(-1)
@@ -183,6 +227,13 @@ def _build_prediction_records(
     record_count = min(int(targets.numel()), int(predictions.numel()), int(probabilities.shape[0]))
     if sample_paths:
         record_count = min(record_count, len(sample_paths))
+    if sample_metadata:
+        record_count = min(record_count, len(sample_metadata))
+    if abstention_probabilities is not None:
+        abstention_probabilities = (
+            abstention_probabilities.detach().cpu().to(dtype=torch.float32).view(-1)
+        )
+        record_count = min(record_count, int(abstention_probabilities.numel()))
 
     records: List[Dict[str, object]] = []
     for sample_index in range(record_count):
@@ -203,6 +254,14 @@ def _build_prediction_records(
             else 0.0,
             "correct": int(target_index == prediction_index),
         }
+        if sample_metadata:
+            for key, value in dict(sample_metadata[sample_index]).items():
+                if key not in record:
+                    record[str(key)] = value
+        if abstention_probabilities is not None:
+            record["abstention_probability"] = float(
+                abstention_probabilities[sample_index].item()
+            )
         for rank, (score, class_index) in enumerate(zip(top_values.tolist(), top_indices.tolist()), start=1):
             class_index = int(class_index)
             record[f"top{rank}_index"] = class_index
@@ -1061,6 +1120,7 @@ def evaluate_model(
     require_foreground_argmax: bool = False,
     detection_score_mode: str = "foreground",
     collect_prediction_records: bool = False,
+    bbox_token_prior_source: str = "bbox",
 ) -> Dict[str, object]:
     eval_start = time.perf_counter()
     model.eval()
@@ -1081,6 +1141,7 @@ def evaluate_model(
     all_full_predictions = []
     all_detection_scores = []
     all_probabilities = []
+    all_abstention_probabilities = []
     all_bbox_targets = []
     all_bbox_predictions = []
     detection_records: List[Dict[str, torch.Tensor]] = []
@@ -1117,6 +1178,8 @@ def evaluate_model(
         total_batches = min(total_batches, max_batches)
         batch_iterator = islice(dataloader, total_batches)
 
+    bbox_token_prior_source = str(bbox_token_prior_source or "bbox").strip().lower()
+
     loop_start = time.perf_counter()
     with torch.inference_mode():
         with tqdm(
@@ -1127,19 +1190,37 @@ def evaluate_model(
             dynamic_ncols=True,
         ) as pbar:
             for batch in pbar:
+                bbox_metadata = None
+                bbox_token_prior_metadata = None
+                source_context_images = None
+                source_context_bboxes = None
                 if len(batch) == 2 and _is_detection_targets(batch[1]):
                     images, batch_targets = batch
                     labels = None
                     target_boxes = None
+                    crop_boxes = None
                     detection_targets = _move_targets_to_device(batch_targets, device)
                     detection_mode = True
                 elif len(batch) == 3:
                     images, labels, targets = batch
-                    target_boxes = targets["bbox"]
+                    target_boxes = targets.get("bbox") if isinstance(targets, dict) else None
+                    crop_boxes = targets.get("crop_bbox") if isinstance(targets, dict) else None
+                    source_context_images = (
+                        targets.get("source_context_image")
+                        if isinstance(targets, dict)
+                        else None
+                    )
+                    source_context_bboxes = (
+                        targets.get("source_context_bbox")
+                        if isinstance(targets, dict)
+                        else None
+                    )
+                    bbox_metadata = target_boxes
                     detection_targets = None
                 elif len(batch) == 2:
                     images, labels = batch
                     target_boxes = None
+                    crop_boxes = None
                     detection_targets = None
                 else:
                     raise ValueError("Eval dataloader phai tra ve 2 hoac 3 phan tu.")
@@ -1151,16 +1232,61 @@ def evaluate_model(
                     metric_labels = None
                 if target_boxes is not None:
                     target_boxes = target_boxes.to(device, non_blocking=True)
+                    bbox_metadata = target_boxes
+                if torch.is_tensor(crop_boxes):
+                    crop_boxes = crop_boxes.to(device, dtype=torch.float32, non_blocking=True)
+                else:
+                    crop_boxes = None
+                bbox_token_prior_metadata = (
+                    crop_boxes
+                    if bbox_token_prior_source == "crop_bbox" and torch.is_tensor(crop_boxes)
+                    else bbox_metadata
+                )
+                if torch.is_tensor(source_context_images):
+                    source_context_images = source_context_images.to(
+                        device,
+                        non_blocking=True,
+                    )
+                else:
+                    source_context_images = None
+                if torch.is_tensor(source_context_bboxes):
+                    source_context_bboxes = source_context_bboxes.to(
+                        device=device,
+                        dtype=torch.float32,
+                        non_blocking=True,
+                    )
+                else:
+                    source_context_bboxes = None
 
                 base_features = None
                 base_output = None
-                image_valid_mask = _stack_image_masks_from_targets(detection_targets)
+                image_valid_mask = _stack_image_masks_from_targets(
+                    targets if len(batch) == 3 else detection_targets
+                )
+                if image_valid_mask is not None:
+                    image_valid_mask = image_valid_mask.to(
+                        device=device,
+                        dtype=torch.bool,
+                        non_blocking=True,
+                    )
                 with autocast_context(device, amp):
                     if hasattr(model, "forward_features") and hasattr(model, "forward_heads") and hasattr(model, "num_registers"):
-                        base_features = model.forward_features(images, image_valid_mask=image_valid_mask)
+                        base_features = model.forward_features(
+                            images,
+                            image_valid_mask=image_valid_mask,
+                            bbox_token_prior=bbox_token_prior_metadata,
+                        )
+                        if bbox_metadata is not None:
+                            base_features["bbox"] = bbox_metadata
                         base_output = model.forward_heads(base_features)
                     elif hasattr(model, "forward_features") and hasattr(model, "head") and hasattr(model, "num_registers"):
-                        base_features = model.forward_features(images, image_valid_mask=image_valid_mask)
+                        base_features = model.forward_features(
+                            images,
+                            image_valid_mask=image_valid_mask,
+                            bbox_token_prior=bbox_token_prior_metadata,
+                        )
+                        if bbox_metadata is not None:
+                            base_features["bbox"] = bbox_metadata
                         base_output = classification_logits_from_features(model, base_features)
                     else:
                         base_output = model(images)
@@ -1172,9 +1298,78 @@ def evaluate_model(
                     metric_objectness_logits = base_objectness_logits
                     metric_count_logits = base_count_logits
                     metric_quality_logits = base_quality_logits
+                    if (
+                        base_features is not None
+                        and torch.is_tensor(source_context_images)
+                        and torch.is_tensor(source_context_bboxes)
+                        and getattr(model, "source_context_fusion_head", None) is not None
+                    ):
+                        if hasattr(model, "forward_features") and hasattr(model, "forward_heads") and hasattr(model, "num_registers"):
+                            source_features = model.forward_features(
+                                source_context_images,
+                                bbox_token_prior=source_context_bboxes,
+                            )
+                            source_features["bbox"] = source_context_bboxes
+                            source_output = model.forward_heads(source_features)
+                        elif hasattr(model, "forward_features") and hasattr(model, "head") and hasattr(model, "num_registers"):
+                            source_features = model.forward_features(
+                                source_context_images,
+                                bbox_token_prior=source_context_bboxes,
+                            )
+                            source_features["bbox"] = source_context_bboxes
+                            source_output = classification_logits_from_features(
+                                model,
+                                source_features,
+                            )
+                        else:
+                            source_features = None
+                            source_output = None
+                        if source_features is not None and source_output is not None:
+                            source_logits, _ = extract_bbox_from_model_output(source_output)
+                            if torch.is_tensor(source_logits):
+                                fused_logits = source_context_fused_logits_from_features(
+                                    model,
+                                    base_features,
+                                    source_features,
+                                    base_logits,
+                                    source_logits,
+                                )
+                                if torch.is_tensor(fused_logits):
+                                    base_logits = fused_logits
+                                    metric_logits = fused_logits
+                                    if isinstance(base_output, dict):
+                                        base_output = dict(base_output)
+                                        base_output["logits"] = fused_logits
+                                    else:
+                                        base_output = fused_logits
 
                     if tta_runner is not None:
-                        tta_output = tta_runner.forward(model, images)
+                        def _tta_forward(augmented_images: torch.Tensor):
+                            if hasattr(model, "forward_features") and hasattr(model, "forward_heads") and hasattr(model, "num_registers"):
+                                aug_features = model.forward_features(
+                                    augmented_images,
+                                    image_valid_mask=image_valid_mask,
+                                    bbox_token_prior=bbox_token_prior_metadata,
+                                )
+                                if bbox_metadata is not None:
+                                    aug_features["bbox"] = bbox_metadata
+                                return model.forward_heads(aug_features)
+                            if hasattr(model, "forward_features") and hasattr(model, "head") and hasattr(model, "num_registers"):
+                                aug_features = model.forward_features(
+                                    augmented_images,
+                                    image_valid_mask=image_valid_mask,
+                                    bbox_token_prior=bbox_token_prior_metadata,
+                                )
+                                if bbox_metadata is not None:
+                                    aug_features["bbox"] = bbox_metadata
+                                return classification_logits_from_features(model, aug_features)
+                            return model(augmented_images)
+
+                        tta_output = tta_runner.forward(
+                            model,
+                            images,
+                            forward_fn=_tta_forward,
+                        )
                         metric_logits = tta_output["logits"]
                         metric_pred_boxes = tta_output.get("boxes", pred_boxes)
                         metric_objectness_logits = tta_output.get("objectness_logits", base_objectness_logits)
@@ -1210,6 +1405,29 @@ def evaluate_model(
                         pbar.set_postfix(loss=f"{loss_value:.4f}")
 
                 probabilities = F.softmax(metric_logits.float(), dim=-1)
+                batch_abstention_probabilities = None
+                if (
+                    not detection_mode
+                    and base_features is not None
+                    and metric_logits.ndim == 2
+                ):
+                    abstention_logits = base_features.get("deep_abstention_logit")
+                    if (
+                        torch.is_tensor(abstention_logits)
+                        and abstention_logits.ndim == 1
+                        and abstention_logits.size(0) == metric_logits.size(0)
+                    ):
+                        joint_probabilities = F.softmax(
+                            torch.cat(
+                                (
+                                    metric_logits.float(),
+                                    abstention_logits.float().unsqueeze(1),
+                                ),
+                                dim=1,
+                            ),
+                            dim=1,
+                        )
+                        batch_abstention_probabilities = joint_probabilities[:, -1]
                 objectness_scores = (
                     torch.sigmoid(metric_objectness_logits.float())
                     if metric_objectness_logits is not None
@@ -1334,6 +1552,10 @@ def evaluate_model(
                     all_targets.append(metric_labels.detach().cpu())
                     all_predictions.append(predictions.detach().cpu())
                     all_probabilities.append(probabilities.detach().cpu())
+                    if batch_abstention_probabilities is not None:
+                        all_abstention_probabilities.append(
+                            batch_abstention_probabilities.detach().cpu()
+                        )
                     if metric_pred_boxes is not None and target_boxes is not None:
                         all_bbox_predictions.append(metric_pred_boxes.detach().cpu())
                         all_bbox_targets.append(target_boxes.detach().cpu())
@@ -1366,6 +1588,11 @@ def evaluate_model(
         if all_probabilities
         else torch.empty((0, len(class_names)), dtype=torch.float32)
     )
+    abstention_probabilities = (
+        torch.cat(all_abstention_probabilities).to(dtype=torch.float32)
+        if all_abstention_probabilities
+        else None
+    )
     metrics = build_metrics(
         targets=targets,
         predictions=predictions,
@@ -1379,7 +1606,29 @@ def evaluate_model(
             probabilities=probabilities,
             class_names=class_names,
             sample_paths=_dataset_sample_paths(getattr(dataloader, "dataset", None)),
+            sample_metadata=_dataset_sample_metadata(getattr(dataloader, "dataset", None)),
+            abstention_probabilities=abstention_probabilities,
         )
+    if abstention_probabilities is not None and abstention_probabilities.numel():
+        correctness = predictions.eq(targets)
+        metrics["deep_abstention"] = {
+            "count": int(abstention_probabilities.numel()),
+            "mean_probability": float(abstention_probabilities.mean().item()),
+            "max_probability": float(abstention_probabilities.max().item()),
+            "fraction_010": float(
+                (abstention_probabilities >= 0.10).float().mean().item()
+            ),
+            "mean_probability_correct": float(
+                abstention_probabilities[correctness].mean().item()
+            )
+            if bool(correctness.any())
+            else 0.0,
+            "mean_probability_incorrect": float(
+                abstention_probabilities[~correctness].mean().item()
+            )
+            if bool((~correctness).any())
+            else 0.0,
+        }
     if detection_mode and targets.numel() and full_predictions.numel():
         metrics["foreground_classification"] = {
             "accuracy": metrics["accuracy"],
@@ -1653,6 +1902,13 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--max-batches", type=int, default=0)
     parser.add_argument("--override-image-size", type=int, default=None)
+    parser.add_argument(
+        "--override-stem-pooling-mode",
+        choices=("max", "soft", "max_soft"),
+        default=None,
+        help="Diagnostic checkpoint-compatible override for CNN stem pooling.",
+    )
+    parser.add_argument("--override-stem-softpool-blend", type=float, default=None)
     parser.add_argument("--tta", action="store_true", default=False)
     parser.add_argument("--eval-tta", dest="tta", action="store_true", default=False)
     parser.add_argument("--tta-brightness-delta", type=float, default=0.08)
@@ -1682,6 +1938,23 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--adaptive-count-margin", type=int, default=1)
     parser.add_argument("--adaptive-min-detections", type=int, default=1)
+    parser.add_argument(
+        "--bbox-token-prior-source",
+        choices=("bbox", "crop_bbox"),
+        default="bbox",
+        help="Nguon bbox cho token-level prior khi evaluate classification object crops.",
+    )
+    parser.add_argument("--patch-evidence-linear-verifier-json", type=Path, default=None)
+    parser.add_argument("--patch-evidence-linear-verifier-pair", type=str, default="0-1")
+    parser.add_argument("--patch-evidence-linear-verifier-min-pair-probability", type=float, default=0.02)
+    parser.add_argument("--patch-evidence-linear-verifier-max-pair-margin", type=float, default=0.40)
+    parser.add_argument("--patch-evidence-linear-verifier-confidence-threshold", type=float, default=0.60)
+    parser.add_argument("--patch-evidence-linear-verifier-logit-boost", type=float, default=0.01)
+    parser.add_argument(
+        "--patch-evidence-linear-verifier-protect-right-min-probability",
+        type=float,
+        default=0.0,
+    )
     return parser.parse_args()
 
 
@@ -1717,7 +1990,29 @@ def main() -> None:
         checkpoint=checkpoint,
         num_classes=len(class_names),
         override_image_size=args.override_image_size,
+        override_stem_pooling_mode=args.override_stem_pooling_mode,
+        override_stem_softpool_blend=args.override_stem_softpool_blend,
     )
+    patch_evidence_linear_verifier_summary = {"enabled": False}
+    if args.patch_evidence_linear_verifier_json is not None:
+        load_verifier = getattr(model, "load_patch_evidence_linear_verifier_export", None)
+        if not callable(load_verifier):
+            raise RuntimeError("Checkpoint model does not support patch-evidence linear verifier export.")
+        patch_evidence_linear_verifier_summary = load_verifier(
+            args.patch_evidence_linear_verifier_json,
+            pair=args.patch_evidence_linear_verifier_pair,
+            min_pair_probability=args.patch_evidence_linear_verifier_min_pair_probability,
+            max_pair_margin=args.patch_evidence_linear_verifier_max_pair_margin,
+            confidence_threshold=args.patch_evidence_linear_verifier_confidence_threshold,
+            logit_boost=args.patch_evidence_linear_verifier_logit_boost,
+            protect_right_min_probability=(
+                args.patch_evidence_linear_verifier_protect_right_min_probability
+            ),
+        )
+        print(
+            {"patch_evidence_linear_verifier": patch_evidence_linear_verifier_summary},
+            flush=True,
+        )
     model.to(device)
     model.eval()
 
@@ -1737,6 +2032,18 @@ def main() -> None:
     augmentation_config = checkpoint.get("augmentation_config", {})
     if not isinstance(augmentation_config, dict):
         augmentation_config = {}
+    model_config = checkpoint.get("model_config", {})
+    if not isinstance(model_config, dict):
+        model_config = {}
+    input_mean, input_std = checkpoint_input_normalization(checkpoint)
+    source_context_feature_fusion = bool(
+        model_config.get("source_context_feature_fusion", False)
+    )
+    source_context_aux_for_eval = bool(
+        source_context_feature_fusion
+        and not checkpoint_detection_mode
+        and bool(augmentation_config.get("classification_source_context_aux", False))
+    )
     eval_transform = build_eval_transform(
         image_size=image_size,
         resize_mode=augmentation_config.get("resize_mode", "pad"),
@@ -1756,6 +2063,23 @@ def main() -> None:
         background_suppression_mode=str(augmentation_config.get("background_suppression_mode", "none") or "none"),
         background_suppression_margin=float(augmentation_config.get("background_suppression_margin", 0.08) or 0.08),
         background_suppression_blur_radius=float(augmentation_config.get("background_suppression_blur_radius", 7.0) or 7.0),
+        surface_detail_amplification_mode=str(
+            augmentation_config.get("surface_detail_amplification_mode", "none") or "none"
+        ),
+        surface_detail_amplification_strength=float(
+            augmentation_config.get("surface_detail_amplification_strength", 0.0) or 0.0
+        ),
+        surface_detail_amplification_blur_radius=float(
+            augmentation_config.get("surface_detail_amplification_blur_radius", 1.25) or 1.25
+        ),
+        surface_detail_amplification_foreground_weight=float(
+            augmentation_config.get("surface_detail_amplification_foreground_weight", 0.85) or 0.85
+        ),
+        eval_surface_detail_amplification=bool(
+            augmentation_config.get("eval_surface_detail_amplification", False)
+        ),
+        mean=input_mean,
+        std=input_std,
     )
     if data_spec.data_format == "classification_folder":
         if checkpoint_detection_mode:
@@ -1777,6 +2101,24 @@ def main() -> None:
             crop_to_primary_object=crop_to_primary_object,
             classification_target=not checkpoint_detection_mode,
             classification_object_crops=classification_object_crops,
+            classification_bbox_metadata=not checkpoint_detection_mode,
+            classification_source_context_aux=source_context_aux_for_eval,
+            classification_source_context_mode=str(
+                augmentation_config.get("classification_source_context_mode", "desaturate_blur")
+                or "desaturate_blur"
+            ),
+            classification_source_context_margin_ratio=float(
+                augmentation_config.get("classification_source_context_margin_ratio", 0.12)
+                or 0.12
+            ),
+            classification_source_context_background_alpha=float(
+                augmentation_config.get("classification_source_context_background_alpha", 0.35)
+                or 0.35
+            ),
+            classification_source_context_blur_radius=float(
+                augmentation_config.get("classification_source_context_blur_radius", 7.0)
+                or 7.0
+            ),
         )
     dataloader_kwargs, dataloader_summary = build_safe_dataloader_kwargs(
         requested_num_workers=args.num_workers,
@@ -1857,7 +2199,9 @@ def main() -> None:
         adaptive_count_margin=args.adaptive_count_margin,
         adaptive_min_detections=args.adaptive_min_detections,
         collect_prediction_records=True,
+        bbox_token_prior_source=args.bbox_token_prior_source,
     )
+    metrics["patch_evidence_linear_verifier"] = patch_evidence_linear_verifier_summary
 
     output_dir = args.output_dir
     if output_dir is None:
@@ -1903,6 +2247,7 @@ def main() -> None:
         "loss": metrics["loss"],
         "tta": args.tta,
         "confidence_threshold": confidence_threshold,
+        "patch_evidence_linear_verifier": patch_evidence_linear_verifier_summary,
     }
     if "bbox" in metrics:
         summary["bbox"] = metrics["bbox"]

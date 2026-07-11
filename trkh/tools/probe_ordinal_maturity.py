@@ -91,6 +91,21 @@ def _build_dataset(data_spec, split: str, augmentation_config: Dict[str, object]
         background_suppression_blur_radius=float(
             augmentation_config.get("background_suppression_blur_radius", 7.0) or 7.0
         ),
+        surface_detail_amplification_mode=str(
+            augmentation_config.get("surface_detail_amplification_mode", "none") or "none"
+        ),
+        surface_detail_amplification_strength=float(
+            augmentation_config.get("surface_detail_amplification_strength", 0.0) or 0.0
+        ),
+        surface_detail_amplification_blur_radius=float(
+            augmentation_config.get("surface_detail_amplification_blur_radius", 1.25) or 1.25
+        ),
+        surface_detail_amplification_foreground_weight=float(
+            augmentation_config.get("surface_detail_amplification_foreground_weight", 0.85) or 0.85
+        ),
+        eval_surface_detail_amplification=bool(
+            augmentation_config.get("eval_surface_detail_amplification", False)
+        ),
     )
     return ClassificationFolderDataset.from_data_spec(
         data_spec=data_spec,

@@ -907,31 +907,42 @@ def plot_all_training_metrics(history_csv: Path, output_path: Path) -> None:
     if not numeric_series:
         return
 
-    columns = 3
-    rows_count = int(math.ceil(len(numeric_series) / columns))
-    figure, axes = plt.subplots(
-        rows_count,
-        columns,
-        figsize=(18, max(4.0, rows_count * 3.1)),
-        squeeze=False,
-    )
-    axes_flat = axes.ravel()
-
-    for axis, (field_name, values) in zip(axes_flat, numeric_series.items()):
-        axis.plot(epochs, values, linewidth=1.8)
-        axis.set_title(field_name)
-        axis.set_xlabel("Epoch")
-        axis.grid(True, linestyle="--", linewidth=0.5, alpha=0.4)
-        if field_name == "learning_rate" and any(value > 0.0 for value in values):
-            axis.set_yscale("log")
-
-    for axis in axes_flat[len(numeric_series):]:
-        axis.axis("off")
-
-    figure.tight_layout()
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    figure.savefig(output_path, dpi=200, bbox_inches="tight")
-    plt.close(figure)
+    columns = 3
+    max_plots_per_figure = 45
+    series_items = list(numeric_series.items())
+    for chunk_index in range(0, len(series_items), max_plots_per_figure):
+        chunk = series_items[chunk_index : chunk_index + max_plots_per_figure]
+        rows_count = int(math.ceil(len(chunk) / columns))
+        figure, axes = plt.subplots(
+            rows_count,
+            columns,
+            figsize=(18, max(4.0, rows_count * 3.1)),
+            squeeze=False,
+        )
+        axes_flat = axes.ravel()
+
+        for axis, (field_name, values) in zip(axes_flat, chunk):
+            axis.plot(epochs, values, linewidth=1.8)
+            axis.set_title(field_name)
+            axis.set_xlabel("Epoch")
+            axis.grid(True, linestyle="--", linewidth=0.5, alpha=0.4)
+            if field_name == "learning_rate" and any(value > 0.0 for value in values):
+                axis.set_yscale("log")
+
+        for axis in axes_flat[len(chunk):]:
+            axis.axis("off")
+
+        figure.tight_layout()
+        if chunk_index == 0:
+            chunk_output = output_path
+        else:
+            part_number = int(chunk_index / max_plots_per_figure) + 1
+            chunk_output = output_path.with_name(
+                f"{output_path.stem}_part{part_number:02d}{output_path.suffix}"
+            )
+        figure.savefig(chunk_output, dpi=200, bbox_inches="tight")
+        plt.close(figure)
 
 
 def plot_per_class_training_metrics(

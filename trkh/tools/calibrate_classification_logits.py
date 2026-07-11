@@ -73,6 +73,27 @@ def _probability_columns(fieldnames: Sequence[str]) -> Tuple[List[str], List[str
     )
 
 
+def _load_sidecar_class_names(path: Path, expected_count: int) -> List[str]:
+    candidates = [
+        path.with_name(f"{path.stem}_metrics.json"),
+    ]
+    if path.stem.startswith("predictions_"):
+        split_name = path.stem.removeprefix("predictions_")
+        candidates.append(path.with_name(f"metrics_{split_name}.json"))
+    for candidate in candidates:
+        if not candidate.exists():
+            continue
+        try:
+            payload = json.loads(candidate.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        for key in ("target_classes", "classes", "class_names"):
+            values = payload.get(key)
+            if isinstance(values, list) and len(values) == expected_count:
+                return [str(value) for value in values]
+    return []
+
+
 def read_prediction_csv(
     path: Path,
 ) -> Tuple[List[Dict[str, str]], List[str], Tensor, Tensor]:
@@ -82,14 +103,37 @@ def read_prediction_csv(
         fieldnames = list(reader.fieldnames or [])
     if not rows:
         raise ValueError(f"Prediction CSV is empty: {path}")
-    if "target_index" not in fieldnames:
-        raise ValueError(f"Prediction CSV is missing target_index: {path}")
-
     probability_columns, class_names = _probability_columns(fieldnames)
-    targets = torch.tensor(
-        [int(row["target_index"]) for row in rows],
-        dtype=torch.int64,
-    )
+    sidecar_class_names = _load_sidecar_class_names(Path(path), len(probability_columns))
+    if sidecar_class_names and all(str(name).isdigit() for name in class_names):
+        class_names = sidecar_class_names
+    if "target_index" in fieldnames:
+        targets = torch.tensor(
+            [int(row["target_index"]) for row in rows],
+            dtype=torch.int64,
+        )
+    elif "y_true" in fieldnames:
+        targets = torch.tensor(
+            [int(row["y_true"]) for row in rows],
+            dtype=torch.int64,
+        )
+        for row, target in zip(rows, targets.tolist()):
+            row["target_index"] = str(int(target))
+    elif "true_name" in fieldnames:
+        name_to_index = {str(name): index for index, name in enumerate(class_names)}
+        missing = sorted({str(row.get("true_name", "")) for row in rows} - set(name_to_index))
+        if missing:
+            raise ValueError(
+                f"Cannot map true_name values to class indices in {path}: {missing[:5]}"
+            )
+        target_values = [int(name_to_index[str(row["true_name"])]) for row in rows]
+        targets = torch.tensor(target_values, dtype=torch.int64)
+        for row, target in zip(rows, target_values):
+            row["target_index"] = str(int(target))
+    else:
+        raise ValueError(
+            f"Prediction CSV is missing target_index/y_true/true_name and cannot infer targets: {path}"
+        )
     probabilities = torch.tensor(
         [
             [float(row[column]) for column in probability_columns]

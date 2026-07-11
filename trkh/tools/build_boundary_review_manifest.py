@@ -87,6 +87,15 @@ def _float_value(row: Mapping[str, str], keys: Sequence[str], default: float = 0
     return float(default)
 
 
+def _cartography_row_is_unseen(row: Mapping[str, str]) -> bool:
+    if "seen_count" not in row:
+        return False
+    try:
+        return float(str(row.get("seen_count", "") or "0").strip()) <= 0.0
+    except ValueError:
+        return True
+
+
 def _probability_columns(fieldnames: Sequence[str]) -> Tuple[Dict[int, str], List[str]]:
     indexed: Dict[int, Tuple[str, str]] = {}
     for field in fieldnames:
@@ -305,6 +314,7 @@ def build_manifest(
     selected: List[Dict[str, object]] = []
     skipped_other_split = 0
     skipped_unknown_split = 0
+    skipped_unseen = 0
     image_stats_rows = 0
     for row_index, row in enumerate(prediction_rows):
         image_path = _path_value(row)
@@ -320,6 +330,9 @@ def build_manifest(
                 raise ValueError(
                     f"Prediction CSV mixes split {row_split!r} into requested split {active_split!r}: {image_path}"
                 )
+            continue
+        if _cartography_row_is_unseen(row):
+            skipped_unseen += 1
             continue
 
         probabilities = _probabilities(row, prob_columns)
@@ -378,9 +391,11 @@ def build_manifest(
         if not reason:
             continue
         boundary_pair = pair or f"{target}-{prediction}"
+        sample_index = _int_value(row, "sample_index", default=row_index)
         record: Dict[str, object] = {
             "review_id": "",
             "source_row_index": int(row_index),
+            "sample_index": int(sample_index),
             "split": row_split,
             "image_path": str(Path(image_path).resolve()),
             "target_index": int(target),
@@ -453,6 +468,7 @@ def build_manifest(
         field_order = [
             "review_id",
             "source_row_index",
+            "sample_index",
             "split",
             "image_path",
             "target_index",
@@ -478,6 +494,7 @@ def build_manifest(
         fieldnames_out = [
             "review_id",
             "source_row_index",
+            "sample_index",
             "split",
             "image_path",
             "target_index",
@@ -515,6 +532,7 @@ def build_manifest(
         "selected_rows": int(len(kept)),
         "skipped_other_split": int(skipped_other_split),
         "skipped_unknown_split": int(skipped_unknown_split),
+        "skipped_unseen": int(skipped_unseen),
         "image_stats_rows": int(image_stats_rows),
         "class_names": class_names,
         "pairs": [name for _, _, name in parsed_pairs],

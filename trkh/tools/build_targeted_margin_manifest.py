@@ -48,6 +48,15 @@ def _float_value(row: Dict[str, str], *names: str) -> Optional[float]:
     return None
 
 
+def _cartography_row_is_unseen(row: Dict[str, str]) -> bool:
+    if "seen_count" not in row:
+        return False
+    try:
+        return float(str(row.get("seen_count", "") or "0").strip()) <= 0.0
+    except ValueError:
+        return True
+
+
 def _parse_pairs(text: str) -> set[Tuple[int, int]]:
     pairs: set[Tuple[int, int]] = set()
     for item in str(text or "").replace(";", ",").split(","):
@@ -105,6 +114,7 @@ def build_manifest(
         raise FileNotFoundError(f"Missing predictions CSV: {predictions}")
     rows: List[Dict[str, str]] = []
     skipped_non_train = 0
+    skipped_unseen = 0
     skipped_invalid = 0
     by_reason: Counter[str] = Counter()
     by_pair: Counter[str] = Counter()
@@ -122,6 +132,9 @@ def build_manifest(
                 continue
             if _looks_like_non_train(image_path) and not allow_non_train_paths:
                 skipped_non_train += 1
+                continue
+            if _cartography_row_is_unseen(row):
+                skipped_unseen += 1
                 continue
             target_index = _int_value(row, "target_index", "y_true", "label", "label_index")
             prediction_index = _int_value(row, "prediction_index", "y_pred", "pred", "pred_index")
@@ -220,6 +233,7 @@ def build_manifest(
         "dry_run": bool(dry_run),
         "rows": int(len(rows)),
         "skipped_non_train": int(skipped_non_train),
+        "skipped_unseen": int(skipped_unseen),
         "skipped_invalid": int(skipped_invalid),
         "focus_class_index": int(focus_class_index),
         "target_margin": float(target_margin),

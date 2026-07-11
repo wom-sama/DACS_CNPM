@@ -19,6 +19,7 @@ from trkh.inference.inference import (
 )
 from trkh.inference.stream_infer import (
     StreamSmoother,
+    build_classification_prediction_result,
     build_output_video_path,
     compute_preview_size,
     create_video_writer,
@@ -33,7 +34,9 @@ from trkh.core.utils import PredictionDriftMonitor, load_checkpoint
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Suy dien webcam/video bang TensorRT DETR ViT-Registers engine.")
+    parser = argparse.ArgumentParser(
+        description="Suy dien webcam/video bang TensorRT classification hoac detection engine."
+    )
     parser.add_argument("--engine", type=Path, required=True)
     parser.add_argument("--checkpoint", type=Path, required=True)
     parser.add_argument("--source", type=str, default=None)
@@ -289,42 +292,50 @@ def main() -> None:
                 tensor, meta = transform(pil_image, return_meta=True)
                 outputs = predict_tensor_outputs_trt(classifier, tensor.unsqueeze(0))
                 if "boxes" not in outputs:
-                    raise RuntimeError("TensorRT stream moi yeu cau engine detection co output boxes.")
-                objectness_logits = outputs.get("objectness_logits")
-                smoothed_logits, smoothed_boxes, smoothed_objectness_logits = smoother.smooth_query_outputs(
-                    outputs["logits"][0].detach().cpu(),
-                    outputs["boxes"][0].detach().cpu(),
-                    objectness_logits[0].detach().cpu() if objectness_logits is not None else None,
-                )
-                raw_detections = post_process_detections(
-                    logits=smoothed_logits.unsqueeze(0),
-                    boxes=smoothed_boxes.unsqueeze(0),
-                    objectness_logits=(
-                        smoothed_objectness_logits.unsqueeze(0)
-                        if smoothed_objectness_logits is not None
-                        else None
-                    ),
-                    conf_threshold=checkpoint.get("resolved_confidence_threshold"),
-                    max_detections=max_detections,
-                    nms_iou_threshold=args.nms_iou_threshold,
-                )[0]
-                detections: List[Dict[str, object]] = []
-                for detection in raw_detections:
-                    bbox_payload = invert_bbox_from_transform_meta(detection["box"], meta)
-                    detections.append(
-                        {
-                            "query_index": int(detection["query_index"]),
-                            "class_index": int(detection["class_index"]),
-                            "class_name": str(checkpoint["class_names"][int(detection["class_index"])]),
-                            "probability": float(detection["probability"]),
-                            "bbox": bbox_payload,
-                        }
+                    smoothed_logits = smoother.smooth_class_logits(outputs["logits"][0].detach().cpu())
+                    last_prediction_result = build_classification_prediction_result(
+                        logits=smoothed_logits,
+                        class_names=list(checkpoint["class_names"]),
+                        top_k=args.top_k,
+                        confidence_threshold=checkpoint.get("resolved_confidence_threshold"),
                     )
-                last_prediction_result = {
-                    "detections": detections,
-                    "num_detections": len(detections),
-                }
-                drift_prediction = detections[0] if detections else None
+                    drift_prediction = last_prediction_result.get("top_prediction")
+                else:
+                    objectness_logits = outputs.get("objectness_logits")
+                    smoothed_logits, smoothed_boxes, smoothed_objectness_logits = smoother.smooth_query_outputs(
+                        outputs["logits"][0].detach().cpu(),
+                        outputs["boxes"][0].detach().cpu(),
+                        objectness_logits[0].detach().cpu() if objectness_logits is not None else None,
+                    )
+                    raw_detections = post_process_detections(
+                        logits=smoothed_logits.unsqueeze(0),
+                        boxes=smoothed_boxes.unsqueeze(0),
+                        objectness_logits=(
+                            smoothed_objectness_logits.unsqueeze(0)
+                            if smoothed_objectness_logits is not None
+                            else None
+                        ),
+                        conf_threshold=checkpoint.get("resolved_confidence_threshold"),
+                        max_detections=max_detections,
+                        nms_iou_threshold=args.nms_iou_threshold,
+                    )[0]
+                    detections: List[Dict[str, object]] = []
+                    for detection in raw_detections:
+                        bbox_payload = invert_bbox_from_transform_meta(detection["box"], meta)
+                        detections.append(
+                            {
+                                "query_index": int(detection["query_index"]),
+                                "class_index": int(detection["class_index"]),
+                                "class_name": str(checkpoint["class_names"][int(detection["class_index"])]),
+                                "probability": float(detection["probability"]),
+                                "bbox": bbox_payload,
+                            }
+                        )
+                    last_prediction_result = {
+                        "detections": detections,
+                        "num_detections": len(detections),
+                    }
+                    drift_prediction = detections[0] if detections else None
                 drift_event = drift_monitor.update(
                     None if drift_prediction is None else int(drift_prediction.get("class_index", -1))
                 )
@@ -349,6 +360,14 @@ def main() -> None:
                 draw_prediction_overlay(
                     frame_bgr,
                     overlay_detections,
+                    fps=smoothed_fps,
+                    classify_every=args.classify_every,
+                    smoothing_mode=args.temporal_smoothing,
+                )
+            elif last_prediction_result.get("predictions"):
+                draw_prediction_overlay(
+                    frame_bgr,
+                    list(last_prediction_result.get("predictions", [])),
                     fps=smoothed_fps,
                     classify_every=args.classify_every,
                     smoothing_mode=args.temporal_smoothing,

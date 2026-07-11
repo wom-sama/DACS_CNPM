@@ -1,0 +1,6 @@
+format: classification_folder
+path: D:/DataAI/AIEx/newdataset/class_f
+train: train
+val: val
+test: test
+class_name_mode: raw

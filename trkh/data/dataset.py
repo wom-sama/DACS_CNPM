@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-import math
 import logging
-from collections import OrderedDict
+import math
+import re
+from collections import Counter, OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Dict, Iterator, List, Mapping, Optional, Sequence, Tuple, Union
@@ -22,6 +23,7 @@ from trkh.core.config import IMAGENET_MEAN, IMAGENET_STD, DataSpec, load_data_sp
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
+CLASSIFICATION_CROP_NAME = re.compile(r"^(?P<source>.+)_box(?P<box>\d+)$", re.IGNORECASE)
 logger = logging.getLogger(__name__)
 PIL_RESAMPLE_MAP = {
     InterpolationMode.NEAREST: Image.Resampling.NEAREST,
@@ -263,6 +265,114 @@ def _suppress_background_image(
     return Image.composite(base, background, alpha)
 
 
+def _surface_detail_foreground_mask_array(image: Image.Image, margin: float = 0.08) -> np.ndarray:
+    base = image.convert("RGB")
+    pseudo_mask = _pseudo_foreground_mask_array(base, margin=margin)
+    rgb = np.asarray(base, dtype=np.float32) / 255.0
+    if rgb.ndim != 3 or rgb.shape[-1] != 3:
+        return pseudo_mask
+    height, width = rgb.shape[:2]
+    if height < 4 or width < 4:
+        return pseudo_mask
+
+    fill_rgb = np.asarray(_imagenet_fill(IMAGENET_MEAN), dtype=np.float32).reshape(1, 1, 3) / 255.0
+    fill_delta = np.abs(rgb - fill_rgb).mean(axis=2)
+    not_padding = fill_delta >= 0.035
+
+    max_channel = rgb.max(axis=2)
+    min_channel = rgb.min(axis=2)
+    delta = max_channel - min_channel
+    saturation = np.where(max_channel > 1e-6, delta / np.maximum(max_channel, 1e-6), 0.0)
+    hue = np.zeros_like(max_channel, dtype=np.float32)
+    non_gray = delta > 1e-6
+    red_is_max = (rgb[..., 0] >= rgb[..., 1]) & (rgb[..., 0] >= rgb[..., 2])
+    green_is_max = (rgb[..., 1] > rgb[..., 0]) & (rgb[..., 1] >= rgb[..., 2])
+    blue_is_max = ~(red_is_max | green_is_max)
+    hue[red_is_max & non_gray] = ((rgb[..., 1] - rgb[..., 2]) / np.maximum(delta, 1e-6))[red_is_max & non_gray] % 6.0
+    hue[green_is_max & non_gray] = ((rgb[..., 2] - rgb[..., 0]) / np.maximum(delta, 1e-6) + 2.0)[green_is_max & non_gray]
+    hue[blue_is_max & non_gray] = ((rgb[..., 0] - rgb[..., 1]) / np.maximum(delta, 1e-6) + 4.0)[blue_is_max & non_gray]
+    hue = (hue / 6.0).astype(np.float32)
+
+    yy, xx = np.mgrid[0:height, 0:width].astype(np.float32)
+    xx = (xx + 0.5) / max(1.0, float(width)) * 2.0 - 1.0
+    yy = (yy + 0.5) / max(1.0, float(height)) * 2.0 - 1.0
+    central = ((xx / 0.84) ** 2 + (yy / 0.92) ** 2) <= 1.0
+    broad_central = ((xx / 0.95) ** 2 + (yy / 0.98) ** 2) <= 1.0
+
+    green_yellow = (hue >= 0.08) & (hue <= 0.45) & (saturation >= 0.05) & (max_channel >= 0.12)
+    orange_brown = (hue >= 0.03) & (hue <= 0.18) & (saturation >= 0.08) & (max_channel >= 0.08)
+    fruit_like = green_yellow | orange_brown
+    mask = pseudo_mask & not_padding & ((fruit_like & broad_central) | central)
+
+    mask_fraction = float(mask.mean())
+    if mask_fraction > 0.78:
+        mask = pseudo_mask & not_padding & central
+        mask_fraction = float(mask.mean())
+    if mask_fraction < 0.04:
+        fallback = pseudo_mask & not_padding & broad_central
+        mask = fallback if float(fallback.mean()) >= 0.03 else pseudo_mask
+
+    mask_image = Image.fromarray((mask.astype(np.uint8) * 255), mode="L")
+    mask_image = mask_image.filter(ImageFilter.MaxFilter(size=5)).filter(ImageFilter.MinFilter(size=5))
+    mask = np.asarray(mask_image, dtype=np.uint8) > 127
+    component = _largest_connected_component(mask)
+    if 0.04 <= float(component.mean()) <= 0.88:
+        mask = component
+    return mask
+
+
+def _amplify_surface_detail_image(
+    image: Image.Image,
+    *,
+    mode: str = "none",
+    strength: float = 0.0,
+    blur_radius: float = 1.25,
+    foreground_margin: float = 0.08,
+    foreground_weight: float = 0.85,
+) -> Image.Image:
+    normalized_mode = str(mode or "none").strip().lower().replace("-", "_")
+    if normalized_mode in {"", "none", "off", "false"}:
+        return image
+    strength = max(0.0, float(strength))
+    if strength <= 0.0:
+        return image
+    blur_radius = max(0.1, float(blur_radius))
+    foreground_weight = max(0.0, min(1.0, float(foreground_weight)))
+
+    base = image.convert("RGB")
+    blurred = base.filter(ImageFilter.GaussianBlur(radius=blur_radius))
+    rgb = np.asarray(base, dtype=np.float32) / 255.0
+    low_frequency = np.asarray(blurred, dtype=np.float32) / 255.0
+    residual = rgb - low_frequency
+
+    if normalized_mode in {"unsharp", "rgb_unsharp", "foreground_unsharp"}:
+        enhanced = rgb + strength * residual
+    elif normalized_mode in {"luma", "luma_residual", "foreground_luma"}:
+        luminance = (0.299 * rgb[..., 0] + 0.587 * rgb[..., 1] + 0.114 * rgb[..., 2]).astype(np.float32)
+        low_luminance = (
+            0.299 * low_frequency[..., 0]
+            + 0.587 * low_frequency[..., 1]
+            + 0.114 * low_frequency[..., 2]
+        ).astype(np.float32)
+        target_luminance = np.clip(luminance + strength * (luminance - low_luminance), 0.0, 1.0)
+        ratio = np.clip(target_luminance / np.maximum(luminance, 1e-3), 0.55, 1.75)
+        enhanced = rgb * ratio[..., None]
+    else:
+        raise ValueError(f"surface_detail_amplification_mode khong hop le: {mode}")
+
+    use_foreground = normalized_mode.startswith("foreground") or foreground_weight < 1.0
+    if use_foreground:
+        try:
+            mask = _surface_detail_foreground_mask_array(base, margin=float(foreground_margin))
+            alpha = np.asarray(_soft_mask_image(mask, radius=max(1.0, blur_radius * 1.5)), dtype=np.float32) / 255.0
+            alpha = (1.0 - foreground_weight) + foreground_weight * alpha
+            enhanced = rgb + (enhanced - rgb) * alpha[..., None]
+        except Exception:
+            pass
+    enhanced = np.clip(enhanced, 0.0, 1.0)
+    return Image.fromarray((enhanced * 255.0).round().astype(np.uint8), mode="RGB")
+
+
 def _apply_mixup_batch(images: Tensor, targets: Tensor, alpha: float) -> Tuple[Tensor, Tensor]:
     if alpha <= 0.0 or images.size(0) < 2:
         return images, targets
@@ -392,6 +502,8 @@ def _apply_foreground_background_mix_batch(
     min_foreground_fraction: float = 0.06,
     max_foreground_fraction: float = 0.88,
     softness: float = 5.0,
+    mask_source: str = "pseudo",
+    bboxes: Optional[Tensor] = None,
     mean: Sequence[float] = IMAGENET_MEAN,
     std: Sequence[float] = IMAGENET_STD,
 ) -> Tensor:
@@ -401,14 +513,44 @@ def _apply_foreground_background_mix_batch(
     if torch.rand(1).item() >= probability:
         return images
 
-    masks = _pseudo_foreground_mask_from_tensor_images(
-        images,
-        margin=margin,
-        min_fraction=min_foreground_fraction,
-        max_fraction=max_foreground_fraction,
-        mean=mean,
-        std=std,
-    )
+    normalized_mask_source = str(mask_source or "pseudo").strip().lower()
+    if normalized_mask_source not in {"pseudo", "bbox", "crop_bbox"}:
+        raise ValueError(
+            "foreground-background mix mask_source phai la 'pseudo', 'bbox', hoac 'crop_bbox'."
+        )
+
+    masks: Optional[Tensor] = None
+    if normalized_mask_source in {"bbox", "crop_bbox"} and torch.is_tensor(bboxes):
+        boxes = bboxes.detach().to(device=images.device, dtype=torch.float32)
+        if boxes.ndim == 2 and boxes.size(0) == images.size(0) and boxes.size(1) == 4:
+            height = int(images.size(-2))
+            width = int(images.size(-1))
+            centers = boxes[:, :2].clamp(0.0, 1.0)
+            sizes = boxes[:, 2:].clamp(min=0.0, max=1.0)
+            margin_value = float(max(0.0, margin))
+            x1 = (centers[:, 0] - sizes[:, 0] * 0.5 - margin_value).clamp(0.0, 1.0)
+            y1 = (centers[:, 1] - sizes[:, 1] * 0.5 - margin_value).clamp(0.0, 1.0)
+            x2 = (centers[:, 0] + sizes[:, 0] * 0.5 + margin_value).clamp(0.0, 1.0)
+            y2 = (centers[:, 1] + sizes[:, 1] * 0.5 + margin_value).clamp(0.0, 1.0)
+            ys = (torch.arange(height, device=images.device, dtype=torch.float32) + 0.5) / max(1, height)
+            xs = (torch.arange(width, device=images.device, dtype=torch.float32) + 0.5) / max(1, width)
+            yy = ys.view(1, height, 1)
+            xx = xs.view(1, 1, width)
+            masks = (
+                (xx >= x1.view(-1, 1, 1))
+                & (xx <= x2.view(-1, 1, 1))
+                & (yy >= y1.view(-1, 1, 1))
+                & (yy <= y2.view(-1, 1, 1))
+            ).unsqueeze(1)
+    if masks is None:
+        masks = _pseudo_foreground_mask_from_tensor_images(
+            images,
+            margin=margin,
+            min_fraction=min_foreground_fraction,
+            max_fraction=max_foreground_fraction,
+            mean=mean,
+            std=std,
+        )
     fractions = masks.float().flatten(1).mean(dim=1)
     valid = (fractions >= float(min_foreground_fraction)) & (
         fractions <= float(max_foreground_fraction)
@@ -1081,6 +1223,7 @@ class TrainBatchCollator:
     foreground_background_mix_min_foreground_fraction: float = 0.06
     foreground_background_mix_max_foreground_fraction: float = 0.88
     foreground_background_mix_softness: float = 5.0
+    foreground_background_mix_mask_source: str = "pseudo"
 
     def __post_init__(self) -> None:
         self.num_classes = max(1, int(self.num_classes))
@@ -1122,13 +1265,24 @@ class TrainBatchCollator:
             1.0,
         )
         self.foreground_background_mix_softness = max(0.0, float(self.foreground_background_mix_softness))
+        self.foreground_background_mix_mask_source = str(
+            self.foreground_background_mix_mask_source or "pseudo"
+        ).strip().lower()
+        if self.foreground_background_mix_mask_source not in {"pseudo", "bbox", "crop_bbox"}:
+            raise ValueError(
+                "foreground_background_mix_mask_source phai la 'pseudo', 'bbox', hoac 'crop_bbox'."
+            )
         if self.targeted_copy_paste_class_scales is not None:
             self.targeted_copy_paste_class_scales = torch.tensor(
                 list(self.targeted_copy_paste_class_scales),
                 dtype=torch.float32,
             ).clamp(min=1.0)
 
-    def _apply_classification_background_mix(self, images: Tensor) -> Tensor:
+    def _apply_classification_background_mix(
+        self,
+        images: Tensor,
+        bboxes: Optional[Tensor] = None,
+    ) -> Tensor:
         return _apply_foreground_background_mix_batch(
             images,
             probability=self.foreground_background_mix_probability,
@@ -1136,6 +1290,8 @@ class TrainBatchCollator:
             min_foreground_fraction=self.foreground_background_mix_min_foreground_fraction,
             max_foreground_fraction=self.foreground_background_mix_max_foreground_fraction,
             softness=self.foreground_background_mix_softness,
+            mask_source=self.foreground_background_mix_mask_source,
+            bboxes=bboxes,
         )
 
     def __call__(self, batch) -> Tuple[Tensor, Tensor]:
@@ -1221,9 +1377,69 @@ class TrainBatchCollator:
                     [sample[2]["bbox"] for sample in batch],
                     dim=0,
                 ).to(dtype=torch.float32)
+            if "crop_bbox" in batch[0][2]:
+                metadata["crop_bbox"] = torch.stack(
+                    [sample[2]["crop_bbox"] for sample in batch],
+                    dim=0,
+                ).to(dtype=torch.float32)
+            if "source_context_image" in batch[0][2]:
+                metadata["source_context_image"] = torch.stack(
+                    [sample[2]["source_context_image"] for sample in batch],
+                    dim=0,
+                ).to(dtype=torch.float32)
+            if "source_context_image_mask" in batch[0][2]:
+                metadata["source_context_image_mask"] = torch.stack(
+                    [sample[2]["source_context_image_mask"] for sample in batch],
+                    dim=0,
+                ).to(dtype=torch.bool)
+            if "source_context_bbox" in batch[0][2]:
+                metadata["source_context_bbox"] = torch.stack(
+                    [sample[2]["source_context_bbox"] for sample in batch],
+                    dim=0,
+                ).to(dtype=torch.float32)
+            if "image_mask" in batch[0][2]:
+                metadata["image_mask"] = torch.stack(
+                    [sample[2]["image_mask"] for sample in batch],
+                    dim=0,
+                ).to(dtype=torch.bool)
+            if "paired_view_image" in batch[0][2]:
+                metadata["paired_view_image"] = torch.stack(
+                    [sample[2]["paired_view_image"] for sample in batch],
+                    dim=0,
+                ).to(dtype=torch.float32)
+            if "paired_view_label" in batch[0][2]:
+                metadata["paired_view_label"] = torch.as_tensor(
+                    [int(sample[2]["paired_view_label"]) for sample in batch],
+                    dtype=torch.long,
+                )
+            if "paired_view_bbox" in batch[0][2]:
+                metadata["paired_view_bbox"] = torch.stack(
+                    [sample[2]["paired_view_bbox"] for sample in batch],
+                    dim=0,
+                ).to(dtype=torch.float32)
+            if "paired_view_crop_bbox" in batch[0][2]:
+                metadata["paired_view_crop_bbox"] = torch.stack(
+                    [sample[2]["paired_view_crop_bbox"] for sample in batch],
+                    dim=0,
+                ).to(dtype=torch.float32)
+            if "paired_view_image_mask" in batch[0][2]:
+                metadata["paired_view_image_mask"] = torch.stack(
+                    [sample[2]["paired_view_image_mask"] for sample in batch],
+                    dim=0,
+                ).to(dtype=torch.bool)
             if "teacher_probs" in batch[0][2]:
                 metadata["teacher_probs"] = torch.stack(
                     [sample[2]["teacher_probs"] for sample in batch],
+                    dim=0,
+                ).to(dtype=torch.float32)
+            if "patch_router_teacher_probs" in batch[0][2]:
+                metadata["patch_router_teacher_probs"] = torch.stack(
+                    [sample[2]["patch_router_teacher_probs"] for sample in batch],
+                    dim=0,
+                ).to(dtype=torch.float32)
+            if "teacher_features" in batch[0][2]:
+                metadata["teacher_features"] = torch.stack(
+                    [sample[2]["teacher_features"] for sample in batch],
                     dim=0,
                 ).to(dtype=torch.float32)
             if "soft_target" in batch[0][2]:
@@ -1241,6 +1457,11 @@ class TrainBatchCollator:
                     [float(sample[2]["sample_weight"]) for sample in batch],
                     dtype=torch.float32,
                 )
+            if "quality_group_index" in batch[0][2]:
+                metadata["quality_group_index"] = torch.as_tensor(
+                    [int(sample[2]["quality_group_index"]) for sample in batch],
+                    dtype=torch.long,
+                )
             if "targeted_margin_negative" in batch[0][2]:
                 metadata["targeted_margin_negative"] = torch.as_tensor(
                     [int(sample[2]["targeted_margin_negative"]) for sample in batch],
@@ -1257,7 +1478,16 @@ class TrainBatchCollator:
                     dtype=torch.float32,
                 )
             if metadata:
-                images = self._apply_classification_background_mix(images)
+                bbox_mix_source = None
+                if self.foreground_background_mix_mask_source == "crop_bbox":
+                    bbox_mix_source = metadata.get("crop_bbox")
+                    if bbox_mix_source is None:
+                        bbox_mix_source = metadata.get("bbox")
+                elif self.foreground_background_mix_mask_source == "bbox":
+                    bbox_mix_source = metadata.get("bbox")
+                    if bbox_mix_source is None:
+                        bbox_mix_source = metadata.get("crop_bbox")
+                images = self._apply_classification_background_mix(images, bboxes=bbox_mix_source)
                 return images, labels, metadata
 
         targets = F.one_hot(labels, num_classes=self.num_classes).to(dtype=torch.float32)
@@ -1316,6 +1546,7 @@ def build_train_collate_fn(
     foreground_background_mix_min_foreground_fraction: float = 0.06,
     foreground_background_mix_max_foreground_fraction: float = 0.88,
     foreground_background_mix_softness: float = 5.0,
+    foreground_background_mix_mask_source: str = "pseudo",
 ) -> Callable:
     return TrainBatchCollator(
         num_classes=num_classes,
@@ -1340,6 +1571,7 @@ def build_train_collate_fn(
         foreground_background_mix_min_foreground_fraction=foreground_background_mix_min_foreground_fraction,
         foreground_background_mix_max_foreground_fraction=foreground_background_mix_max_foreground_fraction,
         foreground_background_mix_softness=foreground_background_mix_softness,
+        foreground_background_mix_mask_source=foreground_background_mix_mask_source,
     )
 
 
@@ -1364,6 +1596,12 @@ class ClassificationFolderSample:
     image_path: Path
     label: int
     class_name: str
+    yolo_source_image_path: Optional[Path] = None
+    yolo_label_path: Optional[Path] = None
+    yolo_source_id: str = ""
+    yolo_object: Optional[MangoObject] = None
+    yolo_object_count: int = 0
+    class_label_matches_yolo: Optional[bool] = None
 
 
 class ClassificationFolderDataset(Dataset):
@@ -1377,6 +1615,18 @@ class ClassificationFolderDataset(Dataset):
         class_augmentation_power: float = 0.75,
         class_augmentation_max_scale: float = 1.8,
         class_crop_margin_scales: Optional[Sequence[float]] = None,
+        paired_yolo_images_dir: Optional[Path] = None,
+        paired_yolo_labels_dir: Optional[Path] = None,
+        paired_yolo_class_names: Optional[Sequence[str]] = None,
+        classification_source_context: bool = False,
+        classification_source_context_mode: str = "desaturate_blur",
+        classification_source_context_layout: str = "full",
+        classification_source_context_margin_ratio: float = 0.12,
+        classification_source_context_background_alpha: float = 0.35,
+        classification_source_context_blur_radius: float = 7.0,
+        classification_source_context_inset_scale: float = 0.34,
+        classification_source_context_aux: bool = False,
+        classification_bbox_metadata: bool = False,
     ) -> None:
         self.root_dir = Path(root_dir)
         self.images_dir = self.root_dir
@@ -1388,6 +1638,65 @@ class ClassificationFolderDataset(Dataset):
         self.classification_target = True
         self.classification_object_crops = False
         self.crop_to_primary_object = False
+        self.paired_yolo_images_dir = Path(paired_yolo_images_dir) if paired_yolo_images_dir else None
+        self.paired_yolo_labels_dir = Path(paired_yolo_labels_dir) if paired_yolo_labels_dir else None
+        self.paired_yolo_class_names = (
+            [str(name) for name in paired_yolo_class_names]
+            if paired_yolo_class_names is not None
+            else list(self.class_names)
+        )
+        self.paired_yolo_enabled = bool(
+            self.paired_yolo_images_dir is not None and self.paired_yolo_labels_dir is not None
+        )
+        self.classification_source_context = bool(
+            self.paired_yolo_enabled and classification_source_context
+        )
+        self.classification_source_context_aux = bool(
+            self.paired_yolo_enabled and classification_source_context_aux
+        )
+        self.classification_source_context_mode = (
+            str(classification_source_context_mode or "desaturate_blur")
+            .strip()
+            .lower()
+            .replace("-", "_")
+        )
+        valid_source_context_modes = {"dim", "gray", "blur", "mean", "desaturate_blur", "blur_gray"}
+        if self.classification_source_context_mode not in valid_source_context_modes:
+            raise ValueError(
+                "classification_source_context_mode khong hop le: "
+                f"{classification_source_context_mode}. Hop le: {sorted(valid_source_context_modes)}"
+            )
+        self.classification_source_context_layout = (
+            str(classification_source_context_layout or "full")
+            .strip()
+            .lower()
+            .replace("-", "_")
+        )
+        valid_source_context_layouts = {"full"}
+        if self.classification_source_context_layout not in valid_source_context_layouts:
+            raise ValueError(
+                "classification_source_context_layout khong hop le cho classification_folder paired YOLO: "
+                f"{classification_source_context_layout}. Hop le: {sorted(valid_source_context_layouts)}"
+            )
+        self.classification_source_context_margin_ratio = max(
+            0.0,
+            float(classification_source_context_margin_ratio),
+        )
+        self.classification_source_context_background_alpha = min(
+            1.0,
+            max(0.0, float(classification_source_context_background_alpha)),
+        )
+        self.classification_source_context_blur_radius = max(
+            0.1,
+            float(classification_source_context_blur_radius),
+        )
+        self.classification_source_context_inset_scale = min(
+            0.75,
+            max(0.10, float(classification_source_context_inset_scale)),
+        )
+        self.classification_bbox_metadata = bool(
+            self.paired_yolo_enabled and classification_bbox_metadata
+        )
         self.class_aware_augmentation = bool(class_aware_augmentation)
         self.class_augmentation_power = max(0.0, float(class_augmentation_power))
         self.class_augmentation_max_scale = max(1.0, float(class_augmentation_max_scale))
@@ -1428,7 +1737,24 @@ class ClassificationFolderDataset(Dataset):
         class_augmentation_power: float = 0.75,
         class_augmentation_max_scale: float = 1.8,
         class_crop_margin_scales: Optional[Sequence[float]] = None,
+        paired_yolo_data_spec: Optional[DataSpec] = None,
+        classification_source_context: bool = False,
+        classification_source_context_mode: str = "desaturate_blur",
+        classification_source_context_layout: str = "full",
+        classification_source_context_margin_ratio: float = 0.12,
+        classification_source_context_background_alpha: float = 0.35,
+        classification_source_context_blur_radius: float = 7.0,
+        classification_source_context_inset_scale: float = 0.34,
+        classification_source_context_aux: bool = False,
+        classification_bbox_metadata: bool = False,
     ) -> "ClassificationFolderDataset":
+        paired_images_dir = None
+        paired_labels_dir = None
+        paired_class_names = None
+        if paired_yolo_data_spec is not None:
+            paired_images_dir = paired_yolo_data_spec.split_images_dir(split)
+            paired_labels_dir = paired_yolo_data_spec.split_labels_dir(split)
+            paired_class_names = paired_yolo_data_spec.class_names
         return cls(
             root_dir=data_spec.split_images_dir(split),
             class_names=data_spec.class_names,
@@ -1438,6 +1764,18 @@ class ClassificationFolderDataset(Dataset):
             class_augmentation_power=class_augmentation_power,
             class_augmentation_max_scale=class_augmentation_max_scale,
             class_crop_margin_scales=class_crop_margin_scales,
+            paired_yolo_images_dir=paired_images_dir,
+            paired_yolo_labels_dir=paired_labels_dir,
+            paired_yolo_class_names=paired_class_names,
+            classification_source_context=classification_source_context,
+            classification_source_context_mode=classification_source_context_mode,
+            classification_source_context_layout=classification_source_context_layout,
+            classification_source_context_margin_ratio=classification_source_context_margin_ratio,
+            classification_source_context_background_alpha=classification_source_context_background_alpha,
+            classification_source_context_blur_radius=classification_source_context_blur_radius,
+            classification_source_context_inset_scale=classification_source_context_inset_scale,
+            classification_source_context_aux=classification_source_context_aux,
+            classification_bbox_metadata=classification_bbox_metadata,
         )
 
     def _init_audit(self) -> Dict[str, object]:
@@ -1463,12 +1801,250 @@ class ClassificationFolderDataset(Dataset):
             "sample_invalid_bboxes": [],
             "sample_invalid_classes": [],
             "sample_missing_class_dirs": [],
+            "paired_yolo_enabled": bool(self.paired_yolo_enabled),
+            "paired_yolo_mapped_count": 0,
+            "paired_yolo_missing_mapping_count": 0,
+            "paired_yolo_label_mismatch_count": 0,
+            "paired_yolo_invalid_line_count": 0,
+            "paired_yolo_invalid_bbox_count": 0,
+            "paired_yolo_invalid_class_count": 0,
+            "paired_yolo_multi_object_count": 0,
+            "sample_paired_yolo_missing": [],
+            "sample_paired_yolo_label_mismatch": [],
+            "sample_paired_yolo_invalid_lines": [],
+            "sample_paired_yolo_invalid_bboxes": [],
+            "sample_paired_yolo_invalid_classes": [],
         }
 
     def _audit_append(self, key: str, value: object, limit: int = 10) -> None:
         sample_list = self.audit[key]
         if len(sample_list) < limit:
             sample_list.append(value)
+
+    @staticmethod
+    def _source_from_crop_path(path: Path) -> Tuple[str, int]:
+        match = CLASSIFICATION_CROP_NAME.match(path.stem)
+        if match is None:
+            raise ValueError(f"Cannot parse classification crop name: {path.name}")
+        return str(match.group("source")), int(match.group("box"))
+
+    def _find_paired_yolo_image(self, source_id: str) -> Optional[Path]:
+        if self.paired_yolo_images_dir is None:
+            return None
+        for suffix in IMAGE_EXTENSIONS:
+            candidate = self.paired_yolo_images_dir / f"{source_id}{suffix}"
+            if candidate.is_file():
+                return candidate
+        return None
+
+    def _load_paired_yolo_objects(self, label_path: Path) -> List[MangoObject]:
+        objects: List[MangoObject] = []
+        if not label_path.is_file():
+            return objects
+        lines = label_path.read_text(encoding="utf-8", errors="replace").splitlines()
+        for object_index, line in enumerate(lines):
+            parts = line.strip().split()
+            if len(parts) != 5:
+                self.audit["paired_yolo_invalid_line_count"] += 1
+                self._audit_append(
+                    "sample_paired_yolo_invalid_lines",
+                    {"file": label_path.name, "line": object_index + 1, "content": line},
+                )
+                continue
+            try:
+                label = int(parts[0])
+                bbox = (
+                    float(parts[1]),
+                    float(parts[2]),
+                    float(parts[3]),
+                    float(parts[4]),
+                )
+            except ValueError:
+                self.audit["paired_yolo_invalid_line_count"] += 1
+                self._audit_append(
+                    "sample_paired_yolo_invalid_lines",
+                    {"file": label_path.name, "line": object_index + 1, "content": line},
+                )
+                continue
+            if label < 0 or label >= len(self.paired_yolo_class_names):
+                self.audit["paired_yolo_invalid_class_count"] += 1
+                self._audit_append(
+                    "sample_paired_yolo_invalid_classes",
+                    {"file": label_path.name, "line": object_index + 1, "label": label},
+                )
+                continue
+            if any(value < 0.0 or value > 1.0 for value in bbox) or bbox[2] <= 0.0 or bbox[3] <= 0.0:
+                self.audit["paired_yolo_invalid_bbox_count"] += 1
+                self._audit_append(
+                    "sample_paired_yolo_invalid_bboxes",
+                    {"file": label_path.name, "line": object_index + 1, "bbox": bbox},
+                )
+                continue
+            objects.append(MangoObject(label=label, bbox=bbox, object_index=object_index))
+        return objects
+
+    def _paired_yolo_mapping_for_sample(
+        self,
+        image_path: Path,
+        class_label: int,
+    ) -> Tuple[Optional[Path], Optional[Path], str, Optional[MangoObject], int, Optional[bool]]:
+        if not self.paired_yolo_enabled or self.paired_yolo_labels_dir is None:
+            return None, None, "", None, 0, None
+        try:
+            source_id, box_index = self._source_from_crop_path(image_path)
+        except ValueError:
+            self.audit["paired_yolo_missing_mapping_count"] += 1
+            self._audit_append("sample_paired_yolo_missing", str(image_path))
+            return None, None, "", None, 0, None
+
+        source_image_path = self._find_paired_yolo_image(source_id)
+        label_path = self.paired_yolo_labels_dir / f"{source_id}.txt"
+        objects = self._load_paired_yolo_objects(label_path)
+        if source_image_path is None or box_index >= len(objects):
+            self.audit["paired_yolo_missing_mapping_count"] += 1
+            self._audit_append(
+                "sample_paired_yolo_missing",
+                {
+                    "crop": str(image_path),
+                    "source_id": source_id,
+                    "box_index": int(box_index),
+                    "source_image": str(source_image_path or ""),
+                    "label_path": str(label_path),
+                    "object_count": len(objects),
+                },
+            )
+            return source_image_path, label_path, source_id, None, len(objects), None
+
+        if len(objects) > 1:
+            self.audit["paired_yolo_multi_object_count"] += 1
+        selected = objects[int(box_index)]
+        label_matches = bool(int(selected.label) == int(class_label))
+        if not label_matches:
+            self.audit["paired_yolo_label_mismatch_count"] += 1
+            self._audit_append(
+                "sample_paired_yolo_label_mismatch",
+                {
+                    "crop": str(image_path),
+                    "source_id": source_id,
+                    "box_index": int(box_index),
+                    "class_f_label": int(class_label),
+                    "yolo_label": int(selected.label),
+                },
+            )
+        self.audit["paired_yolo_mapped_count"] += 1
+        return source_image_path, label_path, source_id, selected, len(objects), label_matches
+
+    def _apply_paired_yolo_source_context(
+        self,
+        image: Image.Image,
+        yolo_object: MangoObject,
+    ) -> Image.Image:
+        base = image.convert("RGB")
+        width, height = base.size
+        if width <= 0 or height <= 0:
+            return base
+
+        x1, y1, x2, y2 = bbox_xywh_to_xyxy(
+            yolo_object.bbox,
+            width=width,
+            height=height,
+        )
+        box_width = max(1.0, float(x2 - x1))
+        box_height = max(1.0, float(y2 - y1))
+        margin_ratio = max(0.0, float(self.classification_source_context_margin_ratio))
+        margin_x = box_width * margin_ratio
+        margin_y = box_height * margin_ratio
+        left = max(0, int(math.floor(float(x1) - margin_x)))
+        top = max(0, int(math.floor(float(y1) - margin_y)))
+        right = min(width, int(math.ceil(float(x2) + margin_x)))
+        bottom = min(height, int(math.ceil(float(y2) + margin_y)))
+        if right <= left or bottom <= top:
+            return base
+
+        mask = Image.new("L", (width, height), 0)
+        draw = ImageDraw.Draw(mask)
+        draw.rectangle((left, top, max(left, right - 1), max(top, bottom - 1)), fill=255)
+        mask = mask.filter(
+            ImageFilter.GaussianBlur(radius=max(1.0, min(width, height) * 0.0125))
+        )
+
+        mode = self.classification_source_context_mode
+        if mode == "dim":
+            background = Image.new("RGB", base.size, tuple(_imagenet_fill(IMAGENET_MEAN)))
+        elif mode == "gray":
+            background = ImageOps.grayscale(base).convert("RGB")
+        elif mode == "blur":
+            background = base.filter(
+                ImageFilter.GaussianBlur(
+                    radius=max(0.1, float(self.classification_source_context_blur_radius))
+                )
+            )
+        elif mode == "mean":
+            rgb = np.asarray(base, dtype=np.float32)
+            mean = np.median(rgb.reshape(-1, 3), axis=0).round().astype(np.uint8)
+            background = Image.new("RGB", base.size, tuple(int(value) for value in mean.tolist()))
+        elif mode in {"desaturate_blur", "blur_gray"}:
+            background = ImageOps.grayscale(base).convert("RGB").filter(
+                ImageFilter.GaussianBlur(
+                    radius=max(0.1, float(self.classification_source_context_blur_radius))
+                )
+            )
+        else:
+            raise ValueError(f"classification_source_context_mode khong hop le: {mode}")
+
+        outside = Image.blend(
+            background,
+            base,
+            float(self.classification_source_context_background_alpha),
+        )
+        return Image.composite(base, outside, mask)
+
+    def _paired_yolo_source_context_aux_metadata(
+        self,
+        *,
+        source_image: Image.Image,
+        yolo_object: MangoObject,
+        label: int,
+    ) -> Dict[str, Tensor]:
+        context_image = self._apply_paired_yolo_source_context(
+            image=source_image,
+            yolo_object=yolo_object,
+        )
+        context_target = {
+            "labels": torch.tensor([int(label)], dtype=torch.long),
+            "boxes": torch.tensor([yolo_object.bbox], dtype=torch.float32),
+            "augmentation_scale": torch.tensor(
+                [self._augmentation_scale_for_label(int(label))],
+                dtype=torch.float32,
+            ),
+        }
+        if self.transform is not None:
+            transformed = self.transform(context_image, target=context_target)
+            if isinstance(transformed, tuple) and len(transformed) == 2:
+                context_tensor, transformed_target = transformed
+            else:
+                raise TypeError("Transform detection phai tra ve (image_tensor, target).")
+        else:
+            context_tensor = TF.to_tensor(context_image)
+            transformed_target = context_target
+
+        bbox_value = transformed_target.get("boxes") if isinstance(transformed_target, dict) else None
+        if torch.is_tensor(bbox_value) and bbox_value.ndim == 2 and bbox_value.size(0) > 0:
+            context_bbox = bbox_value[0].to(dtype=torch.float32).clamp(0.0, 1.0)
+        else:
+            context_bbox = torch.tensor(yolo_object.bbox, dtype=torch.float32).clamp(0.0, 1.0)
+        metadata = {
+            "source_context_image": context_tensor,
+            "source_context_bbox": context_bbox,
+        }
+        context_mask = (
+            transformed_target.get("image_mask")
+            if isinstance(transformed_target, dict)
+            else None
+        )
+        if torch.is_tensor(context_mask):
+            metadata["source_context_image_mask"] = context_mask.to(dtype=torch.bool)
+        return metadata
 
     def _index_samples(self) -> List[ClassificationFolderSample]:
         samples: List[ClassificationFolderSample] = []
@@ -1496,11 +2072,25 @@ class ClassificationFolderDataset(Dataset):
             if isinstance(histogram, dict):
                 histogram["1"] = int(histogram.get("1", 0)) + len(image_paths)
             for image_path in image_paths:
+                (
+                    yolo_source_image_path,
+                    yolo_label_path,
+                    yolo_source_id,
+                    yolo_object,
+                    yolo_object_count,
+                    label_matches_yolo,
+                ) = self._paired_yolo_mapping_for_sample(image_path, class_index)
                 samples.append(
                     ClassificationFolderSample(
                         image_path=image_path,
                         label=int(class_index),
                         class_name=class_name,
+                        yolo_source_image_path=yolo_source_image_path,
+                        yolo_label_path=yolo_label_path,
+                        yolo_source_id=yolo_source_id,
+                        yolo_object=yolo_object,
+                        yolo_object_count=int(yolo_object_count),
+                        class_label_matches_yolo=label_matches_yolo,
                     )
                 )
         return samples
@@ -1557,6 +2147,26 @@ class ClassificationFolderDataset(Dataset):
         report["class_augmentation_scales"] = list(self.class_augmentation_scales)
         report["class_aware_augmentation"] = bool(self.class_aware_augmentation)
         report["image_cache"] = self.image_cache_stats()
+        report["paired_yolo"] = {
+            "enabled": bool(self.paired_yolo_enabled),
+            "images_dir": str(self.paired_yolo_images_dir) if self.paired_yolo_images_dir else "",
+            "labels_dir": str(self.paired_yolo_labels_dir) if self.paired_yolo_labels_dir else "",
+            "mapped_count": int(self.audit.get("paired_yolo_mapped_count", 0)),
+            "missing_mapping_count": int(self.audit.get("paired_yolo_missing_mapping_count", 0)),
+            "label_mismatch_count": int(self.audit.get("paired_yolo_label_mismatch_count", 0)),
+            "multi_object_count": int(self.audit.get("paired_yolo_multi_object_count", 0)),
+        }
+        report["classification_bbox_metadata"] = bool(self.classification_bbox_metadata)
+        report["classification_source_context"] = {
+            "enabled": bool(self.classification_source_context),
+            "aux_enabled": bool(self.classification_source_context_aux),
+            "mode": self.classification_source_context_mode,
+            "layout": self.classification_source_context_layout,
+            "margin_ratio": self.classification_source_context_margin_ratio,
+            "background_alpha": self.classification_source_context_background_alpha,
+            "blur_radius": self.classification_source_context_blur_radius,
+            "inset_scale": self.classification_source_context_inset_scale,
+        }
         return report
 
     def enable_image_cache(
@@ -1644,22 +2254,82 @@ class ClassificationFolderDataset(Dataset):
         sample = self.samples[int(index)]
         image = self._load_rgb_image(sample.image_path)
         augmentation_scale = self._augmentation_scale_for_label(sample.label)
+        yolo_object = sample.yolo_object
+        source_image: Optional[Image.Image] = None
+        if yolo_object is not None and sample.yolo_source_image_path is not None:
+            if self.classification_source_context or self.classification_source_context_aux:
+                source_image = self._load_rgb_image(sample.yolo_source_image_path)
+
+        main_image = image
+        main_bbox = (0.5, 0.5, 1.0, 1.0)
+        if self.classification_source_context and yolo_object is not None and source_image is not None:
+            main_image = self._apply_paired_yolo_source_context(
+                image=source_image,
+                yolo_object=yolo_object,
+            )
+            main_bbox = yolo_object.bbox
+
+        transformed_target: Optional[Mapping[str, object]] = None
         if self.transform is not None:
             target = {
                 "labels": torch.tensor([sample.label], dtype=torch.long),
-                "boxes": torch.tensor([[0.5, 0.5, 1.0, 1.0]], dtype=torch.float32),
+                "boxes": torch.tensor([main_bbox], dtype=torch.float32),
                 "augmentation_scale": torch.tensor([augmentation_scale], dtype=torch.float32),
             }
             try:
-                transformed = self.transform(image, target=target)
+                transformed = self.transform(main_image, target=target)
             except TypeError:
-                transformed = self.transform(image)
+                transformed = self.transform(main_image)
             if isinstance(transformed, tuple) and len(transformed) == 2:
                 image_tensor = transformed[0]
+                transformed_target = transformed[1] if isinstance(transformed[1], Mapping) else None
             else:
                 image_tensor = transformed
         else:
-            image_tensor = image
+            image_tensor = main_image
+            transformed_target = {
+                "labels": torch.tensor([sample.label], dtype=torch.long),
+                "boxes": torch.tensor([main_bbox], dtype=torch.float32),
+                "augmentation_scale": torch.tensor([augmentation_scale], dtype=torch.float32),
+            }
+
+        metadata: Dict[str, Tensor] = {}
+        if self.classification_bbox_metadata and yolo_object is not None:
+            metadata["bbox"] = torch.tensor(yolo_object.bbox, dtype=torch.float32).clamp(0.0, 1.0)
+            transformed_boxes = (
+                transformed_target.get("boxes")
+                if isinstance(transformed_target, Mapping)
+                else None
+            )
+            if (
+                torch.is_tensor(transformed_boxes)
+                and transformed_boxes.ndim == 2
+                and transformed_boxes.size(0) > 0
+            ):
+                areas = transformed_boxes[:, 2].clamp(min=0.0) * transformed_boxes[:, 3].clamp(min=0.0)
+                crop_bbox = transformed_boxes[int(torch.argmax(areas).item())]
+            else:
+                crop_bbox = torch.tensor(main_bbox, dtype=torch.float32)
+            metadata["crop_bbox"] = crop_bbox.to(dtype=torch.float32).clamp(0.0, 1.0)
+
+        image_mask = (
+            transformed_target.get("image_mask")
+            if isinstance(transformed_target, Mapping)
+            else None
+        )
+        if torch.is_tensor(image_mask):
+            metadata["image_mask"] = image_mask.to(dtype=torch.bool)
+
+        if self.classification_source_context_aux and yolo_object is not None and source_image is not None:
+            metadata.update(
+                self._paired_yolo_source_context_aux_metadata(
+                    source_image=source_image,
+                    yolo_object=yolo_object,
+                    label=int(sample.label),
+                )
+            )
+        if metadata:
+            return image_tensor, int(sample.label), metadata
         return image_tensor, int(sample.label)
 
 
@@ -1683,6 +2353,15 @@ class MangoYOLOCropDataset(Dataset):
         class_crop_margin_scale_threshold: float = 1.5,
         class_crop_margin_max_ratio: Optional[float] = None,
         class_crop_margin_scales: Optional[Sequence[float]] = None,
+        classification_source_context: bool = False,
+        classification_source_context_mode: str = "desaturate_blur",
+        classification_source_context_layout: str = "full",
+        classification_source_context_margin_ratio: float = 0.12,
+        classification_source_context_background_alpha: float = 0.35,
+        classification_source_context_blur_radius: float = 7.0,
+        classification_source_context_inset_scale: float = 0.34,
+        classification_source_context_aux: bool = False,
+        classification_bbox_metadata: bool = False,
     ) -> None:
         self.images_dir = Path(images_dir)
         self.labels_dir = Path(labels_dir)
@@ -1698,6 +2377,55 @@ class MangoYOLOCropDataset(Dataset):
         self.class_augmentation_max_scale = max(1.0, float(class_augmentation_max_scale))
         self.classification_target = bool(classification_target)
         self.classification_object_crops = bool(classification_object_crops)
+        self.classification_source_context = bool(
+            self.classification_target and classification_source_context
+        )
+        self.classification_source_context_aux = bool(
+            self.classification_target and classification_source_context_aux
+        )
+        self.classification_source_context_mode = (
+            str(classification_source_context_mode or "desaturate_blur")
+            .strip()
+            .lower()
+            .replace("-", "_")
+        )
+        valid_source_context_modes = {"dim", "gray", "blur", "mean", "desaturate_blur", "blur_gray"}
+        if self.classification_source_context_mode not in valid_source_context_modes:
+            raise ValueError(
+                "classification_source_context_mode khong hop le: "
+                f"{classification_source_context_mode}. Hop le: {sorted(valid_source_context_modes)}"
+            )
+        self.classification_source_context_layout = (
+            str(classification_source_context_layout or "full")
+            .strip()
+            .lower()
+            .replace("-", "_")
+        )
+        valid_source_context_layouts = {"full", "crop_inset"}
+        if self.classification_source_context_layout not in valid_source_context_layouts:
+            raise ValueError(
+                "classification_source_context_layout khong hop le: "
+                f"{classification_source_context_layout}. Hop le: {sorted(valid_source_context_layouts)}"
+            )
+        self.classification_source_context_margin_ratio = max(
+            0.0,
+            float(classification_source_context_margin_ratio),
+        )
+        self.classification_source_context_background_alpha = min(
+            1.0,
+            max(0.0, float(classification_source_context_background_alpha)),
+        )
+        self.classification_source_context_blur_radius = max(
+            0.1,
+            float(classification_source_context_blur_radius),
+        )
+        self.classification_source_context_inset_scale = min(
+            0.75,
+            max(0.10, float(classification_source_context_inset_scale)),
+        )
+        self.classification_bbox_metadata = bool(classification_bbox_metadata)
+        if self.classification_source_context:
+            self.crop_to_primary_object = False
         self.class_crop_margin_scale_threshold = max(1.0, float(class_crop_margin_scale_threshold))
         base_crop_margin_ratio = self.crop_margin_ratio
         if class_crop_margin_max_ratio is None:
@@ -1727,7 +2455,8 @@ class MangoYOLOCropDataset(Dataset):
             "Dataset initialized: split=%s images_dir=%s labels_dir=%s "
             "image_files=%s label_files=%s selected_samples=%s valid_objects=%s "
             "missing_images=%s invalid_bboxes=%s invalid_classes=%s crop_primary=%s "
-            "classification_target=%s object_crops=%s class_aug=%s scales=%s",
+            "classification_target=%s object_crops=%s source_context=%s context_layout=%s "
+            "source_context_aux=%s class_aug=%s scales=%s",
             self.split,
             self.images_dir,
             self.labels_dir,
@@ -1741,6 +2470,9 @@ class MangoYOLOCropDataset(Dataset):
             self.crop_to_primary_object,
             self.classification_target,
             self.classification_object_crops,
+            self.classification_source_context,
+            self.classification_source_context_layout,
+            self.classification_source_context_aux,
             self.class_aware_augmentation,
             self.class_augmentation_scales,
         )
@@ -1762,6 +2494,15 @@ class MangoYOLOCropDataset(Dataset):
         class_crop_margin_scale_threshold: float = 1.5,
         class_crop_margin_max_ratio: Optional[float] = None,
         class_crop_margin_scales: Optional[Sequence[float]] = None,
+        classification_source_context: bool = False,
+        classification_source_context_mode: str = "desaturate_blur",
+        classification_source_context_layout: str = "full",
+        classification_source_context_margin_ratio: float = 0.12,
+        classification_source_context_background_alpha: float = 0.35,
+        classification_source_context_blur_radius: float = 7.0,
+        classification_source_context_inset_scale: float = 0.34,
+        classification_source_context_aux: bool = False,
+        classification_bbox_metadata: bool = False,
     ) -> "MangoYOLOCropDataset":
         return cls(
             images_dir=data_spec.split_images_dir(split),
@@ -1780,6 +2521,15 @@ class MangoYOLOCropDataset(Dataset):
             class_crop_margin_scale_threshold=class_crop_margin_scale_threshold,
             class_crop_margin_max_ratio=class_crop_margin_max_ratio,
             class_crop_margin_scales=class_crop_margin_scales,
+            classification_source_context=classification_source_context,
+            classification_source_context_mode=classification_source_context_mode,
+            classification_source_context_layout=classification_source_context_layout,
+            classification_source_context_margin_ratio=classification_source_context_margin_ratio,
+            classification_source_context_background_alpha=classification_source_context_background_alpha,
+            classification_source_context_blur_radius=classification_source_context_blur_radius,
+            classification_source_context_inset_scale=classification_source_context_inset_scale,
+            classification_source_context_aux=classification_source_context_aux,
+            classification_bbox_metadata=classification_bbox_metadata,
         )
 
     @classmethod
@@ -1799,6 +2549,15 @@ class MangoYOLOCropDataset(Dataset):
         class_crop_margin_scale_threshold: float = 1.5,
         class_crop_margin_max_ratio: Optional[float] = None,
         class_crop_margin_scales: Optional[Sequence[float]] = None,
+        classification_source_context: bool = False,
+        classification_source_context_mode: str = "desaturate_blur",
+        classification_source_context_layout: str = "full",
+        classification_source_context_margin_ratio: float = 0.12,
+        classification_source_context_background_alpha: float = 0.35,
+        classification_source_context_blur_radius: float = 7.0,
+        classification_source_context_inset_scale: float = 0.34,
+        classification_source_context_aux: bool = False,
+        classification_bbox_metadata: bool = False,
         class_name_mode: Optional[str] = None,
         expected_num_classes: Optional[int] = None,
     ) -> "MangoYOLOCropDataset":
@@ -1822,6 +2581,15 @@ class MangoYOLOCropDataset(Dataset):
             class_crop_margin_scale_threshold=class_crop_margin_scale_threshold,
             class_crop_margin_max_ratio=class_crop_margin_max_ratio,
             class_crop_margin_scales=class_crop_margin_scales,
+            classification_source_context=classification_source_context,
+            classification_source_context_mode=classification_source_context_mode,
+            classification_source_context_layout=classification_source_context_layout,
+            classification_source_context_margin_ratio=classification_source_context_margin_ratio,
+            classification_source_context_background_alpha=classification_source_context_background_alpha,
+            classification_source_context_blur_radius=classification_source_context_blur_radius,
+            classification_source_context_inset_scale=classification_source_context_inset_scale,
+            classification_source_context_aux=classification_source_context_aux,
+            classification_bbox_metadata=classification_bbox_metadata,
         )
 
     def _index_image_paths_by_stem(self) -> Dict[str, Path]:
@@ -2105,6 +2873,17 @@ class MangoYOLOCropDataset(Dataset):
         report["crop_to_primary_object"] = bool(self.crop_to_primary_object)
         report["classification_target"] = bool(self.classification_target)
         report["classification_object_crops"] = bool(self.classification_object_crops)
+        report["classification_source_context"] = {
+            "enabled": bool(self.classification_source_context),
+            "aux_enabled": bool(self.classification_source_context_aux),
+            "mode": str(self.classification_source_context_mode),
+            "layout": str(self.classification_source_context_layout),
+            "margin_ratio": float(self.classification_source_context_margin_ratio),
+            "background_alpha": float(self.classification_source_context_background_alpha),
+            "blur_radius": float(self.classification_source_context_blur_radius),
+            "inset_scale": float(self.classification_source_context_inset_scale),
+        }
+        report["classification_bbox_metadata"] = bool(self.classification_bbox_metadata)
         if self.num_classes is not None:
             report["class_counts"] = self.class_counts(self.num_classes)
             report["class_augmentation_scales"] = list(self.class_augmentation_scales)
@@ -2260,6 +3039,167 @@ class MangoYOLOCropDataset(Dataset):
             "boxes": torch.tensor(kept_boxes, dtype=torch.float32).clamp(0.0, 1.0),
         }
 
+    def _apply_classification_source_context(
+        self,
+        image: Image.Image,
+        primary_object: MangoObject,
+    ) -> Image.Image:
+        base = image.convert("RGB")
+        width, height = base.size
+        if width <= 0 or height <= 0:
+            return base
+
+        x1, y1, x2, y2 = bbox_xywh_to_xyxy(
+            primary_object.bbox,
+            width=width,
+            height=height,
+        )
+        box_width = max(1.0, float(x2 - x1))
+        box_height = max(1.0, float(y2 - y1))
+        margin_ratio = max(0.0, float(self.classification_source_context_margin_ratio))
+        margin_x = box_width * margin_ratio
+        margin_y = box_height * margin_ratio
+        left = max(0, int(math.floor(float(x1) - margin_x)))
+        top = max(0, int(math.floor(float(y1) - margin_y)))
+        right = min(width, int(math.ceil(float(x2) + margin_x)))
+        bottom = min(height, int(math.ceil(float(y2) + margin_y)))
+        if right <= left or bottom <= top:
+            return base
+
+        mask = Image.new("L", (width, height), 0)
+        draw = ImageDraw.Draw(mask)
+        draw.rectangle((left, top, max(left, right - 1), max(top, bottom - 1)), fill=255)
+        mask = mask.filter(
+            ImageFilter.GaussianBlur(radius=max(1.0, min(width, height) * 0.0125))
+        )
+
+        mode = self.classification_source_context_mode
+        if mode == "dim":
+            background = Image.new("RGB", base.size, tuple(_imagenet_fill(IMAGENET_MEAN)))
+        elif mode == "gray":
+            background = ImageOps.grayscale(base).convert("RGB")
+        elif mode == "blur":
+            background = base.filter(
+                ImageFilter.GaussianBlur(
+                    radius=max(0.1, float(self.classification_source_context_blur_radius))
+                )
+            )
+        elif mode == "mean":
+            rgb = np.asarray(base, dtype=np.float32)
+            mean = np.median(rgb.reshape(-1, 3), axis=0).round().astype(np.uint8)
+            background = Image.new("RGB", base.size, tuple(int(value) for value in mean.tolist()))
+        elif mode in {"desaturate_blur", "blur_gray"}:
+            background = ImageOps.grayscale(base).convert("RGB").filter(
+                ImageFilter.GaussianBlur(
+                    radius=max(0.1, float(self.classification_source_context_blur_radius))
+                )
+            )
+        else:
+            raise ValueError(f"classification_source_context_mode khong hop le: {mode}")
+
+        outside = Image.blend(
+            background,
+            base,
+            float(self.classification_source_context_background_alpha),
+        )
+        return Image.composite(base, outside, mask)
+
+    def _compose_classification_crop_inset_context(
+        self,
+        image: Image.Image,
+        labels: Tensor,
+        boxes: Tensor,
+        sample: MangoSample,
+        primary_object: MangoObject,
+    ) -> Tuple[Image.Image, Dict[str, Tensor]]:
+        primary_labels = torch.tensor([int(primary_object.label)], dtype=torch.long)
+        primary_boxes = torch.tensor([primary_object.bbox], dtype=torch.float32)
+        crop_image, crop_target = self._crop_to_primary_object(
+            image=image,
+            labels=primary_labels,
+            boxes=primary_boxes,
+            sample=sample,
+        )
+        canvas = crop_image.convert("RGB")
+        width, height = canvas.size
+        if width < 8 or height < 8:
+            return canvas, crop_target
+
+        context = self._apply_classification_source_context(
+            image=image,
+            primary_object=primary_object,
+        )
+        max_inset_width = max(4, int(round(width * self.classification_source_context_inset_scale)))
+        max_inset_height = max(4, int(round(height * self.classification_source_context_inset_scale)))
+        inset = ImageOps.contain(
+            context,
+            (max_inset_width, max_inset_height),
+            method=Image.Resampling.BILINEAR,
+        ).convert("RGB")
+        pad = max(1, int(round(min(width, height) * 0.025)))
+        left = max(0, width - inset.width - pad)
+        top = max(0, height - inset.height - pad)
+        border = max(1, int(round(min(width, height) * 0.006)))
+
+        draw = ImageDraw.Draw(canvas)
+        draw.rectangle(
+            (
+                max(0, left - border),
+                max(0, top - border),
+                min(width - 1, left + inset.width + border - 1),
+                min(height - 1, top + inset.height + border - 1),
+            ),
+            fill=(245, 245, 245),
+        )
+        canvas.paste(inset, (left, top))
+        return canvas, crop_target
+
+    def _source_context_aux_metadata(
+        self,
+        *,
+        image: Image.Image,
+        primary_object: MangoObject,
+    ) -> Dict[str, Tensor]:
+        context_image = self._apply_classification_source_context(
+            image=image,
+            primary_object=primary_object,
+        )
+        context_target = {
+            "labels": torch.tensor([int(primary_object.label)], dtype=torch.long),
+            "boxes": torch.tensor([primary_object.bbox], dtype=torch.float32),
+            "augmentation_scale": torch.tensor(
+                [self._augmentation_scale_for_labels(torch.tensor([int(primary_object.label)]))],
+                dtype=torch.float32,
+            ),
+        }
+        if self.transform is not None:
+            transformed = self.transform(context_image, target=context_target)
+            if isinstance(transformed, tuple) and len(transformed) == 2:
+                context_tensor, transformed_target = transformed
+            else:
+                raise TypeError("Transform detection phai tra ve (image_tensor, target).")
+        else:
+            context_tensor = TF.to_tensor(context_image)
+            transformed_target = context_target
+
+        bbox_value = transformed_target.get("boxes") if isinstance(transformed_target, dict) else None
+        if torch.is_tensor(bbox_value) and bbox_value.ndim == 2 and bbox_value.size(0) > 0:
+            context_bbox = bbox_value[0].to(dtype=torch.float32).clamp(0.0, 1.0)
+        else:
+            context_bbox = torch.tensor(primary_object.bbox, dtype=torch.float32).clamp(0.0, 1.0)
+        metadata = {
+            "source_context_image": context_tensor,
+            "source_context_bbox": context_bbox,
+        }
+        context_mask = (
+            transformed_target.get("image_mask")
+            if isinstance(transformed_target, dict)
+            else None
+        )
+        if torch.is_tensor(context_mask):
+            metadata["source_context_image_mask"] = context_mask.to(dtype=torch.bool)
+        return metadata
+
     def __getitem__(self, index: int):
         sample = self.samples[index]
         logger.debug(
@@ -2303,7 +3243,29 @@ class MangoYOLOCropDataset(Dataset):
             "labels": labels,
             "boxes": boxes,
         }
-        if self.crop_to_primary_object:
+        primary_object: Optional[MangoObject] = None
+        if self.classification_target and sample.objects:
+            primary_object = self._select_sample_primary_object(sample)
+        source_image = image.copy() if self.classification_source_context_aux else image
+        if self.classification_source_context and primary_object is not None:
+            if self.classification_source_context_layout == "crop_inset":
+                image, target = self._compose_classification_crop_inset_context(
+                    image=image,
+                    labels=labels,
+                    boxes=boxes,
+                    sample=sample,
+                    primary_object=primary_object,
+                )
+            else:
+                image = self._apply_classification_source_context(
+                    image=image,
+                    primary_object=primary_object,
+                )
+                target = {
+                    "labels": torch.tensor([int(primary_object.label)], dtype=torch.long),
+                    "boxes": torch.tensor([primary_object.bbox], dtype=torch.float32),
+                }
+        elif self.crop_to_primary_object:
             image, target = self._crop_to_primary_object(
                 image=image,
                 labels=labels,
@@ -2325,7 +3287,43 @@ class MangoYOLOCropDataset(Dataset):
             transformed_target = target
 
         if self.classification_target:
-            return image_tensor, int(sample.primary_label)
+            label = int(primary_object.label if primary_object is not None else sample.primary_label)
+            metadata: Dict[str, Tensor] = {}
+            if self.classification_bbox_metadata:
+                bbox = primary_object.bbox if primary_object is not None else (0.5, 0.5, 1.0, 1.0)
+                metadata["bbox"] = torch.tensor(bbox, dtype=torch.float32)
+                transformed_boxes = (
+                    transformed_target.get("boxes")
+                    if isinstance(transformed_target, dict)
+                    else None
+                )
+                if (
+                    torch.is_tensor(transformed_boxes)
+                    and transformed_boxes.ndim == 2
+                    and transformed_boxes.size(0) > 0
+                ):
+                    areas = transformed_boxes[:, 2].clamp(min=0.0) * transformed_boxes[:, 3].clamp(min=0.0)
+                    crop_bbox = transformed_boxes[int(torch.argmax(areas).item())]
+                else:
+                    crop_bbox = torch.tensor((0.5, 0.5, 1.0, 1.0), dtype=torch.float32)
+                metadata["crop_bbox"] = crop_bbox.to(dtype=torch.float32).clamp(0.0, 1.0)
+            transformed_image_mask = (
+                transformed_target.get("image_mask")
+                if isinstance(transformed_target, dict)
+                else None
+            )
+            if torch.is_tensor(transformed_image_mask):
+                metadata["image_mask"] = transformed_image_mask.to(dtype=torch.bool)
+            if self.classification_source_context_aux and primary_object is not None:
+                metadata.update(
+                    self._source_context_aux_metadata(
+                        image=source_image,
+                        primary_object=primary_object,
+                    )
+                )
+            if metadata:
+                return image_tensor, label, metadata
+            return image_tensor, label
 
         target_metadata = {
             key: transformed_target[key]
@@ -2380,6 +3378,445 @@ class MangoYOLOCropDataset(Dataset):
             int(transformed_labels.numel()),
         )
         return image_tensor, transformed_target
+
+
+class MixedTrainDataset(Dataset):
+    def __init__(
+        self,
+        datasets: Sequence[Dataset],
+        source_names: Optional[Sequence[str]] = None,
+        source_weights: Optional[Sequence[float]] = None,
+        seed: int = 42,
+    ) -> None:
+        self.datasets = [dataset for dataset in datasets if len(dataset) > 0]
+        if not self.datasets:
+            raise ValueError("MixedTrainDataset yeu cau it nhat 1 dataset khong rong.")
+        names = list(source_names or [])
+        while len(names) < len(self.datasets):
+            names.append(f"source_{len(names)}")
+        self.source_names = [str(name or f"source_{index}") for index, name in enumerate(names[: len(self.datasets)])]
+        weights = list(source_weights or [])
+        while len(weights) < len(self.datasets):
+            weights.append(1.0)
+        self.source_weights = [max(0.0, float(value)) for value in weights[: len(self.datasets)]]
+        self.seed = int(seed)
+        self.indices = self._build_indices()
+        if not self.indices:
+            raise ValueError("MixedTrainDataset khong tao duoc sample nao tu source_weights.")
+
+        primary = self.datasets[0]
+        self.split = str(getattr(primary, "split", "train"))
+        self.classification_target = bool(getattr(primary, "classification_target", True))
+        self.classification_object_crops = bool(getattr(primary, "classification_object_crops", False))
+        self.crop_to_primary_object = bool(getattr(primary, "crop_to_primary_object", False))
+        self.num_classes = getattr(primary, "num_classes", None)
+        self.class_augmentation_scales = list(getattr(primary, "class_augmentation_scales", []))
+
+    def _build_indices(self) -> List[Tuple[int, int]]:
+        generator = torch.Generator()
+        generator.manual_seed(self.seed)
+        mixed: List[Tuple[int, int]] = []
+        for source_index, (dataset, weight) in enumerate(zip(self.datasets, self.source_weights)):
+            if weight <= 0.0:
+                continue
+            dataset_len = len(dataset)
+            whole = int(math.floor(weight))
+            fraction = float(weight) - float(whole)
+            if whole <= 0:
+                for sample_index in range(dataset_len):
+                    if torch.rand(1, generator=generator).item() < fraction:
+                        mixed.append((source_index, sample_index))
+                continue
+            for sample_index in range(dataset_len):
+                mixed.extend([(source_index, sample_index)] * whole)
+                if fraction > 0.0 and torch.rand(1, generator=generator).item() < fraction:
+                    mixed.append((source_index, sample_index))
+        if len(mixed) > 1:
+            order = torch.randperm(len(mixed), generator=generator).tolist()
+            mixed = [mixed[index] for index in order]
+        return mixed
+
+    def __len__(self) -> int:
+        return len(self.indices)
+
+    def __getitem__(self, index: int):
+        source_index, sample_index = self.indices[int(index)]
+        return self.datasets[int(source_index)][int(sample_index)]
+
+    def labels(self) -> List[int]:
+        labels_by_source: List[List[int]] = []
+        for dataset in self.datasets:
+            labels_fn = getattr(dataset, "labels", None)
+            labels_by_source.append([int(value) for value in labels_fn()] if callable(labels_fn) else [])
+        labels: List[int] = []
+        for source_index, sample_index in self.indices:
+            source_labels = labels_by_source[int(source_index)]
+            if 0 <= int(sample_index) < len(source_labels):
+                labels.append(int(source_labels[int(sample_index)]))
+        return labels
+
+    def class_counts(self, num_classes: int) -> List[int]:
+        counts = [0 for _ in range(max(1, int(num_classes)))]
+        for label in self.labels():
+            if 0 <= int(label) < len(counts):
+                counts[int(label)] += 1
+        return counts
+
+    def sample_paths(self) -> List[Path]:
+        paths_by_source: List[List[Path]] = []
+        for dataset in self.datasets:
+            sample_paths_fn = getattr(dataset, "sample_paths", None)
+            paths_by_source.append([Path(path) for path in sample_paths_fn()] if callable(sample_paths_fn) else [])
+        paths: List[Path] = []
+        for source_index, sample_index in self.indices:
+            source_paths = paths_by_source[int(source_index)]
+            if 0 <= int(sample_index) < len(source_paths):
+                paths.append(Path(source_paths[int(sample_index)]))
+        return paths
+
+    def bboxes(self) -> List[Tuple[float, float, float, float]]:
+        bboxes_by_source: List[List[Tuple[float, float, float, float]]] = []
+        for dataset in self.datasets:
+            bboxes_fn = getattr(dataset, "bboxes", None)
+            if callable(bboxes_fn):
+                source_bboxes = [tuple(float(value) for value in bbox) for bbox in bboxes_fn()]
+            else:
+                source_bboxes = [(0.5, 0.5, 1.0, 1.0) for _ in range(len(dataset))]
+            bboxes_by_source.append(source_bboxes)
+        bboxes: List[Tuple[float, float, float, float]] = []
+        for source_index, sample_index in self.indices:
+            source_bboxes = bboxes_by_source[int(source_index)]
+            if 0 <= int(sample_index) < len(source_bboxes):
+                bboxes.append(source_bboxes[int(sample_index)])
+        return bboxes
+
+    @staticmethod
+    def _sum_report_key(reports: Sequence[Dict[str, object]], key: str) -> int:
+        return int(sum(int(report.get(key, 0) or 0) for report in reports))
+
+    def _source_summaries(self) -> List[Dict[str, object]]:
+        summaries: List[Dict[str, object]] = []
+        effective_counts = Counter(source_index for source_index, _ in self.indices)
+        for source_index, dataset in enumerate(self.datasets):
+            report_fn = getattr(dataset, "quality_report", None)
+            report = report_fn() if callable(report_fn) else {}
+            labels_fn = getattr(dataset, "labels", None)
+            source_labels = [int(value) for value in labels_fn()] if callable(labels_fn) else []
+            summaries.append(
+                {
+                    "name": self.source_names[source_index],
+                    "weight": float(self.source_weights[source_index]),
+                    "base_samples": int(len(dataset)),
+                    "effective_samples": int(effective_counts.get(source_index, 0)),
+                    "class_counts": [
+                        int(sum(1 for label in source_labels if int(label) == class_index))
+                        for class_index in range(max(1, int(self.num_classes or 1)))
+                    ],
+                    "report": report,
+                }
+            )
+        return summaries
+
+    def quality_report(self) -> Dict[str, object]:
+        source_reports = []
+        for dataset in self.datasets:
+            report_fn = getattr(dataset, "quality_report", None)
+            source_reports.append(report_fn() if callable(report_fn) else {})
+        report: Dict[str, object] = {
+            "data_format": "mixed_train",
+            "classification_target": True,
+            "classification_object_crops": any(
+                bool(getattr(dataset, "classification_object_crops", False))
+                for dataset in self.datasets
+            ),
+            "crop_to_primary_object": any(
+                bool(getattr(dataset, "crop_to_primary_object", False))
+                for dataset in self.datasets
+            ),
+            "image_file_count": self._sum_report_key(source_reports, "image_file_count"),
+            "label_file_count": self._sum_report_key(source_reports, "label_file_count"),
+            "valid_object_count": self._sum_report_key(source_reports, "valid_object_count"),
+            "selected_sample_count": int(len(self)),
+            "single_object_image_count": self._sum_report_key(source_reports, "single_object_image_count"),
+            "multi_object_image_count": self._sum_report_key(source_reports, "multi_object_image_count"),
+            "max_objects_per_image": max(
+                [int(report.get("max_objects_per_image", 0) or 0) for report in source_reports],
+                default=0,
+            ),
+            "ignored_object_count": self._sum_report_key(source_reports, "ignored_object_count"),
+            "empty_label_count": self._sum_report_key(source_reports, "empty_label_count"),
+            "missing_image_count": self._sum_report_key(source_reports, "missing_image_count"),
+            "invalid_line_count": self._sum_report_key(source_reports, "invalid_line_count"),
+            "invalid_bbox_count": self._sum_report_key(source_reports, "invalid_bbox_count"),
+            "invalid_class_count": self._sum_report_key(source_reports, "invalid_class_count"),
+            "class_counts": self.class_counts(max(1, int(self.num_classes or 1))),
+            "class_augmentation_scales": list(self.class_augmentation_scales),
+            "class_aware_augmentation": any(
+                bool(getattr(dataset, "class_aware_augmentation", False))
+                for dataset in self.datasets
+            ),
+            "image_cache": self.image_cache_stats(),
+            "mixed_train": {
+                "enabled": True,
+                "seed": int(self.seed),
+                "source_count": int(len(self.datasets)),
+                "effective_samples": int(len(self)),
+                "sources": self._source_summaries(),
+            },
+        }
+        return report
+
+    def enable_image_cache(
+        self,
+        max_megabytes: int = 256,
+        max_items: int = 0,
+    ) -> None:
+        for dataset in self.datasets:
+            enable_fn = getattr(dataset, "enable_image_cache", None)
+            if callable(enable_fn):
+                enable_fn(max_megabytes=max_megabytes, max_items=max_items)
+
+    def clear_image_cache(self) -> None:
+        for dataset in self.datasets:
+            clear_fn = getattr(dataset, "clear_image_cache", None)
+            if callable(clear_fn):
+                clear_fn()
+
+    def image_cache_stats(self) -> Dict[str, object]:
+        source_stats = []
+        for source_name, dataset in zip(self.source_names, self.datasets):
+            stats_fn = getattr(dataset, "image_cache_stats", None)
+            stats = stats_fn() if callable(stats_fn) else {}
+            stats = dict(stats)
+            stats["source"] = str(source_name)
+            source_stats.append(stats)
+        return {
+            "enabled": any(bool(stats.get("enabled", False)) for stats in source_stats),
+            "items": int(sum(int(stats.get("items", 0) or 0) for stats in source_stats)),
+            "bytes": int(sum(int(stats.get("bytes", 0) or 0) for stats in source_stats)),
+            "sources": source_stats,
+        }
+
+
+class PairedViewTrainDataset(Dataset):
+    """Attach a second train-only view of the same object to each primary sample."""
+
+    def __init__(
+        self,
+        primary_dataset: Dataset,
+        paired_dataset: Dataset,
+        *,
+        primary_name: str = "primary",
+        paired_name: str = "paired",
+        require_all_matched: bool = True,
+    ) -> None:
+        self.primary_dataset = primary_dataset
+        self.paired_dataset = paired_dataset
+        self.primary_name = str(primary_name or "primary")
+        self.paired_name = str(paired_name or "paired")
+        self.require_all_matched = bool(require_all_matched)
+
+        self._paired_index_by_key = self._build_index(paired_dataset)
+        self.pairs: List[Tuple[int, int]] = []
+        self.missing_primary_keys: List[Tuple[str, int, int]] = []
+        for primary_index in range(len(primary_dataset)):
+            key = self._sample_key(primary_dataset, primary_index)
+            paired_index = self._paired_index_by_key.get(key)
+            if paired_index is None:
+                self.missing_primary_keys.append(key)
+                continue
+            self.pairs.append((primary_index, paired_index))
+        if not self.pairs:
+            raise ValueError("PairedViewTrainDataset khong map duoc cap object nao.")
+        if self.require_all_matched and len(self.pairs) != len(primary_dataset):
+            preview = self.missing_primary_keys[:5]
+            raise ValueError(
+                "PairedViewTrainDataset thieu paired view cho primary samples: "
+                f"matched={len(self.pairs)}/{len(primary_dataset)} preview={preview}"
+            )
+
+        self.split = str(getattr(primary_dataset, "split", "train"))
+        self.classification_target = bool(getattr(primary_dataset, "classification_target", True))
+        self.classification_object_crops = bool(
+            getattr(primary_dataset, "classification_object_crops", False)
+        )
+        self.crop_to_primary_object = bool(getattr(primary_dataset, "crop_to_primary_object", False))
+        self.num_classes = getattr(primary_dataset, "num_classes", None)
+        self.class_augmentation_scales = list(
+            getattr(primary_dataset, "class_augmentation_scales", [])
+        )
+
+    @staticmethod
+    def _labels(dataset: Dataset) -> List[int]:
+        labels_fn = getattr(dataset, "labels", None)
+        return [int(value) for value in labels_fn()] if callable(labels_fn) else []
+
+    @staticmethod
+    def _sample_paths(dataset: Dataset) -> List[Path]:
+        sample_paths_fn = getattr(dataset, "sample_paths", None)
+        return [Path(path) for path in sample_paths_fn()] if callable(sample_paths_fn) else []
+
+    @classmethod
+    def _sample_key(cls, dataset: Dataset, index: int) -> Tuple[str, int, int]:
+        samples = getattr(dataset, "samples", None)
+        labels = cls._labels(dataset)
+        fallback_label = int(labels[index]) if 0 <= int(index) < len(labels) else -1
+        if isinstance(samples, Sequence) and 0 <= int(index) < len(samples):
+            sample = samples[int(index)]
+            yolo_source_id = getattr(sample, "yolo_source_id", "")
+            yolo_object = getattr(sample, "yolo_object", None)
+            if yolo_source_id and yolo_object is not None:
+                return (
+                    str(yolo_source_id),
+                    int(getattr(yolo_object, "object_index", 0)),
+                    int(fallback_label),
+                )
+            image_path = getattr(sample, "image_path", None)
+            objects = getattr(sample, "objects", None)
+            if image_path is not None and objects:
+                selector = getattr(dataset, "_select_sample_primary_object", None)
+                primary_object = selector(sample) if callable(selector) else objects[0]
+                return (
+                    Path(image_path).stem,
+                    int(getattr(primary_object, "object_index", 0)),
+                    int(getattr(primary_object, "label", fallback_label)),
+                )
+        paths = cls._sample_paths(dataset)
+        if 0 <= int(index) < len(paths):
+            path = paths[int(index)]
+            match = CLASSIFICATION_CROP_NAME.match(path.stem)
+            if match is not None:
+                return (str(match.group("source")), int(match.group("box")), int(fallback_label))
+            return (path.stem, 0, int(fallback_label))
+        return (str(index), 0, int(fallback_label))
+
+    @classmethod
+    def _build_index(cls, dataset: Dataset) -> Dict[Tuple[str, int, int], int]:
+        index_by_key: Dict[Tuple[str, int, int], int] = {}
+        duplicate_keys: List[Tuple[str, int, int]] = []
+        for sample_index in range(len(dataset)):
+            key = cls._sample_key(dataset, sample_index)
+            if key in index_by_key:
+                duplicate_keys.append(key)
+                continue
+            index_by_key[key] = int(sample_index)
+        if duplicate_keys:
+            raise ValueError(
+                "PairedViewTrainDataset paired source co duplicate object key, preview="
+                f"{duplicate_keys[:5]}"
+            )
+        return index_by_key
+
+    @staticmethod
+    def _split_sample(sample) -> Tuple[object, int, Dict[str, object]]:
+        if isinstance(sample, tuple) and len(sample) >= 3 and isinstance(sample[2], dict):
+            return sample[0], int(sample[1]), dict(sample[2])
+        if isinstance(sample, tuple) and len(sample) >= 2:
+            return sample[0], int(sample[1]), {}
+        raise TypeError("PairedViewTrainDataset chi ho tro classification samples tuple.")
+
+    def __len__(self) -> int:
+        return len(self.pairs)
+
+    def __getitem__(self, index: int):
+        primary_index, paired_index = self.pairs[int(index)]
+        primary_image, primary_label, primary_metadata = self._split_sample(
+            self.primary_dataset[int(primary_index)]
+        )
+        paired_image, paired_label, paired_metadata = self._split_sample(
+            self.paired_dataset[int(paired_index)]
+        )
+        primary_metadata["paired_view_image"] = paired_image
+        primary_metadata["paired_view_label"] = int(paired_label)
+        if "bbox" in paired_metadata:
+            primary_metadata["paired_view_bbox"] = paired_metadata["bbox"]
+        if "crop_bbox" in paired_metadata:
+            primary_metadata["paired_view_crop_bbox"] = paired_metadata["crop_bbox"]
+        if "image_mask" in paired_metadata:
+            primary_metadata["paired_view_image_mask"] = paired_metadata["image_mask"]
+        return primary_image, int(primary_label), primary_metadata
+
+    def labels(self) -> List[int]:
+        labels = self._labels(self.primary_dataset)
+        return [int(labels[primary_index]) for primary_index, _ in self.pairs]
+
+    def class_counts(self, num_classes: int) -> List[int]:
+        counts = [0 for _ in range(max(1, int(num_classes)))]
+        for label in self.labels():
+            if 0 <= int(label) < len(counts):
+                counts[int(label)] += 1
+        return counts
+
+    def sample_paths(self) -> List[Path]:
+        paths = self._sample_paths(self.primary_dataset)
+        return [Path(paths[primary_index]) for primary_index, _ in self.pairs]
+
+    def bboxes(self) -> List[Tuple[float, float, float, float]]:
+        bboxes_fn = getattr(self.primary_dataset, "bboxes", None)
+        if not callable(bboxes_fn):
+            return [(0.5, 0.5, 1.0, 1.0) for _ in self.pairs]
+        bboxes = [tuple(float(value) for value in bbox) for bbox in bboxes_fn()]
+        return [
+            bboxes[primary_index]
+            if 0 <= int(primary_index) < len(bboxes)
+            else (0.5, 0.5, 1.0, 1.0)
+            for primary_index, _ in self.pairs
+        ]
+
+    def quality_report(self) -> Dict[str, object]:
+        report_fn = getattr(self.primary_dataset, "quality_report", None)
+        report = dict(report_fn() if callable(report_fn) else {})
+        paired_report_fn = getattr(self.paired_dataset, "quality_report", None)
+        report["data_format"] = "paired_view_train"
+        report["selected_sample_count"] = int(len(self))
+        report["class_counts"] = self.class_counts(max(1, int(self.num_classes or 1)))
+        report["image_cache"] = self.image_cache_stats()
+        report["paired_view_train"] = {
+            "enabled": True,
+            "primary_name": self.primary_name,
+            "paired_name": self.paired_name,
+            "primary_base_samples": int(len(self.primary_dataset)),
+            "paired_base_samples": int(len(self.paired_dataset)),
+            "matched_samples": int(len(self.pairs)),
+            "missing_primary_count": int(len(self.missing_primary_keys)),
+            "missing_primary_preview": [list(key) for key in self.missing_primary_keys[:5]],
+            "paired_report": paired_report_fn() if callable(paired_report_fn) else {},
+        }
+        return report
+
+    def enable_image_cache(
+        self,
+        max_megabytes: int = 256,
+        max_items: int = 0,
+    ) -> None:
+        for dataset in (self.primary_dataset, self.paired_dataset):
+            enable_fn = getattr(dataset, "enable_image_cache", None)
+            if callable(enable_fn):
+                enable_fn(max_megabytes=max_megabytes, max_items=max_items)
+
+    def clear_image_cache(self) -> None:
+        for dataset in (self.primary_dataset, self.paired_dataset):
+            clear_fn = getattr(dataset, "clear_image_cache", None)
+            if callable(clear_fn):
+                clear_fn()
+
+    def image_cache_stats(self) -> Dict[str, object]:
+        source_stats = []
+        for source_name, dataset in (
+            (self.primary_name, self.primary_dataset),
+            (self.paired_name, self.paired_dataset),
+        ):
+            stats_fn = getattr(dataset, "image_cache_stats", None)
+            stats = stats_fn() if callable(stats_fn) else {}
+            stats = dict(stats)
+            stats["source"] = str(source_name)
+            source_stats.append(stats)
+        return {
+            "enabled": any(bool(stats.get("enabled", False)) for stats in source_stats),
+            "items": int(sum(int(stats.get("items", 0) or 0) for stats in source_stats)),
+            "bytes": int(sum(int(stats.get("bytes", 0) or 0) for stats in source_stats)),
+            "sources": source_stats,
+        }
 
 
 class StrictBalancedBatchSampler(Sampler[List[int]]):
@@ -2735,6 +4172,7 @@ class SampleWeightDataset(Dataset):
         dataset: Dataset,
         sample_weights_by_path: Mapping[str, float],
         *,
+        sample_weights_by_sample_index: Optional[Mapping[int, float]] = None,
         default_weight: float = 1.0,
         max_weight: float = 5.0,
     ) -> None:
@@ -2747,6 +4185,11 @@ class SampleWeightDataset(Dataset):
             )
             for path, weight in sample_weights_by_path.items()
             if str(path).strip()
+        }
+        self.sample_weights_by_sample_index = {
+            int(index): float(min(self.max_weight, max(0.0, weight)))
+            for index, weight in (sample_weights_by_sample_index or {}).items()
+            if int(index) >= 0
         }
         self._sample_paths = self._collect_sample_paths()
 
@@ -2779,22 +4222,22 @@ class SampleWeightDataset(Dataset):
 
     def sample_weight_summary(self) -> Dict[str, object]:
         weights = [
-            self.sample_weights_by_path.get(
-                str(Path(path).resolve()).lower(),
-                self.default_weight,
-            )
-            for path in self._sample_paths
+            self._weight_for_index(index, path)
+            for index, path in enumerate(self._sample_paths)
         ]
         matched = sum(
             1
-            for path in self._sample_paths
-            if str(Path(path).resolve()).lower() in self.sample_weights_by_path
+            for index, path in enumerate(self._sample_paths)
+            if int(index) in self.sample_weights_by_sample_index
+            or str(Path(path).resolve()).lower() in self.sample_weights_by_path
         )
         weight_tensor = torch.tensor(weights, dtype=torch.float32) if weights else torch.tensor([])
         return {
             "enabled": True,
             "samples": int(len(self._sample_paths)),
             "weighted_paths": int(len(self.sample_weights_by_path)),
+            "weighted_sample_indices": int(len(self.sample_weights_by_sample_index)),
+            "key_mode": "sample_index" if self.sample_weights_by_sample_index else "path",
             "matched_samples": int(matched),
             "default_weight": float(self.default_weight),
             "max_weight": float(self.max_weight),
@@ -2809,12 +4252,18 @@ class SampleWeightDataset(Dataset):
         report["sample_weights"] = self.sample_weight_summary()
         return report
 
+    def _weight_for_index(self, index: int, sample_path: Path) -> float:
+        sample_index = int(index)
+        if sample_index in self.sample_weights_by_sample_index:
+            return float(self.sample_weights_by_sample_index[sample_index])
+        key = str(Path(sample_path).resolve()).lower()
+        return float(self.sample_weights_by_path.get(key, self.default_weight))
+
     def __getitem__(self, index: int):
         item = self.dataset[int(index)]
         sample_path = self._sample_paths[int(index)]
-        key = str(Path(sample_path).resolve()).lower()
         sample_weight = torch.tensor(
-            float(self.sample_weights_by_path.get(key, self.default_weight)),
+            self._weight_for_index(int(index), sample_path),
             dtype=torch.float32,
         )
         if len(item) == 2:
@@ -2823,6 +4272,110 @@ class SampleWeightDataset(Dataset):
         if len(item) >= 3 and isinstance(item[2], dict):
             metadata = dict(item[2])
             metadata["sample_weight"] = sample_weight
+            return item[0], item[1], metadata
+        return item
+
+
+class QualityGroupDataset(Dataset):
+    def __init__(
+        self,
+        dataset: Dataset,
+        group_indices_by_path: Mapping[str, int],
+        *,
+        group_indices_by_sample_index: Optional[Mapping[int, int]] = None,
+        default_group_index: int = 0,
+    ) -> None:
+        self.dataset = dataset
+        self.default_group_index = max(0, int(default_group_index))
+        self.group_indices_by_path = {
+            str(Path(path).resolve()).lower(): max(0, int(group_index))
+            for path, group_index in group_indices_by_path.items()
+            if str(path).strip()
+        }
+        self.group_indices_by_sample_index = {
+            int(index): max(0, int(group_index))
+            for index, group_index in (group_indices_by_sample_index or {}).items()
+            if int(index) >= 0
+        }
+        self._sample_paths = self._collect_sample_paths()
+
+    def __len__(self) -> int:
+        return len(self.dataset)
+
+    def __getattr__(self, name: str):
+        if name.startswith("__") and name.endswith("__"):
+            raise AttributeError(name)
+        dataset = self.__dict__.get("dataset")
+        if dataset is None:
+            raise AttributeError(name)
+        return getattr(dataset, name)
+
+    def _collect_sample_paths(self) -> List[Path]:
+        sample_paths_fn = getattr(self.dataset, "sample_paths", None)
+        if callable(sample_paths_fn):
+            return list(sample_paths_fn())
+        samples = getattr(self.dataset, "samples", None)
+        if samples is None:
+            return []
+        return [
+            Path(getattr(sample, "image_path"))
+            for sample in samples
+            if getattr(sample, "image_path", None) is not None
+        ]
+
+    def sample_paths(self) -> List[Path]:
+        return list(self._sample_paths)
+
+    def quality_group_summary(self) -> Dict[str, object]:
+        group_counts: Dict[int, int] = {}
+        matched = 0
+        for index, path in enumerate(self._sample_paths):
+            group_index = self._group_for_index(int(index), path)
+            group_counts[group_index] = int(group_counts.get(group_index, 0)) + 1
+            key = str(Path(path).resolve()).lower()
+            if int(index) in self.group_indices_by_sample_index or key in self.group_indices_by_path:
+                matched += 1
+        return {
+            "enabled": True,
+            "samples": int(len(self._sample_paths)),
+            "manifest_paths": int(len(self.group_indices_by_path)),
+            "manifest_sample_indices": int(len(self.group_indices_by_sample_index)),
+            "key_mode": "sample_index" if self.group_indices_by_sample_index else "path",
+            "matched_samples": int(matched),
+            "default_group_index": int(self.default_group_index),
+            "num_observed_groups": int(len(group_counts)),
+            "group_counts": {str(key): int(value) for key, value in sorted(group_counts.items())},
+        }
+
+    def quality_report(self) -> Dict[str, object]:
+        quality_fn = getattr(self.dataset, "quality_report", None)
+        report = quality_fn() if callable(quality_fn) else {}
+        report = dict(report)
+        report["quality_groups"] = self.quality_group_summary()
+        return report
+
+    def _group_for_index(self, index: int, sample_path: Optional[Path]) -> int:
+        if int(index) in self.group_indices_by_sample_index:
+            return int(self.group_indices_by_sample_index[int(index)])
+        if sample_path is not None:
+            key = str(Path(sample_path).resolve()).lower()
+            if key in self.group_indices_by_path:
+                return int(self.group_indices_by_path[key])
+        return int(self.default_group_index)
+
+    def __getitem__(self, index: int):
+        item = self.dataset[int(index)]
+        sample_path = self._sample_paths[int(index)] if int(index) < len(self._sample_paths) else None
+        group_index = torch.tensor(
+            self._group_for_index(int(index), sample_path),
+            dtype=torch.long,
+        )
+        if len(item) == 2:
+            image, label = item
+            return image, label, {"quality_group_index": group_index}
+        if len(item) >= 3 and isinstance(item[2], dict):
+            metadata = dict(item[2])
+            metadata["quality_group_index"] = group_index
             return item[0], item[1], metadata
         return item
 
@@ -2847,6 +4400,12 @@ class AmbiguousSoftTargetDataset(Dataset):
             for path, probabilities in soft_targets_by_path.items()
             if str(path).strip()
         }
+        raw_by_sample_index = getattr(soft_targets_by_path, "by_sample_index", None)
+        self.soft_targets_by_sample_index = {
+            int(index): torch.tensor(list(probabilities), dtype=torch.float32)
+            for index, probabilities in (raw_by_sample_index or {}).items()
+            if int(index) >= 0
+        }
         self._sample_paths = self._collect_sample_paths()
         self._labels = self._collect_labels()
         invalid_paths = [
@@ -2860,6 +4419,18 @@ class AmbiguousSoftTargetDataset(Dataset):
             raise ValueError(
                 "Ambiguous soft-target manifest co dong khong hop le: "
                 f"count={len(invalid_paths)} preview={invalid_paths[:5]}"
+            )
+        invalid_indices = [
+            index
+            for index, probabilities in self.soft_targets_by_sample_index.items()
+            if probabilities.numel() != self.num_classes
+            or not torch.isfinite(probabilities).all()
+            or float(probabilities.sum().item()) <= 0.0
+        ]
+        if invalid_indices:
+            raise ValueError(
+                "Ambiguous soft-target manifest co sample_index khong hop le: "
+                f"count={len(invalid_indices)} preview={invalid_indices[:5]}"
             )
 
     def __len__(self) -> int:
@@ -2914,13 +4485,19 @@ class AmbiguousSoftTargetDataset(Dataset):
             for path in self._sample_paths
             if str(Path(path).resolve()).lower() in self.soft_targets_by_path
         )
+        matched_by_sample_index = sum(
+            1 for index in range(len(self.dataset)) if int(index) in self.soft_targets_by_sample_index
+        )
         return {
             "enabled": True,
             "samples": int(len(self._sample_paths)),
             "num_classes": int(self.num_classes),
             "manifest_paths": int(len(self.soft_targets_by_path)),
+            "manifest_sample_indices": int(len(self.soft_targets_by_sample_index)),
             "matched_samples": int(matched),
+            "matched_sample_indices": int(matched_by_sample_index),
             "default_alpha": float(self.default_alpha),
+            "key_mode": "sample_index" if self.soft_targets_by_sample_index else "path",
         }
 
     def quality_report(self) -> Dict[str, object]:
@@ -2935,7 +4512,10 @@ class AmbiguousSoftTargetDataset(Dataset):
         sample_path = self._sample_paths[int(index)] if int(index) < len(self._sample_paths) else None
         key = str(Path(sample_path).resolve()).lower() if sample_path is not None else ""
         label = int(item[1]) if len(item) >= 2 else 0
-        if key in self.soft_targets_by_path:
+        if int(index) in self.soft_targets_by_sample_index:
+            soft_target = self.soft_targets_by_sample_index[int(index)].clone()
+            soft_target = soft_target / soft_target.sum().clamp(min=1e-12)
+        elif key in self.soft_targets_by_path:
             soft_target = self.soft_targets_by_path[key].clone()
             soft_target = soft_target / soft_target.sum().clamp(min=1e-12)
         else:
@@ -2956,6 +4536,7 @@ class TargetedMarginDataset(Dataset):
         dataset: Dataset,
         margin_specs_by_path: Mapping[str, Mapping[str, float]],
         *,
+        margin_specs_by_sample_index: Optional[Mapping[int, Mapping[str, float]]] = None,
         default_weight: float = 1.0,
         default_margin: float = 0.12,
         max_weight: float = 3.0,
@@ -2974,6 +4555,21 @@ class TargetedMarginDataset(Dataset):
             weight = float(spec.get("weight", self.default_weight))
             margin = float(spec.get("margin", self.default_margin))
             self.margin_specs_by_path[str(Path(path).resolve()).lower()] = {
+                "negative_index": float(negative_index),
+                "weight": float(min(self.max_weight, max(0.0, weight))),
+                "margin": float(max(0.0, margin)),
+            }
+        self.margin_specs_by_sample_index: Dict[int, Dict[str, float]] = {}
+        for index, spec in (margin_specs_by_sample_index or {}).items():
+            sample_index = int(index)
+            if sample_index < 0:
+                continue
+            negative_index = int(spec.get("negative_index", -1))
+            if negative_index < 0:
+                continue
+            weight = float(spec.get("weight", self.default_weight))
+            margin = float(spec.get("margin", self.default_margin))
+            self.margin_specs_by_sample_index[sample_index] = {
                 "negative_index": float(negative_index),
                 "weight": float(min(self.max_weight, max(0.0, weight))),
                 "margin": float(max(0.0, margin)),
@@ -3011,8 +4607,10 @@ class TargetedMarginDataset(Dataset):
         matched = 0
         weights: List[float] = []
         margins: List[float] = []
-        for path in self._sample_paths:
-            spec = self.margin_specs_by_path.get(str(Path(path).resolve()).lower())
+        for index, path in enumerate(self._sample_paths):
+            spec = self.margin_specs_by_sample_index.get(int(index))
+            if spec is None:
+                spec = self.margin_specs_by_path.get(str(Path(path).resolve()).lower())
             if spec is None:
                 continue
             matched += 1
@@ -3024,6 +4622,8 @@ class TargetedMarginDataset(Dataset):
             "enabled": True,
             "samples": int(len(self._sample_paths)),
             "manifest_paths": int(len(self.margin_specs_by_path)),
+            "manifest_sample_indices": int(len(self.margin_specs_by_sample_index)),
+            "key_mode": "sample_index" if self.margin_specs_by_sample_index else "path",
             "matched_samples": int(matched),
             "default_weight": float(self.default_weight),
             "default_margin": float(self.default_margin),
@@ -3043,7 +4643,9 @@ class TargetedMarginDataset(Dataset):
         item = self.dataset[int(index)]
         sample_path = self._sample_paths[int(index)] if int(index) < len(self._sample_paths) else None
         key = str(Path(sample_path).resolve()).lower() if sample_path is not None else ""
-        spec = self.margin_specs_by_path.get(key)
+        spec = self.margin_specs_by_sample_index.get(int(index))
+        if spec is None:
+            spec = self.margin_specs_by_path.get(key)
         if spec is None:
             negative_index = torch.tensor(-1, dtype=torch.long)
             weight = torch.tensor(0.0, dtype=torch.float32)
@@ -3067,6 +4669,131 @@ class TargetedMarginDataset(Dataset):
         return item
 
 
+class FocusNeighborBinaryDataset(Dataset):
+    def __init__(
+        self,
+        dataset: Dataset,
+        specs_by_path: Mapping[str, Mapping[str, float]],
+        *,
+        default_weight: float = 1.0,
+        max_weight: float = 3.0,
+    ) -> None:
+        self.dataset = dataset
+        self.default_weight = max(0.0, float(default_weight))
+        self.max_weight = max(self.default_weight, float(max_weight))
+        self.specs_by_path: Dict[str, Dict[str, float]] = {}
+        for path, spec in specs_by_path.items():
+            if not str(path).strip():
+                continue
+            target = float(spec.get("binary_target", -1.0))
+            if target < 0.0 or target > 1.0:
+                continue
+            weight = float(spec.get("weight", self.default_weight))
+            neighbor_index = int(spec.get("neighbor_index", -1))
+            self.specs_by_path[str(Path(path).resolve()).lower()] = {
+                "binary_target": float(max(0.0, min(1.0, target))),
+                "weight": float(min(self.max_weight, max(0.0, weight))),
+                "neighbor_index": float(neighbor_index),
+            }
+        self._sample_paths = self._collect_sample_paths()
+
+    def __len__(self) -> int:
+        return len(self.dataset)
+
+    def __getattr__(self, name: str):
+        if name.startswith("__") and name.endswith("__"):
+            raise AttributeError(name)
+        dataset = self.__dict__.get("dataset")
+        if dataset is None:
+            raise AttributeError(name)
+        return getattr(dataset, name)
+
+    def _collect_sample_paths(self) -> List[Path]:
+        sample_paths_fn = getattr(self.dataset, "sample_paths", None)
+        if callable(sample_paths_fn):
+            return list(sample_paths_fn())
+        samples = getattr(self.dataset, "samples", None)
+        if samples is None:
+            return []
+        return [
+            Path(getattr(sample, "image_path"))
+            for sample in samples
+            if getattr(sample, "image_path", None) is not None
+        ]
+
+    def sample_paths(self) -> List[Path]:
+        return list(self._sample_paths)
+
+    def focus_neighbor_binary_summary(self) -> Dict[str, object]:
+        matched = 0
+        positive = 0
+        negative = 0
+        weights: List[float] = []
+        neighbor_counts: Dict[int, int] = {}
+        for path in self._sample_paths:
+            spec = self.specs_by_path.get(str(Path(path).resolve()).lower())
+            if spec is None:
+                continue
+            matched += 1
+            target = float(spec["binary_target"])
+            if target >= 0.5:
+                positive += 1
+            else:
+                negative += 1
+            weights.append(float(spec["weight"]))
+            neighbor_index = int(spec.get("neighbor_index", -1))
+            if neighbor_index >= 0:
+                neighbor_counts[neighbor_index] = int(neighbor_counts.get(neighbor_index, 0)) + 1
+        weight_tensor = torch.tensor(weights, dtype=torch.float32) if weights else torch.tensor([])
+        return {
+            "enabled": True,
+            "samples": int(len(self._sample_paths)),
+            "manifest_paths": int(len(self.specs_by_path)),
+            "matched_samples": int(matched),
+            "positive_samples": int(positive),
+            "negative_samples": int(negative),
+            "default_weight": float(self.default_weight),
+            "max_weight": float(self.max_weight),
+            "mean_weight": float(weight_tensor.mean().item()) if weight_tensor.numel() else 0.0,
+            "max_observed_weight": float(weight_tensor.max().item()) if weight_tensor.numel() else 0.0,
+            "neighbor_counts": {str(key): int(value) for key, value in sorted(neighbor_counts.items())},
+        }
+
+    def quality_report(self) -> Dict[str, object]:
+        quality_fn = getattr(self.dataset, "quality_report", None)
+        report = quality_fn() if callable(quality_fn) else {}
+        report = dict(report)
+        report["focus_neighbor_binary"] = self.focus_neighbor_binary_summary()
+        return report
+
+    def __getitem__(self, index: int):
+        item = self.dataset[int(index)]
+        sample_path = self._sample_paths[int(index)] if int(index) < len(self._sample_paths) else None
+        key = str(Path(sample_path).resolve()).lower() if sample_path is not None else ""
+        spec = self.specs_by_path.get(key)
+        if spec is None:
+            target = torch.tensor(0.0, dtype=torch.float32)
+            weight = torch.tensor(0.0, dtype=torch.float32)
+            neighbor_index = torch.tensor(-1, dtype=torch.long)
+        else:
+            target = torch.tensor(float(spec["binary_target"]), dtype=torch.float32)
+            weight = torch.tensor(float(spec["weight"]), dtype=torch.float32)
+            neighbor_index = torch.tensor(int(spec.get("neighbor_index", -1)), dtype=torch.long)
+        metadata_update = {
+            "focus_neighbor_binary_target": target,
+            "focus_neighbor_binary_weight": weight,
+            "focus_neighbor_binary_neighbor": neighbor_index,
+        }
+        if len(item) == 2:
+            image, label = item
+            return image, label, metadata_update
+        if len(item) >= 3 and isinstance(item[2], dict):
+            metadata = dict(item[2])
+            metadata.update(metadata_update)
+            return item[0], item[1], metadata
+        return item
+
+
 class TeacherProbabilityDataset(Dataset):
     def __init__(
         self,
@@ -3074,9 +4801,14 @@ class TeacherProbabilityDataset(Dataset):
         probabilities_by_path: Mapping[str, Sequence[float]],
         *,
         num_classes: int,
+        probabilities_by_sample_index: Optional[Mapping[int, Sequence[float]]] = None,
+        metadata_key: str = "teacher_probs",
     ) -> None:
         self.dataset = dataset
         self.num_classes = int(num_classes)
+        self.metadata_key = str(metadata_key or "teacher_probs").strip()
+        if not self.metadata_key:
+            raise ValueError("TeacherProbabilityDataset metadata_key khong duoc rong.")
         self.probabilities_by_path = {
             str(Path(path).resolve()).lower(): torch.tensor(
                 list(probabilities),
@@ -3084,22 +4816,62 @@ class TeacherProbabilityDataset(Dataset):
             )
             for path, probabilities in probabilities_by_path.items()
         }
+        self.probabilities_by_sample_index = {
+            int(index): torch.tensor(
+                list(probabilities),
+                dtype=torch.float32,
+            )
+            for index, probabilities in (probabilities_by_sample_index or {}).items()
+        }
         self._sample_paths = self._collect_sample_paths()
         sample_paths = self._sample_paths
-        missing_paths = [
-            str(path)
-            for path in sample_paths
-            if str(Path(path).resolve()).lower() not in self.probabilities_by_path
-        ]
-        if missing_paths:
-            preview = missing_paths[:5]
-            raise ValueError(
-                "Teacher probability cache khong phu het train samples: "
-                f"missing={len(missing_paths)}/{len(sample_paths)} preview={preview}"
+        self.sample_index_path_overlap_count = 0
+        self.sample_index_path_overlap_ratio = 0.0
+        if self.probabilities_by_sample_index and self.probabilities_by_path:
+            sample_path_keys = {
+                str(Path(path).resolve()).lower()
+                for path in sample_paths
+            }
+            self.sample_index_path_overlap_count = sum(
+                1 for key in sample_path_keys if key in self.probabilities_by_path
             )
+            self.sample_index_path_overlap_ratio = float(
+                self.sample_index_path_overlap_count / max(1, len(sample_path_keys))
+            )
+        if self.probabilities_by_sample_index:
+            missing_indices = [
+                int(index)
+                for index in range(len(self.dataset))
+                if int(index) not in self.probabilities_by_sample_index
+            ]
+            if missing_indices:
+                raise ValueError(
+                    "Teacher probability cache khong phu het train sample indices: "
+                    f"missing={len(missing_indices)}/{len(self.dataset)} "
+                    f"preview={missing_indices[:5]}"
+                )
+        else:
+            missing_paths = [
+                str(path)
+                for path in sample_paths
+                if str(Path(path).resolve()).lower() not in self.probabilities_by_path
+            ]
+            if missing_paths:
+                preview = missing_paths[:5]
+                raise ValueError(
+                    "Teacher probability cache khong phu het train samples: "
+                    f"missing={len(missing_paths)}/{len(sample_paths)} preview={preview}"
+                )
         invalid_paths = [
             str(path)
             for path, probabilities in self.probabilities_by_path.items()
+            if probabilities.numel() != self.num_classes
+            or not torch.isfinite(probabilities).all()
+            or float(probabilities.sum().item()) <= 0.0
+        ]
+        invalid_indices = [
+            int(index)
+            for index, probabilities in self.probabilities_by_sample_index.items()
             if probabilities.numel() != self.num_classes
             or not torch.isfinite(probabilities).all()
             or float(probabilities.sum().item()) <= 0.0
@@ -3108,6 +4880,211 @@ class TeacherProbabilityDataset(Dataset):
             raise ValueError(
                 "Teacher probability cache co dong khong hop le: "
                 f"count={len(invalid_paths)} preview={invalid_paths[:5]}"
+            )
+        if invalid_indices:
+            raise ValueError(
+                "Teacher probability cache co sample index khong hop le: "
+                f"count={len(invalid_indices)} preview={invalid_indices[:5]}"
+            )
+        if self.probabilities_by_sample_index and self.sample_index_path_overlap_ratio < 0.5:
+            labels_fn = getattr(self.dataset, "labels", None)
+            labels = list(labels_fn()) if callable(labels_fn) else []
+            if labels and len(labels) == len(self.dataset):
+                probabilities = torch.stack(
+                    [
+                        self._teacher_probs_for_index(index)
+                        for index in range(len(self.dataset))
+                    ],
+                    dim=0,
+                )
+                predictions = probabilities.argmax(dim=1)
+                label_tensor = torch.tensor(labels, dtype=torch.long)
+                agreement = float((predictions.cpu() == label_tensor).float().mean().item())
+                if agreement < 0.5:
+                    sample_path_keys = {
+                        str(Path(path).resolve()).lower()
+                        for path in sample_paths
+                    }
+                    raise ValueError(
+                        "Teacher probability CSV co sample_index nhung path gan nhu khong "
+                        "khop dataset hien tai va teacher-label agreement rat thap. Co "
+                        "the dang dung sample_index cua view khac "
+                        f"(path_overlap={self.sample_index_path_overlap_count}/"
+                        f"{len(sample_path_keys)}, "
+                        f"overlap_ratio={self.sample_index_path_overlap_ratio:.4f}, "
+                        f"agreement={agreement:.4f}). Hay remap teacher CSV sang sample "
+                        "order cua dataset primary truoc khi train."
+                    )
+
+    def __len__(self) -> int:
+        return len(self.dataset)
+
+    def __getattr__(self, name: str):
+        if name.startswith("__") and name.endswith("__"):
+            raise AttributeError(name)
+        dataset = self.__dict__.get("dataset")
+        if dataset is None:
+            raise AttributeError(name)
+        return getattr(dataset, name)
+
+    def _collect_sample_paths(self) -> List[Path]:
+        sample_paths_fn = getattr(self.dataset, "sample_paths", None)
+        if callable(sample_paths_fn):
+            return list(sample_paths_fn())
+        samples = getattr(self.dataset, "samples", None)
+        if samples is None:
+            return []
+        return [
+            Path(getattr(sample, "image_path"))
+            for sample in samples
+            if getattr(sample, "image_path", None) is not None
+        ]
+
+    def sample_paths(self) -> List[Path]:
+        return list(self._sample_paths)
+
+    def _teacher_probs_for_index(self, index: int) -> Tensor:
+        if self.probabilities_by_sample_index:
+            teacher_probs = self.probabilities_by_sample_index[int(index)]
+        else:
+            sample_path = self._sample_paths[int(index)]
+            key = str(Path(sample_path).resolve()).lower()
+            teacher_probs = self.probabilities_by_path[key]
+        return teacher_probs / teacher_probs.sum().clamp(min=1e-12)
+
+    def teacher_probability_summary(self) -> Dict[str, object]:
+        paths = self._sample_paths
+        probabilities = torch.stack(
+            [
+                self._teacher_probs_for_index(index)
+                for index in range(len(self.dataset))
+            ],
+            dim=0,
+        )
+        predictions = probabilities.argmax(dim=1)
+        labels_fn = getattr(self.dataset, "labels", None)
+        labels = list(labels_fn()) if callable(labels_fn) else []
+        agreement = 0.0
+        if labels and len(labels) == len(paths):
+            label_tensor = torch.tensor(labels, dtype=torch.long)
+            agreement = float((predictions.cpu() == label_tensor).float().mean().item())
+        return {
+            "enabled": True,
+            "samples": len(paths),
+            "num_classes": int(self.num_classes),
+            "mean_confidence": float(probabilities.max(dim=1).values.mean().item()),
+            "teacher_label_agreement": agreement,
+            "key_mode": (
+                "sample_index"
+                if self.probabilities_by_sample_index
+                else "path"
+            ),
+            "sample_index_path_overlap_count": int(self.sample_index_path_overlap_count),
+            "sample_index_path_overlap_ratio": float(self.sample_index_path_overlap_ratio),
+            "metadata_key": self.metadata_key,
+        }
+
+    def quality_report(self) -> Dict[str, object]:
+        quality_fn = getattr(self.dataset, "quality_report", None)
+        report = quality_fn() if callable(quality_fn) else {}
+        report = dict(report)
+        report_key = (
+            "teacher_probabilities"
+            if self.metadata_key == "teacher_probs"
+            else f"{self.metadata_key}_summary"
+        )
+        report[report_key] = self.teacher_probability_summary()
+        return report
+
+    def __getitem__(self, index: int):
+        item = self.dataset[int(index)]
+        teacher_probs = self._teacher_probs_for_index(int(index))
+        if len(item) == 2:
+            image, label = item
+            return image, label, {self.metadata_key: teacher_probs.clone()}
+        if len(item) >= 3 and isinstance(item[2], dict):
+            metadata = dict(item[2])
+            metadata[self.metadata_key] = teacher_probs.clone()
+            return item[0], item[1], metadata
+        return item
+
+
+class TeacherFeatureDataset(Dataset):
+    def __init__(
+        self,
+        dataset: Dataset,
+        features_by_path: Mapping[str, Sequence[float]],
+        *,
+        features_by_sample_index: Optional[Mapping[int, Sequence[float]]] = None,
+    ) -> None:
+        self.dataset = dataset
+        self.features_by_path = {
+            str(Path(path).resolve()).lower(): torch.tensor(
+                list(features),
+                dtype=torch.float32,
+            )
+            for path, features in features_by_path.items()
+        }
+        self.features_by_sample_index = {
+            int(index): torch.tensor(
+                list(features),
+                dtype=torch.float32,
+            )
+            for index, features in (features_by_sample_index or {}).items()
+        }
+        self._sample_paths = self._collect_sample_paths()
+
+        if self.features_by_sample_index:
+            missing_indices = [
+                int(index)
+                for index in range(len(self.dataset))
+                if int(index) not in self.features_by_sample_index
+            ]
+            if missing_indices:
+                raise ValueError(
+                    "Teacher feature cache khong phu het train sample indices: "
+                    f"missing={len(missing_indices)}/{len(self.dataset)} "
+                    f"preview={missing_indices[:5]}"
+                )
+        else:
+            missing_paths = [
+                str(path)
+                for path in self._sample_paths
+                if str(Path(path).resolve()).lower() not in self.features_by_path
+            ]
+            if missing_paths:
+                raise ValueError(
+                    "Teacher feature cache khong phu het train samples: "
+                    f"missing={len(missing_paths)}/{len(self._sample_paths)} "
+                    f"preview={missing_paths[:5]}"
+                )
+
+        dimensions = {
+            int(feature.numel())
+            for feature in list(self.features_by_sample_index.values())
+            + list(self.features_by_path.values())
+        }
+        if len(dimensions) != 1:
+            raise ValueError(
+                "Teacher feature cache phai co feature_dim dong nhat, "
+                f"found={sorted(dimensions)}"
+            )
+        self.feature_dim = int(next(iter(dimensions))) if dimensions else 0
+        invalid_indices = [
+            int(index)
+            for index, feature in self.features_by_sample_index.items()
+            if feature.ndim != 1 or not torch.isfinite(feature).all()
+        ]
+        invalid_paths = [
+            str(path)
+            for path, feature in self.features_by_path.items()
+            if feature.ndim != 1 or not torch.isfinite(feature).all()
+        ]
+        if self.feature_dim <= 0 or invalid_indices or invalid_paths:
+            raise ValueError(
+                "Teacher feature cache co vector khong hop le: "
+                f"feature_dim={self.feature_dim} "
+                f"invalid_indices={invalid_indices[:5]} invalid_paths={invalid_paths[:5]}"
             )
 
     def __len__(self) -> int:
@@ -3137,49 +5114,49 @@ class TeacherProbabilityDataset(Dataset):
     def sample_paths(self) -> List[Path]:
         return list(self._sample_paths)
 
-    def teacher_probability_summary(self) -> Dict[str, object]:
-        paths = self._sample_paths
-        probabilities = torch.stack(
+    def _teacher_features_for_index(self, index: int) -> Tensor:
+        if self.features_by_sample_index:
+            return self.features_by_sample_index[int(index)]
+        sample_path = self._sample_paths[int(index)]
+        key = str(Path(sample_path).resolve()).lower()
+        return self.features_by_path[key]
+
+    def teacher_feature_summary(self) -> Dict[str, object]:
+        features = torch.stack(
             [
-                self.probabilities_by_path[str(Path(path).resolve()).lower()]
-                for path in paths
+                self._teacher_features_for_index(index)
+                for index in range(len(self.dataset))
             ],
             dim=0,
         )
-        predictions = probabilities.argmax(dim=1)
-        labels_fn = getattr(self.dataset, "labels", None)
-        labels = list(labels_fn()) if callable(labels_fn) else []
-        agreement = 0.0
-        if labels and len(labels) == len(paths):
-            label_tensor = torch.tensor(labels, dtype=torch.long)
-            agreement = float((predictions.cpu() == label_tensor).float().mean().item())
+        norms = torch.linalg.vector_norm(features.float(), ord=2, dim=1)
         return {
             "enabled": True,
-            "samples": len(paths),
-            "num_classes": int(self.num_classes),
-            "mean_confidence": float(probabilities.max(dim=1).values.mean().item()),
-            "teacher_label_agreement": agreement,
+            "samples": int(len(self.dataset)),
+            "feature_dim": int(self.feature_dim),
+            "path_samples": int(len(self.features_by_path)),
+            "sample_index_samples": int(len(self.features_by_sample_index)),
+            "key_mode": "sample_index" if self.features_by_sample_index else "path",
+            "mean_norm": float(norms.mean().item()) if norms.numel() else 0.0,
+            "std_norm": float(norms.std(unbiased=False).item()) if norms.numel() else 0.0,
         }
 
     def quality_report(self) -> Dict[str, object]:
         quality_fn = getattr(self.dataset, "quality_report", None)
         report = quality_fn() if callable(quality_fn) else {}
         report = dict(report)
-        report["teacher_probabilities"] = self.teacher_probability_summary()
+        report["teacher_features"] = self.teacher_feature_summary()
         return report
 
     def __getitem__(self, index: int):
         item = self.dataset[int(index)]
-        sample_path = self._sample_paths[int(index)]
-        key = str(Path(sample_path).resolve()).lower()
-        teacher_probs = self.probabilities_by_path[key]
-        teacher_probs = teacher_probs / teacher_probs.sum().clamp(min=1e-12)
+        teacher_features = self._teacher_features_for_index(int(index))
         if len(item) == 2:
             image, label = item
-            return image, label, {"teacher_probs": teacher_probs.clone()}
+            return image, label, {"teacher_features": teacher_features.clone()}
         if len(item) >= 3 and isinstance(item[2], dict):
             metadata = dict(item[2])
-            metadata["teacher_probs"] = teacher_probs.clone()
+            metadata["teacher_features"] = teacher_features.clone()
             return item[0], item[1], metadata
         return item
 
@@ -3549,6 +5526,11 @@ class HybridImageTransform:
         background_suppression_probability: float = 0.0,
         background_suppression_margin: float = 0.08,
         background_suppression_blur_radius: float = 7.0,
+        surface_detail_amplification_mode: str = "none",
+        surface_detail_amplification_probability: float = 0.0,
+        surface_detail_amplification_strength: float = 0.0,
+        surface_detail_amplification_blur_radius: float = 1.25,
+        surface_detail_amplification_foreground_weight: float = 0.85,
         local_exposure_probability: float = 0.0,
         local_exposure_strength: float = 0.25,
         obstacle_probability: float = 0.0,
@@ -3596,6 +5578,22 @@ class HybridImageTransform:
         self.background_suppression_probability = max(0.0, min(1.0, float(background_suppression_probability)))
         self.background_suppression_margin = max(0.0, float(background_suppression_margin))
         self.background_suppression_blur_radius = max(0.1, float(background_suppression_blur_radius))
+        self.surface_detail_amplification_mode = (
+            str(surface_detail_amplification_mode or "none").strip().lower().replace("-", "_")
+        )
+        self.surface_detail_amplification_probability = max(
+            0.0,
+            min(1.0, float(surface_detail_amplification_probability)),
+        )
+        self.surface_detail_amplification_strength = max(0.0, float(surface_detail_amplification_strength))
+        self.surface_detail_amplification_blur_radius = max(
+            0.1,
+            float(surface_detail_amplification_blur_radius),
+        )
+        self.surface_detail_amplification_foreground_weight = max(
+            0.0,
+            min(1.0, float(surface_detail_amplification_foreground_weight)),
+        )
         self.local_exposure_probability = max(0.0, min(1.0, float(local_exposure_probability)))
         self.local_exposure_strength = max(0.0, min(1.0, float(local_exposure_strength)))
         self.obstacle_probability = max(0.0, min(1.0, float(obstacle_probability)))
@@ -3800,6 +5798,19 @@ class HybridImageTransform:
                     margin=self.background_suppression_margin,
                     blur_radius=self.background_suppression_blur_radius,
                 )
+        if self.surface_detail_amplification_mode not in {"", "none", "off", "false"}:
+            should_apply = (not self.train) or (
+                torch.rand(1).item() < self.surface_detail_amplification_probability
+            )
+            if should_apply:
+                image = _amplify_surface_detail_image(
+                    image,
+                    mode=self.surface_detail_amplification_mode,
+                    strength=self.surface_detail_amplification_strength,
+                    blur_radius=self.surface_detail_amplification_blur_radius,
+                    foreground_margin=self.background_suppression_margin,
+                    foreground_weight=self.surface_detail_amplification_foreground_weight,
+                )
         return image
 
     def _apply_foreground_crop(
@@ -3930,6 +5941,22 @@ class HybridImageTransform:
                 masks = resized_masks
             meta["scale"] = float(scale)
             meta["padding"] = tuple(int(value) for value in padding)
+            meta["crop_box"] = None
+            return image, masks, meta
+
+        if self.resize_mode == "stretch":
+            width, height = image.size
+            image = image.resize((self.image_size, self.image_size), Image.Resampling.BILINEAR)
+            if masks is not None:
+                masks = [
+                    mask.resize((self.image_size, self.image_size), Image.Resampling.NEAREST)
+                    for mask in masks
+                ]
+            meta["scale"] = (
+                float(self.image_size / max(1, width)),
+                float(self.image_size / max(1, height)),
+            )
+            meta["padding"] = (0, 0, 0, 0)
             meta["crop_box"] = None
             return image, masks, meta
 
@@ -4157,6 +6184,11 @@ def build_train_transform(
     background_suppression_probability: float = 0.0,
     background_suppression_margin: float = 0.08,
     background_suppression_blur_radius: float = 7.0,
+    surface_detail_amplification_mode: str = "none",
+    surface_detail_amplification_probability: float = 0.0,
+    surface_detail_amplification_strength: float = 0.0,
+    surface_detail_amplification_blur_radius: float = 1.25,
+    surface_detail_amplification_foreground_weight: float = 0.85,
     local_exposure_probability: float = 0.0,
     local_exposure_strength: float = 0.25,
     obstacle_probability: float = 0.0,
@@ -4195,6 +6227,11 @@ def build_train_transform(
         background_suppression_probability=background_suppression_probability,
         background_suppression_margin=background_suppression_margin,
         background_suppression_blur_radius=background_suppression_blur_radius,
+        surface_detail_amplification_mode=surface_detail_amplification_mode,
+        surface_detail_amplification_probability=surface_detail_amplification_probability,
+        surface_detail_amplification_strength=surface_detail_amplification_strength,
+        surface_detail_amplification_blur_radius=surface_detail_amplification_blur_radius,
+        surface_detail_amplification_foreground_weight=surface_detail_amplification_foreground_weight,
         local_exposure_probability=local_exposure_probability,
         local_exposure_strength=local_exposure_strength,
         obstacle_probability=obstacle_probability,
@@ -4218,9 +6255,19 @@ def build_eval_transform(
     background_suppression_mode: str = "none",
     background_suppression_margin: float = 0.08,
     background_suppression_blur_radius: float = 7.0,
+    surface_detail_amplification_mode: str = "none",
+    surface_detail_amplification_strength: float = 0.0,
+    surface_detail_amplification_blur_radius: float = 1.25,
+    surface_detail_amplification_foreground_weight: float = 0.85,
+    eval_surface_detail_amplification: bool = False,
     mean: Sequence[float] = IMAGENET_MEAN,
     std: Sequence[float] = IMAGENET_STD,
 ) -> HybridImageTransform:
+    eval_surface_mode = (
+        str(surface_detail_amplification_mode or "none")
+        if bool(eval_surface_detail_amplification)
+        else "none"
+    )
     return HybridImageTransform(
         image_size=image_size,
         resize_mode=resize_mode,
@@ -4237,6 +6284,11 @@ def build_eval_transform(
         background_suppression_probability=1.0,
         background_suppression_margin=background_suppression_margin,
         background_suppression_blur_radius=background_suppression_blur_radius,
+        surface_detail_amplification_mode=eval_surface_mode,
+        surface_detail_amplification_probability=1.0 if bool(eval_surface_detail_amplification) else 0.0,
+        surface_detail_amplification_strength=surface_detail_amplification_strength,
+        surface_detail_amplification_blur_radius=surface_detail_amplification_blur_radius,
+        surface_detail_amplification_foreground_weight=surface_detail_amplification_foreground_weight,
         mean=mean,
         std=std,
     )

@@ -70,7 +70,15 @@ def _truth(row: Mapping[str, str]) -> str:
 
 
 def _prediction(row: Mapping[str, str]) -> str:
-    for key in ("pred_name", "prediction_name", "y_pred", "prediction_index"):
+    for key in (
+        "pred_name",
+        "prediction_name",
+        "teacher_pred_name",
+        "selector_pred_name",
+        "y_pred",
+        "prediction_index",
+        "teacher_pred_index",
+    ):
         value = str(row.get(key, "") or "").strip()
         if value:
             return value

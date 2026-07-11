@@ -57,6 +57,15 @@ def _int_value(row: Dict[str, str], key: str, default: int = -1) -> int:
         return int(default)
 
 
+def _cartography_row_is_unseen(row: Dict[str, str]) -> bool:
+    if "seen_count" not in row:
+        return False
+    try:
+        return float(str(row.get("seen_count", "") or "0").strip()) <= 0.0
+    except ValueError:
+        return True
+
+
 def _path_looks_like_train(path_text: str) -> bool:
     normalized = str(path_text or "").replace("\\", "/").lower()
     parts = [part for part in normalized.split("/") if part]
@@ -133,6 +142,7 @@ def build_manifest(
     by_reason: Counter[str] = Counter()
     by_pair: Counter[str] = Counter()
     skipped_non_train = 0
+    skipped_unseen = 0
     skipped_invalid = 0
 
     with Path(predictions).open("r", encoding="utf-8-sig", newline="") as handle:
@@ -154,6 +164,9 @@ def build_manifest(
                 continue
             if require_train_paths and not _path_looks_like_train(image_path):
                 skipped_non_train += 1
+                continue
+            if _cartography_row_is_unseen(row):
+                skipped_unseen += 1
                 continue
             candidate = _candidate_from_row(
                 row,
@@ -229,6 +242,7 @@ def build_manifest(
         "max_samples": int(max_samples),
         "require_train_paths": bool(require_train_paths),
         "skipped_non_train": int(skipped_non_train),
+        "skipped_unseen": int(skipped_unseen),
         "skipped_invalid": int(skipped_invalid),
         "by_reason": dict(by_reason),
         "by_pair": dict(by_pair),

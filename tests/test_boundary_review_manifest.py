@@ -114,6 +114,67 @@ class BoundaryReviewManifestTests(unittest.TestCase):
             self.assertIn("quality_dirty_obstacle", fieldnames)
             self.assertIn("review_notes", fieldnames)
 
+    def test_cartography_unseen_rows_are_skipped(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            seen_image = root / "class_f" / "train" / "class0" / "seen.jpg"
+            unseen_image = root / "class_f" / "train" / "class0" / "unseen.jpg"
+            seen_image.parent.mkdir(parents=True)
+            seen_image.write_bytes(b"not-image")
+            unseen_image.write_bytes(b"not-image")
+            predictions = root / "cartography.csv"
+            with predictions.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.DictWriter(
+                    handle,
+                    fieldnames=[
+                        "image_path",
+                        "target_index",
+                        "prediction_index",
+                        "top2_index",
+                        "top2_margin",
+                        "seen_count",
+                        "prob_0_class0",
+                        "prob_1_class1",
+                    ],
+                )
+                writer.writeheader()
+                writer.writerow(
+                    {
+                        "image_path": str(unseen_image),
+                        "target_index": 0,
+                        "prediction_index": -1,
+                        "top2_index": -1,
+                        "top2_margin": 0.0,
+                        "seen_count": 0,
+                        "prob_0_class0": 0.0,
+                        "prob_1_class1": 0.0,
+                    }
+                )
+                writer.writerow(
+                    {
+                        "image_path": str(seen_image),
+                        "target_index": 0,
+                        "prediction_index": 1,
+                        "top2_index": 0,
+                        "top2_margin": 0.05,
+                        "seen_count": 1,
+                        "prob_0_class0": 0.45,
+                        "prob_1_class1": 0.55,
+                    }
+                )
+
+            summary = build_manifest(
+                predictions=predictions,
+                output_dir=root / "out",
+                split="train",
+                pairs="0-1",
+                image_stats_mode="none",
+                copy_images=False,
+            )
+
+            self.assertEqual(summary["selected_rows"], 1)
+            self.assertEqual(summary["skipped_unseen"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

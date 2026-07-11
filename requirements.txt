@@ -7,3 +7,4 @@ torchvision==0.21.0
 tqdm
 scipy==1.13.1
 pytest==8.4.2
+cleanlab==2.7.1

@@ -219,8 +219,15 @@ def _issue_candidate(
     image_path = _path_value(row)
     if not image_path:
         return None
-    target = _int_value(row, "target_index", "y_true", "label", "label_index")
-    prediction = _int_value(row, "prediction_index", "y_pred", "pred", "pred_index")
+    target = _int_value(row, "target_index", "true_index", "y_true", "label", "label_index")
+    prediction = _int_value(
+        row,
+        "prediction_index",
+        "suggested_index",
+        "pred_index",
+        "y_pred",
+        "pred",
+    )
     if target < 0:
         return None
     inferred_top1, inferred_top1_probability, inferred_top2, inferred_top2_probability = _top2_from_probabilities(
@@ -230,10 +237,16 @@ def _issue_candidate(
     top2 = _int_value(row, "top2_index", default=inferred_top2)
     if prediction < 0:
         prediction = top1
-    top1_probability = _float_value(row, "top1_probability", "confidence", default=inferred_top1_probability)
+    top1_probability = _float_value(
+        row,
+        "top1_probability",
+        "top1_confidence",
+        "confidence",
+        default=inferred_top1_probability,
+    )
     top2_probability = _float_value(row, "top2_probability", default=inferred_top2_probability)
     margin = _float_value(row, "top2_margin", default=top1_probability - top2_probability)
-    target_probability = _probability(row, prob_columns, target)
+    target_probability = _float_value(row, "self_confidence", default=_probability(row, prob_columns, target))
     if target_probability <= 0.0 and prediction == target:
         target_probability = top1_probability
 
@@ -266,6 +279,7 @@ def _issue_candidate(
         or str(row.get("label_name", "")),
         "prediction_index": int(prediction),
         "prediction_name": str(row.get("prediction_name", ""))
+        or str(row.get("suggested_name", ""))
         or str(row.get("pred_name", ""))
         or str(row.get("teacher_pred_name", "")),
         "top2_index": int(top2),

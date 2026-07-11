@@ -1,0 +1,98 @@
+TRKH current-best commands for VS Code PowerShell
+Created: 2026-07-06
+Updated and preflight-verified: 2026-07-11
+
+CURRENT SELECTED VERSION
+
+- Train base/checkpoint:
+  runs\probe_v8_yolof_pairroute_teacherfocusbinary015_boundarydrop_bboxprior_120b_2e_20260701\checkpoints\best.pt
+- Raw validation macro/class-1 F1: 0.884675 / 0.686047.
+- Independent reload validation macro/class-1 F1: 0.882925 / 0.678261.
+- Runtime softboost validation macro/class-1 F1: 0.888675 / 0.703030.
+- Locked raw final-test macro/class-1 F1: 0.8865 / 0.6667.
+- The 2026-07-11 30-epoch continuation stopped at epoch 5 and did not replace
+  this checkpoint. The wrapper below therefore still resumes the selected
+  keeper; it does not promote a rejected experimental checkpoint.
+
+WHY THESE COMMANDS ARE SAFE TO PASTE IN VS CODE
+
+- Every command is one physical line and uses an absolute script path.
+- The wrappers set the repository working directory themselves.
+- Native Python processes are invoked directly. They are never piped through
+  `2>&1 | ForEach-Object`, which caused the NativeCommandError in the supplied
+  VS Code screenshot when Python wrote valid INFO logs to stderr.
+- Every native process is checked with `$LASTEXITCODE`; a failed step stops the
+  next step and writes pipeline_status.json.
+- Training always uses -SkipFinalTest internally. The explicit -RunFinalTest
+  phase opens test only after training, architecture trace, all validation
+  audits, and the raw validation promotion gate pass. The gate requires both
+  independent-reload macro F1 >= 0.882925 and class-1 F1 >= 0.678261. This
+  compares the new checkpoint with the keeper through the same evaluator;
+  0.884675/0.686047 remains the in-training anchor, not the reload gate.
+
+1) OPTIONAL PREFLIGHT ONLY (no train, no test, no run directory)
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "D:\DataAI\AIEx\TRKH\scripts\run_trkh_current_best_full_pipeline.ps1" -RunName "preflight_current_best_$(Get-Date -Format yyyyMMdd_HHmmss)" -RunFinalTest -PreflightOnly
+
+2) ONE-COMMAND FULL PIPELINE: TRAIN + VALIDATION AUDITS + FINAL TEST + XAI
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "D:\DataAI\AIEx\TRKH\scripts\run_trkh_current_best_full_pipeline.ps1" -RunName "full_v8_yolof_current_best_30e_$(Get-Date -Format yyyyMMdd_HHmmss)" -RunFinalTest
+
+The one command above runs, in order:
+
+- exact current selected TRKH v8 recipe, max 30 epochs, patience 3, architecture trace;
+- independent full validation for raw checkpoint and frozen softboost001 hook;
+- validation prediction forensics, class-confusion audits, and boundary reviews;
+- full validation robustness audit;
+- raw and verifier-aware validation XAI with robustness probes and transition summaries;
+- a validation promotion gate against the selected raw keeper;
+- raw and verifier-aware locked final-test evaluation only when that gate passes;
+- final-test prediction forensics, confusion audits, verifier-aware boundary review;
+- verifier-aware final-test XAI and transition summary;
+- final artifact-retention audit;
+- runs\latest_full_pipeline.json, which points export/video wrappers to the completed run.
+
+If the gate fails, the same command still preserves all validation audits,
+writes status `validation_gate_rejected`, skips test, and does not update the
+latest deploy pointer. Do not use final-test outputs to alter thresholds,
+losses, or model selection; test remains a final report only.
+
+3) EXPORT THE COMPLETED PIPELINE TO ONNX + TENSORRT FP16 .ENGINE
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "D:\DataAI\AIEx\TRKH\scripts\run_trkh_export_engine.ps1"
+
+The export wrapper reads runs\latest_full_pipeline.json and writes:
+
+- <run>\deploy\model_fp32.onnx
+- <run>\deploy\model_fp32_fp16.engine
+- <run>\deploy\deploy_summary.json
+
+Export the currently selected keeper directly, without first running command 2:
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "D:\DataAI\AIEx\TRKH\scripts\run_trkh_export_engine.ps1" -Checkpoint "D:\DataAI\AIEx\TRKH\runs\probe_v8_yolof_pairroute_teacherfocusbinary015_boundarydrop_bboxprior_120b_2e_20260701\checkpoints\best.pt"
+
+4) TEST A VIDEO WITH THE TENSORRT ENGINE (separate command)
+
+Replace D:\VIDEO\input.mp4 with the real video path:
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "D:\DataAI\AIEx\TRKH\scripts\run_trkh_test_video.ps1" -Source "D:\VIDEO\input.mp4" -SaveOutput
+
+The video wrapper reads the latest checkpoint and default FP16 engine. It now
+supports classification-only TensorRT engines; bbox outputs are not required.
+
+5) TEST THE SAME VIDEO WITH PYTORCH CHECKPOINT (comparison/fallback)
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "D:\DataAI\AIEx\TRKH\scripts\run_trkh_test_video.ps1" -Source "D:\VIDEO\input.mp4" -UsePyTorch -SaveOutput
+
+UPDATE POLICY
+
+When a new version is judged better under the locked validation protocol, update
+all of the following together before publishing a new command:
+
+1. selected checkpoint and recipe defaults in run_trkh_current_best_full_pipeline.ps1;
+2. the selected-version metrics and commands in this TXT file;
+3. TRKH_5CLASS_RESEARCH_JOURNAL.md, TODO_TRKH_5CLASS.md, and the trkh-5class skill;
+4. PowerShell parse, full-pipeline -PreflightOnly, engine -PreflightOnly, and focused tests.
+
+Never update these commands from a smoke-only gain, a validation-oracle result,
+or a test-tuned result.
