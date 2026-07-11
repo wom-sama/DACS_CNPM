@@ -13973,3 +13973,65 @@ Date: 2026-07-02
   verification, direct plot review, and `git diff --check`; current-best command
   SHA-256 remains
   `3c71813000970a9776cfde974895358be2dda214ca9d6eb0e6a89dbc31d657dd`.
+
+## Diagnostic 2026-07-12 - Fixed Interior LBP Surface Texture Rejected Before Image Smoke
+
+- Re-read the primary multiresolution uniform-LBP work
+  (`https://doi.org/10.1109/TPAMI.2002.1017623`), its implementation details,
+  and color-constant LBP before selecting a fixed diagnostic. This stage uses
+  grayscale order patterns only to test whether local surface microtexture adds
+  a stable signal beyond the keeper. It is intentionally distinct from the
+  already rejected HOG, wavelet-scattering, high-frequency, and generic
+  pretrained-feature routes.
+- Added `trkh.tools.audit_lbp_surface_texture_readiness`, six focused tests, and
+  the explicit `scikit-image==0.24.0` dependency. The protocol denormalizes the
+  exact runtime crop, erodes the transformed object box by 15%, ROI-aligns a
+  `128x128` interior, and concatenates rotation-invariant uniform LBP histograms
+  at `(P=8,R=1)` and `(P=16,R=2)`. Histograms are normalized independently and
+  the resulting 28D descriptor is evaluated with five source-grouped folds.
+- Self-review rejected the first 4096-row preflight because a free bias plus
+  summed cross-entropy allowed class-prior recalibration to dominate the LBP
+  question. A corrected no-bias, natural-frequency mean-CE residual with
+  `C=0.3` removed that confound, but its prefix remained class-biased. The final
+  decision therefore uses all `9,215/2,606` train/validation rows and
+  `8,064/2,577` source groups, with zero train/validation or OOF fit/hold source
+  overlap. Test and raw-data writes are prohibited.
+- The fixed descriptor is low-dimensional in practice: standardized effective
+  rank is only `4.386422`. A standalone LBP readout reaches validation
+  macro/class1 F1 `0.368847/0.000000`. Adding the zero-initialized LBP residual
+  changes the train in-sample keeper/grouped-OOF residual macro-class1
+  `0.939922/0.815729 -> 0.923667/0.814516` and validation
+  `0.884073/0.684058 -> 0.864965/0.645963`; candidate class1 precision/recall
+  is `0.608187/0.688742` versus keeper `0.608247/0.781457`.
+- Full transition audit confirms another class1 suppressor. On validation it
+  changes 115 rows with `29/68` corrections/harms, removes/creates `14/5`
+  class1 false positives, rescues one false negative, and breaks 15 true
+  positives. OOF changes are similarly unsafe: `64/226` corrections/harms and
+  `1/25` FN-rescue/TP-break. FN-versus-FP direction AUROC is effectively random
+  and stable in the wrong sense (`0.484949/0.460128` OOF/validation).
+- The reviewed 13-row RGB/LBP8/LBP16 contact sheet shows speckles, scratches,
+  wrinkles, lesions, shading boundaries, and smooth-skin microtexture, but
+  class1 false positives and false negatives visibly overlap. Strong responses
+  also follow shadow and crop-edge transitions. The descriptor therefore does
+  not provide recall-safe maturity evidence even when restricted to the fruit
+  interior.
+- Decision: 15 fixed checks fail and `image_smoke_permission=false`. Do not
+  sweep RGB/opponent LBP channels, points/radii, ROI erosion/size, residual C,
+  optimizer iterations, folds/class balancing, or nearby LTP/CLBP variants.
+  Reopen local order-pattern texture only after genuinely new representation or
+  independent supervision changes direct keeper FN/FP support.
+- Final evidence is retained at
+  `runs\diagnostic_lbp_surface_texture_full_20260712`: 20 payloads,
+  `6,496,709` bytes, manifest SHA-256
+  `195c8a0ea8b337a2afb955a5585a1eb09b921b54cd70c29cebb632a6c9f52919`,
+  no model/checkpoint/test payload. It includes compact protocol/fold/summary
+  evidence for both superseded preflights. Guarded cleanup manifest
+  `runs\cleanup_manifest_20260712_lbp_surface_preflights_superseded.json`
+  deleted exactly 20 original files (`6,665,614` bytes; observed free-space
+  gain `6,713,344` bytes). Retention then covered 572 directories with
+  `blockers=[]`; keeper and current-best command remain unchanged.
+- Closure passed py-compile, compileall, focused LBP tests `6/6`, complete
+  pytest `688/688`, artifact/cleanup JSON and payload-hash verification,
+  `git diff --check`, and explicit protected-path worktree review. Current-best
+  command SHA-256 remains
+  `3c71813000970a9776cfde974895358be2dda214ca9d6eb0e6a89dbc31d657dd`.
