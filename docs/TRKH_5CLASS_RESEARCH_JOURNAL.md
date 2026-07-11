@@ -13757,3 +13757,78 @@ Date: 2026-07-02
   complete pytest `660/660`, evidence-manifest hash verification, cleanup and
   retention assertions, and `git diff --check`. No full train, test evaluation,
   checkpoint, deploy artifact, or current-best command was produced.
+
+## Diagnostic 2026-07-12 - Two-Stage Re-EDL Keeper Residual Rejected Before GPU
+
+- Cross-checked the ambiguity-aware recommendations in deep-research reports
+  14/15 against the no-repeat matrix and primary sources before implementation.
+  TEDL (`https://arxiv.org/abs/2209.05522`) motivates a stable cross-entropy
+  first stage followed by evidential training. Re-EDL
+  (`https://arxiv.org/abs/2410.00393`) and its official source use
+  `evidence=softplus(logits)`, `alpha=evidence+prior`, and direct optimization
+  of the projected Dirichlet mean while removing the variance and KL terms.
+  This audit deliberately composes TEDL's schedule with Re-EDL's documented
+  objective; it is not presented as a reproduction of either paper.
+- Added `trkh.tools.audit_two_stage_reedl_readiness` and five focused tests.
+  The candidate is a zero-initialized linear residual over the exact cached
+  keeper log probabilities, so identity is preserved before optimization. It
+  uses natural-frequency batches, no class weights/oversampling, fold-fit-only
+  standardization, AdamW `lr=0.003/wd=0.0001`, CE for 20 epochs, then compares
+  CE versus Re-EDL for ten more epochs from the identical stage-1 state and
+  batch order. Total branch budget is exactly 30 epochs.
+- The locked CPU audit read all `9,215/2,606` train/validation rows and
+  `8,064/2,577` source groups from the existing keeper cache. Five
+  StratifiedGroupKFold folds had zero fit/hold source overlap; train and
+  validation had zero source overlap. Test, raw data, checkpoint, trainable
+  manifest, and validation hyperparameter selection were all absent. The
+  grouped OOF limitation is explicit: the residual is held out, but the
+  underlying keeper representation was originally trained on the full train
+  split.
+- Re-EDL adds only a small in-sample-head class1 change and does not transfer.
+  OOF CE macro/class1 `0.939108/0.817204` became
+  `0.938132/0.821662`; only two of five folds improved class1. Validation CE
+  `0.877448/0.640288` fell to `0.858718/0.590406`, far below direct keeper
+  `0.884675/0.686047`. Candidate validation class1 precision/recall was
+  `0.666667/0.529801`; recall dropped `0.251656` from the keeper.
+- Transition evidence rejects the apparent conservative class1 effect. Versus
+  validation CE, Re-EDL made `18` corrections and `51` harms, removed/created
+  class1 FP `5/7`, rescued four FN, and broke 13 true positives. Versus the
+  keeper it made `45/71` corrections/harms, removed/created FP `38/3`, but
+  rescued only one FN while breaking 39 true positives. It is another class1
+  suppressor rather than a recall-safe ambiguity head.
+- The loss was stable rather than divergent: full-train stage-2 Re-EDL loss
+  decreased `0.4426 -> 0.2079`, with the same pattern in all five folds.
+  Nonetheless its validation uncertainty error AUROC/AURC
+  `0.838151/0.022503` was worse than CE entropy
+  `0.885434/0.013678`; top-label ECE was also worse
+  (`0.075548` versus `0.036798`). At 80% coverage it retained only `35/151`
+  validation class1 samples and class1 F1 `0.311111`, so lower aggregate risk
+  comes partly from abstaining on most of the difficult focus class.
+- Candidate-minus-CE class1 probability has stable FN-versus-FP direction
+  AUROC `0.954918/0.978778` on OOF/validation, but this is not a deployable
+  action: it is defined relative to the already recall-damaging CE residual,
+  while direct keeper transitions break 39 true positives for one FN rescue.
+  The risk-coverage and uncertainty histograms confirm separation of some
+  errors but consistently trail CE and do not restore closed-set decisions.
+- Decision: 13 fixed checks failed and `smoke_permission=false`. Do not add an
+  evidential head to the image model or sweep prior weight, CE/Re-EDL epoch
+  split, LR, weight decay, residual width/depth, class weights, calibration,
+  uncertainty thresholds, or post-hoc routing on this representation. Generic
+  EDL/Re-EDL is closed for the current keeper cache; reopen only after a new
+  representation independently changes class1 FN/FP support and then rerun a
+  matched CE control.
+- Evidence is retained at
+  `runs\diagnostic_two_stage_reedl_keeper_residual_readiness_20260712`: ten
+  payloads, `5,670,155` bytes, manifest SHA-256
+  `24a71f2896d9a6aa0457a792322b6c330c30ca827f85a746ea929aa74177da1b`,
+  no model/checkpoint/test payload. It contains complete OOF/validation
+  probabilities, fold/training curves, calibration, risk-coverage, uncertainty
+  plots, and the fixed gate. No full train, test evaluation, deploy pointer, or
+  current-best command was produced or changed.
+- Closure passed py-compile, compileall, focused Re-EDL tests `5/5`, complete
+  pytest `665/665`, evidence-manifest hash verification, `git diff --check`,
+  and retention
+  `runs\artifact_retention_audit_after_two_stage_reedl_precheck_20260712` over
+  563 run directories with `blockers=[]`. The keeper checkpoint remains
+  present and current-best command SHA-256 remains
+  `3c71813000970a9776cfde974895358be2dda214ca9d6eb0e6a89dbc31d657dd`.
