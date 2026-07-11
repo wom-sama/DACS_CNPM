@@ -350,7 +350,7 @@ def fit_grouped_scattering_readouts(
             }
         )
         print(
-            f"wavelet readout fold {fold_index + 1}/{len(split_indices)} complete; "
+            f"descriptor readout fold {fold_index + 1}/{len(split_indices)} complete; "
             f"fit={fit_indices.size} holdout={holdout_indices.size} "
             f"elapsed={fold_telemetry[-1]['elapsed_seconds']:.1f}s",
             flush=True,

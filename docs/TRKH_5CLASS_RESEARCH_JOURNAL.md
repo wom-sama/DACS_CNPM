@@ -13613,3 +13613,68 @@ Date: 2026-07-02
   `runs\artifact_retention_audit_after_pwca_residual_precheck_20260711`
   covered 557 directories with `blockers=[]`; the current-best command SHA-256
   remains `3c71813000970a9776cfde974895358be2dda214ca9d6eb0e6a89dbc31d657dd`.
+
+## Diagnostic 2026-07-12 - MaskFeat RGB-HOG Target Rejected Before GPU
+
+- Checked the primary MaskFeat CVPR 2022 paper before implementation. Unlike
+  the already rejected RGB reconstruction and global VICReg/DINO routes,
+  MaskFeat predicts a dense handcrafted feature only at masked regions. Its
+  image ablation identifies separate RGB-channel HOG, nine unsigned orientation
+  bins, `8x8` pixel cells, and local L2 contrast normalization as the effective
+  default. The paper also uses hundreds of pretraining epochs, so under TRKH's
+  `<=30`-epoch constraint this target had to show strong direct class1 and
+  FN-versus-FP evidence before a trainable head could be justified.
+- Added `trkh.tools.audit_maskfeat_hog_readiness` and three focused tests. The
+  fixed audit computes dense RGB HOG with differentiable Torch operations at
+  image size 128, preserves the full `16x16x3x9=6,912` cell descriptor, and
+  uses the same fixed scaler/PCA-128 plus linear/RBF readouts under five
+  StratifiedGroupKFold folds as the prior wavelet control. It aligns
+  `class_f` crops to all `9,215/2,606` `yolo_f` object rows, has zero
+  missing/duplicate/label mismatch, and reads no test split.
+- A self-review caught that the first infrastructure-valid run had pooled the
+  `16x16` HOG grid to `8x8`. Because MaskFeat predicts every cell, that proxy
+  could discard the local detail being tested. I therefore reran one
+  paper-faithful full-grid correction without looking for a favorable setting.
+  Standardized projected effective rank rose from `29.7902` to `61.8220`, so
+  the corrected descriptor is neither collapsed nor equivalent to the pooled
+  version.
+- Full-grid class signal still failed decisively. Primary RBF OOF macro/class1
+  F1 was `0.733291/0.331096`; validation was `0.656872/0.262911`, class1
+  precision/recall `0.451613/0.185430`, versus direct keeper validation
+  `0.884073/0.684058`. The linear control was weaker at OOF
+  `0.546913/0.198565` and validation `0.500041/0.168724`.
+- Transition evidence shows the same unsafe suppressor mechanism as fixed
+  gradients/wavelets, not a transferable MaskFeat target. Versus keeper on
+  validation, HOG made `69` corrections and `539` harms, removed/created
+  class1 FP `66/24`, but rescued only `3` class1 FN while breaking `93` true
+  positives. The label-assisted binary oracle class1 F1 `0.858156` is large
+  only because an unavailable oracle can choose when to apply suppression.
+  FN-versus-FP action AUROC inverted from `0.309054` train OOF to `0.736045`
+  validation, failing fold-safe direction and stability.
+- Visual review of the five-class RGB/channel-energy contact sheet found HOG
+  energy concentrated on fruit contours, stems, scratches, speckles, padding,
+  and foreground-background edges. It exposes plausible shape/texture but no
+  stable interior maturity cue that separates true class1 recall cases from
+  `0/2/4->1` false positives. The preview is bit-identical across the pooled
+  and full-grid runs because only the downstream readout grid changed.
+- Decision: eight readiness checks failed and `smoke_permission=false`. Do not
+  implement/sweep a MaskFeat-HOG auxiliary/pretraining head, mask ratio,
+  HOG bins/cell size/channel space, decoder, target weight, schedule, or a HOG
+  router under the current data and 30-epoch budget. This closes the distinct
+  HOG target, not every future masked target; a revisit needs a new semantic
+  surface target with train-OOF recall-safe direction rather than another
+  handcrafted edge descriptor.
+- Full evidence is retained at
+  `runs\diagnostic_maskfeat_hog_rgb9c8_fullgrid16_readiness_20260712`: ten
+  payloads, `3,906,228` bytes, manifest SHA-256
+  `2782c40309425080c6281c97bf2aef29cb25bba43a7333afc555ec8f3d65886a`,
+  no model/checkpoint/test payload. It includes the superseded pooled summary
+  and manifest. Guarded cleanup
+  `runs\cleanup_manifest_20260712_maskfeat_hog_pooled8_superseded.json`
+  removed exactly nine pooled-run files (`3,882,869` bytes; observed free
+  delta `3,903,488` bytes). Retention then covered 559 directories with
+  `blockers=[]`; current-best commands remain unchanged.
+- Closure passed py-compile, compileall, focused HOG/wavelet regressions `8/8`,
+  complete pytest `656/656`, manifest hash verification, and
+  `git diff --check`. No checkpoint, deploy pointer, test metric, or full-train
+  command was created or changed.
