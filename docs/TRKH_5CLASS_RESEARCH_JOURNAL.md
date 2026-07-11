@@ -14172,3 +14172,54 @@ Date: 2026-07-02
   `708/708`, artifact/cleanup/retention hash verification, staged
   `git diff --check`, and explicit protected-path review. Keeper and current-best
   command SHA values remain unchanged.
+
+## Diagnostic 2026-07-12 - VICRegL Crop-Local Objective Rejected Before Trainer Smoke
+
+- Re-read the VICRegL NeurIPS 2022 paper and inspected its official code at
+  commit `803ae4c8cd1649a820f03afb4793763e95317620`. Unlike prior global VICReg,
+  pixel MIM, paired `class_f/yolo_f` feature consistency, and rejected hflip
+  consistency, VICRegL explicitly matches local features by original-image
+  coordinates and feature distance. The official recipe needs 100-400 epochs
+  and large batches, so a fixed readiness audit was required under TRKH's
+  30-epoch/8-GB constraint.
+- Added `trkh.tools.audit_vicregl_crop_match_readiness` and nine focused tests.
+  The frozen no-test protocol makes two fixed overlapping 240px crops from each
+  256px runtime object view, transforms bbox/valid-mask metadata exactly, maps
+  post-pruning tokens through `patch_indices` to source coordinates, and keeps
+  the official 20 closest symmetric interior location matches. It writes no
+  projector, model, checkpoint, cache, or trainable manifest.
+- A 128-row implementation pilot and class-biased 1,024/512 preflight were
+  protocol-only. They verified geometry, XAI, throughput, and fixed thresholds
+  before the sole decision run. Full support is `9,215/2,606` rows and
+  `8,064/2,577` groups with zero train/validation overlap.
+- The final patch representation is already locally equivariant. Train/validation
+  location cosine is `0.966519/0.965089`, and feature retrieval of the
+  location-matched token is `0.893692/0.895635`; every row supplies all 20
+  matches. Class1 FN mismatch is lower than TP mismatch
+  (`-0.003113/-0.001721` FN-minus-TP), while FN-vs-FP AUROC is only
+  `0.470264/0.411313`.
+- Crop views are not a recall-safe action. Direct keeper versus crop-average
+  validation macro-class1 changes `0.884675/0.686047 -> 0.881340/0.670487`.
+  Among 78 changed rows there are `35/38` corrections/harms, class1 FP
+  remove/create `12/18`, and FN-rescue/TP-break `5/6`.
+- The reviewed 12-case mismatch sheet has mean mismatch `0.010515`; border mass
+  `0.215986` exceeds center mass `0.149665`. Residual mismatch follows crop
+  edges, padding, hands, stems, and object boundaries rather than missing
+  interior maturity evidence. A local consistency loss would optimize nuisance
+  invariance without targeting the class1 FN/FP boundary.
+- Decision: 11 fixed checks fail and trainer/image smoke is closed. Do not sweep
+  crop geometry, gamma, thresholds, projector, local/global weight, optimizer,
+  or epochs, and do not use mismatch as a router/sample-weight/margin signal.
+  Current-best commands remain unchanged.
+- Final evidence is
+  `runs\diagnostic_vicregl_crop_match_full_20260712`: nine payloads,
+  `4,791,831` bytes, SHA
+  `f249f51c8302454269ec17ae7253d44864d659ef110bf179e327d512170f6281`,
+  no model/checkpoint/test. A guarded manifest deleted the one superseded
+  preflight root, eight files and `1,776,284` bytes, with observed free gain
+  `1,794,048` bytes. Retention passed across 578 directories with no blockers;
+  the exact official reference clone was removed after commit verification.
+- Closure passed py-compile, compileall, focused tests `9/9`, full pytest
+  `717/717`, artifact/cleanup/retention hash verification, staged
+  `git diff --check`, and explicit protected-path review. Keeper and current-best
+  command SHA values remain unchanged.
