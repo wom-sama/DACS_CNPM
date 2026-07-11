@@ -14119,3 +14119,56 @@ Date: 2026-07-02
   pointer, or current-best command update was permitted. `pip check` reports
   only the already documented shared-environment MambaVision pin mismatches and
   OpenCV's NumPy>=2 requirement; OpenCLIP introduced no additional conflict.
+
+## Diagnostic 2026-07-12 - Deep-TEN Stem-Interior Texture Rejected Before Image Smoke
+
+- Re-read the primary Deep TEN CVPR 2017 and DEP CVPR 2018 papers and inspected
+  the official `PyTorch-Encoding` implementation at exact commit
+  `ac748410dfc8d7d70a2ce7f5add08050af2fae20`. This fixed diagnostic tests the
+  official learnable residual-encoding operation on the frozen keeper's final
+  CNN stem; it is distinct from prior LBP/HOG/wavelet, bilinear/covariance,
+  hard-cluster histogram, and high-frequency expert failures.
+- Added `trkh.tools.audit_deepten_stem_texture_readiness` and 11 focused tests.
+  The candidate uses a `12x12` final-stem grid, fixed orthogonal `256->32`
+  projection, 12%-eroded bbox/valid-mask interior, `K=8` masked Deep-TEN,
+  64D readout, and a zero-init no-bias keeper-log-probability residual. The
+  matched control uses mean+std over exactly the same descriptors. Both use
+  natural-frequency batches, five source folds, AdamW, and 20 epochs.
+- The first class-biased prefix preflight found one eight-token eroded mask.
+  Self-review replaced the unsafe all-valid fallback with the nine nearest
+  valid bbox-center tokens, added a regression test, and reran the protocol
+  preflight. Throughput improved from `178.46s` to `81.82s` with four workers
+  and batch 192. Prefix metrics remained explicitly non-decisional.
+- The full no-test run covers all `9,215/2,606` train/validation rows and
+  `8,064/2,577` source groups with zero train/validation or OOF fit/hold source
+  overlap. Deep-TEN is worse than its matched control in all five folds. Direct
+  keeper/control/candidate validation macro-class1 is
+  `0.884675/0.686047 -> 0.794480/0.363636 -> 0.779022/0.316327`; candidate
+  class1 recall collapses from `0.781457` to `0.205298`.
+- Candidate-versus-keeper transitions are decisively unsafe: `82/199`
+  corrections/harms, class1 FP remove/create `62/1`, and FN-rescue/TP-break
+  `0/87`. Codeword-use entropy recovers to `0.896705`, but maximum codeword
+  cosine is `0.995986` and final residual magnitude is large. The branch learns
+  a global class1 suppressor rather than missing positive maturity evidence.
+- XAI confirms the same failure. Candidate positive center mass falls
+  `0.356843 -> 0.278909` versus control and border mass rises
+  `0.030891 -> 0.040745`; multiple true class1 examples receive broad negative
+  surface evidence. Candidate-minus-control FN/FP AUROC `0.848099/0.922566`
+  cannot be reused as a keeper action because candidate-minus-keeper validation
+  AUROC is `0.446869` and exact keeper OOF predictions do not exist.
+- Decision: ten locked checks fail and image smoke is closed. Do not sweep
+  codewords/grid/projection/erosion/readout/LR/residual scale/folds/epochs, and
+  do not fit a router, threshold, or calibrator from this control-relative
+  signal. The current-best command remains unchanged.
+- Final evidence is
+  `runs\diagnostic_deepten_stem_texture_full_20260712`: 11 payloads,
+  `5,671,831` bytes, manifest SHA
+  `24ee35631bade5d70a1b9bca8714614d45eb81f1e2b983f6cf9ff4b852b46924`,
+  no model/checkpoint/test. A guarded two-phase manifest removed both prefix
+  roots, exactly 20 files and `5,866,265` bytes, with observed free gain
+  `5,902,336` bytes. Retention passed across 576 directories with no blockers;
+  the exact official reference clone was also deleted after commit verification.
+- Closure passed py-compile, compileall, focused tests `11/11`, full pytest
+  `708/708`, artifact/cleanup/retention hash verification, staged
+  `git diff --check`, and explicit protected-path review. Keeper and current-best
+  command SHA values remain unchanged.
