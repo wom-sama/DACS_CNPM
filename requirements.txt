@@ -8,3 +8,4 @@ tqdm
 scipy==1.13.1
 pytest==8.4.2
 cleanlab==2.7.1
+kymatio==0.3.0

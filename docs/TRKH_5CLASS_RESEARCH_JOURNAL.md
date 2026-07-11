@@ -13178,3 +13178,60 @@ Date: 2026-07-02
   resolved the remote ref. Local and remote heads matched at `7548c1f`, with
   ahead/behind `0/0`. GitHub therefore contains the verified runtime, VS Code
   commands, current research records, reports 14/15, and reference pack.
+
+## Diagnostic 2026-07-11 - Fixed Wavelet Scattering Rejected
+
+- Checked primary sources before implementation: invariant scattering
+  (Bruna/Mallat), rotation/scale scattering (Sifre/Mallat), Kymatio, Wavelet
+  Integrated CNNs, and Parametric Scattering Networks. This was a distinct
+  surface/texture representation precheck, not a repeat of the rejected raw
+  FFT/high-frequency expert.
+- Added `trkh.tools.audit_wavelet_scattering_readiness`, pinned
+  `kymatio==0.3.0`, and passed five focused tests. The fixed protocol uses
+  `128x128` `class_f` crops, RGB plus luminance/red-green/blue-yellow channels,
+  Kymatio `J=3/L=4/max_order=2`, mean/std/2x2 spatial descriptors (`2196`
+  dimensions), train-only StandardScaler/PCA-128 whitening, and a predeclared
+  RBF-SVC `C=3/gamma=scale`. A linear logistic readout is diagnostic only. No
+  validation selection, raw-data change, test access, checkpoint, or trainable
+  target manifest is permitted.
+- Strict `class_f -> yolo_f sample_index` alignment covered all `9215/2606`
+  train/validation objects with `8064/2577` source groups and zero missing rows,
+  duplicate keys, or label mismatches. GPU scattering plus five grouped folds
+  completed in about `135.1s` on the final run. No descriptor cache was retained.
+- The raw and train-standardized projected effective ranks were only
+  `4.7739/11.6378`; PCA-128 nevertheless explained `0.98808` of standardized
+  variance, confirming a highly redundant representation rather than a broken
+  extraction. Absolute scattering mass was stable train-to-validation: roughly
+  `77.4%` zero-order, `14.5%` first-order, and `8.1%` second-order.
+- Linear scattering reached OOF/validation macro-class1 F1
+  `0.79693/0.42680` and `0.77613/0.45408`. The predeclared RBF readout improved
+  to `0.84388/0.51383` OOF and `0.85632/0.63118` validation, but remained below
+  direct keeper validation `0.88407/0.68406`. RBF validation class1 precision
+  was `0.74107`, but recall was only `0.54967`.
+- Both prediction audits were reviewed. RBF changed `248` validation rows:
+  `88` corrections, `138` harms, and `22` neutral. It removed/created class1
+  false positives `56/9`, but rescued only `9` class1 false negatives while
+  breaking `44` true positives. Train OOF changed `741` rows with `113/616`
+  corrections/harms and class1 FN-rescue/TP-break `2/270`. FN-versus-FP
+  direction AUROC therefore shifted from `0.38087` train OOF to `0.64872`
+  validation instead of transferring.
+- The label-assisted validation binary oracle reached class1 F1 `0.85235`, but
+  this only proves post-hoc complementarity. The fold-safe action needed to
+  retain keeper true positives while applying scattering's conservative FP
+  control is absent. Visual review of all five preview rows showed first- and
+  second-order energy dominated by fruit boundaries, stems, scratches, and
+  high-contrast background edges; it did not reveal a stable maturity-surface
+  signal that resolves class 1.
+- Decision: seven gates failed and `smoke_permission=false` in
+  `runs\diagnostic_wavelet_scattering_rbf_c3_readiness_20260711`. Do not sweep
+  J/L/order, opponent channels, PCA, SVM C/gamma/kernel, fusion thresholds, or
+  a wavelet router on this keeper. No GPU train was launched and the current
+  full-train/deployment command packet remains unchanged.
+- Closure verification passed compileall and the complete suite (`625/625`).
+  Retention
+  `runs\artifact_retention_audit_after_wavelet_scattering_precheck_20260711`
+  scanned `544` run directories and passed with `blockers=[]`. `pip check`
+  continues to report pre-existing shared-venv conflicts between MambaVision's
+  old exact pins and the repository runtime, plus OpenCV's NumPy requirement;
+  Kymatio itself imports and runs correctly, so unrelated package versions were
+  deliberately left unchanged.
