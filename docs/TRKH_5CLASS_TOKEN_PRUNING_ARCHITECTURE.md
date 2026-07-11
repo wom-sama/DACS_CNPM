@@ -600,3 +600,185 @@ CLI/tool:
 Probe V26 dat validation macro/class-1 F1 `0.8864/0.6805`, van thap hon V16.
 Forensic cho thay `0->1` tang len `51`, nen khong tang weight va khong
 full-train. Chi tiet: `docs/TRKH_5CLASS_V25_V26_AUDIT_20260625.md`.
+
+## V64 High-Frequency Texture Expert (2026-06-26)
+
+V64 them mot nhanh residual tuy chon de khuech dai chi tiet be mat nho: vet
+lom, cham, texture ban/hu, canh sang cuc bo va gradient. Khac voi patch detail
+enhancer trong stem, nhanh nay chay song song voi classifier va sinh residual
+logits rieng.
+
+Input:
+
+- anh normalized `[B,3,H,W]`;
+- logits hien tai `[B,5]` de tinh route low-margin.
+
+Xu ly:
+
+1. Unnormalize anh ve RGB gan mien `[0,1]`.
+2. Resize ve `high_frequency_texture_analysis_size`, mac dinh `96`.
+3. Tinh local mean va high-pass RGB `image - local_mean`.
+4. Tinh gradient magnitude, Laplacian, local contrast va pseudo-foreground
+   weight.
+5. Tao foreground-detail map bang high-frequency/edge co mask foreground.
+6. Pool thanh descriptor texture va dua qua MLP de tao logits rieng.
+7. Route residual theo probability margin cua base logits, chi tac dong manh
+   khi mau nam gan boundary.
+
+Output:
+
+- `high_frequency_texture_logits [B,5]`;
+- `high_frequency_texture_route_weights [B]`;
+- residual class-logit adjustment `[B,5]`;
+- final logits la `base_logits + routed_high_frequency_adjustment`.
+
+Trace:
+
+- `09l_high_frequency_high_pass.png`;
+- `09m_high_frequency_gradient.png`;
+- `09n_high_frequency_laplacian.png`;
+- `09o_high_frequency_foreground_detail.png`;
+- `09p_high_frequency_foreground_weight.png`;
+- `high_frequency_texture_descriptor_shape`, logits va route weight trong
+  `shapes.json`.
+
+CLI/config:
+
+- `high_frequency_texture_expert`;
+- `high_frequency_texture_hidden_dim`;
+- `high_frequency_texture_dropout`;
+- `high_frequency_texture_analysis_size`;
+- `high_frequency_texture_logit_scale`;
+- `high_frequency_texture_routing`;
+- `high_frequency_texture_route_pairs`;
+- `high_frequency_texture_route_max_probability_margin`;
+- `--high-frequency-texture-*`.
+
+Probe V64 tren group-clean dat validation macro/class-1 F1 `0.7088/0.4151`.
+Day la best clean single probe hien tai, nhung van duoi gate full train `0.70`.
+Chi tiet: `docs/TRKH_5CLASS_V64_V70_HIGHFREQ_SURFACEAMP_QUALITY_AUDIT_20260626.md`.
+
+## V69 Surface-Detail Amplified Supervised View (Train-Only, 2026-06-26)
+
+V69 khong them inference branch. No them mot loss train-only de test gia thuyet:
+neu dac trung khac biet qua nho, tao view khuech dai chi tiet be mat roi bat
+model phan loai dung va tach boundary tot hon.
+
+Input:
+
+- batch image normalized `[B,3,H,W]`;
+- hard target `[B]`;
+- model hien tai.
+
+Xu ly:
+
+1. Chon mot phan batch theo `surface_amplified_probability`.
+2. Tao surface-amplified image bang `_surface_counterfactual_images`, mode mac
+   dinh `foreground_luma`.
+3. Forward lai cung model tren view da khuech dai.
+4. Tinh supervised classification loss tren view moi.
+5. Neu bat boundary margin, ep `logit_target - logit_neighbor >= margin` cho
+   cac pair cau hinh.
+
+Output:
+
+- `train_surface_amplified_supervised_loss`;
+- `train_surface_amplified_boundary_margin_loss`;
+- `train_surface_amplified_fraction`;
+- `train_surface_amplified_boundary_terms`.
+
+CLI/config:
+
+- `surface_amplified_supervised_loss_weight`;
+- `surface_amplified_boundary_margin_loss_weight`;
+- `surface_amplified_probability`;
+- `surface_amplified_mode`;
+- `surface_amplified_strength`;
+- `surface_amplified_blur_kernel`;
+- `surface_amplified_boundary_pairs`;
+- `surface_amplified_boundary_margin`;
+- `--surface-amplified-*`.
+
+Probe V69 cho thay loss hoat dong nhung class-1 FP tang manh: TP/FP/FN
+`74/173/79`, F1 `0.3700`. Ket luan: khuech dai surface toan cuc khuech dai ca
+dau hieu gay nham class 1, nen khong dung lam huong chinh.
+
+## V70 Quality Sample Weight Guard (Train-Only, 2026-06-26)
+
+V70 khong them inference branch. No dung quality/cartography manifest train-only
+de sinh per-sample weight, tranh dung val/test va tranh oversample class 1 toan
+cuc.
+
+Input:
+
+- manifest quality train-only co `image_path`, `target_index`,
+  `quality_bucket`, `cartography_bucket`;
+- train dataset sample `(image, label, metadata)`.
+
+Xu ly:
+
+1. `trkh.tools.build_quality_sample_weights` doc manifest va fail neu path co
+   `/val/` hoac `/test/`.
+2. Gan weight theo quality/cartography bucket, co cap min/max va normalize mean.
+3. Train loop boc dataset bang `SampleWeightDataset`.
+4. Classification loss nhan per-sample weight truoc khi reduce.
+
+Output:
+
+- CSV `sample_weights_quality_guard_train_only.csv`;
+- `summary.json` voi split/quality/cartography counts;
+- history field `train_sample_weight_mean`.
+
+CLI/tool:
+
+- `python -m trkh.tools.build_quality_sample_weights`;
+- `--sample-weight-manifest`;
+- `--sample-weight-min`;
+- `--sample-weight-max`.
+
+Probe V70 dat validation macro/class-1 F1 `0.6962/0.3912`; recall class 1 tang
+nhung precision giam, nen reject. Chi tiet:
+`docs/TRKH_5CLASS_V64_V70_HIGHFREQ_SURFACEAMP_QUALITY_AUDIT_20260626.md`.
+
+## Internal SSL Pretraining: Barlow/VICReg (Train-Only, 2026-06-26)
+
+Day la giai doan khoi tao model truoc fine-tune, khong phai pretrained ngoai.
+Tool `trkh.tools.pretrain_internal_barlow` ho tro `--ssl-method barlow|vicreg`
+va chi doc split train cua `data.yaml`.
+
+Input:
+
+- train images tu `class_f_groupclean_v1/train`;
+- hai augmented views cua cung mot anh;
+- label train tuy chon cho SupCon nhe, khong dung val/test.
+
+Xu ly chung:
+
+1. Tao model TRKH V8 scratch.
+2. Forward hai view qua `forward_features`.
+3. Lay head input embedding `[B,256]`.
+4. Dua qua projector MLP `[256 -> hidden -> output]`.
+5. Tinh SSL loss va optional SupCon train-only.
+6. Luu checkpoint chua `model_state`, `projector_state`, `ssl_config`.
+
+Barlow loss:
+
+- chuan hoa projection theo batch;
+- ep cross-correlation diagonal gan 1;
+- phat off-diagonal de decorrelate feature.
+
+VICReg loss:
+
+- invariance: MSE giua hai projection;
+- variance: hinge giu std moi dimension lon hon `gamma`;
+- covariance: phat off-diagonal covariance.
+
+Output:
+
+- checkpoint kind `internal_barlow_pretrain` hoac `internal_vicreg_pretrain`;
+- `history.json` voi `ssl_loss`, `barlow_loss` hoac `vicreg_*_loss`;
+- checkpoint co the resume vao train classification bang `--resume`.
+
+V71 VICReg+SupCon train-only giam SSL loss `34.56 -> 31.44`, nhung fine-tune
+V64-config chi dat validation macro/class-1 F1 `0.6972/0.3356`; reject. Chi
+tiet: `docs/TRKH_5CLASS_V71_INTERNAL_VICREG_AUDIT_20260626.md`.
