@@ -19,7 +19,7 @@ from dataclasses import fields
 from functools import partial
 from itertools import count, islice
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Callable, Dict, List, Mapping, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import torch
@@ -7139,6 +7139,48 @@ def _preload_resume_checkpoint_for_config(args: argparse.Namespace) -> Tuple[Opt
     return resume_path, load_checkpoint(resume_path, map_location="cpu")
 
 
+def _validate_resume_runtime_requirements(
+    args: argparse.Namespace,
+    resume_checkpoint: Optional[Mapping[str, object]],
+) -> None:
+    if resume_checkpoint is None:
+        return
+    transfer = resume_checkpoint.get("curriculum_transfer")
+    if not isinstance(transfer, Mapping):
+        return
+    requirements = transfer.get("required_runtime")
+    if not isinstance(requirements, Mapping):
+        return
+
+    missing: List[str] = []
+    if bool(requirements.get("full_image_detection")) and not bool(
+        getattr(args, "full_image_detection", False)
+    ):
+        missing.append("--full-image-detection")
+    if bool(requirements.get("skip_final_test")) and not bool(
+        getattr(args, "skip_final_test", False)
+    ):
+        missing.append("--skip-final-test")
+    if missing:
+        joined = " ".join(missing)
+        raise ValueError(
+            "Curriculum detector checkpoint requires runtime argument(s): "
+            f"{joined}. These preserve the full yolo_f frame/all bboxes and keep "
+            "the held-out test split untouched."
+        )
+
+
+def _propagate_curriculum_transfer_metadata(
+    checkpoint_payload: Dict[str, object],
+    resume_checkpoint: Optional[Mapping[str, object]],
+) -> None:
+    if resume_checkpoint is None:
+        return
+    transfer = resume_checkpoint.get("curriculum_transfer")
+    if isinstance(transfer, Mapping):
+        checkpoint_payload["curriculum_transfer"] = to_serializable(dict(transfer))
+
+
 def apply_balance_file_auto_adjustment(
     data_spec,
     train_config: TrainConfig,
@@ -8022,6 +8064,7 @@ def _save_interrupt_checkpoint(
     epochs_without_improvement: int,
     stage1_auto_advance_epoch: Optional[int] = None,
     model_ema: Optional[ModelEMA] = None,
+    resume_checkpoint: Optional[Mapping[str, object]] = None,
 ) -> Dict[str, object]:
     checkpoint = {
         "epoch": int(epoch),
@@ -8054,6 +8097,7 @@ def _save_interrupt_checkpoint(
             "next_epoch": int(epoch) + 1,
         },
     }
+    _propagate_curriculum_transfer_metadata(checkpoint, resume_checkpoint)
     if model_ema is not None:
         checkpoint["ema_model_state"] = model_ema.state_dict()
         checkpoint["ema_updates"] = int(model_ema.updates)
@@ -25083,6 +25127,7 @@ def make_train_transform(
 def main() -> None:
     args = parse_args()
     preloaded_resume_path, preloaded_resume_checkpoint = _preload_resume_checkpoint_for_config(args)
+    _validate_resume_runtime_requirements(args, preloaded_resume_checkpoint)
     if preloaded_resume_checkpoint is not None and not bool(args.resume_use_cli_config):
         (
             model_config,
@@ -30347,6 +30392,10 @@ def main() -> None:
                     data_summary=data_summary,
                     imbalance_summary=imbalance_summary,
                 )
+                _propagate_curriculum_transfer_metadata(
+                    checkpoint_payload,
+                    resume_checkpoint,
+                )
                 checkpoint_payload["train_stage"] = stage_config["stage_name"]
                 checkpoint_payload["classification_overfit_guard"] = classification_guard
                 checkpoint_payload["adaptive_detection_loss"] = detection_loss_adaptation
@@ -31042,6 +31091,7 @@ def main() -> None:
                     epochs_without_improvement=epochs_without_improvement,
                     stage1_auto_advance_epoch=stage1_auto_advance_epoch,
                     model_ema=model_ema,
+                    resume_checkpoint=resume_checkpoint,
                 )
                 save_checkpoint(checkpoints_dir / "last.pt", interrupt_payload)
                 print(

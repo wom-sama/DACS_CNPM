@@ -13235,3 +13235,73 @@ Date: 2026-07-02
   old exact pins and the repository runtime, plus OpenCV's NumPy requirement;
   Kymatio itself imports and runs correctly, so unrelated package versions were
   deliberately left unchanged.
+
+## Probe 2026-07-11 - Full-Frame Detection Curriculum Rejected
+
+- Checked NTS-Net, ELoPE, compact joint localization/classification, Cross-X,
+  and InsLoc before implementation. The fixed hypothesis used complete
+  `yolo_f` frames and supervised boxes to teach a DETR encoder where the fruit
+  is, then transferred only an explicit encoder allowlist into the unchanged
+  object-crop TRKH classifier. No raw dataset file was changed and the test
+  split was never evaluated.
+- Added a bidirectional curriculum-checkpoint builder with state-reset and
+  allowlist reports. Classifier-to-detector initialization transferred
+  `183/185` model keys (`7,245,048` elements) while excluding the classifier
+  head; detector-to-classifier transfer copied `155` encoder keys
+  (`6,909,381` elements) and preserved the original classifier head bit-exact.
+  Generated detector checkpoints now declare `required_runtime`, and training
+  fails closed unless both `--full-image-detection` and `--skip-final-test`
+  are present. The trainer propagates this contract through subsequent
+  best/last/interrupt checkpoints, while fresh curriculum payloads remove stale
+  resume, calibration, stage, data-summary, and EMA-selection metadata.
+- That guard was required: the first resource dry run omitted full-image mode,
+  cropped around the primary object, and ignored `1,151` secondary training
+  boxes. It is infrastructure-invalid. The corrected loader covered train
+  `8,064` images / `9,215` objects and validation `2,577` images / `2,606`
+  objects with `ignored_objects=0`. Batch 32 used about `2,656.7 MiB` allocated
+  and `3,098 MiB` reserved, so it was selected without leaving GPU capacity
+  idle.
+- The fixed 20-query, decoder-depth-2, FFN-512 full-frame detector ran two
+  120-batch epochs. Epoch 2 reached matched-query validation macro/class1 F1
+  `0.928815/0.769760`, class1 precision/recall `0.800000/0.741722`, bbox IoU
+  `0.483235`, and best detection F1@0.5 `0.414182`. The high classification
+  score depends on ground-truth Hungarian matching and is therefore diagnostic,
+  not a deployable classifier gate.
+- After the detector encoder was transferred back under the original TRKH
+  classifier head, independent validation before fine-tuning collapsed to
+  macro/class1 `0.782285/0.522167`. The unchanged current V8 recipe recovered
+  after two 120-batch epochs only to raw `0.874127/0.659574`, class1 P/R
+  `0.551111/0.821192`. This failed the locked keeper minima
+  `0.882925/0.678261` by `0.008798/0.018686`; keeper softboost also failed to
+  transfer at `0.873939/0.650307` and reduced class1 recall to `0.701987`.
+- Aligned full-validation comparison changed 81 predictions: 28 corrections,
+  50 harms, and 3 wrong-to-wrong transitions. It rescued 8 class1 false
+  negatives and broke 2 true positives, but created 33 new class1 false
+  positives while removing only 8. The dominant regression was `0->1`.
+- Reviewed raw and softboost prediction audits, 48-row boundary evidence,
+  architecture traces, 24-case raw XAI, 24-case softboost XAI, and the full
+  corruption audit. Raw `0->1` object-desaturation probability drop averaged
+  `0.231264`, versus background blur/gray `0.007791/0.010052`. Center occlusion
+  changed macro-F1 only `-0.008466`, while dim, bright, and low-contrast
+  conditions changed it `-0.089595/-0.081702/-0.070126`. Attention usually
+  covered the fruit, although selected Grad-CAM/rollout maps still emphasized
+  boundaries and background. The unresolved bottleneck is photometric/surface
+  class separability and class1 FP control, not basic localization.
+- Corrected `robustness_eval` while performing this audit: `yolo_f` now loads
+  classification object crops with original/transformed bbox metadata and pad
+  masks, and model forwarding now supplies `bbox_token_prior`, `features["bbox"]`,
+  and `image_valid_mask` exactly as the independent evaluator does. Focused
+  regression tests cover the dataset/transform/forward contract.
+- Decision: reject the exact direct DETR-20 curriculum, nearby detection-loss,
+  LR/batch/epoch sweeps, and the same unrestricted encoder round-trip plus V8
+  fine-tune. Do not run test, extend training, update the deploy pointer, or
+  change `docs\TRKH_CURRENT_BEST_FULL_TRAIN_COMMANDS_20260706.txt` from this
+  result.
+- Compact evidence is retained at
+  `runs\evidence_detcls_fullframe_curriculum_rejected_20260711`; its 89 payloads
+  contain no checkpoint/ONNX/engine and manifest SHA-256
+  `32abb934337801851f9523e4d31c9dfa090efd0ce5b28ca146346010fb808f62`.
+  Guarded cleanup deleted exactly seven superseded source roots and reclaimed
+  an observed `1,458,147,328` bytes. The post-clean retention audit covered
+  `547` run directories and passed with `blockers=[]`. Compileall,
+  `git diff --check`, and the complete test suite passed (`637/637`).
