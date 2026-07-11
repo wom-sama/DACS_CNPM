@@ -13569,3 +13569,47 @@ Date: 2026-07-02
   retention covered 555 run directories with `blockers=[]`, and the command TXT
   SHA-256 remained `3c71813000970a9776cfde974895358be2dda214ca9d6eb0e6a89dbc31d657dd`.
   Compileall and the complete suite also passed (`650/650`).
+
+## Diagnostic 2026-07-11 - Keeper-Relative PWCA Scalar Residual Rejected
+
+- Before regenerating the deleted 53.5 MB token cache or opening a GPU smoke, I
+  checked the narrowest keeper-preserving interpretation of the retained PWCA
+  evidence. AdaptFormer motivates a parallel residual path that starts from the
+  unchanged base function, while rate-constrained optimization motivates
+  enforcing recall and false-positive requirements on train-only support. The
+  fixed audit therefore applies
+  `log(p_keeper) + alpha * (log(p_pwca) - log(p_control))`: `alpha=0` is exactly
+  the keeper, and the matched PWCA-minus-control term isolates the prior
+  training-only interaction effect.
+- Added `trkh.tools.audit_pwca_keeper_residual_readiness` and three focused
+  tests. It reads only the retained `9,215` train-OOF and `2,606` validation
+  rows, rejects test paths, uses a fixed 201-point `[-1,1]` alpha grid, and
+  selects alpha exclusively on train OOF. Eligibility requires macro F1,
+  class1 F1, and class1 recall no lower than the keeper plus no increase in
+  class1 false positives. Validation is transfer evaluation only.
+- Exactly one coefficient was eligible: `alpha=0`. Every nonzero relative
+  PWCA residual violated at least one train-OOF preservation constraint. The
+  selected result consequently kept train OOF macro/class1
+  `0.940013/0.816358` and validation `0.884675/0.686047` unchanged, with class1
+  train OOF TP/FN/FP `529/12/226` and validation `118/33/75` unchanged.
+- The label-assisted choose-keeper-or-PWCA upper bound is also limited:
+  validation can fix only 38 keeper errors while 47 keeper-correct rows are
+  harmable, and its class1 F1 is `0.733945`. This is not a selection rule and
+  does not permit validation routing or test use.
+- Decision: close scalar post-hoc PWCA/control residual interpolation and do
+  not sweep coefficient ranges, steps, class-specific scales, thresholds, or
+  routers. This result does not claim to reject a newly trained zero-initialized
+  token adapter, but it removes the retained logits as standalone evidence for
+  building one; a trainable revisit now needs a different train-only
+  supervision signal and a predeclared nonzero recall-safe action before GPU.
+- Evidence is retained at
+  `runs\diagnostic_pwca_keeper_relative_residual_full_20260711`: five payloads,
+  `2,525,541` bytes, manifest SHA-256
+  `6996ed28dc16700eb24e7782a0f2c29739dabedb5028eb20def144aad3f4974f`,
+  no model/checkpoint/test payload. The current-best command and deploy pointer
+  remain unchanged.
+- Closure passed compileall, focused API/residual tests `7/7`, complete pytest
+  `653/653`, manifest hash verification, and `git diff --check`. Retention
+  `runs\artifact_retention_audit_after_pwca_residual_precheck_20260711`
+  covered 557 directories with `blockers=[]`; the current-best command SHA-256
+  remains `3c71813000970a9776cfde974895358be2dda214ca9d6eb0e6a89dbc31d657dd`.

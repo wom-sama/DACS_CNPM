@@ -625,7 +625,11 @@ def _compact_curve(curve: Sequence[Mapping[str, float]]) -> Dict[str, object]:
     }
 
 
-def _write_artifact_manifest(output_dir: Path) -> Dict[str, object]:
+def _write_artifact_manifest(
+    output_dir: Path,
+    *,
+    mode: str = "api_pairwise_interaction_readiness_evidence_manifest",
+) -> Dict[str, object]:
     manifest_path = output_dir / "artifact_manifest.json"
     rows = []
     for path in sorted(output_dir.iterdir(), key=lambda value: value.name.casefold()):
@@ -643,7 +647,7 @@ def _write_artifact_manifest(output_dir: Path) -> Dict[str, object]:
         aggregate.update(str(row["name"]).encode("utf-8"))
         aggregate.update(str(row["sha256"]).encode("ascii"))
     manifest = {
-        "mode": "api_pairwise_interaction_readiness_evidence_manifest",
+        "mode": str(mode),
         "payload_count": len(rows),
         "payload_size_bytes": int(sum(int(row["size_bytes"]) for row in rows)),
         "payload_manifest_sha256": aggregate.hexdigest(),
