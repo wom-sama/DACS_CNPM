@@ -13678,3 +13678,82 @@ Date: 2026-07-02
   complete pytest `656/656`, manifest hash verification, and
   `git diff --check`. No checkpoint, deploy pointer, test metric, or full-train
   command was created or changed.
+
+## Diagnostic 2026-07-12 - DINOv2 Dense Patch Surface Target Rejected Before GPU
+
+- Re-read the primary DINOv2 paper, Meta model card, and official
+  `forward_features` implementation before coding. DINOv2-S/14 returns one
+  normalized CLS token plus `16x16=256` normalized patch tokens for a 224-pixel
+  input; its patch-level self-supervision and dense downstream use make those
+  tokens a materially different semantic target from the already rejected
+  RGB/HOG/wavelet descriptors and the prior global 384D DINOv2 cache.
+- Added `trkh.tools.audit_dinov2_dense_patch_readiness` and four focused tests.
+  The descriptor was locked before validation: a 384D CLS-only control versus
+  `CLS + patch mean + patch std + 2x2 spatial patch means` (`2,688` dimensions).
+  Both branches use the same scaler, fixed randomized PCA-128, linear and RBF
+  readouts, and the same five source-grouped folds. There is no grid/readout
+  sweep, descriptor cache by default, test access, image-model training,
+  target manifest, or checkpoint write.
+- Strict `class_f -> yolo_f` alignment covered all `9,215/2,606` object rows
+  and `8,064/2,577` source groups with zero duplicate keys, missing rows, or
+  label mismatch. Extraction used pretrained `vit_small_patch14_dinov2.lvd142m`
+  at 224 pixels, resized the official positional embedding from `37x37` to
+  `16x16`, took `72.9/21.3` seconds for train/validation, and peaked at about
+  `644 MiB` allocated CUDA memory.
+- Protocol self-review found that the first complete run had accidentally
+  supplied different fold seeds to the control and candidate. Its negative
+  result was not used. The tool now locks the model and one common seed and
+  records `matched_source_folds=true`; the corrected fold telemetry is exactly
+  identical (`7,377/1,838`, `7,363/1,852`, `7,384/1,831`, `7,387/1,828`,
+  `7,349/1,866`) for both branches.
+- Under matched folds, dense patches add real train-OOF signal but it does not
+  transfer. Primary RBF CLS OOF macro/class1 F1
+  `0.872683/0.581068` becomes `0.880335/0.603738`, while validation CLS
+  `0.887625/0.664384` falls to `0.882850/0.636364`. Dense validation class1
+  precision/recall is `0.674074/0.602649`, below direct keeper
+  `0.884073/0.684058`. Linear readouts show the same weak regime: dense OOF
+  `0.830536/0.472397` and validation `0.844524/0.543590`.
+- Transition review explains why this is not a distillation permission. Versus
+  the matched CLS control, dense patches make `122/78` OOF corrections/harms
+  but only `40/40` on validation; validation class1 FN rescue/TP break is
+  `10/16` and FP remove/create is `16/16`. Versus the keeper they make
+  `98/71` corrections/harms and remove/create `49/17` class1 false positives,
+  but break 31 true class1 predictions while rescuing only four. The
+  label-assisted binary oracle class1 F1 `0.813333` is therefore an unavailable
+  selector, not a deployable gain.
+- FN-versus-FP direction also shifts across splits. Dense-minus-CLS direction
+  AUROC is `0.592613` train OOF versus `0.771886` validation, exceeding the
+  fixed stability gap; relative to keeper errors validation AUROC is only
+  `0.598086`. On actual keeper FN rows, the dense-minus-CLS class1 probability
+  delta is negative on both train/validation (`-0.035150/-0.088202`), so the
+  signal cannot justify another keeper-relative scalar residual or router.
+- The five-class patch-deviation contact sheet is non-collapsed but nearly
+  uniform in spatial entropy (`0.996020`) with border mass `0.255176`. It
+  responds to fruit texture, spots, lesions, lighting, edges, and remaining
+  crop/background patches without isolating a stable recall-safe maturity
+  region. Because the encoder is frozen and no image model was trained, a new
+  TRKH Grad-CAM/rollout audit would only reproduce keeper XAI; the applicable
+  audit surface is the patch map, full OOF/validation predictions, per-class
+  metrics, transitions, and direction checks reviewed above.
+- Decision: seven fixed readiness checks fail and `smoke_permission=false`.
+  Do not sweep DINOv2 input size, model scale, spatial grid, patch moments,
+  pooling, PCA/SVM, thresholds, residual coefficients, routers, adapters, or
+  dense-feature distillation on this evidence. This closes the fixed DINOv2
+  dense semantic-surface target on the current data; a future external target
+  must prove stable keeper-FN rescue without sacrificing true class1 recall.
+- Corrected evidence is retained at
+  `runs\diagnostic_dinov2_dense_patch_semantic_surface_matchedfolds_readiness_20260712`:
+  11 payloads, `3,866,659` bytes, manifest SHA-256
+  `7a44e78857d8908eea651de6ea047b81009b995a3a7e2b86aae628c4bceb5f52`,
+  no model/checkpoint/test payload. It contains the superseded summary and
+  manifest. Guarded cleanup
+  `runs\cleanup_manifest_20260712_dinov2_dense_unmatchedfolds_superseded.json`
+  deleted exactly ten invalid-run files (`3,823,398` bytes; observed free
+  delta `3,846,144` bytes). Retention then covered 561 run directories with
+  `blockers=[]`; keeper, deploy pointers, and current-best command remain
+  unchanged, with command SHA-256
+  `3c71813000970a9776cfde974895358be2dda214ca9d6eb0e6a89dbc31d657dd`.
+- Closure passed py-compile, compileall, focused DINOv2 regressions `4/4`,
+  complete pytest `660/660`, evidence-manifest hash verification, cleanup and
+  retention assertions, and `git diff --check`. No full train, test evaluation,
+  checkpoint, deploy artifact, or current-best command was produced.
