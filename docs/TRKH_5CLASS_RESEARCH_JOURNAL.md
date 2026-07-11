@@ -13914,3 +13914,62 @@ Date: 2026-07-02
   covers 566 directories with `blockers=[]`. Keeper and current-best command
   remain unchanged; command SHA-256 is
   `3c71813000970a9776cfde974895358be2dda214ca9d6eb0e6a89dbc31d657dd`.
+
+## Diagnostic 2026-07-12 - BBN Bilateral Classifier Space Rejected Before Image Smoke
+
+- Re-read the primary long-tail multi-branch literature before implementation:
+  [BBN (CVPR 2020)](https://openaccess.thecvf.com/content_CVPR_2020/html/Zhou_BBN_Bilateral-Branch_Network_With_Cumulative_Learning_for_Long-Tailed_Visual_Recognition_CVPR_2020_paper.html),
+  [RIDE (ICLR 2021)](https://iclr.cc/virtual/2021/poster/3018),
+  [ResLT](https://arxiv.org/abs/2101.10633), and
+  [SADE (NeurIPS 2022)](https://proceedings.neurips.cc/paper_files/paper/2022/hash/dc6319dde4fb182b22fb902da9418566-Abstract-Conference.html).
+  These methods motivate separate experts for natural, inverse, nested-tail, or
+  test-agnostic class distributions. The fixed precheck isolates the cheaper BBN
+  classifier-space claim before allocating another image-model branch; it is not
+  presented as a reproduction of any full paper.
+- Added `trkh.tools.audit_bbn_bilateral_classifier_readiness` and six focused
+  tests. The conventional branch is a natural-frequency multinomial logistic
+  readout. The reversed branch exactly realizes BBN class sampling proportional
+  to `1/N_i` as natural-row loss weights proportional to `1/N_i^2`; raw logits
+  are fused once at the paper's fixed inference `alpha=0.5`. There is no C,
+  alpha, weighting, fold, or validation sweep.
+- Reused a frozen keeper cache over all `9,215/2,606` train/validation objects,
+  `8,064/2,577` source groups, and 256D embeddings. A source-guard self-review
+  added a hard zero-overlap check between train and validation as well as every
+  OOF fit/hold fold. The final run has both overlap counts at zero, reads no test,
+  writes no model/checkpoint, and leaves raw data untouched. The reusable
+  `12,496,767`-byte cache is retained with payload SHA-256
+  `86df861525b2fddd1d11b853d213104e0e39e41d2d16144d0e89136299e090e6`.
+- BBN fusion has a small same-readout OOF effect but does not transfer to the
+  direct keeper boundary. Conventional versus bilateral OOF macro/class1 F1 is
+  `0.934635/0.802208 -> 0.936151/0.809365`; the macro gain `+0.001516`
+  misses its fixed `0.002` gate. On validation, conventional, reversed, and
+  bilateral class1 F1 are `0.644928/0.650602/0.666667`, while the direct keeper
+  remains `0.684058`; bilateral macro F1 `0.880665` is also below keeper
+  `0.884073`.
+- Transition and direction audits reject the apparent false-positive control.
+  Versus keeper, bilateral removes/creates `32/7` class1 false positives but
+  rescues only one false negative while breaking 18 true positives. Its class1
+  precision/recall is `0.664474/0.668874` versus keeper
+  `0.608247/0.781457`. Same-scale bilateral-minus-conventional FN-versus-FP
+  direction AUROC inverts from `0.636277` OOF to `0.396057` validation; keeper
+  probability deltas are deliberately excluded because the probability scales
+  are incompatible.
+- Decision: six fixed checks fail and `image_smoke_permission=false`. Do not
+  implement or sweep BBN branch alpha, reversed weight, logistic C, folds, or a
+  same-representation RIDE/ResLT/SADE expert family. This closes the current
+  frozen-embedding class-prior axis, not every future multi-expert architecture;
+  reopen only after a genuinely new image representation independently preserves
+  keeper macro/class1/recall and changes direct keeper FN/FP support.
+- Final evidence is retained at
+  `runs\diagnostic_bbn_bilateral_classifier_readiness_sourceguarded_20260712`:
+  eight payloads, `6,199,651` bytes, manifest SHA-256
+  `c66558746eb9817d461938fcae051b99a945e45b34ebffa01a38f0fbf4aea45b`,
+  no model/checkpoint/test payload. Two guarded manifests removed the original
+  scale-invalid and intermediate no-source-guard outputs, exactly 18 files and
+  `12,401,130` bytes; observed free-space gain was `12,443,648` bytes. Retention
+  then covered 570 run directories with `blockers=[]`. Keeper and current-best
+  command remain unchanged. Closure passed py-compile, compileall, focused BBN
+  tests `6/6`, complete pytest `682/682`, evidence/cache/cleanup manifest hash
+  verification, direct plot review, and `git diff --check`; current-best command
+  SHA-256 remains
+  `3c71813000970a9776cfde974895358be2dda214ca9d6eb0e6a89dbc31d657dd`.
