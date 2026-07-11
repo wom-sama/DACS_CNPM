@@ -13832,3 +13832,85 @@ Date: 2026-07-02
   563 run directories with `blockers=[]`. The keeper checkpoint remains
   present and current-best command SHA-256 remains
   `3c71813000970a9776cfde974895358be2dda214ca9d6eb0e6a89dbc31d657dd`.
+
+## Diagnostic 2026-07-12 - Joint Spatial-PCGrad Passed Gradient Readiness but Failed Image Smoke
+
+- Revisited full-frame localization only as simultaneous multi-task supervision,
+  not the already rejected sequential detector-to-classifier curriculum. The
+  implementation follows the conflict-projection rule from PCGrad
+  (`https://arxiv.org/abs/2001.06782`) and compares its component balancing to
+  GradNorm's multi-task motivation (`https://proceedings.mlr.press/v80/chen18a.html`).
+  The fixed candidate uses crop classification as the primary task and raw-context
+  full-frame objectness/localization as auxiliary tasks. Detector classification
+  gradients are excluded so class priors cannot be injected twice.
+- Added `trkh.tools.audit_joint_cls_localization_gradient_readiness` and
+  `trkh.tools.train_joint_spatial_pcgrad_smoke` with ten focused tests. The
+  readiness audit used only `yolo_f/train`: 7,373 exact single-object paired
+  sources, five held-out audit folds, 12 rows per class/fold, and a frozen keeper
+  encoder. A DETR-20/depth-2/FFN-512 head was warmed for 120 batches of eight
+  full frames while excluding every audit source; its loss ratio fell to
+  `0.33354` and the encoder remained bit-exact.
+- The predeclared component-normalized rule independently norm-matches
+  objectness and localization to the natural-prior classification gradient,
+  projects each conflicting component, then caps their combined contribution at
+  `0.25`. It passed all readiness checks: raw total cosine median `0.173536`,
+  localization retained norm `1.0`, class1 retained norm median `0.920122`,
+  spatial-PCGrad CE delta `-0.000514` versus classification-only, and positive
+  class1/true-margin deltas `+0.005872/+0.001055`. This established only local
+  one-step geometry, not transferable validation improvement.
+- A first runtime preflight exposed an important implementation mismatch. Tiny
+  microbatch AdamW applies coordinate-wise moment normalization after gradient
+  projection and collapsed validation to control/candidate macro-class1
+  `0.877542/0.661017` and `0.860898/0.620112`. That path is retained only as an
+  explicit rejected ablation; it must not be used for this hypothesis. The
+  official smoke instead exactly reproduced the readiness macro-step: aggregate
+  per-class gradients, weight by the natural single-object prior, and apply one
+  encoder-only update with equal L2 parameter-step norm (`1e-4`) for control and
+  candidate.
+- The official 12-per-class smoke was numerically well controlled. Objectness
+  raw cosine was `-0.289796` with projected norm retention `0.957088`;
+  localization cosine/retention was `0.229522/1.0`. Requested step norm was
+  `0.009468466`, actual control/candidate parameter ratios were
+  `9.999998e-5/1.000000e-4`, and absolute step-norm difference was only
+  `2.315e-9`.
+- Full validation rejected the method. Keeper, matched classification control,
+  and spatial candidate macro/class1 F1 were respectively
+  `0.882925/0.678261`, `0.874714/0.654867`, and `0.873916/0.652941`.
+  Candidate versus control changed 16 rows with 7 corrections, 8 harms, and 1
+  neutral; class1 FP remove/create was `2/3`, while FN rescue/TP break was
+  `1/1`. It regressed both `0-1` and `1-2` pair accuracy and failed six fixed
+  promotion checks, so no probe or test was run.
+- Forensics initially reported impossible near-random accuracy because the
+  prediction exporter emitted `label/prediction` while the shared audit expects
+  canonical `target_index/prediction_index` or `y_true/y_pred`. The exporter and
+  tests now require both canonical forms; repaired files reproduce direct
+  evaluator accuracy exactly. Treat cross-tool prediction schema as a tested
+  contract, not an implicit convention.
+- Complete changed-case XAI explains why locally safe gradients still fail.
+  Candidate versus keeper Grad-CAM foreground mass fell
+  `0.910216 -> 0.890438`, border mass rose `0.210001 -> 0.242096`, and near ties
+  rose `11/16 -> 16/16`. Grad-rollout foreground also fell
+  `0.937680 -> 0.932045`; object-desaturation prediction drop weakened
+  `0.058020 -> 0.046398`. Contact-sheet review found occasional useful surface
+  corrections, but class0/class1 harms shifted evidence toward stems, hands,
+  borders, and context. Full-frame localization therefore did not add the
+  missing class1 surface representation.
+- Decision: reject before probe. Do not sweep macro-step size, auxiliary ratio,
+  detector warm-up, seed, query count, nearby PCGrad/GradNorm weighting, raw
+  total detection gradients, or the microbatch AdamW path; the CLI now requires
+  a separate explicit rejected-ablation opt-in. The matched
+  classification direction itself leaves the keeper optimum, so this route may
+  reopen only after a new representation changes direct keeper FN/FP support and
+  a matched control first preserves keeper performance.
+- Evidence is retained at
+  `runs\smoke_joint_spatial_pcgrad_normalized_macrostep_s12_20260712`: 492
+  payloads, `40,643,232` bytes, manifest SHA-256
+  `37d39be82c398b7bc3201891adf0198d0b143d0b5090cb9af76444ec588eedc6`,
+  no checkpoint/model/test payload. Guarded cleanup preserved checkpoint hashes,
+  deleted only two rejected smoke checkpoints and four exact `%TEMP%` preflights,
+  and reclaimed `178,580,777` bytes. Focused tests pass `11/11`, compileall and
+  complete pytest pass `676/676`; retention
+  `runs\artifact_retention_audit_after_joint_spatial_pcgrad_cleanup_20260712`
+  covers 566 directories with `blockers=[]`. Keeper and current-best command
+  remain unchanged; command SHA-256 is
+  `3c71813000970a9776cfde974895358be2dda214ca9d6eb0e6a89dbc31d657dd`.
