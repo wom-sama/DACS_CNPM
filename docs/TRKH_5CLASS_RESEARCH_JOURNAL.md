@@ -13305,3 +13305,73 @@ Date: 2026-07-02
   an observed `1,458,147,328` bytes. The post-clean retention audit covered
   `547` run directories and passed with `blockers=[]`. Compileall,
   `git diff --check`, and the complete test suite passed (`637/637`).
+
+## Diagnostic 2026-07-11 - Learned Context Illuminant Estimator Rejected
+
+- A same-frame relative-maturity idea was screened first and closed without
+  code or GPU work. `yolo_f/train` has only 306 cross-class object pairs in 144
+  mixed-label frames; validation has 29 multi-object frames but zero mixed-label
+  pair and zero class1 multi-object frame. A same-frame action therefore has no
+  independent validation support and cannot establish fold-safe class1 FN/FP
+  direction.
+- Checked primary CLCC, Cheng et al. learning-based illuminant estimation,
+  Convolutional Color Constancy, FC4 confidence-weighted pooling, and CNN color
+  constancy before implementation. Their key distinction is that illuminant
+  estimation needs an illuminant-dependent representation; forcing the class
+  representation itself to ignore color repeats the already rejected generic
+  consistency route. Because TRKH has sRGB rather than RAW images, this audit
+  is explicitly a synthetic diagonal-photometric nuisance test, not a claim of
+  ground-truth physical illuminant recovery.
+- Added `trkh.tools.probe_context_illuminant_estimator_readiness` and four
+  focused tests. The fixed protocol uses eight predeclared clean/dim/bright/
+  RGB-cast/warm/cool gains, a 67D RGB/log-chroma/luminance/saturation descriptor
+  from full-frame context outside the union of transformed object boxes, and
+  `ExtraTreesRegressor(n=96,min_leaf=3,max_features=0.75)`. All casts from one
+  source remain in one of five GroupKFold folds. The estimator is not saved;
+  no checkpoint, trainable manifest, raw-data edit, or test access is allowed.
+- Full support was exact: `8,064` train sources, `2,577` validation sources,
+  `2,606` validation objects, and `64,512/20,616` train/validation descriptor
+  rows. Gain recovery itself transferred strongly: minimum channel R2 was
+  `0.98857` train OOF and `0.98282` validation; maximum log-gain MAE was
+  `0.00409/0.00583`, with validation mean/p95 angular error only
+  `0.16772/0.95596` degrees.
+- Strong gain regression did not make correction class-safe. Clean keeper
+  macro/class1 `0.884675/0.686047` fell after near-neutral estimated correction
+  to `0.867572/0.638418`. Fifty-two predictions changed: only 8 corrections
+  versus 40 harms, with class1 FN rescue/TP break `1/6` and FP remove/create
+  `5/20`. A mean clean pixel change of only `0.00477` was already enough to
+  erase subtle maturity color and expand `0/2/4->1` errors.
+- Estimated correction recovered many severe synthetic failures but remained
+  below the required clean envelope: dim raw/corrected macro-class1 was
+  `0.722295/0.372222 -> 0.881802/0.676218`; red
+  `0.484077/0.185022 -> 0.850795/0.595174`; green
+  `0.134447/0.065445 -> 0.819418/0.500000`; blue
+  `0.768656/0.448087 -> 0.882242/0.680115`; warm
+  `0.731609/0.353659 -> 0.856235/0.608696`; and cool
+  `0.514673/0.096089 -> 0.872015/0.651685`. Bright correction regressed
+  `0.774372/0.455782 -> 0.758768/0.387234`, with 181 corrections versus 217
+  harms and 178 newly created class1 false positives. Mean macro/class1 recovery
+  was only `0.77547/0.69628`, below the locked `0.80/0.70` readiness thresholds.
+- The full-validation known-gain oracle isolated the ceiling from estimator
+  error. Exact dim inversion returned bit-near clean metrics and blue/cool were
+  nearly recoverable, but bright remained `0.764950/0.399142`, red
+  `0.852863/0.596774`, green `0.824396/0.500000`, and warm
+  `0.863249/0.628099`. Clipping and sRGB nonlinear processing destroy class
+  evidence that diagonal inversion cannot reconstruct even with the true gain.
+  The five-class visual preview likewise shows correction cooling/greening the
+  fruit and removing legitimate maturity warmth.
+- Decision: eight gates failed and `smoke_permission=false`. Do not sweep tree
+  family/count, descriptor statistics, synthetic gain strength, correction
+  shrinkage/dead-zone, or implement an FC4/context-illuminant CNN on this sRGB
+  route. The oracle ceiling proves those changes cannot meet the clean/class1
+  gate. No GPU train, test evaluation, deploy update, or current-best command
+  change is permitted.
+- Full evidence is retained at
+  `runs\diagnostic_context_illuminant_estimator_full_20260711`: six payloads,
+  `6,140,666` bytes, no model/deploy binary, manifest SHA-256
+  `010c610d8a7bda758e25ad9be74256f49090ad7231671027700c5e151bc58c76`.
+  The superseded 100/50-source dry-run (`581,496` bytes) was removed under
+  `runs\cleanup_manifest_20260711_context_illuminant_dryrun.json`; observed
+  free-space delta was `593,920` bytes. Retention then covered `549` run
+  directories and passed with `blockers=[]`. Py-compile, four focused tests,
+  `git diff --check`, and the complete suite passed (`641/641`).
