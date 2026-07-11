@@ -13375,3 +13375,114 @@ Date: 2026-07-02
   free-space delta was `593,920` bytes. Retention then covered `549` run
   directories and passed with `blockers=[]`. Py-compile, four focused tests,
   `git diff --check`, and the complete suite passed (`641/641`).
+
+## Diagnostic 2026-07-11 - Pooled-Head API-Net Interaction Rejected
+
+- Checked the primary API-Net AAAI/arXiv paper, DCAL CVPR 2022, and Pairwise
+  Confusion ECCV 2018 before implementation. API-Net is distinct from the
+  already rejected pairwise-confusion/margin losses: it learns a mutual vector
+  from two images, generates image-specific channel gates, trains self/other
+  residual features with cross entropy plus score ranking, and unloads the
+  interaction module for single-image inference. DCAL independently supports
+  training-only cross-image interaction, although its PWCA operates on tokens
+  rather than the pooled feature used in this diagnostic.
+- Added `trkh.tools.probe_api_pairwise_interaction_readiness` and three focused
+  tests. The fixed no-sweep protocol uses the retained 256D keeper-head cache,
+  mutual MLP `512->128->256`, `sigmoid(x_m * x_i)` gates, four self/other
+  outputs, ranking weight `1.0`, margin `0.05`, AdamW `0.003`, and 20 epochs.
+  A matched plain-linear control receives exactly the same initialization,
+  natural-frequency batches, nearest intra/inter pairs, class weights,
+  optimizer, and schedule. Each anchor occurs once per epoch; class 1 is not
+  oversampled as an anchor. Every pair excludes the same `source_stem`.
+- The audit covered all `9,215/2,606` train/validation rows, `8,064` train
+  source groups, zero train-validation source overlap, and five
+  StratifiedGroupKFold folds with zero fit-holdout source overlap. Every class
+  had intra/inter pair support; the final plan contained `368,600` pairs,
+  exactly 20 anchor visits per row, and zero same-source pair. The known
+  limitation is explicit: keeper train embeddings are in-sample, so absolute
+  OOF scores are optimistic and only API-versus-control direction transferring
+  to untouched validation can open an image-model smoke.
+- Direction failed in every fold. Matched-control OOF macro/class1 F1
+  `0.911297/0.740431` fell with API to `0.907701/0.726531`; the five fold
+  macro/class1 deltas were all negative. Validation control
+  `0.848918/0.602041` fell to `0.846950/0.597590`. The direct frozen keeper
+  remains `0.884675/0.686047`, so API single-image inference lost
+  `0.037725` macro F1 versus the actual head.
+- Full transition audits agree with the metrics. OOF control-to-API made 26
+  corrections and 46 harms and removed/created class1 false positives
+  `10/41`. Validation control-to-API made `15/22` corrections/harms, rescued
+  six class1 false negatives without breaking a true positive, but
+  removed/created class1 false positives only `2/19`. Versus the direct keeper,
+  API changed 147 rows with `25` corrections, `111` harms, class1 FN
+  rescue/TP break `9/3`, and FP remove/create `4/69`.
+- Probability audit identifies the mechanism rather than an epoch shortfall.
+  On validation, API lowered mean class1 probability for true class1 by
+  `0.069506` while raising it for non-class1 rows by `0.042589`; it raised
+  class1 probability on `2,303/2,455` negatives. The same direction appeared
+  in OOF (`-0.099088` true class1, `+0.047158` non-class1). API pair-conditioned
+  cross entropy did converge below control cross entropy, but the unloaded
+  single-image classifier learned class-unsafe smoothing.
+- Protocol self-review found that the first symmetric API run still reused
+  nearest partners as label-bearing endpoints. Class1 was only `5.871%` of
+  natural anchors but `14.535%` of selected partners (`53,576/368,600`), so
+  symmetric endpoint loss amplified class1 despite the natural anchor sampler.
+  This does not reverse the matched candidate-versus-control result, but it is
+  a confound against the project's no-global-oversampling rule and cannot be
+  the sole pooled-API closure evidence.
+- The tool was therefore made explicitly reproducible with
+  `--loss-scope symmetric|anchor_only`, partner endpoint/reuse telemetry, and a
+  fourth test proving that anchor-only loss is invariant to partner labels.
+  The one predeclared correction keeps nearest intra/inter images as mutual-gate
+  context but computes CE/ranking only for each naturally sampled anchor; the
+  partner is never a label target. All other folds, seeds, pairs, optimizer,
+  20-epoch schedule, thresholds, and no-test guards stayed fixed.
+- Anchor-only removed most of the symmetric control bias but still failed to
+  transfer. Control/API OOF macro/class1 was
+  `0.929138/0.798137 -> 0.928312/0.795699`, while validation was
+  `0.862903/0.628743 -> 0.863613/0.631268`. Only two of five folds were
+  positive; aggregate OOF gains were `-0.000827/-0.002438` and validation gains
+  only `+0.000710/+0.002526`, below the fixed `0.002/0.015` gates and far below
+  the direct keeper `0.884675/0.686047`.
+- Anchor-only transition evidence is also class-unsafe. Versus its control it
+  made `17/23` OOF corrections/harms and `10/10` on validation, with class1 FP
+  remove/create `6/16` OOF and `0/3` validation. Versus the direct keeper it
+  changed 96 rows with `24` corrections, `64` harms, class1 FN rescue/TP break
+  `3/14`, and FP remove/create `10/16`. It continued to lower mean class1
+  probability on true class1 by `0.082786` and raise it on non-class1 by
+  `0.030825` (`2,335/2,455` negatives raised).
+- No image-level XAI rerun is technically meaningful for this precheck: the
+  frozen keeper image encoder, token path, attention, and checkpoint never
+  changed, while the training-only API module was deliberately not saved.
+  The complete applicable audit surface is retained instead: pair/source
+  support, fold curves, per-class confusion, OOF/validation predictions,
+  probability shifts, and all transition directions. Existing keeper XAI still
+  describes the unchanged spatial representation.
+- The first symmetric run failed 13 readiness checks; the corrected anchor-only
+  run also failed 13 and retained `smoke_permission=false`. Do not integrate
+  either pooled-head API module, run test, or sweep MLP width,
+  optimizer/LR, class weights, batch size, ranking margin/weight, or epochs on
+  the frozen keeper cache. A future token-level PWCA hypothesis is distinct,
+  but it must first define a new fold-safe FN-versus-FP gate and cannot use this
+  failed pooled interaction as smoke permission.
+- Evidence is retained at
+  `runs\diagnostic_api_pairwise_interaction_full_20260711`: seven payloads,
+  `3,464,753` bytes, no checkpoint/model/test payload, manifest SHA-256
+  `e4c847118ef3b82a700e6385e2dcd8a2afde8417e0daa7cc27bcf8f5f80770d0`.
+  The full run took `29.445 s`; py-compile, three focused tests, manifest hash
+  verification, compileall, complete pytest `644/644`, and `git diff --check`
+  passed. Retention audit
+  `runs\artifact_retention_audit_after_api_pairwise_precheck_20260711`
+  covered 551 run directories with `blockers=[]`. Current-best commands and
+  deploy pointers remain unchanged; the command TXT SHA-256 is still
+  `3c71813000970a9776cfde974895358be2dda214ca9d6eb0e6a89dbc31d657dd`.
+- Corrected anchor-only evidence is retained separately at
+  `runs\diagnostic_api_pairwise_anchoronly_full_20260711`: seven payloads,
+  `3,485,228` bytes, no checkpoint/model/test payload, manifest SHA-256
+  `d65f25b1c4d3117e4e72f1f12312b3e035b8de06691e824a18515c07c559bc83`.
+  It completed in `31.154 s`; all payload hashes and `9,215/2,606` prediction
+  rows were verified, stderr was empty, and no model-like file exists.
+  Final compileall, four focused tests, complete pytest `645/645`, and
+  `git diff --check` passed. Retention
+  `runs\artifact_retention_audit_after_api_anchoronly_precheck_20260711`
+  covered 553 run directories with `blockers=[]`; the current-best command hash
+  remained unchanged.
