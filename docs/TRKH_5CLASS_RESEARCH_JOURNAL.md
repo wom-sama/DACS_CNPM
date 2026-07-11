@@ -13486,3 +13486,86 @@ Date: 2026-07-02
   `runs\artifact_retention_audit_after_api_anchoronly_precheck_20260711`
   covered 553 run directories with `blockers=[]`; the current-best command hash
   remained unchanged.
+
+## Diagnostic 2026-07-11 - Token-Level Natural-Distractor PWCA Below Gate
+
+- Re-read the primary DCAL CVPR 2022 paper and supplement before coding. PWCA
+  differs materially from pooled API: target queries attend jointly to target
+  and distractor key/value tokens through weights shared with the ordinary
+  self-attention branch, while PWCA is removed at inference. The paper's
+  ablation found random same-dataset pairs from the natural distribution better
+  than intra-only, inter-only, fixed 1:1, Gaussian, or external-COCO
+  distractors. The fixed proxy therefore uses label-blind random partners and
+  does not repeat nearest-pair API.
+- Added `trkh.tools.extract_pwca_token_cache` and
+  `trkh.tools.probe_pwca_token_interaction_readiness` with five focused tests.
+  The extractor runs the immutable keeper under deterministic eval transforms,
+  takes its final head token plus the 32 highest fine-grained-attention patch
+  tokens, and applies one fixed QR-orthogonal `256->64` projection. It covers
+  all `9,215/2,606` train/validation objects, `8,064/2,577` source groups, zero
+  split overlap, and writes no test/model/trainable manifest.
+- Cache alignment and representation checks passed. Direct validation from the
+  extraction pass is exactly keeper macro/class1 `0.884675/0.686047`.
+  Projected head effective rank is `5.951/6.274` train/validation and selected
+  patch rank `14.407/14.076`. Top-32 tokens retain mean attention mass
+  `0.886970/0.888785` (p05 `0.614710/0.624190`) and have mean bbox fraction
+  `0.856538/0.872614`. Visual review of one train/validation row per class shows
+  fruit-surface, spot, lesion, and decay focus, with occasional stem/background
+  edge selection and low-tail bbox coverage; no top-k/rank was changed after
+  viewing validation.
+- The proxy is one shared pre-norm four-head SA/FFN/classifier over 33x64
+  tokens. Its matched control trains self-attention CE only. The candidate adds
+  equal-weight PWCA target CE, where target Q attends to concatenated target and
+  random distractor K/V; validation uses only the shared self-attention branch.
+  Both use identical initialization, natural-frequency anchor batches,
+  inverse-frequency CE, AdamW `lr=0.002/wd=0.005`, cosine decay, dropout `0.05`,
+  and 20 epochs. Distractors always come from a different source, never carry
+  label loss, and are selected without labels.
+- Full source-grouped five-fold support was exact. The final plan contains
+  `184,300` pairs, every row is anchor and partner exactly 20 times, same-source
+  count is zero, and natural inter-class fraction is `0.773880`. Fold-level
+  macro gains were positive in four of five folds; class1 gains were positive
+  in three. This is a real but sub-gate signal rather than the uniformly bad
+  pooled API result.
+- Matched-control OOF macro/class1 `0.933468/0.805324` became
+  `0.934686/0.810855`, gains only `+0.001219/+0.005531` versus required
+  `+0.002/+0.010`. Validation control `0.874168/0.636656` became
+  `0.874874/0.647436`, gains `+0.000706/+0.010780` versus required
+  `+0.002/+0.015`. The candidate remains below class1 `0.70` and loses
+  `0.009801` macro F1 versus the direct keeper.
+- Transition audits explain both value and risk. OOF PWCA made `48` corrections
+  and `44` harms, rescued/broke class1 FN/TP `14/5`, and removed/created FP
+  `17/22`. Validation versus matched control made `15/18` corrections/harms,
+  rescued/broke `5/3`, and removed/created FP `4/3`. Versus the direct keeper,
+  however, it made `38` corrections and `47` harms, removed/created class1 FP
+  `22/7`, but rescued only two FN while breaking 19 true positives. It learns
+  conservative class1 FP control but cannot preserve keeper recall.
+- PWCA attention is active and target-dominant on average: distractor mass mean
+  is `0.329867`, below the fixed `0.35` limit. Its p95 is `0.637411`, above the
+  `0.55` tail gate; class1 FN/FP p95 values remain `0.604036/0.607195`. The
+  explicit PWCA branch itself is weaker than self inference at validation
+  macro/class1 `0.871155/0.636943`, consistent with a useful distractor only if
+  the shared representation can absorb it safely.
+- Decision: 11 readiness checks failed and `smoke_permission=false`. Do not
+  launch an end-to-end PWCA smoke or sweep projection rank, top-k, heads,
+  dropout, optimizer/LR, PWCA weight, pair distribution, or epochs from this
+  proxy. Preserve the positive relative direction as research evidence. A
+  future PWCA revisit must start from an exact keeper-preserving residual path
+  and prove recall protection with a new predeclared gate; it cannot treat this
+  below-threshold proxy as permission.
+- Compact evidence remains at
+  `runs\diagnostic_pwca_token_rank64_top32_full_20260711`: 14 payloads,
+  `4,176,398` bytes, no model/test payload, manifest SHA-256
+  `bbe9fea148340bcd3ce0646e348a60089d929a2e2e952771c8f35d50db42b0b6`.
+  It includes full OOF/validation predictions and curves plus copied cache
+  summary, original cache manifest, and five-class train/validation previews.
+  Guarded cleanup
+  `runs\cleanup_manifest_20260711_pwca_token_cache_rejected.json` deleted 11
+  cache files (`53,500,161` bytes) after hash preservation and observed
+  `53,526,528` free bytes reclaimed. Raw data, test, keeper, deploy pointers,
+  and current-best commands were untouched. Py-compile, five focused tests,
+  `git diff --check`, and retention
+  `runs\artifact_retention_audit_after_pwca_token_precheck_20260711` passed;
+  retention covered 555 run directories with `blockers=[]`, and the command TXT
+  SHA-256 remained `3c71813000970a9776cfde974895358be2dda214ca9d6eb0e6a89dbc31d657dd`.
+  Compileall and the complete suite also passed (`650/650`).
