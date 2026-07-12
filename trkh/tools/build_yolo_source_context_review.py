@@ -595,7 +595,11 @@ def build_yolo_source_context_review(
         "label_mismatch_count": int(label_mismatch),
         "by_boundary_pair": dict(Counter(str(row.get("boundary_pair", "") or "") for row in output_rows)),
         "by_reason": dict(Counter(str(row.get("reason", "") or "") for row in output_rows)),
-        "note": "Train-only source-context review artifact; do not use val/test rows to build training policy.",
+        "note": (
+            "Train-only source-context review artifact."
+            if split_name == "train"
+            else f"Diagnostic {split_name}-only source-context review artifact; do not use it to build a training policy."
+        ),
     }
     (output_dir / "summary.json").write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
     return summary

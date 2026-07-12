@@ -14399,3 +14399,55 @@ Date: 2026-07-02
   `blockers=[]`. Closure passed focused tests `7/7`, compileall, full pytest
   `754/754`, independent CSV reconstruction, and protected-path review. Keeper
   and current-best commands remain unchanged.
+
+## Diagnostic 2026-07-12 - Raw-Pretrained AIDT Fusion Rejected as Fold-Safe Teacher
+
+- Verified the exact local AIDT architecture and official timm model metadata,
+  then added a frozen train/validation-only extractor for
+  `resnet50.a1_in1k` and
+  `vit_base_patch16_224.augreg2_in21k_ft_in1k`. Exact weight hashes are
+  `68faebec...ac59` and `b1b1a872...0fd`; square-pad/224 geometry and
+  branch-specific normalization match local AIDT evaluation.
+- A numerical preflight selected FP32 batch 128. BF16 feature values changed
+  materially with batch geometry (ViT mean absolute delta `0.00475`, maximum
+  `0.26994`), while FP32 reduced the all-feature mean delta to `6.0e-6`.
+  Full extraction covered `9215/2606` rows, `8064/2577` groups, zero overlap,
+  and strict `class_f -> yolo_f sample_index` remap had zero missing/duplicate
+  keys.
+- Added a locked five-fold readiness audit with the exact AIDT nonlinear head,
+  30 epochs, RAM-only heads, OOF-only component selection, direct keeper
+  comparison, canonical prediction exports, input hashes, and fail-closed
+  class1/recall/direction gates. No test, raw-data write, checkpoint, model, or
+  trainable manifest was produced.
+- ViT was the OOF control. Raw fusion changed OOF macro/class1
+  `0.879585/0.600000 -> 0.878306/0.587121` and lost class1 in all five folds,
+  but validation reversed to `0.894439/0.664407 -> 0.901745/0.691030`.
+  Direct keeper is `0.884073/0.684058` with much higher class1 recall
+  `0.781457` versus fusion `0.688742`.
+- Raw fusion versus keeper made `109/53` corrections/harms and removed/created
+  46/16 class1 FP, but rescued/broke only 13/27 FN/TP. OOF fusion-versus-ViT
+  FN/FP direction AUROC was `0.430115`, so the isolated validation precision
+  gain cannot authorize KD, routing, weighting, or promotion. Eight gates fail.
+- Feature norms showed a large ResNet/ViT scale difference, so one fixed
+  block-L2 correction was allowed with every other setting unchanged. It was
+  worse: OOF fusion `0.874501/0.568982`, validation
+  `0.898699/0.684211`, all five folds negative, and nine gates failed. Do not
+  sweep branch normalization/scales/weights or head settings.
+- Reviewed 32 largest class1 changes with exact `class_f` crops plus `yolo_f`
+  source frames/bboxes. Pale-green color, weak yellowing, spots, and mottling
+  overlap across rescued and broken true class1 rows as well as class0 false
+  positives; background does not define a stable action group.
+- Retained raw/block-L2/review evidence with manifest SHAs
+  `e0709072...6626`, `a6db9f10...23db`, and `9056b345...a3bb`.
+  Guarded cleanup removed eight superseded roots, 95 files and `26639806`
+  bytes (observed gain `26865664`). Full feature/remap caches remain temporarily
+  because the next declared audit needs them.
+- Decision: raw AIDT feature fusion is complementary but not a fold-safe
+  teacher and does not update current-best commands. The next distinct fixed
+  test combines the retained `class_f` object representation with a newly
+  extracted wider `yolo_f` bbox-context representation under the same no-test
+  grouped gate.
+- Closure passed py-compile, compileall, focused tests `16/16`, full pytest
+  `769/769`, independent CSV/NPZ reconstruction, recursive payload and cleanup
+  hashes, and retention over 594 directories with `blockers=[]`. Keeper and
+  current-best command hashes remain unchanged.

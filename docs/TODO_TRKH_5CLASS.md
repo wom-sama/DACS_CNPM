@@ -1899,3 +1899,34 @@
 - [ ] Keep current-best full-train/export/video commands unchanged. Select the
   next genuinely distinct class1-positive image supervision route only after a
   no-repeat literature/code audit and a predeclared keeper-relative gate.
+- [x] Verified the original local AIDT ResNet50+ViT-B/16 architecture, exact
+  timm weights/preprocessing, and added FP32 frozen feature extraction plus a
+  five-fold no-test fusion readiness audit with 14 focused tests.
+- [x] Full strict `class_f -> yolo_f` support is `9215/2606` rows and
+  `8064/2577` groups with zero missing keys or source leakage. Raw fusion loses
+  to ViT OOF `0.879585/0.600000 -> 0.878306/0.587121`, despite validation
+  improving `0.894439/0.664407 -> 0.901745/0.691030`.
+- [x] Direct keeper comparison rejects the validation-only gain: fusion recall
+  is `0.688742` versus `0.781457`, FN-rescue/TP-break is `13/27`, all five OOF
+  folds lose class1, direction AUROC is `0.430115`, and eight teacher gates
+  fail.
+- [x] Tested exactly one block-L2 correction after measuring the 6.4x branch
+  norm mismatch. It worsened OOF fusion to `0.874501/0.568982`, stayed below
+  class1 `0.70` on validation, and failed nine gates; close normalization and
+  branch-scale sweeps.
+- [x] Reviewed 32 balanced FP-remove/create and FN-rescue/TP-break cases with
+  `class_f` crop plus `yolo_f` source/bbox. Rescued and broken class1 rows share
+  the same pale-green/yellow/spot cues; no stable context rule appears.
+- [ ] Do not use raw/block-L2 AIDT caches for KD, sample weighting, routing,
+  thresholding, or command promotion. They are complementary validation
+  diagnostics but not a fold-safe class1-positive teacher.
+- [x] Removed eight superseded AIDT prefixes/reviews under exact hashes: 95
+  files, `26639806` bytes; retained the two full audits, final visual review,
+  and full feature/remap caches needed by the next declared stage.
+- [ ] Next fixed method: extract raw pretrained AIDT features from a wider
+  `yolo_f` bbox-context crop and compare object-only, context-only, and paired
+  object+context fusion with source-grouped OOF, direct keeper recall safety,
+  no test, and no normalization/fusion-weight sweep.
+- [x] Raw-AIDT stage closure passed compileall, focused tests `16/16`, full
+  pytest `769/769`, exact prediction/payload/cleanup checks, and retention over
+  594 directories with `blockers=[]`; keeper and command hashes are unchanged.
