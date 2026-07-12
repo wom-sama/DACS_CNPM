@@ -2103,3 +2103,40 @@
 - [x] Close the Fourier stage with compileall, focused tests `6/6`, full pytest
   `820/820`, independent CSV/payload reconstruction, and retention over `605`
   directories plus `28` compaction manifests with `blockers=[]`.
+- [x] Re-read the NeurIPS class-dependent augmentation study and lock one
+  matched no-test candidate: reduce only class-1 spatial/local augmentation to
+  `0.5`, keep classes `0/2/3/4`, photometric color handling, validation, model,
+  sampling, losses, and optimizer unchanged.
+- [x] Add default-off class-conditional scale plumbing and regressions for
+  exact scale count/range, class routing, validation isolation, V8 forwarding,
+  and bit-equivalent legacy behavior at scale 1.
+- [x] Complete matched one-epoch/60-batch control and candidate continuations
+  from the keeper, independent full-val FP32 reload, architecture trace, and no
+  test. Control/candidate macro-class1 is
+  `0.882725/0.680233 -> 0.881795/0.676385`.
+- [x] Reject candidate before probe: versus control it changes one row and
+  breaks one class-1 TP; versus keeper it has `5/7/1`
+  corrections/harms/neutral, FP remove/create `2/1`, and FN rescue/TP break
+  `1/2`. Five locked gates fail.
+- [x] Complete candidate boundary scan and matched 13-case control/candidate
+  all-method FP32 XAI. Maps are nearly unchanged; object desaturation remains
+  dominant, while sample 1113 shifts candidate Grad-CAM toward hands/image
+  edge and loses a true class-1 decision.
+- [x] Compact the rejected control/candidate smoke, reload, transition,
+  boundary, and XAI roots under exact hashes; verify keeper/current command,
+  and retention. Evidence has 638 payloads/SHA `6de15fce...ab0d`; four
+  checkpoint files were excluded, ten roots were deleted, and observed free
+  gain is `422,850,560` bytes.
+- [x] Re-run compileall, focused tests `22/22`, full pytest `825/825`, all four
+  PowerShell parse checks, and current-best `-PreflightOnly`. It resolves 30
+  epochs/effective batch 64/empty class scale/skip-test/exact keeper and creates
+  no run directory; retention passes over 607 directories and 29 object
+  manifests with no blockers.
+- [x] Inspect the explicit staged diff and stage only the three
+  class-conditional closure docs; protected user paths remain untracked.
+- [ ] Do not sweep class-1 scale, transform subset, photometric scaling, other
+  classes, seed, LR, or run length. Reopen class-dependent augmentation only
+  with an independently measurable harm signal and direct keeper-TP
+  protection.
+- [ ] Keep current-best full-train/export/video commands unchanged; this
+  matched candidate did not pass the locked validation gate.

@@ -14703,3 +14703,51 @@ Date: 2026-07-02
   full payload/CSV reconstruction, and retention over `605` run directories
   plus all `28` object compaction manifests with `blockers=[]`. Worktree staging
   remains explicit-path only; protected user paths are unchanged.
+
+## Smoke 2026-07-12 - FP-Informed Class-1 Augmentation Reduction Rejected
+
+- Re-read the NeurIPS 2023 class-dependent augmentation paper and supplement,
+  then locked one train-only policy before implementation: spatial/local scale
+  `1.0,0.5,1.0,1.0,1.0`, with color scaling off and validation unchanged.
+  AUM/forgetting filtering was excluded because ordered per-epoch trajectories
+  are unavailable and nearby noisy-label policies are already closed.
+- Added default-off config/CLI/dataset/transform/V8-launcher wiring with exact
+  count/range validation, legacy RNG equivalence at scale 1, class-target
+  routing, validation isolation, and focused regressions. Existing current-best
+  preflight stayed at an empty policy.
+- Matched 60-batch keeper continuations used seed 42, batch 32, accumulation 2,
+  LR `1e-5`, one epoch, full `yolo_f/val=2606`, independent FP32 reload, and no
+  test. Control/candidate macro-class1 was
+  `0.882725/0.680233 -> 0.881795/0.676385`; candidate class-1 P/R was
+  `0.604167/0.768212`.
+- Candidate differs from control on one decision and breaks one class-1 TP.
+  Versus keeper it changes 13 decisions with `5/7/1` corrections/harms/neutral,
+  removes/creates class-1 FP `2/1`, and rescues/breaks FN/TP `1/2`. Macro,
+  class1, control gain, FN/TP direction, and correction/harm gates fail.
+- Boundary review selected 43 capped validation rows. Matched all-method FP32
+  XAI used the same 13 changed samples for control and candidate. Candidate
+  attention/grad-rollout/Grad-CAM foreground mass was
+  `0.923821/0.960623/0.846915`; object desaturation drop `0.044803` remained
+  much larger than background blur/gray `-0.003545/-0.001058`.
+- Visual review found nearly identical maps except the matched-control TP harm
+  at sample 1113, where candidate Grad-CAM shifts from fruit surface/boundary
+  toward hands and the image edge. Five-class traces have identical samples,
+  shapes, token pruning, attention-view scores, and default architecture.
+- Decision: reject before the from-initialization probe. Do not sweep class-1
+  scale, transform subsets, photometric scaling, class set, seed, LR, or run
+  length. Test and current-best commands remain closed/unchanged. The complete
+  pre-cleanup conclusion is recorded in
+  `docs/TRKH_5CLASS_FP_INFORMED_CLASS_CONDITIONAL_AUGMENTATION_AUDIT_20260712.md`;
+  guarded compact evidence and retention verification follow next.
+- Compacted ten rejected roots into 638 independently reverified payloads,
+  `72,627,253` copied bytes, and manifest SHA `6de15fce...ab0d`. Four hashed
+  checkpoints totaling `348,750,240` bytes were excluded; source deletion
+  produced `422,850,560` observed free bytes.
+- Cleanup manifest SHA is `8a7551ad...ea8`; all ten source roots are absent,
+  evidence/test declarations are clean, and retention passes over 607 run
+  directories plus 29 object compaction manifests with `blockers=[]`. Keeper
+  and current-command hashes remain unchanged.
+- Closure passed compileall, focused tests `22/22`, full pytest `825/825`, and
+  parse checks for all four PowerShell wrappers. Current-best
+  `-PreflightOnly` confirms 30 epochs, effective batch 64, empty class scale,
+  train-side test skipped, exact keeper, and no generated run directory.
