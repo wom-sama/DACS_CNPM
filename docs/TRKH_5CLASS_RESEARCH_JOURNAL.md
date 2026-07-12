@@ -14365,3 +14365,37 @@ Date: 2026-07-02
   `747/747`, payload/cleanup/retention hashes, `git diff --check`, and explicit
   protected-path review. Keeper and current-best command hashes remain
   unchanged.
+
+## Diagnostic 2026-07-12 - MCR2 Frozen-Embedding Geometry Rejected Before Smoke
+
+- Re-read the NeurIPS 2020 MCR2 paper, official loss/head/training/evaluation
+  code, and the CVPR 2022 efficient formulation. The fixed audit uses the
+  official 128D normalized projection, empirical log-det objective, batch 1000,
+  SGD reproduction LR `0.01`, epsilon `0.5`, and nearest-subspace PCA30, capped
+  at the project limit of 30 epochs.
+- Added `trkh.tools.audit_mcr2_embedding_readiness` and seven focused tests.
+  Five source-grouped folds compare MCR2 with an L2-normalized raw-embedding
+  subspace control. All adapters are trained in RAM and discarded; no test,
+  model, checkpoint, trainable manifest, raw-data write, weighting, or sweep.
+- Full support is `9215/2606` rows and `8064/2577` source groups with zero
+  train/validation or fold overlap. All losses decrease, every batch contains
+  every class, and rate reduction rises from about `10.8-11.7` to `27.3-28.0`.
+- MCR2 substantially beats its weak subspace control: OOF macro/class1
+  `0.891109/0.651852 -> 0.939210/0.818713`; validation
+  `0.852374/0.563574 -> 0.875310/0.640523`. It nevertheless remains below the
+  direct keeper `0.884073/0.684058`, with class1 recall only `0.649007` versus
+  `0.781457`.
+- Matched-control direction fails to transfer: FN-vs-FP AUROC reverses
+  `0.717030 -> 0.385807`. Versus keeper, MCR2 changes 91 rows, makes `42/44`
+  corrections/harms, removes/creates class1 FP `24/5`, and rescues/breaks only
+  `2/22` FN/TP. This is class1 suppression, not missing positive evidence.
+- Decision: seven gates fail and image smoke is closed. Do not sweep LR,
+  epsilon/gamma, width, PCA rank, batch, optimizer, epochs, folds, temperature,
+  or fit an MCR2 residual/router. Reopen only after a new image representation
+  changes direct keeper FN/FP support and with a matched CE control.
+- Retained the sole final evidence root (8 payloads, `4863531` bytes, SHA
+  `f5a32677...f6ae49`), no model/checkpoint/test. There were no superseded MCR2
+  artifacts to delete; retention passed over 588 directories with
+  `blockers=[]`. Closure passed focused tests `7/7`, compileall, full pytest
+  `754/754`, independent CSV reconstruction, and protected-path review. Keeper
+  and current-best commands remain unchanged.

@@ -1874,3 +1874,28 @@
 - [ ] Keep current-best train/export/video commands unchanged. The next method
   must introduce a genuinely different class1-positive supervision source and
   prove direct keeper FN rescue plus TP-recall preservation before GPU smoke.
+- [x] Re-read the primary MCR2 paper and official head/loss/train/evaluation
+  code, then added a locked 30-epoch frozen-keeper embedding audit plus seven
+  tests. Five source-grouped folds compare the official-form MCR2 projection
+  with the same PCA30 nearest-subspace readout on raw normalized embeddings.
+- [x] Full `9215/2606`, `8064/2577`-group support has zero source overlap, all
+  batches cover every class, and every loss decreases. MCR2 improves matched
+  OOF control macro/class1 `0.891109/0.651852 -> 0.939210/0.818713` and
+  validation `0.852374/0.563574 -> 0.875310/0.640523`.
+- [x] Independently recomputed predictions, probabilities, confusion, and
+  transitions. Candidate remains below keeper `0.884073/0.684058`, class1
+  recall falls `0.781457 -> 0.649007`, and FN-vs-FP direction reverses from OOF
+  `0.717030` to validation `0.385807`.
+- [ ] Do not sweep MCR2 LR/epsilon/gamma/projection width/PCA rank/batch/
+  optimizer/epochs/folds/temperature, and do not add a post-hoc MCR2 head,
+  residual, or router. Seven gates fail; reopen only after a new image
+  representation changes direct keeper FN/FP support.
+- [x] Retained one final MCR2 root (8 payloads, `4863531` bytes, SHA
+  `f5a32677...f6ae49`, no model/checkpoint/test). No superseded MCR2 output
+  existed to delete; retention passed over 588 directories with `blockers=[]`.
+- [x] MCR2 closure passed py-compile, compileall, focused tests `7/7`, full
+  pytest `754/754`, independent CSV reconstruction, payload/retention checks,
+  and explicit protected-path review.
+- [ ] Keep current-best full-train/export/video commands unchanged. Select the
+  next genuinely distinct class1-positive image supervision route only after a
+  no-repeat literature/code audit and a predeclared keeper-relative gate.
