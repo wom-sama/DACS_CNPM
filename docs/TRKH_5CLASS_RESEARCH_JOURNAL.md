@@ -14269,3 +14269,57 @@ Date: 2026-07-02
   `724/724`, stable payload-manifest verification, and retention across 580
   run directories with `blockers=[]`. Keeper and current-best command hashes
   remain unchanged.
+
+## Diagnostic 2026-07-12 - Finer-CAM Class-Contrastive Attribution Rejected Before Smoke
+
+- Re-read the Finer-CAM CVPR 2025 paper and current official implementation.
+  Unlike every prior standard Grad-CAM/rollout audit, the fixed target
+  differentiates class-1 logit contrast against three per-sample logit-nearest
+  references before ReLU. The current official probability-weighted objective
+  and default `alpha=1` were locked without comparing the paper's experimental
+  `gamma=0.6`.
+- Added a no-test FP32 readiness audit plus a batch-context-preserving changed-
+  case reviewer and 13 focused tests. It uses the existing `patch_embed.proj`
+  XAI layer, exact bbox/crop-bbox/valid-mask/token-prior metadata, and mean-RGB
+  deletion of the top 5% valid pixels. Ground truth never selects the target,
+  reference, heatmap, mask, or fixed action.
+- Full support is `9215/2606` rows and `8064/2577` source groups with zero
+  overlap. Finer relative confidence drop exceeds standard Grad-CAM on train
+  `0.005317 > 0.005041` and validation `0.006777 > 0.006346`, but the contrast-
+  gain FN-vs-FP AUROC is only `0.574541/0.616501`; direction does not pass both
+  splits.
+- The one fixed top-2 class1 residual changes FP32 keeper validation
+  macro/class1 `0.882925/0.678261 -> 0.884183/0.682216`, class1 precision
+  `0.603093 -> 0.609375`, and leaves recall `0.774834`. Four gates still fail:
+  no `+0.005` class1 gain, no `0.70` milestone, no train-direction transfer,
+  and no positive recall action.
+- All 14 validation transitions were reviewed after exact batch-32
+  reproduction over 334 context rows (maximum RD difference `6.56e-7`): 8/6
+  corrections/harms, class1 FP remove/create `6/4`, and FN-rescue/TP-break
+  `2/2`. Finer-CAM lowers validation interior mass
+  `0.358258 -> 0.323801` and raises border mass `0.181833 -> 0.191826`.
+  Visual maps emphasize silhouettes, endpoints, stems, hands, padding, bright
+  boundaries, and broad color bands rather than a stable class1-positive cue.
+- The prior tile anchor difference is explained, not ignored: tile inference
+  used AMP and reproduced `0.884675/0.686046`; this gradient audit uses FP32 and
+  reproduces the locked independent reload `0.882925/0.678261`. Labels/paths
+  are identical; only six predictions differ from AMP. Candidate comparison is
+  strictly against the matched FP32 control.
+- Decision: `13/17` checks pass but smoke remains closed. Do not sweep alpha,
+  layer, references, mask settings, CAM backend, residual scale, thresholds, or
+  fit a router/filter. No current-keeper OOF signal exists, and a val-derived
+  `1->0` suppression rule would repeat an already rejected validation trap.
+- Retained full evidence
+  `runs\diagnostic_finer_cam_class1_full_20260712` (8 payloads,
+  `8770683` bytes, SHA `dfa7a1a5...40db`) and exact changed-case review
+  `runs\review_finer_cam_class1_full_changed14_batch32_v2_20260712` (4 payloads,
+  `1032981` bytes, SHA `10f48a65...67b9`), with no model/checkpoint/test. Keeper
+  and current-best command SHA values remain unchanged.
+- Two exact-hash cleanup manifests removed 41 superseded files (`3312956`
+  bytes; observed free gain `3383296` bytes), including both implementation
+  prefixes, the throughput prefix, selected-only review, pre-guard batch-32
+  review, and obsolete retention snapshot. Final retention passed across 583
+  directories with `blockers=[]`.
+- Closure passed py-compile, compileall, focused tests `13/13`, full pytest
+  `737/737`, artifact/cleanup/retention hashes, `git diff --check`, and explicit
+  protected-path review. Current-best commands remain unchanged.
