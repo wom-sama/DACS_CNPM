@@ -10748,6 +10748,89 @@ def _build_timm_classifier(
     return timm.create_model(name, pretrained=bool(pretrained), num_classes=num_classes)
 
 
+MAMBAVISION_NANO_SPEC = {
+    "factory": "mamba_vision_T",
+    "resolution": 256,
+    "dim": 48,
+    "in_dim": 32,
+    "depths": (1, 2, 4, 2),
+    "num_heads": (2, 4, 8, 16),
+    "window_size": (8, 8, 16, 8),
+    "drop_path_rate": 0.10,
+}
+
+
+def _build_mambavision_nano(
+    num_classes: int,
+    image_size: int = 256,
+    pretrained: bool = False,
+) -> nn.Module:
+    if pretrained:
+        raise ValueError(
+            "mambavision_nano is a locked scratch-only TRKH candidate; "
+            "pretrained weights are not allowed."
+        )
+    if int(image_size) != int(MAMBAVISION_NANO_SPEC["resolution"]):
+        raise ValueError(
+            "mambavision_nano has a locked input size of "
+            f"{MAMBAVISION_NANO_SPEC['resolution']}; got {image_size}."
+        )
+    try:
+        import mambavision
+    except ImportError as exc:  # pragma: no cover - depends on optional env package
+        raise ImportError(
+            "model_type=mambavision_nano requires mambavision==1.2.0 and "
+            "mamba-ssm==2.2.4."
+        ) from exc
+
+    spec = MAMBAVISION_NANO_SPEC
+    model = mambavision.create_model(
+        str(spec["factory"]),
+        pretrained=False,
+        num_classes=int(num_classes),
+        resolution=int(spec["resolution"]),
+        dim=int(spec["dim"]),
+        in_dim=int(spec["in_dim"]),
+        depths=list(spec["depths"]),
+        num_heads=list(spec["num_heads"]),
+        window_size=list(spec["window_size"]),
+        drop_path_rate=float(spec["drop_path_rate"]),
+    )
+
+    observed_depths = tuple(len(level.blocks) for level in model.levels)
+    observed_mixers = tuple(
+        tuple(
+            type(block.mixer).__name__
+            if getattr(level, "transformer_block", False)
+            else type(block).__name__
+            for block in level.blocks
+        )
+        for level in model.levels
+    )
+    expected_mixers = (
+        ("ConvBlock",),
+        ("ConvBlock", "ConvBlock"),
+        ("MambaVisionMixer", "MambaVisionMixer", "Attention", "Attention"),
+        ("MambaVisionMixer", "Attention"),
+    )
+    if observed_depths != tuple(spec["depths"]) or observed_mixers != expected_mixers:
+        raise RuntimeError(
+            "Installed MambaVision implementation does not match the locked Nano "
+            f"architecture: depths={observed_depths}, mixers={observed_mixers}."
+        )
+
+    feature_dim = int(spec["dim"]) * 8
+    expected_parameters = 6_170_272 + (feature_dim + 1) * int(num_classes)
+    observed_parameters = sum(parameter.numel() for parameter in model.parameters())
+    if observed_parameters != expected_parameters:
+        raise RuntimeError(
+            "Installed MambaVision parameterization drifted from the locked Nano "
+            f"architecture: expected={expected_parameters}, observed={observed_parameters}."
+        )
+    model.trkh_architecture_spec = dict(spec)
+    return model
+
+
 def _pop_pretraining_option(config: Dict[str, Any], key: str) -> Any:
     if key not in config:
         return None
@@ -10890,6 +10973,14 @@ def create_model(
         model = _build_timm_classifier(
             num_classes=num_classes,
             model_name=timm_model_name,
+            pretrained=pretrained,
+        )
+    elif model_type == "mambavision_nano":
+        if temporal_frames != 1:
+            raise ValueError("mambavision_nano is locked to temporal_frames=1.")
+        model = _build_mambavision_nano(
+            num_classes=num_classes,
+            image_size=int(config.get("image_size", MAMBAVISION_NANO_SPEC["resolution"])),
             pretrained=pretrained,
         )
     else:

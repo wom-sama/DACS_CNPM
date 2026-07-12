@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import inspect
 import json
 import random
 from pathlib import Path
@@ -32,6 +33,103 @@ from trkh.training.train import (
     _attention_guided_score_map,
     _bounded_attention_drop_mask,
 )
+
+
+def _supports_trkh_feature_trace(model: torch.nn.Module) -> bool:
+    forward_features = getattr(model, "forward_features", None)
+    if not callable(forward_features):
+        return False
+    try:
+        signature = inspect.signature(forward_features)
+    except (TypeError, ValueError):
+        return False
+    return "return_trace" in signature.parameters
+
+
+def _first_tensor(value: object) -> torch.Tensor | None:
+    if torch.is_tensor(value):
+        return value
+    if isinstance(value, (tuple, list)):
+        for item in value:
+            tensor = _first_tensor(item)
+            if tensor is not None:
+                return tensor
+    if isinstance(value, dict):
+        for item in value.values():
+            tensor = _first_tensor(item)
+            if tensor is not None:
+                return tensor
+    return None
+
+
+def _generic_trace_targets(model: torch.nn.Module) -> List[Tuple[str, torch.nn.Module]]:
+    targets: List[Tuple[str, torch.nn.Module]] = []
+    patch_embed = getattr(model, "patch_embed", None)
+    if isinstance(patch_embed, torch.nn.Module):
+        targets.append(("patch_embed", patch_embed))
+    for container_name in ("levels", "stages"):
+        container = getattr(model, container_name, None)
+        if isinstance(container, (torch.nn.ModuleList, torch.nn.Sequential)):
+            targets.extend(
+                (f"{container_name}_{index + 1:02d}", module)
+                for index, module in enumerate(container)
+            )
+            break
+    norm = getattr(model, "norm", None)
+    if isinstance(norm, torch.nn.Module):
+        targets.append(("norm", norm))
+    if not targets:
+        convolutions = [
+            (name, module)
+            for name, module in model.named_modules()
+            if name and isinstance(module, torch.nn.Conv2d)
+        ]
+        if convolutions:
+            targets.append(("first_conv", convolutions[0][1]))
+            if len(convolutions) > 1:
+                targets.append(("last_conv", convolutions[-1][1]))
+    return targets
+
+
+def _forward_generic_feature_trace(
+    model: torch.nn.Module,
+    images: torch.Tensor,
+) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+    captured: Dict[str, torch.Tensor] = {}
+    handles = []
+
+    def make_hook(name: str):
+        def hook(_module, _inputs, output):
+            tensor = _first_tensor(output)
+            if tensor is not None:
+                captured[name] = tensor.detach().float().cpu()
+
+        return hook
+
+    for name, module in _generic_trace_targets(model):
+        handles.append(module.register_forward_hook(make_hook(name)))
+    try:
+        output = model(images)
+    finally:
+        for handle in handles:
+            handle.remove()
+    logits = _first_tensor(output)
+    if logits is None or logits.ndim != 2:
+        raise TypeError(
+            "Generic architecture trace requires classifier logits shaped [batch, classes]."
+        )
+    return logits, captured
+
+
+def _generic_spatial_activation_map(tensor: torch.Tensor) -> torch.Tensor | None:
+    if tensor.ndim == 4:
+        return tensor[0].pow(2).mean(dim=0).sqrt()
+    if tensor.ndim == 3:
+        token_count = int(tensor.size(1))
+        side = int(round(token_count ** 0.5))
+        if side * side == token_count:
+            return tensor[0].pow(2).mean(dim=-1).sqrt().view(side, side)
+    return None
 
 
 def parse_args() -> argparse.Namespace:
@@ -430,6 +528,74 @@ def main() -> None:
             ),
         )
         model_input = tensor.unsqueeze(0).to(device)
+        if not _supports_trkh_feature_trace(model):
+            with torch.inference_mode():
+                logits, generic_features = _forward_generic_feature_trace(
+                    model,
+                    model_input,
+                )
+            probabilities = torch.softmax(logits.float(), dim=-1)
+            prediction = int(probabilities.argmax(dim=-1)[0].item())
+            class_dir = output_dir / f"class_{class_index}_{class_name}"
+            class_dir.mkdir(parents=True, exist_ok=True)
+            original.save(class_dir / "00_original.jpg", quality=95)
+            raw_input_image.save(class_dir / "01a_resized_before_preprocess.png")
+            illumination_image.save(class_dir / "01b_illumination_normalized.png")
+            _overlay_foreground_mask(illumination_image, foreground_mask).save(
+                class_dir / "01c_foreground_mask_overlay.png"
+            )
+            _overlay_foreground_mask(illumination_image, surface_detail_mask).save(
+                class_dir / "01d_surface_detail_mask_overlay.png"
+            )
+            surface_detail_image.save(class_dir / "01e_surface_detail_amplified.png")
+            input_image.save(class_dir / "01_model_input.png")
+
+            activation_stats: Dict[str, Dict[str, float]] = {}
+            for feature_index, (feature_name, feature) in enumerate(
+                generic_features.items(),
+                start=1,
+            ):
+                activation_map = _generic_spatial_activation_map(feature)
+                if activation_map is None:
+                    continue
+                activation_stats[feature_name] = {
+                    "mean": float(activation_map.mean().item()),
+                    "max": float(activation_map.max().item()),
+                }
+                safe_name = feature_name.replace(".", "_")
+                _heatmap_image(activation_map, input_image.size).save(
+                    class_dir / f"02_{feature_index:02d}_{safe_name}_activation.png"
+                )
+
+            record = {
+                "trace_mode": "generic_feature_stages",
+                "model_type": str(getattr(model, "model_type", type(model).__name__)),
+                "class_id": int(class_index),
+                "class_name": class_name,
+                "sample_index": int(sample_index),
+                "label_from_dataset": int(label),
+                "prediction": prediction,
+                "prediction_name": str(data_spec.class_names[prediction]),
+                "logits": [float(value) for value in logits[0].detach().cpu().tolist()],
+                "probabilities": [
+                    float(value) for value in probabilities[0].detach().cpu().tolist()
+                ],
+                "source_image": str(sample.image_path.resolve()),
+                "foreground_crop_box": transform_meta.get("foreground_crop_box"),
+                "foreground_mask_fraction": float(foreground_mask.mean()),
+                "surface_detail_mask_fraction": float(surface_detail_mask.mean()),
+                "input_shape": list(model_input.shape),
+                "feature_shapes": {
+                    name: list(feature.shape) for name, feature in generic_features.items()
+                },
+                "spatial_activation_stats": activation_stats,
+            }
+            (class_dir / "shapes.json").write_text(
+                json.dumps(record, indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            records.append(record)
+            continue
         with torch.inference_mode():
             bbox_value = sample_metadata.get("bbox") if isinstance(sample_metadata, dict) else None
             crop_bbox_value = sample_metadata.get("crop_bbox") if isinstance(sample_metadata, dict) else None
@@ -1254,7 +1420,7 @@ def main() -> None:
         if checkpoint_path is not None
         else "Trace dung khoi tao ngau nhien de kiem tra luong du lieu/shape; no khong dai dien cho attention sau huan luyen."
     )
-    readme_lines = [
+    trkh_readme_lines = [
         "# TRKH 5-Class Architecture Trace",
         "",
         "Moi thu muc class chua mot anh train ngau nhien co seed co dinh va cac anh trung gian.",
@@ -1302,6 +1468,27 @@ def main() -> None:
         f"Dataset: `{Path(args.data).resolve()}`",
         f"Seed: `{int(args.seed)}`",
     ]
+    if any(record.get("trace_mode") == "generic_feature_stages" for record in records):
+        readme_lines = [
+            "# TRKH 5-Class Generic Architecture Trace",
+            "",
+            "Moi thu muc class chua mot anh train duoc chon bang seed co dinh.",
+            trace_description,
+            "",
+            "- `00_original.jpg`: anh crop goc.",
+            "- `01a`-`01e`: resize/preprocess va foreground/surface views.",
+            "- `01_model_input.png`: model input da denormalize de xem.",
+            "- `02_XX_*_activation.png`: RMS activation theo khong gian cua patch/stage hook.",
+            "- `shapes.json`: logits, probabilities, prediction, feature shapes va activation stats.",
+            "",
+            "Generic stage activation is not causal attention. Use XAI/robustness audits for",
+            "localization or shortcut claims.",
+            "",
+            f"Dataset: `{Path(args.data).resolve()}`",
+            f"Seed: `{int(args.seed)}`",
+        ]
+    else:
+        readme_lines = trkh_readme_lines
     (output_dir / "README.md").write_text("\n".join(readme_lines) + "\n", encoding="utf-8")
     print(json.dumps({"output_dir": str(output_dir.resolve()), "samples": len(records)}, ensure_ascii=False))
 

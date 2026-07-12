@@ -1,7 +1,7 @@
 param(
     [string]$Python = "D:\DataAI\.venv\Scripts\python.exe",
     [string]$DataYaml = "D:\DataAI\AIEx\newdataset\yolo_f\data.yaml",
-    [ValidateSet("mobilevit_s", "mobilevit_xs", "mobilevit_xxs", "mobilevitv2_100", "edgenext_small", "edgenext_x_small", "coatnet_nano_rw_224", "efficientformerv2_s0")]
+    [ValidateSet("mobilevit_s", "mobilevit_xs", "mobilevit_xxs", "mobilevitv2_100", "edgenext_small", "edgenext_x_small", "coatnet_nano_rw_224", "efficientformerv2_s0", "mambavision_nano")]
     [string]$ModelName = "mobilevit_s",
     [string]$RunName = "probe_compacthybrid_mobilevit_s_yolof_scratch_120b_5e",
     [int]$Epochs = 5,
@@ -57,6 +57,7 @@ $env:TRKH_ALLOW_WINDOWS_MULTIPROCESSING = "1"
 Remove-Item Env:TRKH_ALLOW_WINDOWS_PIN_MEMORY -ErrorAction SilentlyContinue
 Remove-Item Env:TRKH_ALLOW_WINDOWS_PERSISTENT_WORKERS -ErrorAction SilentlyContinue
 
+$modelType = if ($ModelName -eq "mambavision_nano") { "mambavision_nano" } else { "timm_classifier" }
 $TrainArgs = @(
     "-m", "trkh.training.train",
     "--data", $DataYaml,
@@ -65,8 +66,7 @@ $TrainArgs = @(
     "--run-name", $RunName,
     "--output-dir", "runs",
     "--seed", "$Seed",
-    "--model-type", "timm_classifier",
-    "--timm-model-name", $ModelName,
+    "--model-type", $modelType,
     "--no-pretrained",
     "--no-pretrained-distillation",
     "--image-size", "$ImageSize",
@@ -130,6 +130,10 @@ $TrainArgs = @(
     "--skip-final-test"
 )
 
+if ($modelType -eq "timm_classifier") {
+    $TrainArgs += @("--timm-model-name", $ModelName)
+}
+
 if ($resumeEnabled) {
     $TrainArgs += @(
         "--resume", (Resolve-Path -LiteralPath $ResumeCheckpoint).Path,
@@ -159,6 +163,7 @@ if ($teacherEnabled) {
 $launch = [ordered]@{
     run_name = $RunName
     model_name = $ModelName
+    model_type = $modelType
     pretrained = $false
     data_yaml = (Resolve-Path -LiteralPath $DataYaml).Path
     epochs = $Epochs
@@ -202,6 +207,7 @@ try {
         started_at = $startedAt.ToString("o")
         run_name = $RunName
         model_name = $ModelName
+        model_type = $modelType
         resume_checkpoint = if ($resumeEnabled) { (Resolve-Path -LiteralPath $ResumeCheckpoint).Path } else { "" }
         skip_final_test = $true
     }
@@ -229,6 +235,7 @@ finally {
         exit_code = $exitCode
         run_name = $RunName
         model_name = $ModelName
+        model_type = $modelType
         resume_checkpoint = if ($resumeEnabled) { (Resolve-Path -LiteralPath $ResumeCheckpoint).Path } else { "" }
         skip_final_test = $true
     }

@@ -136,7 +136,20 @@ logger = logging.getLogger(__name__)
 
 
 def _apply_timm_input_normalization(model_config: ModelConfig) -> Dict[str, object]:
-    if str(model_config.model_type) != "timm_classifier":
+    model_type = str(model_config.model_type).strip().lower()
+    if model_type == "mambavision_nano":
+        model_config.input_mean = tuple(float(value) for value in IMAGENET_MEAN)
+        model_config.input_std = tuple(float(value) for value in IMAGENET_STD)
+        return {
+            "enabled": True,
+            "source": "locked_mambavision_nano_imagenet",
+            "model": model_type,
+            "mean": model_config.input_mean,
+            "std": model_config.input_std,
+            "input_size": [3, 256, 256],
+            "configured_image_size": int(model_config.image_size),
+        }
+    if model_type != "timm_classifier":
         return {
             "enabled": False,
             "mean": tuple(float(value) for value in model_config.input_mean),
@@ -304,6 +317,7 @@ def parse_args() -> argparse.Namespace:
             "mobilenet_v3_large",
             "vit_b_16",
             "timm_classifier",
+            "mambavision_nano",
         ),
         default="vit_registers_hybrid",
     )
@@ -25845,6 +25859,11 @@ def main() -> None:
     )
     set_seed(train_config.seed, deterministic=train_config.deterministic)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if model_config.model_type == "mambavision_nano" and device.type != "cuda":
+        raise RuntimeError(
+            "model_type=mambavision_nano requires CUDA because the installed "
+            "mamba-ssm selective-scan kernel has no CPU execution path."
+        )
     if device.type == "cuda":
         torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.allow_tf32 = True

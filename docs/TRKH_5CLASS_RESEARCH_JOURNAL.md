@@ -14549,3 +14549,63 @@ Date: 2026-07-02
 - Closure passed compileall, focused tests `18/18`, full pytest `789/789`,
   exact eight-variant CSV reconstruction, manifest verification, and retention
   over 598 directories with `blockers=[]`. Protected user paths were untouched.
+
+## Probe 2026-07-12 - Scratch MambaVision-Nano Rejected At Epoch 5
+
+- Re-read the MambaVision paper, CVPR paper, NVIDIA research page, and official
+  repository. To avoid a 31.2M stock T model and another catalogue-size sweep,
+  locked one scratch-only 6.172M Nano scaling: width `48`, depths `1/2/4/2`,
+  windows `8/8/16/8`, with early CNN blocks and later Mamba/attention blocks
+  `2+2` and `1+1`. This was a bounded selective-state-space representation
+  gate, not a novelty claim.
+- Added checkpoint-safe `model_type=mambavision_nano`, exact block/parameter
+  drift guards, fixed ImageNet normalization, CUDA-only selective-scan
+  preflight, launcher wiring, and focused tests. No package changed; exact
+  runtime was `mambavision 1.2.0`, `mamba-ssm 2.2.4`, `timm 1.0.27`, PyTorch
+  `2.6.0+cu124`. NVIDIA Source Code License-NC is recorded and no package source
+  is vendored.
+- BF16 batch-64 synthetic forward/backward was finite at `137.20 img/s` with
+  `1150.68/1548.00 MiB` peak allocated/reserved. The 20-batch/1-epoch smoke
+  completed all `2606` val rows, independent reload, boundary scan, and 12-case
+  XAI without test/OOM/nonfinite output, so the predeclared five-epoch run was
+  allowed.
+- Five-epoch trainer macro/class1 progressed
+  `0.68957/0.43094 -> 0.73417/0.38994 -> 0.76558/0.43810 ->
+  0.75904/0.43981 -> 0.78136/0.48095`. Independent best reload was only
+  `0.78048/0.47733`, class1 P/R `0.37313/0.66225`, below both fixed epoch-5
+  gates `0.83032/0.55340` and keeper `0.88292/0.67826`.
+- Independent confusion had `168` class1 false positives and `100` true
+  positives, versus keeper `77/117`; false negatives were `51` versus keeper
+  `34`. The candidate therefore degraded both precision and recall. No epoch
+  10/15/30 continuation and no test were opened.
+- Fixed `trace_architecture` after it incorrectly passed TRKH-only metadata to
+  generic `forward_features`. The signature-aware path now captures one sample
+  per class and patch/stage RMS maps; MambaVision shapes are
+  `48x64x64 -> 96x32x32 -> 192x16x16 -> 384x8x8 -> 384x8x8`. These are
+  structural activation maps, not causal attention.
+- Balanced final XAI used two cases each for `1->0/2/4` and `0/2/4->1`.
+  Grad-CAM foreground/background was `0.93987/0.06013`; background blur/gray
+  prediction drops were `-0.00048/+0.00030`, center occlusion `0.01873`, and
+  object desaturation `0.13313`. Visual errors share broad pale-green/yellow/
+  mottled fruit regions; selective scan did not create a conservative class1
+  surface boundary and wide background was not the bottleneck.
+- Added a reusable fail-closed rejected-run compactor. It hashes every source,
+  retains non-binary evidence, verifies payloads, writes a pre-delete cleanup
+  manifest, rechecks source immutability, and only then deletes declared roots.
+  Self-review caught and fixed an initial predicate that omitted nested source
+  `summary.json` files from the payload manifest; no data was lost.
+- Final compact evidence has `314` verified payloads, `48,325,685` copied bytes,
+  and manifest SHA `2660ab55...446a1`. Four excluded checkpoints retain exact
+  source hashes (`297,313,032` bytes). Cleanup deleted nine declared roots,
+  observed `346,447,872` free bytes, and preserved datasets, test, keeper,
+  command packet, and protected user paths.
+- Decision: close MambaVision size/width/depth/window/mixer-ratio/input/drop-
+  path/LR/loss/sampler/teacher/augmentation sweeps and do not transplant the
+  same mixer as an ungrounded keeper adapter. Reopen state-space work only with
+  new class1-positive supervision that independently protects keeper TP and
+  suppresses `0/2/4->1` FP. Current-best commands remain unchanged.
+- Closure passed compileall, focused tests `21/21`, full pytest `799/799`,
+  corrected payload/inventory/cleanup hash verification, and retention over
+  `601` run directories with `blockers=[]`. Keeper and current-best command
+  hashes remain unchanged; `pip check` contains only the documented pre-
+  existing MambaVision/OpenCV shared-environment conflicts.

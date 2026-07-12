@@ -2001,3 +2001,43 @@
   excluding already closed SSL/MAE/DINO, ordinal, stock-hybrid, texture,
   context, uncertainty, frozen-readout, and post-hoc-router families; require
   a new class1-positive mechanism before another GPU smoke.
+- [x] Read the primary MambaVision/CVPR sources and lock exactly one
+  parameter-matched scratch-only selective-state-space gate: width `48`, depths
+  `1/2/4/2`, late Mamba/attention layouts `2+2` and `1+1`, input 256, 6.172M
+  parameters, with no architecture or optimization sweep.
+- [x] Add checkpoint-safe `mambavision_nano`, exact structure/parameter guards,
+  fixed ImageNet normalization, CUDA-only preflight, compact-launcher wiring,
+  and regressions. BF16 batch 64 reached `137.20 img/s` at only
+  `1150.68/1548.00 MiB` allocated/reserved; no package version changed.
+- [x] Complete the 20-batch smoke, independent full-val reload, boundary audit,
+  and 12-case robustness XAI. Pipeline passed with no test; Grad-CAM was
+  foreground-clean and object desaturation dominated background perturbation,
+  so the predeclared five-epoch run was permitted.
+- [x] Reject MambaVision-Nano at epoch 5. Independent macro/class1 is only
+  `0.780478/0.477327`, P/R `0.373134/0.662252`, below gates
+  `0.83032/0.55340` and keeper `0.882925/0.678261`. It creates `168` class1 FP
+  for `100` TP and has `51` FN; do not continue to epoch 10/15/30 or open test.
+- [x] Make `trace_architecture` signature-aware for generic classifiers and
+  capture five-class patch/stage traces. MambaVision reduces spatial features
+  `64x64 -> 32x32 -> 16x16 -> 8x8`; generic RMS maps are structural only and
+  must not be described as causal attention.
+- [x] Audit two balanced cases for every `1->0/2/4` and `0/2/4->1` direction.
+  Grad-CAM foreground/background is `0.93987/0.06013`; blur/gray drops are near
+  zero versus object desaturation `0.13313`. Wide background is again not the
+  bottleneck; broad object color/surface evidence remains class-unsafe.
+- [x] Add and test a fail-closed rejected-run compactor. Correct the self-review
+  bug that initially omitted nested source `summary.json` files, refresh all
+  hashes, then retain `314` payloads/`48,325,685` bytes with manifest
+  `2660ab55...446a1`; delete nine source roots and reclaim `346,447,872` bytes.
+- [x] Close the MambaVision batch with compileall, focused tests `21/21`, full
+  pytest `799/799`, corrected evidence/cleanup hashes, and retention over `601`
+  run directories with `blockers=[]`. Keeper and command hashes are unchanged;
+  `pip check` only reports pre-existing MambaVision/OpenCV pin conflicts.
+- [ ] Do not sweep MambaVision size/width/depth/window/mixer ratio/input/drop
+  path/LR/loss/sampler/teacher/augmentation or transplant the same mixer as an
+  ungrounded adapter. Reopen SSM only after new class1-positive supervision
+  independently preserves keeper TP and suppresses `0/2/4->1` FP.
+- [ ] Keep current-best train/export/video commands unchanged. Continue worktree
+  cleanup through explicit-path staging, cached-diff review, tests, retention,
+  commit/push, then select a non-repeated supervision mechanism rather than
+  another architecture catalogue substitution.
