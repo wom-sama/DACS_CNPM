@@ -790,6 +790,15 @@ class TrainConfig:
     foreground_chroma_consistency_bbox_margin_ratio: float = 0.02
     foreground_chroma_consistency_temperature: float = 1.0
     foreground_chroma_consistency_classes: str = "0,1,2,3,4"
+    friendly_adversarial_loss_weight: float = 0.0
+    friendly_adversarial_epsilon: float = 2.0 / 255.0
+    friendly_adversarial_step_size: float = 1.0 / 255.0
+    friendly_adversarial_steps: int = 2
+    friendly_adversarial_bbox_erode_ratio: float = 0.10
+    friendly_adversarial_focus_class: int = 1
+    friendly_adversarial_negative_classes: str = "0,2,4"
+    friendly_adversarial_max_per_direction: int = 8
+    friendly_adversarial_start_epoch: int = 1
     semantic_attribute_loss_weight: float = 0.0
     semantic_attribute_specs: str = (
         "maturity:0,1|2,3|4;transport:0,2|1|3,4;quality:0,1,2|3|4"

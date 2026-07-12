@@ -104,6 +104,15 @@ param(
     [double]$ForegroundChromaConsistencyBboxMarginRatio = 0.02,
     [double]$ForegroundChromaConsistencyTemperature = 1.0,
     [string]$ForegroundChromaConsistencyClasses = "0,1,2,3,4",
+    [double]$FriendlyAdversarialLossWeight = 0.0,
+    [double]$FriendlyAdversarialEpsilon = (2.0 / 255.0),
+    [double]$FriendlyAdversarialStepSize = (1.0 / 255.0),
+    [int]$FriendlyAdversarialSteps = 2,
+    [double]$FriendlyAdversarialBboxErodeRatio = 0.10,
+    [int]$FriendlyAdversarialFocusClass = 1,
+    [string]$FriendlyAdversarialNegativeClasses = "0,2,4",
+    [int]$FriendlyAdversarialMaxPerDirection = 8,
+    [int]$FriendlyAdversarialStartEpoch = 1,
     [double]$SemanticAttributeLossWeight = 0.0,
     [string]$SemanticAttributeSpecs = "maturity:0,1|2,3|4;transport:0,2|1|3,4;quality:0,1,2|3|4",
     [double]$ConfusionPairMixupLossWeight = 0.0,
@@ -1167,6 +1176,30 @@ if ($ForegroundChromaConsistencyBboxMarginRatio -lt 0.0) {
 if ($ForegroundChromaConsistencyTemperature -le 0.0) {
     throw "ForegroundChromaConsistencyTemperature phai > 0."
 }
+if ($FriendlyAdversarialLossWeight -lt 0.0) {
+    throw "FriendlyAdversarialLossWeight phai >= 0."
+}
+if ($FriendlyAdversarialEpsilon -le 0.0) {
+    throw "FriendlyAdversarialEpsilon phai > 0."
+}
+if ($FriendlyAdversarialStepSize -le 0.0 -or $FriendlyAdversarialStepSize -gt $FriendlyAdversarialEpsilon) {
+    throw "FriendlyAdversarialStepSize phai nam trong (0, epsilon]."
+}
+if ($FriendlyAdversarialSteps -lt 1 -or $FriendlyAdversarialSteps -gt 16) {
+    throw "FriendlyAdversarialSteps phai nam trong [1, 16]."
+}
+if ($FriendlyAdversarialBboxErodeRatio -lt 0.0 -or $FriendlyAdversarialBboxErodeRatio -ge 0.5) {
+    throw "FriendlyAdversarialBboxErodeRatio phai nam trong [0, 0.5)."
+}
+if ($FriendlyAdversarialFocusClass -lt 0 -or $FriendlyAdversarialFocusClass -ge 5) {
+    throw "FriendlyAdversarialFocusClass phai nam trong [0, 5)."
+}
+if ($FriendlyAdversarialMaxPerDirection -le 0) {
+    throw "FriendlyAdversarialMaxPerDirection phai > 0."
+}
+if ($FriendlyAdversarialStartEpoch -lt 1) {
+    throw "FriendlyAdversarialStartEpoch phai >= 1."
+}
 if ($SemanticAttributeLossWeight -lt 0.0) {
     throw "SemanticAttributeLossWeight phai >= 0."
 }
@@ -1546,6 +1579,15 @@ if ($PreflightOnly) {
         foreground_chroma_consistency_bbox_margin_ratio = $ForegroundChromaConsistencyBboxMarginRatio
         foreground_chroma_consistency_temperature = $ForegroundChromaConsistencyTemperature
         foreground_chroma_consistency_classes = $ForegroundChromaConsistencyClasses
+        friendly_adversarial_loss_weight = $FriendlyAdversarialLossWeight
+        friendly_adversarial_epsilon = $FriendlyAdversarialEpsilon
+        friendly_adversarial_step_size = $FriendlyAdversarialStepSize
+        friendly_adversarial_steps = $FriendlyAdversarialSteps
+        friendly_adversarial_bbox_erode_ratio = $FriendlyAdversarialBboxErodeRatio
+        friendly_adversarial_focus_class = $FriendlyAdversarialFocusClass
+        friendly_adversarial_negative_classes = $FriendlyAdversarialNegativeClasses
+        friendly_adversarial_max_per_direction = $FriendlyAdversarialMaxPerDirection
+        friendly_adversarial_start_epoch = $FriendlyAdversarialStartEpoch
         semantic_attribute_loss_weight = $SemanticAttributeLossWeight
         semantic_attribute_specs = $SemanticAttributeSpecs
         confusion_pair_mixup_loss_weight = $ConfusionPairMixupLossWeight
@@ -2456,6 +2498,15 @@ try {
         "--foreground-chroma-consistency-bbox-margin-ratio", "$ForegroundChromaConsistencyBboxMarginRatio",
         "--foreground-chroma-consistency-temperature", "$ForegroundChromaConsistencyTemperature",
         "--foreground-chroma-consistency-classes", "$ForegroundChromaConsistencyClasses",
+        "--friendly-adversarial-loss-weight", "$FriendlyAdversarialLossWeight",
+        "--friendly-adversarial-epsilon", "$FriendlyAdversarialEpsilon",
+        "--friendly-adversarial-step-size", "$FriendlyAdversarialStepSize",
+        "--friendly-adversarial-steps", "$FriendlyAdversarialSteps",
+        "--friendly-adversarial-bbox-erode-ratio", "$FriendlyAdversarialBboxErodeRatio",
+        "--friendly-adversarial-focus-class", "$FriendlyAdversarialFocusClass",
+        "--friendly-adversarial-negative-classes", "$FriendlyAdversarialNegativeClasses",
+        "--friendly-adversarial-max-per-direction", "$FriendlyAdversarialMaxPerDirection",
+        "--friendly-adversarial-start-epoch", "$FriendlyAdversarialStartEpoch",
         "--semantic-attribute-loss-weight", "$SemanticAttributeLossWeight",
         "--semantic-attribute-specs", "$SemanticAttributeSpecs",
         "--confusion-pair-mixup-loss-weight", "$ConfusionPairMixupLossWeight",
@@ -3466,6 +3517,15 @@ if ($ClassIndependentHead) {
         foreground_chroma_consistency_bbox_margin_ratio = $ForegroundChromaConsistencyBboxMarginRatio
         foreground_chroma_consistency_temperature = $ForegroundChromaConsistencyTemperature
         foreground_chroma_consistency_classes = $ForegroundChromaConsistencyClasses
+        friendly_adversarial_loss_weight = $FriendlyAdversarialLossWeight
+        friendly_adversarial_epsilon = $FriendlyAdversarialEpsilon
+        friendly_adversarial_step_size = $FriendlyAdversarialStepSize
+        friendly_adversarial_steps = $FriendlyAdversarialSteps
+        friendly_adversarial_bbox_erode_ratio = $FriendlyAdversarialBboxErodeRatio
+        friendly_adversarial_focus_class = $FriendlyAdversarialFocusClass
+        friendly_adversarial_negative_classes = $FriendlyAdversarialNegativeClasses
+        friendly_adversarial_max_per_direction = $FriendlyAdversarialMaxPerDirection
+        friendly_adversarial_start_epoch = $FriendlyAdversarialStartEpoch
         semantic_attribute_loss_weight = $SemanticAttributeLossWeight
         semantic_attribute_specs = $SemanticAttributeSpecs
         confusion_pair_mixup_loss_weight = $ConfusionPairMixupLossWeight

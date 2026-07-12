@@ -14609,3 +14609,44 @@ Date: 2026-07-02
   `601` run directories with `blockers=[]`. Keeper and current-best command
   hashes remain unchanged; `pip check` contains only the documented pre-
   existing MambaVision/OpenCV shared-environment conflicts.
+
+## Smoke 2026-07-12 - Friendly Foreground Adversarial Rejected
+
+- Re-read FAT, AdvProp, and LBGAT, then locked one new input-space supervision
+  test before code: deterministic RGB `2/255`, step `1/255`, two steps, first
+  boundary crossing, no random start, and perturbations restricted to the
+  valid eroded fruit bbox. It protects clean-correct class 1 and suppresses
+  clean-correct `0/2/4` rows near class 1 without editing raw data.
+- Full FP32 train/validation readiness covered `9215/2606` rows with no source
+  overlap or test. It exactly reproduced keeper `0.882925/0.678261`, bounded
+  every perturbation, and passed all `21/21` direction gates. Median five-fold
+  protect/suppress cosines were `0.895480/0.828468`; validation correction
+  cosines were `0.601035/0.741000`.
+- Readiness alignment was correctly treated as a local safety check, not a
+  gain claim. Added default-off trainer/launcher wiring, exact nested module-
+  mode restoration, attack telemetry, shared primitive validation, and 15
+  focused regressions.
+- The predeclared one-epoch/40-batch smoke activated both directions and used
+  full validation with no test. Independent FP32 macro/class1 was only
+  `0.882354/0.676471`, class1 P/R `0.608466/0.761589`, with `115` TP and `74`
+  FP. It failed macro, class1, and FP gates, so no probe was opened.
+- Versus keeper, 12 predictions changed with `6/6` corrections/harms. It
+  removed/created class1 FP `3/0`, but rescued/broke class1 FN/TP `0/2`.
+  Conservative FP movement therefore came at unsafe recall cost.
+- Balanced six-direction XAI had attention/grad-rollout/Grad-CAM foreground
+  mass `0.87564/0.92765/0.82971`. Object desaturation drop `0.13788` dominated
+  background blur/gray `0.00641/0.00602`, but visual evidence remained broad
+  color, silhouette, lesion, endpoint, crop-edge, and occasional background
+  attention rather than a new class1-positive detail.
+- Decision: close nearby FriendlyAdv epsilon/step/erosion/cohort/weight/LR/run-
+  length variants on the current keeper. Keep code default-off only for exact
+  reproducibility; do not update current-best commands or open test.
+- Full readiness SHA is `9e473c2c...adf65`. Compact rejected-smoke evidence
+  has 346 payloads/`46,895,735` copied bytes/SHA `c7c7418e...56a6c`; six source
+  roots were deleted after verification with `396,460,032` observed free-byte
+  gain.
+- Closure passed compileall, PowerShell parse, focused tests `15/15`, full
+  pytest `814/814`, and retention over 603 directories with `blockers=[]`.
+  The current-best one-command wrapper also passed direct PowerShell
+  `-PreflightOnly` with FriendlyAdv weight `0` and no run artifact.
+  Keeper/current-best hashes remain unchanged.

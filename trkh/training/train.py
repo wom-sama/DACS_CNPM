@@ -68,6 +68,10 @@ from trkh.training.debug_and_optimization import (
 )
 from trkh.evaluation.evaluate import DETECTION_SCORE_MODES, evaluate_model, save_evaluation_artifacts
 from trkh.training.loss import HybridDetectionClassificationLoss
+from trkh.training.friendly_adversarial import (
+    build_eroded_bbox_mask,
+    generate_friendly_adversarial_examples,
+)
 from trkh.training.losses import (
     BalancedSoftmaxFocalLoss,
     FocalCrossEntropyLoss,
@@ -3204,6 +3208,60 @@ def parse_args() -> argparse.Namespace:
         help="Danh sach class duoc ap dung foreground chroma consistency.",
     )
     parser.add_argument(
+        "--friendly-adversarial-loss-weight",
+        type=float,
+        default=0.0,
+        help="Trong so CE tren class-1 friendly foreground adversarial views; 0 de tat.",
+    )
+    parser.add_argument(
+        "--friendly-adversarial-epsilon",
+        type=float,
+        default=2.0 / 255.0,
+        help="Ban kinh L-inf trong RGB [0,1] cho friendly adversarial views.",
+    )
+    parser.add_argument(
+        "--friendly-adversarial-step-size",
+        type=float,
+        default=1.0 / 255.0,
+        help="Buoc PGD trong RGB [0,1] cho friendly adversarial views.",
+    )
+    parser.add_argument(
+        "--friendly-adversarial-steps",
+        type=int,
+        default=2,
+        help="So buoc PGD toi da; attack dung som tai class-1 boundary crossing dau tien.",
+    )
+    parser.add_argument(
+        "--friendly-adversarial-bbox-erode-ratio",
+        type=float,
+        default=0.10,
+        help="Ti le erode moi phia cua crop bbox truoc khi perturb foreground.",
+    )
+    parser.add_argument(
+        "--friendly-adversarial-focus-class",
+        type=int,
+        default=1,
+        help="Focus class cho hai huong protect/suppress adversarial.",
+    )
+    parser.add_argument(
+        "--friendly-adversarial-negative-classes",
+        type=str,
+        default="0,2,4",
+        help="Cac class doi thu cho focus-class adversarial boundary.",
+    )
+    parser.add_argument(
+        "--friendly-adversarial-max-per-direction",
+        type=int,
+        default=8,
+        help="So mau protect va suppress toi da cho moi batch.",
+    )
+    parser.add_argument(
+        "--friendly-adversarial-start-epoch",
+        type=int,
+        default=1,
+        help="Epoch 1-based bat dau friendly adversarial auxiliary CE.",
+    )
+    parser.add_argument(
         "--semantic-attribute-loss-weight",
         type=float,
         default=0.0,
@@ -5421,6 +5479,32 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         raise ValueError("--foreground-chroma-consistency-bbox-margin-ratio phai >= 0.")
     if args.foreground_chroma_consistency_temperature <= 0.0:
         raise ValueError("--foreground-chroma-consistency-temperature phai > 0.")
+    if args.friendly_adversarial_loss_weight < 0.0:
+        raise ValueError("--friendly-adversarial-loss-weight phai >= 0.")
+    if args.friendly_adversarial_epsilon <= 0.0:
+        raise ValueError("--friendly-adversarial-epsilon phai > 0.")
+    if not 0.0 < args.friendly_adversarial_step_size <= args.friendly_adversarial_epsilon:
+        raise ValueError(
+            "--friendly-adversarial-step-size phai nam trong (0, epsilon]."
+        )
+    if not 1 <= args.friendly_adversarial_steps <= 16:
+        raise ValueError("--friendly-adversarial-steps phai nam trong [1, 16].")
+    if not 0.0 <= args.friendly_adversarial_bbox_erode_ratio < 0.5:
+        raise ValueError(
+            "--friendly-adversarial-bbox-erode-ratio phai nam trong [0, 0.5)."
+        )
+    if args.friendly_adversarial_max_per_direction <= 0:
+        raise ValueError("--friendly-adversarial-max-per-direction phai > 0.")
+    if args.friendly_adversarial_start_epoch < 1:
+        raise ValueError("--friendly-adversarial-start-epoch phai >= 1.")
+    if int(args.expected_num_classes or 0) > 0:
+        if not 0 <= args.friendly_adversarial_focus_class < int(args.expected_num_classes):
+            raise ValueError("--friendly-adversarial-focus-class nam ngoai class range.")
+        _parse_friendly_adversarial_negative_classes(
+            args.friendly_adversarial_negative_classes,
+            num_classes=int(args.expected_num_classes),
+            focus_class=int(args.friendly_adversarial_focus_class),
+        )
     if args.semantic_attribute_loss_weight < 0.0:
         raise ValueError("--semantic-attribute-loss-weight phai >= 0.")
     if args.semantic_attribute_loss_weight > 0.0:
@@ -6702,6 +6786,21 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         foreground_chroma_consistency_classes=(
             args.foreground_chroma_consistency_classes
         ),
+        friendly_adversarial_loss_weight=args.friendly_adversarial_loss_weight,
+        friendly_adversarial_epsilon=args.friendly_adversarial_epsilon,
+        friendly_adversarial_step_size=args.friendly_adversarial_step_size,
+        friendly_adversarial_steps=args.friendly_adversarial_steps,
+        friendly_adversarial_bbox_erode_ratio=(
+            args.friendly_adversarial_bbox_erode_ratio
+        ),
+        friendly_adversarial_focus_class=args.friendly_adversarial_focus_class,
+        friendly_adversarial_negative_classes=(
+            args.friendly_adversarial_negative_classes
+        ),
+        friendly_adversarial_max_per_direction=(
+            args.friendly_adversarial_max_per_direction
+        ),
+        friendly_adversarial_start_epoch=args.friendly_adversarial_start_epoch,
         semantic_attribute_loss_weight=args.semantic_attribute_loss_weight,
         semantic_attribute_specs=args.semantic_attribute_specs,
         confusion_pair_mixup_loss_weight=args.confusion_pair_mixup_loss_weight,
@@ -16204,6 +16303,221 @@ def _foreground_chroma_consistency_loss(
     return _rdrop_symmetric_kl_loss(logits_a, logits_b, temperature=temperature)
 
 
+def _parse_friendly_adversarial_negative_classes(
+    values: Union[str, Sequence[int]],
+    *,
+    num_classes: int,
+    focus_class: int,
+) -> List[int]:
+    if isinstance(values, str):
+        raw_values = [value.strip() for value in values.split(",") if value.strip()]
+        parsed = [int(value) for value in raw_values]
+    else:
+        parsed = [int(value) for value in values]
+    classes: List[int] = []
+    for class_index in parsed:
+        if not 0 <= int(class_index) < int(num_classes):
+            raise ValueError(
+                f"friendly adversarial negative class {class_index} outside [0,{num_classes})"
+            )
+        if int(class_index) == int(focus_class):
+            raise ValueError("friendly adversarial negative classes cannot contain focus class")
+        if int(class_index) not in classes:
+            classes.append(int(class_index))
+    if not classes:
+        raise ValueError("friendly adversarial negative classes cannot be empty")
+    return classes
+
+
+def _select_friendly_adversarial_indices(
+    logits: Tensor,
+    target_indices: Tensor,
+    *,
+    focus_class: int,
+    negative_classes: Sequence[int],
+    max_per_direction: int,
+) -> Tuple[Tensor, Tensor]:
+    if logits.ndim != 2 or target_indices.ndim != 1:
+        raise ValueError("friendly adversarial logits/targets must be [B,C] and [B]")
+    if int(logits.size(0)) != int(target_indices.numel()):
+        raise ValueError("friendly adversarial logits/targets batch sizes differ")
+    if int(max_per_direction) <= 0:
+        empty = torch.empty(0, device=logits.device, dtype=torch.long)
+        return empty, empty
+    detached_logits = logits.detach().float()
+    targets = target_indices.to(device=logits.device, dtype=torch.long)
+    predictions = detached_logits.argmax(dim=1)
+    top2 = detached_logits.topk(k=min(2, int(detached_logits.size(1))), dim=1).indices
+    focus_in_top2 = (top2 == int(focus_class)).any(dim=1)
+    negative_tensor = torch.as_tensor(
+        list(negative_classes), device=logits.device, dtype=torch.long
+    )
+    target_is_negative = torch.isin(targets, negative_tensor)
+
+    protect_mask = (targets == int(focus_class)) & (predictions == int(focus_class))
+    suppress_mask = target_is_negative & (predictions == targets) & focus_in_top2
+    rival_logits = detached_logits.index_select(1, negative_tensor).max(dim=1).values
+    protect_margin = detached_logits[:, int(focus_class)] - rival_logits
+    true_logits = detached_logits.gather(1, targets.view(-1, 1)).squeeze(1)
+    suppress_margin = true_logits - detached_logits[:, int(focus_class)]
+
+    def select(mask: Tensor, margins: Tensor) -> Tensor:
+        candidates = torch.nonzero(mask, as_tuple=False).flatten()
+        if candidates.numel() == 0:
+            return candidates
+        candidate_margins = margins.index_select(0, candidates)
+        order = torch.argsort(candidate_margins, stable=True)
+        return candidates.index_select(0, order[: int(max_per_direction)])
+
+    return select(protect_mask, protect_margin), select(suppress_mask, suppress_margin)
+
+
+def _friendly_foreground_adversarial_loss(
+    *,
+    model: nn.Module,
+    images: Tensor,
+    logits: Tensor,
+    target_indices: Tensor,
+    image_valid_mask: Optional[Tensor],
+    bbox_metadata: Optional[Tensor],
+    crop_bbox_metadata: Optional[Tensor],
+    bbox_token_prior_metadata: Optional[Tensor],
+    device: torch.device,
+    amp: bool,
+    input_mean: Sequence[float],
+    input_std: Sequence[float],
+    epsilon: float,
+    step_size: float,
+    steps: int,
+    bbox_erode_ratio: float,
+    focus_class: int,
+    negative_classes: Union[str, Sequence[int]],
+    max_per_direction: int,
+) -> Tuple[Tensor, Dict[str, float]]:
+    zero = logits.sum() * 0.0
+    stats = {
+        "friendly_adversarial_protect_fraction": 0.0,
+        "friendly_adversarial_suppress_fraction": 0.0,
+        "friendly_adversarial_protect_count": 0.0,
+        "friendly_adversarial_suppress_count": 0.0,
+        "friendly_adversarial_protect_crossing_rate": 0.0,
+        "friendly_adversarial_suppress_crossing_rate": 0.0,
+        "friendly_adversarial_max_delta_rgb": 0.0,
+        "friendly_adversarial_direction_count": 0.0,
+    }
+    if (
+        images.ndim != 4
+        or not torch.is_tensor(image_valid_mask)
+        or not torch.is_tensor(bbox_metadata)
+        or not torch.is_tensor(crop_bbox_metadata)
+        or not torch.is_tensor(bbox_token_prior_metadata)
+    ):
+        return zero, stats
+    parsed_negatives = _parse_friendly_adversarial_negative_classes(
+        negative_classes,
+        num_classes=int(logits.size(1)),
+        focus_class=int(focus_class),
+    )
+    protect_indices, suppress_indices = _select_friendly_adversarial_indices(
+        logits,
+        target_indices,
+        focus_class=int(focus_class),
+        negative_classes=parsed_negatives,
+        max_per_direction=int(max_per_direction),
+    )
+    direction_losses: List[Tensor] = []
+    batch_size = int(images.size(0))
+    module_modes = [(module, bool(module.training)) for module in model.modules()]
+    model.eval()
+    try:
+        for direction, selected_indices in (
+            ("protect", protect_indices),
+            ("suppress", suppress_indices),
+        ):
+            if selected_indices.numel() == 0:
+                continue
+            selected_images = images.index_select(0, selected_indices)
+            selected_targets = target_indices.index_select(0, selected_indices).long()
+            selected_valid_mask = image_valid_mask.index_select(0, selected_indices)
+            selected_bbox = bbox_metadata.index_select(0, selected_indices)
+            selected_crop_bbox = crop_bbox_metadata.index_select(0, selected_indices)
+            selected_prior = bbox_token_prior_metadata.index_select(0, selected_indices)
+            attack_mask = build_eroded_bbox_mask(
+                selected_crop_bbox,
+                selected_valid_mask,
+                height=int(images.size(2)),
+                width=int(images.size(3)),
+                erode_ratio=float(bbox_erode_ratio),
+            )
+
+            def forward_logits(candidate_images: Tensor) -> Tensor:
+                with autocast_context(device, False):
+                    _, candidate_outputs = _forward_model_outputs(
+                        model,
+                        candidate_images.float(),
+                        image_valid_mask=selected_valid_mask,
+                        bbox_metadata=selected_bbox,
+                        bbox_token_prior=selected_prior,
+                    )
+                    candidate_logits, _ = extract_bbox_from_model_output(candidate_outputs)
+                return candidate_logits.float()
+
+            attack = generate_friendly_adversarial_examples(
+                images=selected_images.float(),
+                labels=selected_targets,
+                attack_mask=attack_mask,
+                forward_logits=forward_logits,
+                mean=input_mean,
+                std=input_std,
+                direction=direction,
+                focus_class=int(focus_class),
+                negative_classes=parsed_negatives,
+                epsilon=float(epsilon),
+                step_size=float(step_size),
+                steps=int(steps),
+            )
+            valid = (attack.clean_margin < 0.0) & attack.attack_mask.flatten(1).any(dim=1)
+            if not bool(valid.any().item()):
+                continue
+            valid_positions = torch.nonzero(valid, as_tuple=False).flatten()
+            valid_images = attack.adversarial_images.index_select(0, valid_positions)
+            valid_targets = selected_targets.index_select(0, valid_positions)
+            valid_mask = selected_valid_mask.index_select(0, valid_positions)
+            valid_bbox = selected_bbox.index_select(0, valid_positions)
+            valid_prior = selected_prior.index_select(0, valid_positions)
+            for module, training in module_modes:
+                module.training = training
+            with autocast_context(device, amp):
+                _, adversarial_outputs = _forward_model_outputs(
+                    model,
+                    valid_images,
+                    image_valid_mask=valid_mask,
+                    bbox_metadata=valid_bbox,
+                    bbox_token_prior=valid_prior,
+                )
+                adversarial_logits, _ = extract_bbox_from_model_output(adversarial_outputs)
+                direction_losses.append(F.cross_entropy(adversarial_logits, valid_targets))
+            model.eval()
+            prefix = f"friendly_adversarial_{direction}"
+            count = int(valid_positions.numel())
+            stats[f"{prefix}_count"] = float(count)
+            stats[f"{prefix}_fraction"] = float(count / max(1, batch_size))
+            stats[f"{prefix}_crossing_rate"] = float(
+                attack.crossed.index_select(0, valid_positions).float().mean().item()
+            )
+            stats["friendly_adversarial_max_delta_rgb"] = max(
+                stats["friendly_adversarial_max_delta_rgb"],
+                float(attack.delta_rgb.index_select(0, valid_positions).abs().max().item()),
+            )
+    finally:
+        for module, training in module_modes:
+            module.training = training
+    if not direction_losses:
+        return zero, stats
+    stats["friendly_adversarial_direction_count"] = float(len(direction_losses))
+    return torch.stack(direction_losses).mean().to(dtype=logits.dtype), stats
+
+
 def _parse_semantic_attribute_specs(
     specs: Union[str, Sequence[str]],
     *,
@@ -17523,6 +17837,17 @@ def _forward_train_loss(
     foreground_chroma_consistency_bbox_margin_ratio: float = 0.02,
     foreground_chroma_consistency_temperature: float = 1.0,
     foreground_chroma_consistency_classes: Union[str, Sequence[int], None] = "0,1,2,3,4",
+    friendly_adversarial_loss_weight: float = 0.0,
+    friendly_adversarial_epsilon: float = 2.0 / 255.0,
+    friendly_adversarial_step_size: float = 1.0 / 255.0,
+    friendly_adversarial_steps: int = 2,
+    friendly_adversarial_bbox_erode_ratio: float = 0.10,
+    friendly_adversarial_focus_class: int = 1,
+    friendly_adversarial_negative_classes: Union[str, Sequence[int]] = "0,2,4",
+    friendly_adversarial_max_per_direction: int = 8,
+    friendly_adversarial_start_epoch: int = 1,
+    friendly_adversarial_input_mean: Sequence[float] = IMAGENET_MEAN,
+    friendly_adversarial_input_std: Sequence[float] = IMAGENET_STD,
     semantic_attribute_loss_weight: float = 0.0,
     semantic_attribute_specs: Union[str, Sequence[str]] = (
         "maturity:0,1|2,3|4;transport:0,2|1|3,4;quality:0,1,2|3|4"
@@ -17968,6 +18293,17 @@ def _forward_train_loss(
             foreground_chroma_consistency_loss = logits.sum() * 0.0
             foreground_chroma_consistency_fraction = 0.0
             foreground_chroma_consistency_mask_fraction = 0.0
+            friendly_adversarial_loss = logits.sum() * 0.0
+            friendly_adversarial_stats = {
+                "friendly_adversarial_protect_fraction": 0.0,
+                "friendly_adversarial_suppress_fraction": 0.0,
+                "friendly_adversarial_protect_count": 0.0,
+                "friendly_adversarial_suppress_count": 0.0,
+                "friendly_adversarial_protect_crossing_rate": 0.0,
+                "friendly_adversarial_suppress_crossing_rate": 0.0,
+                "friendly_adversarial_max_delta_rgb": 0.0,
+                "friendly_adversarial_direction_count": 0.0,
+            }
             semantic_attribute_loss = logits.sum() * 0.0
             semantic_attribute_tasks = 0.0
             confusion_pair_mixup_loss = logits.sum() * 0.0
@@ -18429,6 +18765,44 @@ def _forward_train_loss(
                                 + float(foreground_chroma_consistency_loss_weight)
                                 * foreground_chroma_consistency_loss
                             )
+            if (
+                float(friendly_adversarial_loss_weight) > 0.0
+                and int(epoch_index) >= int(friendly_adversarial_start_epoch)
+                and torch.is_tensor(targets)
+                and float(source_context_fusion_fraction) <= 0.0
+                and float(paired_view_fusion_fraction) <= 0.0
+            ):
+                friendly_targets = _classification_target_indices(targets, logits)
+                if friendly_targets is not None:
+                    (
+                        friendly_adversarial_loss,
+                        friendly_adversarial_stats,
+                    ) = _friendly_foreground_adversarial_loss(
+                        model=model,
+                        images=images,
+                        logits=logits,
+                        target_indices=friendly_targets,
+                        image_valid_mask=image_valid_mask,
+                        bbox_metadata=bbox_metadata,
+                        crop_bbox_metadata=crop_bbox_metadata,
+                        bbox_token_prior_metadata=bbox_token_prior_metadata,
+                        device=device,
+                        amp=amp,
+                        input_mean=friendly_adversarial_input_mean,
+                        input_std=friendly_adversarial_input_std,
+                        epsilon=friendly_adversarial_epsilon,
+                        step_size=friendly_adversarial_step_size,
+                        steps=friendly_adversarial_steps,
+                        bbox_erode_ratio=friendly_adversarial_bbox_erode_ratio,
+                        focus_class=friendly_adversarial_focus_class,
+                        negative_classes=friendly_adversarial_negative_classes,
+                        max_per_direction=friendly_adversarial_max_per_direction,
+                    )
+                    loss = (
+                        loss
+                        + float(friendly_adversarial_loss_weight)
+                        * friendly_adversarial_loss
+                    )
             if (
                 float(semantic_attribute_loss_weight) > 0.0
                 and torch.is_tensor(targets)
@@ -20964,6 +21338,10 @@ def _forward_train_loss(
                 "foreground_chroma_consistency_mask_fraction": float(
                     foreground_chroma_consistency_mask_fraction
                 ),
+                "friendly_adversarial_loss": float(
+                    friendly_adversarial_loss.detach().cpu().item()
+                ),
+                **friendly_adversarial_stats,
                 "semantic_attribute_loss": float(
                     semantic_attribute_loss.detach().cpu().item()
                 ),
@@ -21523,6 +21901,17 @@ def train_one_epoch(
     foreground_chroma_consistency_bbox_margin_ratio: float = 0.02,
     foreground_chroma_consistency_temperature: float = 1.0,
     foreground_chroma_consistency_classes: Union[str, Sequence[int], None] = "0,1,2,3,4",
+    friendly_adversarial_loss_weight: float = 0.0,
+    friendly_adversarial_epsilon: float = 2.0 / 255.0,
+    friendly_adversarial_step_size: float = 1.0 / 255.0,
+    friendly_adversarial_steps: int = 2,
+    friendly_adversarial_bbox_erode_ratio: float = 0.10,
+    friendly_adversarial_focus_class: int = 1,
+    friendly_adversarial_negative_classes: Union[str, Sequence[int]] = "0,2,4",
+    friendly_adversarial_max_per_direction: int = 8,
+    friendly_adversarial_start_epoch: int = 1,
+    friendly_adversarial_input_mean: Sequence[float] = IMAGENET_MEAN,
+    friendly_adversarial_input_std: Sequence[float] = IMAGENET_STD,
     semantic_attribute_loss_weight: float = 0.0,
     semantic_attribute_specs: Union[str, Sequence[str]] = (
         "maturity:0,1|2,3|4;transport:0,2|1|3,4;quality:0,1,2|3|4"
@@ -21855,6 +22244,15 @@ def train_one_epoch(
         "foreground_chroma_consistency_loss": 0.0,
         "foreground_chroma_consistency_fraction": 0.0,
         "foreground_chroma_consistency_mask_fraction": 0.0,
+        "friendly_adversarial_loss": 0.0,
+        "friendly_adversarial_protect_fraction": 0.0,
+        "friendly_adversarial_suppress_fraction": 0.0,
+        "friendly_adversarial_protect_count": 0.0,
+        "friendly_adversarial_suppress_count": 0.0,
+        "friendly_adversarial_protect_crossing_rate": 0.0,
+        "friendly_adversarial_suppress_crossing_rate": 0.0,
+        "friendly_adversarial_max_delta_rgb": 0.0,
+        "friendly_adversarial_direction_count": 0.0,
         "semantic_attribute_loss": 0.0,
         "semantic_attribute_tasks": 0.0,
         "quantized_label_cpu_loss": 0.0,
@@ -22700,6 +23098,23 @@ def train_one_epoch(
                 foreground_chroma_consistency_classes=(
                     foreground_chroma_consistency_classes
                 ),
+                friendly_adversarial_loss_weight=friendly_adversarial_loss_weight,
+                friendly_adversarial_epsilon=friendly_adversarial_epsilon,
+                friendly_adversarial_step_size=friendly_adversarial_step_size,
+                friendly_adversarial_steps=friendly_adversarial_steps,
+                friendly_adversarial_bbox_erode_ratio=(
+                    friendly_adversarial_bbox_erode_ratio
+                ),
+                friendly_adversarial_focus_class=friendly_adversarial_focus_class,
+                friendly_adversarial_negative_classes=(
+                    friendly_adversarial_negative_classes
+                ),
+                friendly_adversarial_max_per_direction=(
+                    friendly_adversarial_max_per_direction
+                ),
+                friendly_adversarial_start_epoch=friendly_adversarial_start_epoch,
+                friendly_adversarial_input_mean=friendly_adversarial_input_mean,
+                friendly_adversarial_input_std=friendly_adversarial_input_std,
                 semantic_attribute_loss_weight=semantic_attribute_loss_weight,
                 semantic_attribute_specs=semantic_attribute_specs,
                 quantized_label_cpu_loss_weight=quantized_label_cpu_loss_weight,
@@ -23710,6 +24125,35 @@ def train_one_epoch(
                             ),
                             foreground_chroma_consistency_classes=(
                                 foreground_chroma_consistency_classes
+                            ),
+                            friendly_adversarial_loss_weight=(
+                                friendly_adversarial_loss_weight
+                            ),
+                            friendly_adversarial_epsilon=friendly_adversarial_epsilon,
+                            friendly_adversarial_step_size=(
+                                friendly_adversarial_step_size
+                            ),
+                            friendly_adversarial_steps=friendly_adversarial_steps,
+                            friendly_adversarial_bbox_erode_ratio=(
+                                friendly_adversarial_bbox_erode_ratio
+                            ),
+                            friendly_adversarial_focus_class=(
+                                friendly_adversarial_focus_class
+                            ),
+                            friendly_adversarial_negative_classes=(
+                                friendly_adversarial_negative_classes
+                            ),
+                            friendly_adversarial_max_per_direction=(
+                                friendly_adversarial_max_per_direction
+                            ),
+                            friendly_adversarial_start_epoch=(
+                                friendly_adversarial_start_epoch
+                            ),
+                            friendly_adversarial_input_mean=(
+                                friendly_adversarial_input_mean
+                            ),
+                            friendly_adversarial_input_std=(
+                                friendly_adversarial_input_std
                             ),
                             semantic_attribute_loss_weight=(
                                 semantic_attribute_loss_weight
@@ -28909,6 +29353,33 @@ def main() -> None:
                     foreground_chroma_consistency_classes=(
                         train_config.foreground_chroma_consistency_classes
                     ),
+                    friendly_adversarial_loss_weight=(
+                        train_config.friendly_adversarial_loss_weight
+                    ),
+                    friendly_adversarial_epsilon=(
+                        train_config.friendly_adversarial_epsilon
+                    ),
+                    friendly_adversarial_step_size=(
+                        train_config.friendly_adversarial_step_size
+                    ),
+                    friendly_adversarial_steps=train_config.friendly_adversarial_steps,
+                    friendly_adversarial_bbox_erode_ratio=(
+                        train_config.friendly_adversarial_bbox_erode_ratio
+                    ),
+                    friendly_adversarial_focus_class=(
+                        train_config.friendly_adversarial_focus_class
+                    ),
+                    friendly_adversarial_negative_classes=(
+                        train_config.friendly_adversarial_negative_classes
+                    ),
+                    friendly_adversarial_max_per_direction=(
+                        train_config.friendly_adversarial_max_per_direction
+                    ),
+                    friendly_adversarial_start_epoch=(
+                        train_config.friendly_adversarial_start_epoch
+                    ),
+                    friendly_adversarial_input_mean=model_config.input_mean,
+                    friendly_adversarial_input_std=model_config.input_std,
                     semantic_attribute_loss_weight=(
                         train_config.semantic_attribute_loss_weight
                     ),
@@ -30144,6 +30615,42 @@ def main() -> None:
                         "foreground_chroma_consistency_mask_fraction",
                         0.0,
                     ),
+                    "train_friendly_adversarial_loss": train_artifact_stats.get(
+                        "friendly_adversarial_loss",
+                        0.0,
+                    ),
+                    "train_friendly_adversarial_protect_fraction": train_artifact_stats.get(
+                        "friendly_adversarial_protect_fraction",
+                        0.0,
+                    ),
+                    "train_friendly_adversarial_suppress_fraction": train_artifact_stats.get(
+                        "friendly_adversarial_suppress_fraction",
+                        0.0,
+                    ),
+                    "train_friendly_adversarial_protect_count": train_artifact_stats.get(
+                        "friendly_adversarial_protect_count",
+                        0.0,
+                    ),
+                    "train_friendly_adversarial_suppress_count": train_artifact_stats.get(
+                        "friendly_adversarial_suppress_count",
+                        0.0,
+                    ),
+                    "train_friendly_adversarial_protect_crossing_rate": train_artifact_stats.get(
+                        "friendly_adversarial_protect_crossing_rate",
+                        0.0,
+                    ),
+                    "train_friendly_adversarial_suppress_crossing_rate": train_artifact_stats.get(
+                        "friendly_adversarial_suppress_crossing_rate",
+                        0.0,
+                    ),
+                    "train_friendly_adversarial_max_delta_rgb": train_artifact_stats.get(
+                        "friendly_adversarial_max_delta_rgb",
+                        0.0,
+                    ),
+                    "train_friendly_adversarial_direction_count": train_artifact_stats.get(
+                        "friendly_adversarial_direction_count",
+                        0.0,
+                    ),
                     "train_semantic_attribute_loss": train_artifact_stats.get(
                         "semantic_attribute_loss",
                         0.0,
@@ -30886,6 +31393,15 @@ def main() -> None:
                         "train_foreground_chroma_consistency_loss",
                         "train_foreground_chroma_consistency_fraction",
                         "train_foreground_chroma_consistency_mask_fraction",
+                        "train_friendly_adversarial_loss",
+                        "train_friendly_adversarial_protect_fraction",
+                        "train_friendly_adversarial_suppress_fraction",
+                        "train_friendly_adversarial_protect_count",
+                        "train_friendly_adversarial_suppress_count",
+                        "train_friendly_adversarial_protect_crossing_rate",
+                        "train_friendly_adversarial_suppress_crossing_rate",
+                        "train_friendly_adversarial_max_delta_rgb",
+                        "train_friendly_adversarial_direction_count",
                         "train_semantic_attribute_loss",
                         "train_semantic_attribute_tasks",
                         "train_quantized_label_cpu_loss",

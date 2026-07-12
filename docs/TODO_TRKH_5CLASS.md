@@ -2041,3 +2041,36 @@
   cleanup through explicit-path staging, cached-diff review, tests, retention,
   commit/push, then select a non-repeated supervision mechanism rather than
   another architecture catalogue substitution.
+- [x] Re-read FAT, AdvProp, and LBGAT; lock one no-test Friendly Foreground
+  Adversarial protocol before implementation with RGB `2/255`, step `1/255`,
+  two early-stopped steps, eroded bbox mask, and class1 protect/suppress pools.
+- [x] Complete full `9215/2606` FP32 readiness with zero source overlap, exact
+  keeper reproduction, bounded/masked attacks, five source folds, and all
+  `21/21` smoke-permission checks passing.
+- [x] Add default-off shared attack/trainer/config/v8-launcher plumbing,
+  telemetry, exact nested module-mode restoration, fail-closed primitive and
+  1-based epoch validation, plus `15/15` focused tests.
+- [x] Run the sole predeclared 40-batch/one-epoch smoke and independent full-val
+  reload without test. Reject `0.882354/0.676471`, class1 P/R
+  `0.608466/0.761589`, TP/FP `115/74`; macro, class1, and FP gates fail.
+- [x] Compare every changed decision to keeper: `12` changes, `6/6`
+  corrections/harms, class1 FP remove/create `3/0`, FN-rescue/TP-break `0/2`.
+  No probe, test, or command promotion is allowed.
+- [x] Complete boundary plus balanced six-direction XAI. Object desaturation
+  `0.13788` dominates background blur/gray `0.00641/0.00602`, while maps and
+  crops remain broad-color/silhouette/border driven.
+- [x] Compact six rejected preflight/smoke/eval/boundary/XAI roots into 346
+  verified payloads (SHA `c7c7418e...56a6c`), reclaim `396,460,032` bytes,
+  retain full readiness separately, and pass retention over 603 directories.
+- [x] Close the stage with compileall, PowerShell parse, full pytest `814/814`,
+  unchanged keeper SHA `1f49d577...482677`, and unchanged command SHA
+  `3c718130...57dd`.
+- [x] Re-run the current-best one-command wrapper directly under Windows
+  PowerShell with `-PreflightOnly`; confirm epochs 30, effective batch 64,
+  train-side test skipped, FriendlyAdv weight `0`, and no run directory.
+- [ ] Do not sweep FriendlyAdv epsilon/step/count/random-start/erosion/cohort/
+  weight/start/LR/run length on this keeper. Reopen adversarial supervision
+  only with a genuinely different independent target that proves direct FN
+  rescue and TP preservation before training.
+- [ ] Keep current-best full-train/export/video commands unchanged; this smoke
+  did not beat the locked independent validation gate.
