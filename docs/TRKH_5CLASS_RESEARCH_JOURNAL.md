@@ -14323,3 +14323,45 @@ Date: 2026-07-02
 - Closure passed py-compile, compileall, focused tests `13/13`, full pytest
   `737/737`, artifact/cleanup/retention hashes, `git diff --check`, and explicit
   protected-path review. Current-best commands remain unchanged.
+
+## Diagnostic 2026-07-12 - Surface-Blob Morphology Rejected Before Smoke
+
+- Re-read primary single-image reflection-separation work plus mango lenticel
+  and optical-maturity literature. Because physical specular separation from
+  unconstrained RGB is ill-posed and lenticel count is not a justified monotonic
+  ripeness rule, the fixed top-5% `V*(1-S)` map is explicitly only an
+  achromatic-highlight exclusion proxy.
+- Added a locked no-test audit and exact changed-case reviewer with ten focused
+  tests. The candidate adds 45D multiscale LoG local-max morphology to a matched
+  25D diffuse-color control on the same 15%-eroded `128x128` runtime ROI. Five
+  folds are source grouped; no scale/threshold/readout sweep is allowed.
+- Full coverage is `9215/2606` rows and `8064/2577` source groups with zero
+  leakage. Highlight exclusion averages `0.049855`, morphology effective rank
+  is `15.337912`, all optimizers converge, and the process backend is
+  bit-identical to the slower threaded path.
+- Morphology improves standalone macro F1 but predicts no class-1 rows. OOF/val
+  candidate-minus-control macro-class1 gains are
+  `-0.002120/-0.005881` and `+0.001950/+0.003402`; only two of five folds
+  improve class1. FN-versus-FP direction is inverted at
+  `0.425281/0.430451` AUROC.
+- Direct keeper/control/candidate validation macro-class1 is
+  `0.884073/0.684058 -> 0.846421/0.624585 -> 0.848371/0.627986`.
+  Candidate versus keeper makes `52/128` corrections/harms, removes/creates
+  class1 FP `33/7`, and rescues/breaks FN/TP only `1/27`.
+- Reviewed 24 prioritized transitions by restoring nine original CUDA batch-64
+  windows over 576 context rows; descriptor reproduction is exact (`0.0` max
+  difference). Peaks remain dense across classes and follow lenticels, lesions,
+  bruises, glare, silhouette/illumination changes, and hands rather than a
+  stable class1-positive cue.
+- Decision: 17 gates fail and image smoke is closed. Do not sweep LoG scales,
+  MAD threshold, highlight quantile, ROI/erosion, residual C, folds, weights,
+  or morphology routers/branches. The current-best command remains unchanged.
+- Retained full evidence (9 payloads, `9568281` bytes, SHA
+  `eaf1b563...f624de`) and exact review (5 payloads, `1851974` bytes, SHA
+  `9724432d...a6cad`), with no model/checkpoint/test. Exact-hash cleanup removed
+  43 superseded files (`4242949` bytes; observed gain `4300800` bytes), and
+  retention passed over 586 directories with `blockers=[]`.
+- Closure passed py-compile, compileall, focused tests `10/10`, full pytest
+  `747/747`, payload/cleanup/retention hashes, `git diff --check`, and explicit
+  protected-path review. Keeper and current-best command hashes remain
+  unchanged.

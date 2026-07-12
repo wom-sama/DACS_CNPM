@@ -1842,3 +1842,35 @@
 - [x] Removed 41 superseded Finer-CAM files under two exact-hash manifests (`3312956` bytes; observed free gain `3383296` bytes), then passed retention across 583 run directories with `blockers=[]`.
 - [x] Finer-CAM closure passed py-compile, compileall, focused tests `13/13`, full pytest `737/737`, `git diff --check`, stable artifact/cleanup/retention hashes, and protected-path review.
 - [ ] Keep current-best full-train/export/video commands unchanged; Finer-CAM did not pass its independent validation and recall-action gates.
+- [x] Re-read reflection-separation and mango lenticel/optical-maturity sources,
+  then added a locked surface-blob morphology readiness audit plus an exact
+  changed-case reviewer. The achromatic top-5% `V*(1-S)` mask is documented as
+  an exclusion proxy, not physical specular separation or a predictive feature.
+- [x] Full source-safe support is `9215/2606` rows and `8064/2577` groups. The
+  fixed 45D multiscale LoG block has effective rank `15.337912`, but standalone
+  class1 F1 remains zero and OOF/val candidate-minus-control class1 gains are
+  `-0.005881/+0.003402`; FN-vs-FP AUROC is inverted
+  `0.425281/0.430451`.
+- [x] Direct keeper/control/candidate validation macro-class1 is
+  `0.884073/0.684058 -> 0.846421/0.624585 -> 0.848371/0.627986`.
+  Candidate versus keeper makes `52/128` corrections/harms and rescues/breaks
+  class1 FN/TP only `1/27`; `image_smoke_permission=false` with 17 failed gates.
+- [x] Reproduced 24 prioritized transitions exactly with their original nine
+  CUDA batch-64 windows (`576` context rows, descriptor max difference `0.0`).
+  Visual review shows dense cross-class responses to spots, lesions, bruises,
+  glare, edges, illumination, and hands rather than class1-positive morphology.
+- [ ] Do not sweep LoG scales/background sigma/MAD threshold, highlight
+  quantile, ROI size/erosion, residual C, folds, weights, or add a morphology
+  branch/router. The stable wrong-sign direction is class1 suppression, not a
+  recall-safe target.
+- [x] Retained full morphology evidence (9 payloads, `9568281` bytes, SHA
+  `eaf1b563...f624de`) and exact review (5 payloads, `1851974` bytes, SHA
+  `9724432d...a6cad`), deleted 43 superseded files under a two-phase exact-hash
+  manifest (`4242949` bytes; observed gain `4300800` bytes), and passed
+  retention over 586 directories with `blockers=[]`.
+- [x] Surface-morphology closure passed py-compile, compileall, focused tests
+  `10/10`, full pytest `747/747`, artifact/cleanup/retention hashes,
+  `git diff --check`, and protected-path review.
+- [ ] Keep current-best train/export/video commands unchanged. The next method
+  must introduce a genuinely different class1-positive supervision source and
+  prove direct keeper FN rescue plus TP-recall preservation before GPU smoke.
