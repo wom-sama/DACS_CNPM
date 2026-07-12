@@ -2074,3 +2074,32 @@
   rescue and TP preservation before training.
 - [ ] Keep current-best full-train/export/video commands unchanged; this smoke
   did not beat the locked independent validation gate.
+- [x] Re-read FACT/FDA primary papers and official code, verify the existing
+  TRKH FFT is token-embedding filtering rather than RGB amplitude mixing, and
+  lock a source-distinct same-class full-spectrum `lambda=0.5` protocol before
+  code or GPU allocation.
+- [x] Add a no-fit/no-test Fourier readiness tool plus six tests. Two capped
+  preflights passed pairing, metadata, exact keeper forward, numerical identity,
+  contact-sheet, manifest, and fail-closed gate checks on Windows/CUDA.
+- [x] Complete full `9215/2606`, `8064/2577`-group evidence with zero source
+  overlap and exact keeper `0.882925/0.678261`; all `11821` same-class and
+  cross-control pairs have the locked label and a different source stem.
+- [x] Reject same-class Fourier views at `20/26` gates: validation macro/class1
+  collapses to `0.688662/0.358362`, clean/class1-TP retention is
+  `0.768685/0.760684`, FN-rescue/TP-break is `16/28`, FP-remove/create
+  `27/197`, and corrections/harms `65/554`.
+- [x] Inspect the balanced 12-row contact sheet and independently rebuild all
+  metrics/transitions/AUROC/hashes. Full-spectrum peer amplitude creates global
+  color casts, halos, duplicated contours, crop-edge ringing, and background
+  leakage; delta-p1 AUROC `0.802176` is unsafe broad movement, not a router.
+- [ ] Do not sweep same-class full-spectrum lambda/randomness/peer policy/
+  consistency, and do not use its delta as routing, weights, margins, or
+  thresholds. A localized/low-frequency revisit needs a new anti-ringing
+  mechanism and predeclared label-retention proof, not a nearby parameter run.
+- [x] Keep current-best commands unchanged. Delete the two superseded
+  preflights only after an 18-file exact-hash manifest, preserved full evidence/
+  keeper/command verification, and manifest round-trip; reclaim an observed
+  `6,356,992` bytes.
+- [x] Close the Fourier stage with compileall, focused tests `6/6`, full pytest
+  `820/820`, independent CSV/payload reconstruction, and retention over `605`
+  directories plus `28` compaction manifests with `blockers=[]`.

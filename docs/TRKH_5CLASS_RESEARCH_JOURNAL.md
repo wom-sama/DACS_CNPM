@@ -14650,3 +14650,56 @@ Date: 2026-07-02
   The current-best one-command wrapper also passed direct PowerShell
   `-PreflightOnly` with FriendlyAdv weight `0` and no run artifact.
   Keeper/current-best hashes remain unchanged.
+
+## Readiness 2026-07-12 - Same-Class Fourier Amplitude Mix Rejected
+
+- Re-read FACT/FDA papers and official implementations, then confirmed that
+  existing TRKH FFT code filters the token embedding dimension and is not RGB
+  amplitude mixing. Locked one no-test policy before implementation: exact
+  keeper eval RGB, full spectrum, `lambda=0.5`, target phase, same hard class,
+  different YOLO source stem, and train-only peers for validation. A fixed
+  focus-boundary cross-class view was control-only.
+- Added a standalone audit plus six focused tests without touching trainer,
+  config, checkpoint schema, raw data, or current-best commands. Two capped
+  Windows/CUDA preflights verified deterministic pairing, metadata, model
+  forwarding, identity reconstruction, contact-sheet generation, and fail-
+  closed gates before the sole full pass.
+- Full FP32 readiness covered `9215/2606` targets and `8064/2577` source groups
+  with zero source overlap/test use. Pair coverage was `11821/11821`, every
+  peer was source-distinct, identity max RGB error was `8.34e-7`, imaginary
+  residual `8.41e-6`, clipping `0.004646`, and exact clean keeper validation
+  reproduced `0.882925/0.678261`.
+- Same-class Fourier views collapsed train macro/class1
+  `0.939876/0.815444 -> 0.707090/0.383481` and validation
+  `0.882925/0.678261 -> 0.688662/0.358362`. Validation clean-correct and class1
+  TP retention were only `0.768685/0.760684`.
+- Direct validation transitions were `16/28` FN-rescue/TP-break and `27/197`
+  FP-remove/create, with `65/554` corrections/harms. Train was even less safe:
+  `3/141`, `93/658`, and `125/2087`. Delta-p1 AUROC looked high
+  (`0.751906/0.802176` train/val) but represented broad confidence movement;
+  only `3/5` train source folds kept both declared mean directions.
+- Reviewed the 12-row full validation contact sheet. Same-class mixes visibly
+  create purple/green casts, duplicated contours, crop-edge ringing, global
+  halos, and peer-background energy. Mango color/surface amplitude is label
+  evidence and independently cropped fruit layouts are not phase-compatible,
+  so the FACT domain-style assumption does not transfer safely here.
+- Independent CSV reconstruction matched all confusion matrices, macro/class1
+  metrics, transitions, AUROC, pairing constraints, and source groups. The
+  full artifact has eight verified payloads, `17,194,976` bytes, manifest SHA
+  `7a82f434...5020e`, and no checkpoint/model/test payload.
+- Decision: reject at `20/26` readiness gates and open no trainer smoke. Do not
+  sweep full-spectrum lambda/randomness/peer policy/consistency or turn its
+  AUROC into routing, weights, margins, or thresholds. Low-frequency/localized
+  Fourier work would need a new mechanism that first eliminates layout
+  ringing; it is not an immediate nearby sweep. Keeper/current-best commands
+  remain unchanged.
+- Deleted the two superseded capped preflights only after resolving them as
+  immediate non-reparse children of `runs`, hashing all 18 files, verifying
+  the full evidence/keeper/current command, persisting and rereading the
+  pre-delete manifest, and rechecking every hash. Manifest
+  `runs/cleanup_manifest_20260712_same_class_fourier_preflights_superseded.json`
+  records `6,337,363` deleted bytes and `6,356,992` observed free-byte gain.
+- Closure passed compileall, focused tests `6/6`, full pytest `820/820`, exact
+  full payload/CSV reconstruction, and retention over `605` run directories
+  plus all `28` object compaction manifests with `blockers=[]`. Worktree staging
+  remains explicit-path only; protected user paths are unchanged.
