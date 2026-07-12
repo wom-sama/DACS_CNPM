@@ -92,3 +92,29 @@ passes the independent locked-validation promotion gate.
 - Result: seven deliberately protected untracked paths remain, staged entries
   `0`. They are not deleted, ignored, staged, or reclassified without a later
   ownership decision.
+
+### Batch 03 - Incremental research closures
+
+- Scope: subsequent model/readiness stages were kept in dependency-coherent
+  commits rather than rebuilding a large dirty batch. Each stage used explicit
+  path staging, cached-diff review, focused plus full tests, evidence hashes,
+  generated-run cleanup manifests, retention reruns, and push verification.
+- Latest closure: same-class Fourier amplitude mix protocol/tool/tests/audit and
+  journal/TODO records, commit `a2e3da34b6d35c0fe79f40bbfffcf19113649944`
+  (`6` explicit paths, `+2,138`), pushed to
+  `origin/classification-only-research`.
+- Verification: exact full no-test CSV/payload reconstruction; compileall;
+  focused tests `6/6`; complete pytest `820/820`; cached diff check and staged
+  secret/binary scans passed. Keeper SHA remains `1f49d577...482677` and the
+  current command SHA remains `3c718130...57dd`.
+- Generated-run cleanup stayed separate from Git. The Fourier cleanup manifest
+  hashed and removed only two superseded preflights (`18` files,
+  `6,337,363` bytes); the retained full evidence SHA is
+  `7a82f434...5020e`. Retention passed over `605` run directories and all `28`
+  object compaction manifests with `blockers=[]`.
+- Result after the research closure commit: local and origin both pointed to
+  `a2e3da3`, and staged entries were `0`. This ledger follow-up is docs-only.
+  The only remaining non-ledger worktree entries are the three deliberately
+  protected user paths
+  `BaoCao/`, `deep-research-report (9).md`, and
+  `deep-research-report (10).md`. They remain untracked and untouched.
