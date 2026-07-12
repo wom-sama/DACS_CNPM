@@ -1011,6 +1011,7 @@ class AugmentationConfig:
     class_aware_augmentation: bool = True
     class_augmentation_power: float = 0.75
     class_augmentation_max_scale: float = 1.8
+    class_conditional_augmentation_scales: str = ""
     class_aware_photometric_augmentation: bool = False
     class_aware_mix_probability_boost: float = 0.5
     class_aware_mix_source_power: float = 1.0

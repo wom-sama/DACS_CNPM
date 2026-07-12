@@ -60,6 +60,7 @@ from trkh.data.dataset import (
     build_eval_transform,
     build_train_collate_fn,
     build_train_transform,
+    normalize_class_conditional_augmentation_scales,
 )
 from trkh.training.debug_and_optimization import (
     GradientCheckpointingEnabler,
@@ -4038,6 +4039,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--class-augmentation-power", type=float, default=0.75)
     parser.add_argument("--class-augmentation-max-scale", type=float, default=1.8)
     parser.add_argument(
+        "--class-conditional-augmentation-scales",
+        type=str,
+        default="",
+        help=(
+            "Train-only comma-separated per-class reduction scales in [0.1,1.0]. "
+            "Empty keeps legacy augmentation bit-compatible."
+        ),
+    )
+    parser.add_argument(
         "--class-aware-photometric-augmentation",
         action="store_true",
         default=False,
@@ -7034,6 +7044,7 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         class_aware_augmentation=bool(args.class_aware_augmentation),
         class_augmentation_power=args.class_augmentation_power,
         class_augmentation_max_scale=args.class_augmentation_max_scale,
+        class_conditional_augmentation_scales=str(args.class_conditional_augmentation_scales or ""),
         class_aware_photometric_augmentation=bool(args.class_aware_photometric_augmentation),
         class_aware_mix_probability_boost=args.class_aware_mix_probability_boost,
         class_aware_mix_source_power=args.class_aware_mix_source_power,
@@ -7370,6 +7381,20 @@ def compute_class_weights(
     blend = float(min(max(blend, 0.0), 1.0))
     weights = torch.lerp(torch.ones_like(weights), weights, blend)
     return weights.to(dtype=torch.float32)
+
+
+def parse_class_conditional_augmentation_scales(value: str, num_classes: int) -> List[float]:
+    text = str(value or "").strip()
+    if not text:
+        return []
+    parts = [part.strip() for part in text.replace(";", ",").split(",") if part.strip()]
+    try:
+        values = [float(part) for part in parts]
+    except ValueError as exc:
+        raise ValueError(
+            "--class-conditional-augmentation-scales chi nhan cac so phan tach boi dau phay."
+        ) from exc
+    return normalize_class_conditional_augmentation_scales(values, num_classes=int(num_classes))
 
 
 def parse_class_loss_multipliers(value: str, num_classes: int) -> Optional[Tensor]:
@@ -26280,6 +26305,29 @@ def main() -> None:
             "Dataset format=classification_folder chi phu hop classification-only. "
             "Hay dung --model-type vit_registers/resnet50/mobilenet_v3_large/vit_b_16."
         )
+    class_conditional_augmentation_scales = parse_class_conditional_augmentation_scales(
+        augmentation_config.class_conditional_augmentation_scales,
+        data_spec.num_classes,
+    )
+    if detection_mode and class_conditional_augmentation_scales:
+        raise ValueError(
+            "--class-conditional-augmentation-scales chi ho tro classification-only train."
+        )
+    if class_conditional_augmentation_scales:
+        print(
+            {
+                "class_conditional_augmentation": {
+                    "enabled": True,
+                    "source_split": "train_only",
+                    "scales": class_conditional_augmentation_scales,
+                    "photometric_scaled": bool(
+                        augmentation_config.class_aware_photometric_augmentation
+                    ),
+                    "validation_unchanged": True,
+                }
+            },
+            flush=True,
+        )
     balance_auto_summary = apply_balance_file_auto_adjustment(
         data_spec=data_spec,
         train_config=train_config,
@@ -26414,6 +26462,7 @@ def main() -> None:
             class_aware_augmentation=augmentation_config.class_aware_augmentation,
             class_augmentation_power=augmentation_config.class_augmentation_power,
             class_augmentation_max_scale=augmentation_config.class_augmentation_max_scale,
+            class_conditional_augmentation_scales=class_conditional_augmentation_scales,
             class_crop_margin_scales=class_crop_margin_scales,
             paired_yolo_data_spec=paired_yolo_data_spec,
             classification_source_context=classification_source_context_for_dataset,
@@ -26500,6 +26549,7 @@ def main() -> None:
             class_aware_augmentation=augmentation_config.class_aware_augmentation,
             class_augmentation_power=augmentation_config.class_augmentation_power,
             class_augmentation_max_scale=augmentation_config.class_augmentation_max_scale,
+            class_conditional_augmentation_scales=class_conditional_augmentation_scales,
             class_crop_margin_scale_threshold=augmentation_config.class_crop_margin_scale_threshold,
             class_crop_margin_max_ratio=augmentation_config.class_crop_margin_max_ratio,
             class_crop_margin_scales=class_crop_margin_scales,
@@ -26656,6 +26706,7 @@ def main() -> None:
                 class_aware_augmentation=augmentation_config.class_aware_augmentation,
                 class_augmentation_power=augmentation_config.class_augmentation_power,
                 class_augmentation_max_scale=augmentation_config.class_augmentation_max_scale,
+                class_conditional_augmentation_scales=class_conditional_augmentation_scales,
                 class_crop_margin_scales=class_crop_margin_scales,
                 paired_yolo_data_spec=auxiliary_paired_yolo_data_spec,
                 classification_source_context=auxiliary_source_context_for_dataset,
@@ -26691,6 +26742,7 @@ def main() -> None:
                 class_aware_augmentation=augmentation_config.class_aware_augmentation,
                 class_augmentation_power=augmentation_config.class_augmentation_power,
                 class_augmentation_max_scale=augmentation_config.class_augmentation_max_scale,
+                class_conditional_augmentation_scales=class_conditional_augmentation_scales,
                 class_crop_margin_scale_threshold=augmentation_config.class_crop_margin_scale_threshold,
                 class_crop_margin_max_ratio=augmentation_config.class_crop_margin_max_ratio,
                 class_crop_margin_scales=class_crop_margin_scales,

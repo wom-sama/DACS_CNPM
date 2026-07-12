@@ -35,6 +35,28 @@ PIL_RESAMPLE_MAP = {
 }
 
 
+def normalize_class_conditional_augmentation_scales(
+    values: Optional[Sequence[float]],
+    *,
+    num_classes: int,
+) -> List[float]:
+    if values is None or len(values) == 0:
+        return []
+    parsed = [float(value) for value in values]
+    if len(parsed) != int(num_classes):
+        raise ValueError(
+            "class_conditional_augmentation_scales phai co dung "
+            f"{int(num_classes)} gia tri; nhan duoc {len(parsed)}."
+        )
+    for index, value in enumerate(parsed):
+        if not math.isfinite(value) or not 0.1 <= value <= 1.0:
+            raise ValueError(
+                "class_conditional_augmentation_scales chi nhan gia tri huu han "
+                f"trong [0.1, 1.0]; class {index}={value}."
+            )
+    return parsed
+
+
 def _imagenet_fill(mean: Sequence[float]) -> Tuple[int, int, int]:
     return tuple(int(round(channel * 255.0)) for channel in mean)
 
@@ -1614,6 +1636,7 @@ class ClassificationFolderDataset(Dataset):
         class_aware_augmentation: bool = False,
         class_augmentation_power: float = 0.75,
         class_augmentation_max_scale: float = 1.8,
+        class_conditional_augmentation_scales: Optional[Sequence[float]] = None,
         class_crop_margin_scales: Optional[Sequence[float]] = None,
         paired_yolo_images_dir: Optional[Path] = None,
         paired_yolo_labels_dir: Optional[Path] = None,
@@ -1700,6 +1723,10 @@ class ClassificationFolderDataset(Dataset):
         self.class_aware_augmentation = bool(class_aware_augmentation)
         self.class_augmentation_power = max(0.0, float(class_augmentation_power))
         self.class_augmentation_max_scale = max(1.0, float(class_augmentation_max_scale))
+        self.class_conditional_augmentation_scales = normalize_class_conditional_augmentation_scales(
+            class_conditional_augmentation_scales,
+            num_classes=self.num_classes,
+        )
         self.class_crop_margin_scales = (
             [max(1.0, float(value)) for value in class_crop_margin_scales]
             if class_crop_margin_scales is not None
@@ -1717,7 +1744,7 @@ class ClassificationFolderDataset(Dataset):
         self.class_augmentation_scales = self._build_class_augmentation_scales()
         logger.info(
             "Classification folder dataset initialized: split=%s root=%s "
-            "classes=%s selected_samples=%s missing_class_dirs=%s class_aug=%s scales=%s",
+            "classes=%s selected_samples=%s missing_class_dirs=%s class_aug=%s scales=%s conditional_scales=%s",
             self.split,
             self.root_dir,
             self.num_classes,
@@ -1725,6 +1752,7 @@ class ClassificationFolderDataset(Dataset):
             self.audit["missing_class_dir_count"],
             self.class_aware_augmentation,
             self.class_augmentation_scales,
+            self.class_conditional_augmentation_scales,
         )
 
     @classmethod
@@ -1736,6 +1764,7 @@ class ClassificationFolderDataset(Dataset):
         class_aware_augmentation: bool = False,
         class_augmentation_power: float = 0.75,
         class_augmentation_max_scale: float = 1.8,
+        class_conditional_augmentation_scales: Optional[Sequence[float]] = None,
         class_crop_margin_scales: Optional[Sequence[float]] = None,
         paired_yolo_data_spec: Optional[DataSpec] = None,
         classification_source_context: bool = False,
@@ -1763,6 +1792,7 @@ class ClassificationFolderDataset(Dataset):
             class_aware_augmentation=class_aware_augmentation,
             class_augmentation_power=class_augmentation_power,
             class_augmentation_max_scale=class_augmentation_max_scale,
+            class_conditional_augmentation_scales=class_conditional_augmentation_scales,
             class_crop_margin_scales=class_crop_margin_scales,
             paired_yolo_images_dir=paired_images_dir,
             paired_yolo_labels_dir=paired_labels_dir,
@@ -2124,9 +2154,13 @@ class ClassificationFolderDataset(Dataset):
 
     def _augmentation_scale_for_label(self, label: int) -> float:
         label = int(label)
+        base_scale = 1.0
         if 0 <= label < len(self.class_augmentation_scales):
-            return float(self.class_augmentation_scales[label])
-        return 1.0
+            base_scale = float(self.class_augmentation_scales[label])
+        conditional_scale = 1.0
+        if 0 <= label < len(self.class_conditional_augmentation_scales):
+            conditional_scale = float(self.class_conditional_augmentation_scales[label])
+        return float(base_scale * conditional_scale)
 
     def labels(self) -> List[int]:
         return [int(sample.label) for sample in self.samples]
@@ -2145,6 +2179,13 @@ class ClassificationFolderDataset(Dataset):
         report["crop_to_primary_object"] = False
         report["class_counts"] = self.class_counts(self.num_classes)
         report["class_augmentation_scales"] = list(self.class_augmentation_scales)
+        report["class_conditional_augmentation_scales"] = list(
+            self.class_conditional_augmentation_scales
+        )
+        report["effective_class_augmentation_scales"] = [
+            self._augmentation_scale_for_label(class_index)
+            for class_index in range(self.num_classes)
+        ]
         report["class_aware_augmentation"] = bool(self.class_aware_augmentation)
         report["image_cache"] = self.image_cache_stats()
         report["paired_yolo"] = {
@@ -2348,6 +2389,7 @@ class MangoYOLOCropDataset(Dataset):
         class_aware_augmentation: bool = False,
         class_augmentation_power: float = 0.75,
         class_augmentation_max_scale: float = 1.8,
+        class_conditional_augmentation_scales: Optional[Sequence[float]] = None,
         classification_target: bool = False,
         classification_object_crops: bool = True,
         class_crop_margin_scale_threshold: float = 1.5,
@@ -2375,6 +2417,10 @@ class MangoYOLOCropDataset(Dataset):
         self.class_aware_augmentation = bool(class_aware_augmentation)
         self.class_augmentation_power = max(0.0, float(class_augmentation_power))
         self.class_augmentation_max_scale = max(1.0, float(class_augmentation_max_scale))
+        self.class_conditional_augmentation_scales = normalize_class_conditional_augmentation_scales(
+            class_conditional_augmentation_scales,
+            num_classes=int(self.num_classes or 0),
+        )
         self.classification_target = bool(classification_target)
         self.classification_object_crops = bool(classification_object_crops)
         self.classification_source_context = bool(
@@ -2456,7 +2502,7 @@ class MangoYOLOCropDataset(Dataset):
             "image_files=%s label_files=%s selected_samples=%s valid_objects=%s "
             "missing_images=%s invalid_bboxes=%s invalid_classes=%s crop_primary=%s "
             "classification_target=%s object_crops=%s source_context=%s context_layout=%s "
-            "source_context_aux=%s class_aug=%s scales=%s",
+            "source_context_aux=%s class_aug=%s scales=%s conditional_scales=%s",
             self.split,
             self.images_dir,
             self.labels_dir,
@@ -2475,6 +2521,7 @@ class MangoYOLOCropDataset(Dataset):
             self.classification_source_context_aux,
             self.class_aware_augmentation,
             self.class_augmentation_scales,
+            self.class_conditional_augmentation_scales,
         )
 
     @classmethod
@@ -2489,6 +2536,7 @@ class MangoYOLOCropDataset(Dataset):
         class_aware_augmentation: bool = False,
         class_augmentation_power: float = 0.75,
         class_augmentation_max_scale: float = 1.8,
+        class_conditional_augmentation_scales: Optional[Sequence[float]] = None,
         classification_target: bool = False,
         classification_object_crops: bool = True,
         class_crop_margin_scale_threshold: float = 1.5,
@@ -2516,6 +2564,7 @@ class MangoYOLOCropDataset(Dataset):
             class_aware_augmentation=class_aware_augmentation,
             class_augmentation_power=class_augmentation_power,
             class_augmentation_max_scale=class_augmentation_max_scale,
+            class_conditional_augmentation_scales=class_conditional_augmentation_scales,
             classification_target=classification_target,
             classification_object_crops=classification_object_crops,
             class_crop_margin_scale_threshold=class_crop_margin_scale_threshold,
@@ -2544,6 +2593,7 @@ class MangoYOLOCropDataset(Dataset):
         class_aware_augmentation: bool = False,
         class_augmentation_power: float = 0.75,
         class_augmentation_max_scale: float = 1.8,
+        class_conditional_augmentation_scales: Optional[Sequence[float]] = None,
         classification_target: bool = False,
         classification_object_crops: bool = True,
         class_crop_margin_scale_threshold: float = 1.5,
@@ -2576,6 +2626,7 @@ class MangoYOLOCropDataset(Dataset):
             class_aware_augmentation=class_aware_augmentation,
             class_augmentation_power=class_augmentation_power,
             class_augmentation_max_scale=class_augmentation_max_scale,
+            class_conditional_augmentation_scales=class_conditional_augmentation_scales,
             classification_target=classification_target,
             classification_object_crops=classification_object_crops,
             class_crop_margin_scale_threshold=class_crop_margin_scale_threshold,
@@ -2799,16 +2850,23 @@ class MangoYOLOCropDataset(Dataset):
             scales.append(float(min(self.class_augmentation_max_scale, max(1.0, scale))))
         return scales
 
+    def _augmentation_scale_for_label(self, label: int) -> float:
+        label = int(label)
+        base_scale = 1.0
+        if self.class_aware_augmentation and 0 <= label < len(self.class_augmentation_scales):
+            base_scale = float(self.class_augmentation_scales[label])
+        conditional_scale = 1.0
+        if 0 <= label < len(self.class_conditional_augmentation_scales):
+            conditional_scale = float(self.class_conditional_augmentation_scales[label])
+        return float(base_scale * conditional_scale)
+
     def _augmentation_scale_for_labels(self, labels: Tensor) -> float:
-        if not self.class_aware_augmentation or labels.numel() == 0:
+        if labels.numel() == 0:
             return 1.0
-        if not self.class_augmentation_scales:
-            return 1.0
-        scale = 1.0
+        scales: List[float] = []
         for label in labels.detach().cpu().to(dtype=torch.long).tolist():
-            if 0 <= int(label) < len(self.class_augmentation_scales):
-                scale = max(scale, float(self.class_augmentation_scales[int(label)]))
-        return float(scale)
+            scales.append(self._augmentation_scale_for_label(int(label)))
+        return float(max(scales)) if scales else 1.0
 
     def _crop_margin_scale_for_label(self, label: int) -> float:
         label = int(label)
@@ -2887,6 +2945,13 @@ class MangoYOLOCropDataset(Dataset):
         if self.num_classes is not None:
             report["class_counts"] = self.class_counts(self.num_classes)
             report["class_augmentation_scales"] = list(self.class_augmentation_scales)
+            report["class_conditional_augmentation_scales"] = list(
+                self.class_conditional_augmentation_scales
+            )
+            report["effective_class_augmentation_scales"] = [
+                self._augmentation_scale_for_label(class_index)
+                for class_index in range(int(self.num_classes))
+            ]
             report["class_crop_margin"] = self._class_crop_margin_report()
         report["class_aware_augmentation"] = bool(self.class_aware_augmentation)
         report["image_cache"] = self.image_cache_stats()
@@ -3168,7 +3233,7 @@ class MangoYOLOCropDataset(Dataset):
             "labels": torch.tensor([int(primary_object.label)], dtype=torch.long),
             "boxes": torch.tensor([primary_object.bbox], dtype=torch.float32),
             "augmentation_scale": torch.tensor(
-                [self._augmentation_scale_for_labels(torch.tensor([int(primary_object.label)]))],
+                [self._augmentation_scale_for_label(int(primary_object.label))],
                 dtype=torch.float32,
             ),
         }
@@ -3272,10 +3337,11 @@ class MangoYOLOCropDataset(Dataset):
                 boxes=boxes,
                 sample=sample,
             )
-        target["augmentation_scale"] = torch.tensor(
-            [self._augmentation_scale_for_labels(target["labels"])],
-            dtype=torch.float32,
-        )
+        if self.classification_target and primary_object is not None:
+            augmentation_scale = self._augmentation_scale_for_label(int(primary_object.label))
+        else:
+            augmentation_scale = self._augmentation_scale_for_labels(target["labels"])
+        target["augmentation_scale"] = torch.tensor([augmentation_scale], dtype=torch.float32)
         if self.transform is not None:
             transformed = self.transform(image, target=target)
             if isinstance(transformed, tuple) and len(transformed) == 2:
@@ -5640,9 +5706,19 @@ class HybridImageTransform:
                 return 1.0
             value = value.detach().to(dtype=torch.float32).view(-1)[0].item()
         try:
-            return float(value)
+            parsed = float(value)
         except (TypeError, ValueError):
             return 1.0
+        if not math.isfinite(parsed):
+            return 1.0
+        return max(0.1, parsed)
+
+    @staticmethod
+    def _probability_scale(augmentation_scale: float, *, boost_power: float) -> float:
+        scale = max(0.1, float(augmentation_scale))
+        if scale < 1.0:
+            return scale
+        return scale ** float(boost_power)
 
     def _apply_affine(
         self,
@@ -5653,7 +5729,7 @@ class HybridImageTransform:
         if not self.train:
             return image, masks
 
-        augmentation_scale = max(1.0, float(augmentation_scale))
+        augmentation_scale = max(0.1, float(augmentation_scale))
         affine_degrees = self.random_affine_degrees * augmentation_scale
         affine_translate = min(0.2, self.random_affine_translate * augmentation_scale)
         affine_scale_min = max(0.7, 1.0 - (1.0 - self.random_affine_scale_min) * augmentation_scale)
@@ -5702,7 +5778,11 @@ class HybridImageTransform:
         masks: Optional[List[Image.Image]],
         augmentation_scale: float = 1.0,
     ) -> Tuple[Image.Image, Optional[List[Image.Image]]]:
-        probability = min(1.0, self.horizontal_flip_probability * math.sqrt(max(1.0, float(augmentation_scale))))
+        probability = min(
+            1.0,
+            self.horizontal_flip_probability
+            * self._probability_scale(augmentation_scale, boost_power=0.5),
+        )
         if not self.train or torch.rand(1).item() >= probability:
             return image, masks
         image = TF.hflip(image)
@@ -5716,7 +5796,11 @@ class HybridImageTransform:
         masks: Optional[List[Image.Image]],
         augmentation_scale: float = 1.0,
     ) -> Tuple[Image.Image, Optional[List[Image.Image]]]:
-        probability = min(1.0, self.vertical_flip_probability * max(1.0, float(augmentation_scale)))
+        probability = min(
+            1.0,
+            self.vertical_flip_probability
+            * self._probability_scale(augmentation_scale, boost_power=1.0),
+        )
         if not self.train or torch.rand(1).item() >= probability:
             return image, masks
         image = TF.vflip(image)
@@ -5730,7 +5814,11 @@ class HybridImageTransform:
         masks: Optional[List[Image.Image]],
         augmentation_scale: float = 1.0,
     ) -> Tuple[Image.Image, Optional[List[Image.Image]]]:
-        probability = min(1.0, self.rotate90_probability * max(1.0, float(augmentation_scale)))
+        probability = min(
+            1.0,
+            self.rotate90_probability
+            * self._probability_scale(augmentation_scale, boost_power=1.0),
+        )
         if not self.train or torch.rand(1).item() >= probability:
             return image, masks
         operations = (
@@ -5754,7 +5842,12 @@ class HybridImageTransform:
             not self.train
             or self.random_resized_crop_scale_min >= 0.999
             or self.random_resized_crop_probability <= 0.0
-            or torch.rand(1).item() >= self.random_resized_crop_probability
+            or torch.rand(1).item()
+            >= min(
+                1.0,
+                self.random_resized_crop_probability
+                * min(1.0, max(0.1, float(augmentation_scale))),
+            )
         ):
             return image, masks
         width, height = image.size
@@ -5762,7 +5855,7 @@ class HybridImageTransform:
             return image, masks
 
         min_scale = self.random_resized_crop_scale_min
-        augmentation_scale = max(1.0, float(augmentation_scale))
+        augmentation_scale = max(0.1, float(augmentation_scale))
         # Minority-class samples already receive stronger affine/color jitter; keep
         # crop jitter moderate so small/edge mangos are not dropped too often.
         min_scale = max(0.55, 1.0 - (1.0 - min_scale) * min(1.5, augmentation_scale))
@@ -5825,7 +5918,8 @@ class HybridImageTransform:
         if self.train:
             probability = min(
                 1.0,
-                self.foreground_crop_probability * math.sqrt(max(1.0, float(augmentation_scale))),
+                self.foreground_crop_probability
+                * self._probability_scale(augmentation_scale, boost_power=0.5),
             )
         if probability <= 0.0 or (self.train and torch.rand(1).item() >= probability):
             return image, masks, None
@@ -5842,7 +5936,11 @@ class HybridImageTransform:
     def _apply_local_exposure_aug(self, image: Image.Image, augmentation_scale: float = 1.0) -> Image.Image:
         if not self.train or self.local_exposure_probability <= 0.0:
             return image
-        probability = min(1.0, self.local_exposure_probability * math.sqrt(max(1.0, float(augmentation_scale))))
+        probability = min(
+            1.0,
+            self.local_exposure_probability
+            * self._probability_scale(augmentation_scale, boost_power=0.5),
+        )
         if torch.rand(1).item() >= probability:
             return image
         width, height = image.size
@@ -5870,7 +5968,11 @@ class HybridImageTransform:
     def _apply_obstacle_aug(self, image: Image.Image, augmentation_scale: float = 1.0) -> Image.Image:
         if not self.train or self.obstacle_probability <= 0.0 or self.obstacle_max_area <= 0.0:
             return image
-        probability = min(1.0, self.obstacle_probability * math.sqrt(max(1.0, float(augmentation_scale))))
+        probability = min(
+            1.0,
+            self.obstacle_probability
+            * self._probability_scale(augmentation_scale, boost_power=0.5),
+        )
         if torch.rand(1).item() >= probability:
             return image
         width, height = image.size
@@ -5976,7 +6078,7 @@ class HybridImageTransform:
     def _apply_color(self, image: Image.Image, augmentation_scale: float = 1.0) -> Image.Image:
         if not self.train:
             return image
-        augmentation_scale = max(1.0, float(augmentation_scale))
+        augmentation_scale = max(0.1, float(augmentation_scale))
         photometric_scale = augmentation_scale if self.scale_photometric_with_augmentation else 1.0
         image = transforms.ColorJitter(
             brightness=self.color_jitter_brightness * photometric_scale,
@@ -5996,7 +6098,11 @@ class HybridImageTransform:
         tensor = TF.to_tensor(image)
         tensor = TF.normalize(tensor, mean=self.mean, std=self.std)
         if self.train and self.random_erasing_probability > 0.0:
-            erasing_scale = max(1.0, float(augmentation_scale)) if self.scale_photometric_with_augmentation else 1.0
+            erasing_scale = (
+                max(0.1, float(augmentation_scale))
+                if self.scale_photometric_with_augmentation
+                else 1.0
+            )
             probability = min(1.0, self.random_erasing_probability * erasing_scale)
             tensor = transforms.RandomErasing(p=probability)(tensor)
         return tensor

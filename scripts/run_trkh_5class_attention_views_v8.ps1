@@ -20,6 +20,7 @@ param(
     [double]$CropMarginRatio = 0.05,
     [double]$ClassCropMarginScaleThreshold = 1.5,
     [double]$ClassCropMarginMaxRatio = 0.16,
+    [string]$ClassConditionalAugmentationScales = "",
     [bool]$ClassificationSourceContext = $false,
     [ValidateSet("dim", "gray", "blur", "mean", "desaturate_blur", "blur_gray")]
     [string]$ClassificationSourceContextMode = "desaturate_blur",
@@ -1446,6 +1447,7 @@ if ($PreflightOnly) {
         crop_margin_ratio = $CropMarginRatio
         class_crop_margin_scale_threshold = $ClassCropMarginScaleThreshold
         class_crop_margin_max_ratio = $ClassCropMarginMaxRatio
+        class_conditional_augmentation_scales = $ClassConditionalAugmentationScales
         classification_source_context = [bool]$ClassificationSourceContext
         classification_source_context_mode = $ClassificationSourceContextMode
         classification_source_context_layout = $ClassificationSourceContextLayout
@@ -2639,6 +2641,13 @@ try {
 
     if ($DisableBalancedEpochSampling) {
         $TrainArgs += @("--disable-balanced-epoch-sampling")
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($ClassConditionalAugmentationScales)) {
+        $TrainArgs += @(
+            "--class-conditional-augmentation-scales",
+            $ClassConditionalAugmentationScales
+        )
     }
 
     if (-not $TeacherFocusMarginRequireAgreement) {
