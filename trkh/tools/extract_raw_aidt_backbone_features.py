@@ -15,7 +15,11 @@ from torch.utils.data import DataLoader
 from torchvision.transforms import v2 as transforms
 
 from trkh.core.config import load_data_spec
-from trkh.tools.evaluate_embedding_retrieval import OrderedFolderDataset
+from trkh.data.dataset import PairedViewTrainDataset
+from trkh.tools.evaluate_embedding_retrieval import (
+    OrderedFolderDataset,
+    OrderedYoloObjectDataset,
+)
 from trkh.tools.export_aidt_predictions import SquarePad
 from trkh.tools.probe_api_pairwise_interaction_readiness import (
     _write_artifact_manifest,
@@ -27,6 +31,7 @@ RESNET_NAME = "resnet50.a1_in1k"
 VIT_NAME = "vit_base_patch16_224.augreg2_in21k_ft_in1k"
 IMAGE_SIZE = 224
 BATCH_SIZE = 32
+YOLO_CONTEXT_MARGIN_RATIO = 0.50
 EXPECTED_ROWS = {"train": 9215, "val": 2606}
 LITERATURE = (
     "https://huggingface.co/timm/resnet50.a1_in1k",
@@ -53,6 +58,11 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--amp", action="store_true", default=False)
     parser.add_argument("--amp-dtype", choices=("bf16", "fp16"), default="bf16")
     parser.add_argument("--max-samples-per-class", type=int, default=0)
+    parser.add_argument(
+        "--yolo-crop-margin-ratio",
+        type=float,
+        default=YOLO_CONTEXT_MARGIN_RATIO,
+    )
     return parser.parse_args(argv)
 
 
@@ -136,10 +146,31 @@ def _normalization_tensors(
     )
 
 
+def _dataset_sample_key(
+    dataset: OrderedFolderDataset | OrderedYoloObjectDataset,
+    *,
+    sample_index: int,
+    path_text: str,
+    label: int,
+) -> Tuple[str, int]:
+    if isinstance(dataset, OrderedYoloObjectDataset):
+        source_stem, object_index, source_label = PairedViewTrainDataset._sample_key(
+            dataset.dataset,
+            int(sample_index),
+        )
+        if int(source_label) != int(label):
+            raise ValueError(
+                "YOLO sample-key label differs from extracted label: "
+                f"sample_index={sample_index}, {source_label} != {label}"
+            )
+        return str(source_stem), int(object_index)
+    return _classification_key(str(path_text))
+
+
 def _extract_split(
     *,
     split: str,
-    dataset: OrderedFolderDataset,
+    dataset: OrderedFolderDataset | OrderedYoloObjectDataset,
     loader: DataLoader,
     resnet: nn.Module,
     vit: nn.Module,
@@ -178,8 +209,17 @@ def _extract_split(
             labels.extend(int(value) for value in batch_labels.tolist())
             paths.extend(str(value) for value in batch_paths)
             sample_indices.extend(int(value) for value in batch_indices.tolist())
-            for path_text in batch_paths:
-                source_stem, object_index = _classification_key(str(path_text))
+            for path_text, sample_index, label in zip(
+                batch_paths,
+                batch_indices.tolist(),
+                batch_labels.tolist(),
+            ):
+                source_stem, object_index = _dataset_sample_key(
+                    dataset,
+                    sample_index=int(sample_index),
+                    path_text=str(path_text),
+                    label=int(label),
+                )
                 source_stems.append(str(source_stem))
                 object_indices.append(int(object_index))
 
@@ -211,6 +251,8 @@ def run_extraction(args: argparse.Namespace) -> Dict[str, object]:
         raise ValueError("image-size/batch-size/workers are invalid")
     if int(args.max_samples_per_class) < 0:
         raise ValueError("max-samples-per-class must be non-negative")
+    if float(args.yolo_crop_margin_ratio) < 0.0:
+        raise ValueError("yolo-crop-margin-ratio must be non-negative")
     output_dir = Path(args.output_dir).resolve()
     if output_dir.exists() and any(output_dir.iterdir()):
         raise FileExistsError(f"output directory must be empty: {output_dir}")
@@ -219,8 +261,9 @@ def run_extraction(args: argparse.Namespace) -> Dict[str, object]:
     amp_dtype = torch.bfloat16 if str(args.amp_dtype) == "bf16" else torch.float16
 
     data_spec = load_data_spec(Path(args.data))
-    if str(data_spec.data_format).strip().casefold() != "classification_folder":
-        raise ValueError("raw AIDT feature extraction requires classification_folder data")
+    data_format = str(data_spec.data_format).strip().casefold()
+    if data_format not in {"classification_folder", "yolo"}:
+        raise ValueError("raw AIDT feature extraction requires classification_folder or yolo data")
     transform = transforms.Compose(
         [
             SquarePad(),
@@ -244,12 +287,21 @@ def run_extraction(args: argparse.Namespace) -> Dict[str, object]:
     split_payloads: Dict[str, Dict[str, object]] = {}
     split_summaries: Dict[str, Dict[str, object]] = {}
     for split in ("train", "val"):
-        dataset = OrderedFolderDataset(
-            data_spec=data_spec,
-            split=split,
-            transform=transform,
-            max_samples_per_class=int(args.max_samples_per_class),
-        )
+        if data_format == "classification_folder":
+            dataset = OrderedFolderDataset(
+                data_spec=data_spec,
+                split=split,
+                transform=transform,
+                max_samples_per_class=int(args.max_samples_per_class),
+            )
+        else:
+            dataset = OrderedYoloObjectDataset(
+                data_spec=data_spec,
+                split=split,
+                transform=transform,
+                max_samples_per_class=int(args.max_samples_per_class),
+                crop_margin_ratio=float(args.yolo_crop_margin_ratio),
+            )
         loader = DataLoader(
             dataset,
             batch_size=int(args.batch_size),
@@ -291,6 +343,11 @@ def run_extraction(args: argparse.Namespace) -> Dict[str, object]:
                 [str(vit_metadata["state_dict_sha256"])], dtype=object
             ),
             raw_pretrained=np.asarray([True], dtype=np.bool_),
+            data_format=np.asarray([data_format], dtype=object),
+            yolo_crop_margin_ratio=np.asarray(
+                [float(args.yolo_crop_margin_ratio) if data_format == "yolo" else -1.0],
+                dtype=np.float32,
+            ),
         )
         split_payloads[split] = payload
         split_summaries[split] = {
@@ -320,6 +377,8 @@ def run_extraction(args: argparse.Namespace) -> Dict[str, object]:
         "method": "raw_pretrained_aidt_resnet50_vitb16_feature_extraction",
         "literature": list(LITERATURE),
         "data": str(Path(args.data).resolve()),
+        "data_format": data_format,
+        "view": "wide_yolo_bbox_context" if data_format == "yolo" else "classification_object_crop",
         "split_usage": {"train": True, "val": True, "test": False},
         "geometry": (
             "SquarePad(fill=0) then direct "
@@ -333,6 +392,9 @@ def run_extraction(args: argparse.Namespace) -> Dict[str, object]:
         "splits": split_summaries,
         "train_val_source_overlap": int(source_overlap),
         "max_samples_per_class": int(args.max_samples_per_class),
+        "yolo_crop_margin_ratio": (
+            float(args.yolo_crop_margin_ratio) if data_format == "yolo" else None
+        ),
         "device": str(device),
         "amp": bool(args.amp),
         "amp_dtype": str(args.amp_dtype),

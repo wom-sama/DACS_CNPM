@@ -45,6 +45,7 @@ EXPECTED_TRAIN_ROWS = 9215
 EXPECTED_VAL_ROWS = 2606
 BRANCHES = ("resnet", "vit", "fusion")
 FEATURE_NORMALIZATIONS = ("raw", "block_l2")
+AUDIT_MODES = ("backbone_fusion", "object_context_fusion")
 LITERATURE = (
     "https://huggingface.co/timm/resnet50.a1_in1k",
     "https://huggingface.co/timm/vit_base_patch16_224.augreg2_in21k_ft_in1k",
@@ -112,7 +113,17 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         choices=FEATURE_NORMALIZATIONS,
         default="raw",
     )
+    parser.add_argument("--audit-mode", choices=AUDIT_MODES, default="backbone_fusion")
     return parser.parse_args(argv)
+
+
+def _branch_semantics(audit_mode: str) -> Dict[str, str]:
+    normalized = str(audit_mode).strip().casefold()
+    if normalized == "backbone_fusion":
+        return {"resnet": "resnet", "vit": "vit", "fusion": "fusion"}
+    if normalized == "object_context_fusion":
+        return {"resnet": "object", "vit": "context", "fusion": "paired"}
+    raise ValueError(f"unsupported audit mode: {audit_mode}")
 
 
 def _resolve_device(value: str) -> torch.device:
@@ -529,7 +540,9 @@ def _prediction_rows(
     probabilities: Mapping[str, np.ndarray],
     selected_control: str,
     keeper_probabilities: Optional[np.ndarray] = None,
+    branch_semantics: Optional[Mapping[str, str]] = None,
 ) -> List[Dict[str, object]]:
+    display = dict(branch_semantics or {name: name for name in BRANCHES})
     rows: List[Dict[str, object]] = []
     labels = np.asarray(cache["labels"], dtype=np.int64)
     for index in range(len(labels)):
@@ -545,12 +558,15 @@ def _prediction_rows(
             "prediction_index": fusion_prediction,
             "y_true": int(labels[index]),
             "y_pred": fusion_prediction,
-            "selected_control": str(selected_control),
+            "selected_control": str(display[selected_control]),
         }
         for branch in BRANCHES:
-            row[f"{branch}_prediction_index"] = int(probabilities[branch][index].argmax())
+            branch_name = str(display[branch])
+            row[f"{branch_name}_prediction_index"] = int(
+                probabilities[branch][index].argmax()
+            )
             for class_index in range(probabilities[branch].shape[1]):
-                row[f"{branch}_prob_{class_index}"] = float(
+                row[f"{branch_name}_prob_{class_index}"] = float(
                     probabilities[branch][index, class_index]
                 )
         if keeper_probabilities is not None:
@@ -570,18 +586,20 @@ def _plot_summary(
     oof_metrics: Mapping[str, Mapping[str, object]],
     val_metrics: Mapping[str, Mapping[str, object]],
     focus_class_index: int,
+    branch_semantics: Mapping[str, str],
 ) -> None:
     figure, axes = plt.subplots(1, 2, figsize=(12, 4.5))
     for branch in BRANCHES:
         rows = [
             row
             for row in curves
-            if str(row["scope"]) == "full_train" and str(row["branch"]) == branch
+            if str(row["scope"]) == "full_train"
+            and str(row["branch"]) == str(branch_semantics[branch])
         ]
         axes[0].plot(
             [int(row["epoch"]) for row in rows],
             [float(row["loss"]) for row in rows],
-            label=branch,
+            label=str(branch_semantics[branch]),
         )
     axes[0].set_title("Full-train readout loss")
     axes[0].set_xlabel("Epoch")
@@ -589,7 +607,9 @@ def _plot_summary(
     axes[0].grid(alpha=0.2)
     axes[0].legend()
 
-    names = [f"OOF {name}" for name in BRANCHES] + [f"val {name}" for name in BRANCHES] + ["val keeper"]
+    names = [f"OOF {branch_semantics[name]}" for name in BRANCHES] + [
+        f"val {branch_semantics[name]}" for name in BRANCHES
+    ] + ["val keeper"]
     metric_rows = [oof_metrics[name] for name in BRANCHES] + [val_metrics[name] for name in BRANCHES] + [val_metrics["keeper"]]
     positions = np.arange(len(names))
     axes[1].bar(
@@ -606,7 +626,7 @@ def _plot_summary(
     )
     axes[1].set_xticks(positions, names, rotation=30, ha="right")
     axes[1].set_ylim(0.0, 1.0)
-    axes[1].set_title("Raw-pretrained AIDT readiness")
+    axes[1].set_title(f"Raw-pretrained AIDT {branch_semantics['fusion']} readiness")
     axes[1].grid(axis="y", alpha=0.2)
     axes[1].legend()
     figure.tight_layout()
@@ -639,6 +659,8 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
     if int(args.torch_threads) > 0:
         torch.set_num_threads(int(args.torch_threads))
     device = _resolve_device(str(args.device))
+    branch_semantics = _branch_semantics(str(args.audit_mode))
+    candidate_name = str(branch_semantics["fusion"])
     start = time.time()
 
     train = load_feature_cache(Path(args.train_npz))
@@ -739,7 +761,11 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
             )
             for row in curve:
                 curve_rows.append(
-                    {"scope": f"fold_{fold_index}", "branch": branch, **row}
+                    {
+                        "scope": f"fold_{fold_index}",
+                        "branch": str(branch_semantics[branch]),
+                        **row,
+                    }
                 )
             del model
             if device.type == "cuda":
@@ -760,11 +786,14 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
             "source_overlap": int(overlap),
         }
         for branch in BRANCHES:
-            fold_row[f"{branch}_macro_f1"] = float(branch_metrics[branch]["macro_f1"])
-            fold_row[f"{branch}_focus_f1"] = float(
+            branch_name = str(branch_semantics[branch])
+            fold_row[f"{branch_name}_macro_f1"] = float(
+                branch_metrics[branch]["macro_f1"]
+            )
+            fold_row[f"{branch_name}_focus_f1"] = float(
                 _focus(branch_metrics[branch], int(args.focus_class_index))["f1"]
             )
-        fold_row["fusion_focus_gain_vs_best_component"] = float(
+        fold_row[f"{candidate_name}_focus_gain_vs_best_component"] = float(
             fusion_focus - best_component_focus
         )
         fold_rows.append(fold_row)
@@ -776,7 +805,10 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
                 "fit_sources": int(len(fit_sources)),
                 "hold_sources": int(len(hold_sources)),
                 "source_overlap": int(overlap),
-                "branches": branch_protocol,
+                "branches": {
+                    str(branch_semantics[name]): value
+                    for name, value in branch_protocol.items()
+                },
             }
         )
     if np.any(fold_assignment < 0):
@@ -805,7 +837,7 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
             val_views[branch],
             device=device,
         )
-        full_protocol[branch] = telemetry
+        full_protocol[str(branch_semantics[branch])] = telemetry
         all_training_finite = all_training_finite and bool(telemetry["finite"])
         all_losses_decreased = all_losses_decreased and bool(telemetry["loss_decreased"])
         minimum_batch_class_support = min(
@@ -813,7 +845,13 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
             int(telemetry["minimum_batch_class_support"]),
         )
         for row in curve:
-            curve_rows.append({"scope": "full_train", "branch": branch, **row})
+            curve_rows.append(
+                {
+                    "scope": "full_train",
+                    "branch": str(branch_semantics[branch]),
+                    **row,
+                }
+            )
         del model
         if device.type == "cuda":
             torch.cuda.empty_cache()
@@ -831,20 +869,21 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
         oof_metrics,
         focus_class_index=int(args.focus_class_index),
     )
+    selected_control_name = str(branch_semantics[selected_control])
     transitions = {
-        "oof_fusion_vs_selected_control": _transition_stats(
+        "oof_candidate_vs_selected_control": _transition_stats(
             y_train,
             oof_probabilities[selected_control],
             oof_probabilities["fusion"],
             focus_class_index=int(args.focus_class_index),
         ),
-        "val_fusion_vs_selected_control": _transition_stats(
+        "val_candidate_vs_selected_control": _transition_stats(
             y_val,
             val_probabilities[selected_control],
             val_probabilities["fusion"],
             focus_class_index=int(args.focus_class_index),
         ),
-        "val_fusion_vs_keeper": _transition_stats(
+        "val_candidate_vs_keeper": _transition_stats(
             y_val,
             aligned_keeper,
             val_probabilities["fusion"],
@@ -852,13 +891,13 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
         ),
     }
     direction = {
-        "oof_fusion_vs_selected_control": _direction_auc(
+        "oof_candidate_vs_selected_control": _direction_auc(
             y_train,
             oof_probabilities[selected_control],
             oof_probabilities["fusion"],
             focus_class_index=int(args.focus_class_index),
         ),
-        "val_fusion_vs_selected_control": _direction_auc(
+        "val_candidate_vs_selected_control": _direction_auc(
             y_val,
             val_probabilities[selected_control],
             val_probabilities["fusion"],
@@ -881,11 +920,11 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
         val_control_metrics=val_metrics[selected_control],
         val_fusion_metrics=val_metrics["fusion"],
         val_keeper_metrics=val_metrics["keeper"],
-        oof_transitions=transitions["oof_fusion_vs_selected_control"],
-        val_control_transitions=transitions["val_fusion_vs_selected_control"],
-        val_keeper_transitions=transitions["val_fusion_vs_keeper"],
-        oof_direction=direction["oof_fusion_vs_selected_control"],
-        val_direction=direction["val_fusion_vs_selected_control"],
+        oof_transitions=transitions["oof_candidate_vs_selected_control"],
+        val_control_transitions=transitions["val_candidate_vs_selected_control"],
+        val_keeper_transitions=transitions["val_candidate_vs_keeper"],
+        oof_direction=direction["oof_candidate_vs_selected_control"],
+        val_direction=direction["val_candidate_vs_selected_control"],
         focus_class_index=int(args.focus_class_index),
         test_split_used=False,
     )
@@ -900,6 +939,7 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
             fold_assignment=fold_assignment,
             probabilities=oof_probabilities,
             selected_control=selected_control,
+            branch_semantics=branch_semantics,
         ),
     )
     _write_csv(
@@ -911,13 +951,14 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
             probabilities=val_probabilities,
             selected_control=selected_control,
             keeper_probabilities=aligned_keeper,
+            branch_semantics=branch_semantics,
         ),
     )
     np.savez_compressed(
         output_dir / "diagnostic_probabilities.npz",
-        train_oof_fusion=oof_probabilities["fusion"],
+        train_oof_candidate=oof_probabilities["fusion"],
         train_oof_selected_control=oof_probabilities[selected_control],
-        val_fusion=val_probabilities["fusion"],
+        val_candidate=val_probabilities["fusion"],
         val_selected_control=val_probabilities[selected_control],
         val_keeper=aligned_keeper,
         train_labels=y_train,
@@ -925,7 +966,9 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
         train_sample_index=train["sample_index"],
         val_sample_index=val["sample_index"],
         classes=train["classes"],
-        selected_control=np.asarray([selected_control], dtype=object),
+        selected_control=np.asarray([selected_control_name], dtype=object),
+        candidate=np.asarray([candidate_name], dtype=object),
+        audit_mode=np.asarray([str(args.audit_mode)], dtype=object),
         diagnostic_only=np.asarray([True], dtype=np.bool_),
     )
     _plot_summary(
@@ -934,9 +977,16 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
         oof_metrics=oof_metrics,
         val_metrics=val_metrics,
         focus_class_index=int(args.focus_class_index),
+        branch_semantics=branch_semantics,
     )
     protocol = {
-        "method": "raw_pretrained_aidt_resnet50_vitb16_fusion_readiness",
+        "method": (
+            "raw_pretrained_aidt_object_context_fusion_readiness"
+            if str(args.audit_mode) == "object_context_fusion"
+            else "raw_pretrained_aidt_resnet50_vitb16_fusion_readiness"
+        ),
+        "audit_mode": str(args.audit_mode),
+        "branch_semantics": dict(branch_semantics),
         "literature": list(LITERATURE),
         "train_npz": str(Path(args.train_npz).resolve()),
         "val_npz": str(Path(args.val_npz).resolve()),
@@ -951,9 +1001,9 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
         "backbones_frozen": True,
         "feature_normalization": str(args.feature_normalization),
         "component_dimensions": {
-            "resnet": int(args.resnet_dim),
-            "vit": int(args.vit_dim),
-            "fusion": int(args.resnet_dim) + int(args.vit_dim),
+            str(branch_semantics["resnet"]): int(args.resnet_dim),
+            str(branch_semantics["vit"]): int(args.vit_dim),
+            candidate_name: int(args.resnet_dim) + int(args.vit_dim),
         },
         "readout": (
             f"Linear(D,{int(args.hidden_dim_1)})-BN-ReLU-Dropout0.3-"
@@ -972,7 +1022,8 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
         "label_smoothing": float(args.label_smoothing),
         "class_balance": "sqrt_inverse normalized to mean 1 per fit",
         "source_grouped_folds": int(args.folds),
-        "selected_control": selected_control,
+        "selected_control": selected_control_name,
+        "candidate": candidate_name,
         "control_selection": "train OOF 0.5*macro_f1 + 0.5*class1_f1; no validation selection",
         "device": str(device),
         "validation_hyperparameter_tuning": False,
@@ -981,11 +1032,23 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
         "trainable_manifest_written": False,
         "test_split_used": False,
     }
+    reported_oof_metrics = {
+        str(branch_semantics[name]): metrics for name, metrics in oof_metrics.items()
+    }
+    reported_val_metrics = {
+        (
+            "keeper" if name == "keeper" else str(branch_semantics[name])
+        ): metrics
+        for name, metrics in val_metrics.items()
+    }
     summary = {
         "protocol": protocol,
         "fold_protocols": fold_protocols,
         "full_training": full_protocol,
-        "metrics": {"train_oof": oof_metrics, "val": val_metrics},
+        "metrics": {
+            "train_oof": reported_oof_metrics,
+            "val": reported_val_metrics,
+        },
         "transitions": transitions,
         "focus_direction": direction,
         "gate": gate,
@@ -999,9 +1062,10 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
     readme = [
         "# Raw-Pretrained AIDT Fusion Readiness",
         "",
-        f"- OOF selected control: `{selected_control}`",
-        f"- OOF control/fusion macro-class1: `{float(oof_metrics[selected_control]['macro_f1']):.6f}/{float(_focus(oof_metrics[selected_control], int(args.focus_class_index))['f1']):.6f} -> {float(oof_metrics['fusion']['macro_f1']):.6f}/{float(_focus(oof_metrics['fusion'], int(args.focus_class_index))['f1']):.6f}`",
-        f"- Val control/fusion macro-class1: `{float(val_metrics[selected_control]['macro_f1']):.6f}/{float(_focus(val_metrics[selected_control], int(args.focus_class_index))['f1']):.6f} -> {float(val_metrics['fusion']['macro_f1']):.6f}/{float(_focus(val_metrics['fusion'], int(args.focus_class_index))['f1']):.6f}`",
+        f"- OOF selected control: `{selected_control_name}`",
+        f"- Candidate: `{candidate_name}`",
+        f"- OOF control/candidate macro-class1: `{float(oof_metrics[selected_control]['macro_f1']):.6f}/{float(_focus(oof_metrics[selected_control], int(args.focus_class_index))['f1']):.6f} -> {float(oof_metrics['fusion']['macro_f1']):.6f}/{float(_focus(oof_metrics['fusion'], int(args.focus_class_index))['f1']):.6f}`",
+        f"- Val control/candidate macro-class1: `{float(val_metrics[selected_control]['macro_f1']):.6f}/{float(_focus(val_metrics[selected_control], int(args.focus_class_index))['f1']):.6f} -> {float(val_metrics['fusion']['macro_f1']):.6f}/{float(_focus(val_metrics['fusion'], int(args.focus_class_index))['f1']):.6f}`",
         f"- Val keeper macro-class1: `{float(val_metrics['keeper']['macro_f1']):.6f}/{float(_focus(val_metrics['keeper'], int(args.focus_class_index))['f1']):.6f}`",
         f"- Fold-safe teacher permission: `{str(bool(gate['fold_safe_teacher_permission'])).lower()}`",
         f"- Failed checks: `{','.join(gate['failed_checks'])}`",
@@ -1011,7 +1075,11 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
     (output_dir / "README.md").write_text("\n".join(readme) + "\n", encoding="utf-8")
     manifest = _write_artifact_manifest(
         output_dir,
-        mode="raw_pretrained_aidt_fusion_readiness_manifest",
+        mode=(
+            "raw_pretrained_aidt_object_context_fusion_readiness_manifest"
+            if str(args.audit_mode) == "object_context_fusion"
+            else "raw_pretrained_aidt_fusion_readiness_manifest"
+        ),
     )
     summary["artifact_manifest"] = {key: value for key, value in manifest.items() if key != "files"}
     return summary

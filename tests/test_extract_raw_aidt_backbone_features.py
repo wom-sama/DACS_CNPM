@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
+import pytest
 import torch
 from torch import nn
 
@@ -8,6 +11,8 @@ from trkh.tools.extract_raw_aidt_backbone_features import (
     IMAGE_SIZE,
     RESNET_NAME,
     VIT_NAME,
+    YOLO_CONTEXT_MARGIN_RATIO,
+    _dataset_sample_key,
     _normalization_tensors,
     _selected_pretrained_config,
     parse_args,
@@ -22,6 +27,7 @@ def test_protocol_defaults_match_local_aidt_backbones() -> None:
     assert args.image_size == IMAGE_SIZE == 224
     assert args.batch_size == BATCH_SIZE == 32
     assert args.max_samples_per_class == 0
+    assert args.yolo_crop_margin_ratio == YOLO_CONTEXT_MARGIN_RATIO == 0.5
     assert not args.amp
 
 
@@ -59,3 +65,44 @@ def test_normalization_tensors_broadcast_over_image_batches() -> None:
     normalized = (images - mean) / std
     assert mean.shape == std.shape == (1, 3, 1, 1)
     assert torch.allclose(normalized[0, :, 0, 0], torch.tensor([2.25, 1.6, 7.0 / 6.0]))
+
+
+def test_dataset_sample_key_preserves_yolo_object_identity() -> None:
+    from trkh.tools.evaluate_embedding_retrieval import OrderedYoloObjectDataset
+
+    yolo_dataset = OrderedYoloObjectDataset.__new__(OrderedYoloObjectDataset)
+    sample = SimpleNamespace(
+        yolo_source_id="Image_7",
+        yolo_object=SimpleNamespace(object_index=3),
+    )
+    yolo_dataset.dataset = SimpleNamespace(
+        samples=[sample],
+        labels=lambda: [1],
+    )
+    assert _dataset_sample_key(
+        yolo_dataset,
+        sample_index=0,
+        path_text="Image_7.jpg",
+        label=1,
+    ) == ("Image_7", 3)
+
+
+def test_dataset_sample_key_rejects_yolo_label_mismatch() -> None:
+    from trkh.tools.evaluate_embedding_retrieval import OrderedYoloObjectDataset
+
+    yolo_dataset = OrderedYoloObjectDataset.__new__(OrderedYoloObjectDataset)
+    sample = SimpleNamespace(
+        yolo_source_id="Image_9",
+        yolo_object=SimpleNamespace(object_index=0),
+    )
+    yolo_dataset.dataset = SimpleNamespace(
+        samples=[sample],
+        labels=lambda: [2],
+    )
+    with pytest.raises(ValueError, match="label differs"):
+        _dataset_sample_key(
+            yolo_dataset,
+            sample_index=0,
+            path_text="Image_9.jpg",
+            label=1,
+        )

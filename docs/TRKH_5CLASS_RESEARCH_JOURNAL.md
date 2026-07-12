@@ -14451,3 +14451,47 @@ Date: 2026-07-02
   `769/769`, independent CSV/NPZ reconstruction, recursive payload and cleanup
   hashes, and retention over 594 directories with `blockers=[]`. Keeper and
   current-best command hashes remain unchanged.
+
+## Diagnostic 2026-07-12 - Raw AIDT Object + Wide-Context Fusion Rejected
+
+- Implemented the explicitly requested two-view diagnostic without modifying
+  data: the strict `class_f` object representation is paired with a direct
+  `yolo_f` bbox crop expanded by one fixed margin ratio `0.50`. A ten-row
+  balanced geometry review confirmed that the context view genuinely adds
+  hands, floor/table, foliage, shadows, neighboring fruit, scale, and position.
+- Extended the exact FP32 AIDT extractor to preserve YOLO `sample_index`,
+  source stem, and object index. Added a strict pairing builder that verifies
+  label/source/object/class order plus encoder state hashes before writing
+  `[object 2816D | context 2816D]`. Full support is `9215/2606` rows,
+  `8064/2577` groups, zero overlap, and zero key mismatch.
+- Reused the locked five-fold, 30-epoch nonlinear-head audit through explicit
+  `object/context/paired` semantics. The object branch is bit-exact to the
+  previous raw-AIDT fusion probabilities, independently validating the runner.
+- OOF object/context/paired macro-class1 is
+  `0.878306/0.587121`, `0.875488/0.578512`, and
+  `0.878969/0.588566`. Paired improves class1 in only 2/5 folds and its OOF
+  gain over object is only `+0.000662/+0.001445` macro/class1.
+- Validation object/context/paired is `0.901745/0.691030`,
+  `0.890328/0.645614`, and `0.899883/0.684746`. Paired class1 recall is
+  `0.668874`, below object `0.688742` and keeper `0.781457`.
+- Paired versus object makes `96/93` OOF and `27/29` validation
+  corrections/harms; class1 FN-rescue/TP-break is `33/29` and `9/12`.
+  Versus keeper it is `12/29`. P1-delta FN/FP AUROC changes
+  `0.582811 -> 0.702590`, while raw view-dissimilarity AUROC stays near random
+  `0.504/0.496`; validation direction cannot authorize a router or loss.
+- Reviewed 32 balanced largest context actions. The same hand/floor/foliage,
+  shadow, neighboring-fruit, and scale cues occur in fixes and harms; rescued
+  and broken class1 fruit still overlap in pale-green/yellow surface state.
+  Context often changes acquisition/scene confidence, not maturity evidence.
+- Decision: eleven gates fail and image-model smoke is closed. Do not sweep
+  margin/layout/normalization/scale/fusion weight/head/optimizer or derive
+  routing, weighting, KD, or thresholds from these caches. Current-best
+  commands remain unchanged.
+- Preserved a 10-payload full audit with upstream provenance SHA
+  `68775466...e976c` and a 39-payload review SHA `fd25ae23...aab4`.
+  Guarded cleanup removed eight cache/preflight roots, 55 files and
+  `495809819` bytes (observed gain `495398912`).
+- Closure passed py-compile, compileall, focused tests `23/23`, full pytest
+  `777/777`, bit-exact object reproduction, independent CSV/NPZ and recursive
+  payload checks, cleanup verification, and retention over 595 directories
+  with `blockers=[]`. Keeper and current-best command hashes are unchanged.

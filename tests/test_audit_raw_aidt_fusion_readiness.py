@@ -19,6 +19,7 @@ from trkh.tools.audit_raw_aidt_fusion_readiness import (
     WEIGHT_DECAY,
     AIDTReadout,
     _align_keeper_probabilities,
+    _branch_semantics,
     _prediction_rows,
     _selected_control,
     assess_raw_aidt_fusion_readiness,
@@ -54,6 +55,15 @@ def test_protocol_defaults_match_locked_raw_aidt_readiness_recipe() -> None:
     assert args.weight_decay == WEIGHT_DECAY == 0.05
     assert args.label_smoothing == LABEL_SMOOTHING == 0.05
     assert args.feature_normalization == "raw"
+    assert args.audit_mode == "backbone_fusion"
+
+
+def test_object_context_mode_uses_unambiguous_branch_names() -> None:
+    assert _branch_semantics("object_context_fusion") == {
+        "resnet": "object",
+        "vit": "context",
+        "fusion": "paired",
+    }
 
 
 def test_aidt_readout_matches_local_head_shape_and_parameter_count() -> None:
@@ -167,6 +177,34 @@ def test_prediction_rows_expose_canonical_fusion_fields() -> None:
     assert row["target_index"] == row["y_true"] == 1
     assert row["prediction_index"] == row["y_pred"] == 1
     assert row["fusion_prediction_index"] == 1
+
+
+def test_prediction_rows_rename_internal_components_for_crossview_audit() -> None:
+    cache = {
+        "sample_index": np.asarray([4], dtype=np.int64),
+        "source_stem": np.asarray(["source_4"], dtype=object),
+        "object_index": np.asarray([0], dtype=np.int64),
+        "paths": np.asarray(["image_4.jpg"], dtype=object),
+        "labels": np.asarray([1], dtype=np.int64),
+    }
+    probabilities = {
+        "resnet": np.asarray([[0.8, 0.2]], dtype=np.float32),
+        "vit": np.asarray([[0.7, 0.3]], dtype=np.float32),
+        "fusion": np.asarray([[0.1, 0.9]], dtype=np.float32),
+    }
+    row = _prediction_rows(
+        split="val",
+        cache=cache,
+        fold_assignment=np.asarray([-1], dtype=np.int64),
+        probabilities=probabilities,
+        selected_control="vit",
+        branch_semantics=_branch_semantics("object_context_fusion"),
+    )[0]
+    assert row["selected_control"] == "context"
+    assert row["object_prediction_index"] == 0
+    assert row["context_prediction_index"] == 0
+    assert row["paired_prediction_index"] == row["prediction_index"] == 1
+    assert "resnet_prediction_index" not in row
 
 
 def _metrics(macro: float, focus: float, recall: float) -> dict:

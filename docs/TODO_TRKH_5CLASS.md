@@ -1930,3 +1930,36 @@
 - [x] Raw-AIDT stage closure passed compileall, focused tests `16/16`, full
   pytest `769/769`, exact prediction/payload/cleanup checks, and retention over
   594 directories with `blockers=[]`; keeper and command hashes are unchanged.
+- [x] Extended exact AIDT extraction to direct YOLO object rows with fixed bbox
+  context margin `0.50`; full context cache matched all `9215/2606` object
+  sample indices, labels, source stems, object indices, classes, and encoder
+  hashes with zero train/validation source overlap.
+- [x] Added strict diagnostic pairing `[class_f object 2816D | yolo_f context
+  2816D]` and explicit `object/context/paired` audit semantics. Prefix schema,
+  geometry, provenance, and end-to-end output passed before the sole full run.
+- [x] Full OOF object/context/paired macro-class1 is
+  `0.878306/0.587121`, `0.875488/0.578512`, and
+  `0.878969/0.588566`; paired wins class1 in only 2/5 folds and misses both
+  required gains.
+- [x] Validation object/context/paired is `0.901745/0.691030`,
+  `0.890328/0.645614`, and `0.899883/0.684746`; paired recall `0.668874` is
+  below object and keeper, with FN-rescue/TP-break `9/12` versus object and
+  `12/29` versus keeper.
+- [x] Reviewed 32 balanced context-induced class1 changes. Hands, floor/table,
+  foliage, shadows, neighboring fruit, object scale, and position occur in both
+  fixes and harms; wide context is real but supplies scene/acquisition cues
+  rather than stable maturity evidence.
+- [ ] Do not sweep context margin/layout, branch normalization/scale, fusion
+  weights, head settings, or create context routing/KD/weights/thresholds.
+  Eleven fold-safe teacher gates fail and the current-best command remains
+  unchanged.
+- [x] Preserved full audit provenance and final review, then deleted eight
+  reproducible cache/preflight roots under exact hashes: 55 files,
+  `495809819` bytes; observed free gain `495398912` bytes.
+- [ ] Select the next method only if it introduces a new class1-positive
+  supervision/representation mechanism rather than another crop/context,
+  frozen-readout, stock-hybrid, texture, uncertainty, or post-hoc variant.
+- [x] Object-context closure passed compileall, focused tests `23/23`, full
+  pytest `777/777`, bit-exact object-control reproduction, exact
+  payload/cleanup verification, and retention over 595 directories with no
+  blockers; keeper/current-best hashes remain unchanged.
