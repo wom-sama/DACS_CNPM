@@ -14495,3 +14495,57 @@ Date: 2026-07-02
   `777/777`, bit-exact object reproduction, independent CSV/NPZ and recursive
   payload checks, cleanup verification, and retention over 595 directories
   with `blockers=[]`. Keeper and current-best command hashes are unchanged.
+
+## Diagnostic 2026-07-12 - DINOv3 Frozen Dense Representation Rejected
+
+- Literature gate: the DINOv3 paper (`https://arxiv.org/abs/2508.10104`) and
+  official Meta repository (`https://github.com/facebookresearch/dinov3`) were
+  checked before implementation. The fixed candidate tests DINOv3's Gram-
+  anchored dense features against DINOv2, not another crop/context or scratch
+  stock-hybrid recipe.
+- Added `trkh.tools.audit_dinov3_dense_patch_readiness` and
+  `trkh.tools.review_dinov3_changed_cases`. The runner hashes exact timm
+  safetensors, aligns every `class_f -> yolo_f sample_index`, selects CLS or
+  fixed `CLS+mean+std+2x2 means` only by train OOF, uses identical PCA-128/RBF
+  readouts and source folds, exports canonical predictions, and never opens
+  test or writes a checkpoint/descriptor cache.
+- Numerical preflight exposed a hidden confound in the old DINOv2 audit. AMP
+  changed descriptors when the same 16 images were evaluated as 16 versus
+  8+8: maximum `0.129207` for DINOv2 and `0.040240` for DINOv3. FP32 was
+  bit-exact, so both models were freshly extracted in FP32. The old AMP
+  DINOv2 result remains provenance only; eight validation predictions changed.
+- Exact weights are DINOv2-S/14 SHA
+  `04d27f34...20081` (21.629M, 224, one prefix token) and DINOv3-S/16 SHA
+  `2a1ec16a...6b040` (21.587M, 256, one CLS plus four registers). Both yield a
+  16x16 patch grid and 384/2688D fixed descriptors. This is a released
+  model-plus-recipe comparison, not a pure architecture ablation.
+- Full support is `9215/2606` rows and `8064/2577` source groups with zero
+  cross-split/fold overlap. OOF selected dense descriptors for both. DINOv2 to
+  DINOv3 changes OOF macro/class1 `0.880034/0.602432 ->
+  0.878180/0.598714` and validation `0.884337/0.641115 ->
+  0.883516/0.643599`.
+- DINOv3 wins class1 in only folds 4-5 (`2/5`). Its isolated validation
+  class1 gain `+0.002484` reverses to `-0.003718` OOF and remains below keeper
+  `0.884073/0.684058`. Class1 recall is only `0.615894` versus keeper
+  `0.781457`.
+- Keeper-to-DINOv3 makes `185` validation changes with `99/74/12`
+  corrections/harms/neutral, removes/creates class1 FP `48/17`, but rescues/
+  breaks FN/TP only `9/34`. The binary keeper+DINOv3 oracle is high
+  (`0.830065`) and direction AUROC is stable (`0.633019/0.699923` OOF/val),
+  but no fold-safe keeper OOF signal exists to learn that oracle without
+  validation fitting.
+- Reviewed 32 largest balanced class1 changes with exact FP32 DINOv2/DINOv3
+  patch-deviation maps. DINOv3 maps are smoother and less interior-detailed;
+  rescued and broken class1 fruit plus created class0 FP share pale-green,
+  yellow-green, mottled, spotted, and shadowed appearances. Patch energy is
+  diagnostic rather than causal attention and provides no safe routing rule.
+- Decision: ten gates fail; reject before TRKH image smoke. Do not sweep DINOv3
+  variants, input, descriptor, PCA, readout, folds, threshold, router, ensemble,
+  KD, or sample weights. Current-best commands remain unchanged.
+- Preserved full evidence (11 payloads, `8168884` bytes, manifest
+  `2ef946a9...fe2b`) and visual review (5 payloads, `471146` bytes, manifest
+  `a3630a1e...6a57`). Neither contains descriptors, checkpoint, model binary,
+  or test payload; no superseded DINOv3 run existed to delete.
+- Closure passed compileall, focused tests `18/18`, full pytest `789/789`,
+  exact eight-variant CSV reconstruction, manifest verification, and retention
+  over 598 directories with `blockers=[]`. Protected user paths were untouched.

@@ -109,7 +109,7 @@ def _resolve_device(value: str) -> torch.device:
     return device
 
 
-def dinov2_dense_patch_descriptors(
+def dino_dense_patch_descriptors(
     tokens: Tensor,
     *,
     grid_size: Tuple[int, int],
@@ -149,6 +149,23 @@ def dinov2_dense_patch_descriptors(
         "dense_patch": dense_patch,
         "cls_plus_dense_patch": torch.cat((cls, dense_patch), dim=1),
     }
+
+
+def dinov2_dense_patch_descriptors(
+    tokens: Tensor,
+    *,
+    grid_size: Tuple[int, int],
+    prefix_tokens: int = 1,
+    spatial_pool_size: int = SPATIAL_POOL_SIZE,
+) -> Dict[str, Tensor]:
+    """Backward-compatible DINOv2 name for the version-neutral descriptor."""
+
+    return dino_dense_patch_descriptors(
+        tokens,
+        grid_size=grid_size,
+        prefix_tokens=prefix_tokens,
+        spatial_pool_size=spatial_pool_size,
+    )
 
 
 def _patch_energy_map(
@@ -263,6 +280,7 @@ def _extract_split(
     workers: int,
     amp: bool,
     model_metadata: Mapping[str, object],
+    progress_label: str = "dinov2-dense",
 ) -> Dict[str, object]:
     dataset = PathImageFolder(Path(classification_root) / split, transform=transform)
     loader = DataLoader(
@@ -286,14 +304,14 @@ def _extract_split(
     if device.type == "cuda":
         torch.cuda.reset_peak_memory_stats(device)
     with torch.inference_mode():
-        iterator = tqdm(loader, desc=f"dinov2-dense-{split}", dynamic_ncols=True)
+        iterator = tqdm(loader, desc=f"{progress_label}-{split}", dynamic_ncols=True)
         for images, targets, batch_paths in iterator:
             images = images.to(device=device, dtype=torch.float32, non_blocking=True)
             with autocast_context(device, bool(amp)):
                 tokens = model.forward_features(images)
             if not torch.is_tensor(tokens):
                 raise TypeError(f"Expected TIMM token tensor, got {type(tokens)!r}")
-            descriptors = dinov2_dense_patch_descriptors(
+            descriptors = dino_dense_patch_descriptors(
                 tokens,
                 grid_size=grid_size,
                 prefix_tokens=prefix_tokens,
@@ -382,6 +400,7 @@ def _write_preview(
     *,
     preview: Mapping[int, Mapping[str, object]],
     folder_classes: Sequence[str],
+    energy_label: str = "dinov2_patch_deviation_energy",
 ) -> None:
     tile = 192
     rows: List[Image.Image] = []
@@ -406,7 +425,7 @@ def _write_preview(
                 "class_index": int(class_index),
                 "class_name": str(class_name),
                 "path": str(item["path"]),
-                "columns": ["rgb", "dinov2_patch_deviation_energy"],
+                "columns": ["rgb", str(energy_label)],
             }
         )
     if not rows:

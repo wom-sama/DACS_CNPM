@@ -1963,3 +1963,41 @@
   pytest `777/777`, bit-exact object-control reproduction, exact
   payload/cleanup verification, and retention over 595 directories with no
   blockers; keeper/current-best hashes remain unchanged.
+- [x] Read the DINOv3 paper/repository and lock one new frozen representation
+  comparison: timm DINOv2-S/14 versus DINOv3-S/16, released 224/256 recipes,
+  equal 16x16 patch grids, equal 384/2688D descriptors, identical PCA/readout,
+  five source folds, and OOF-only CLS-versus-dense selection.
+- [x] Add a version-neutral DINO descriptor helper, exact DINOv2/DINOv3 weight
+  hashes, strict retained-audit provenance, full prediction exports, a
+  fail-closed gate, and a validation-only changed-case reviewer with 11 new
+  tests.
+- [x] Reject AMP for this comparison. A 16-versus-8+8 probe changed DINOv2
+  descriptor values by up to `0.129207` and DINOv3 by `0.040240`; FP32 was
+  bit-exact for both. Re-extract both controls in FP32 rather than comparing
+  mismatched numeric modes.
+- [x] Full `9215/2606`, `8064/2577`-group FP32 audit has zero overlap. OOF
+  selected dense descriptors for both models; DINOv2/DINOv3 macro-class1 is
+  `0.880034/0.602432 -> 0.878180/0.598714` OOF and
+  `0.884337/0.641115 -> 0.883516/0.643599` validation.
+- [x] DINOv3 wins class1 in only `2/5` folds and remains below keeper
+  `0.884073/0.684058`; recall is `0.615894` versus `0.781457`. Versus keeper it
+  rescues/breaks class1 FN/TP `9/34` while removing/creating FP `48/17`.
+- [x] Review the eight largest changes in each of four class1 directions with
+  matched FP32 DINOv2/DINOv3 patch-energy maps. DINOv3 is smoother and less
+  interior-detailed; rescued/broken positives and created class0 FP share the
+  same pale-green/yellow/mottled appearances, so no safe action rule appears.
+- [ ] Do not sweep DINOv3 size/input/descriptor/PCA/readout/folds/thresholds or
+  build a validation router, KD target, sample weight, or ensemble from this
+  audit. Ten gates fail; reopen only with genuinely fold-safe keeper OOF
+  evidence that protects the current `9/34` rescue/break direction.
+- [x] Preserve compact DINOv3 evidence only: full audit 11 payloads/`8168884`
+  bytes/SHA `2ef946a9...fe2b`, review 5 payloads/`471146` bytes/SHA
+  `a3630a1e...6a57`; no descriptors/checkpoint/test/model binary. No
+  superseded DINOv3 run existed to delete.
+- [x] DINOv3 closure passed compileall, focused tests `18/18`, full pytest
+  `789/789`, independent reconstruction of all eight CSV variants, payload
+  hashes, and retention over 598 directories with `blockers=[]`.
+- [ ] Keep current-best commands unchanged. Triage the next method only after
+  excluding already closed SSL/MAE/DINO, ordinal, stock-hybrid, texture,
+  context, uncertainty, frozen-readout, and post-hoc-router families; require
+  a new class1-positive mechanism before another GPU smoke.
