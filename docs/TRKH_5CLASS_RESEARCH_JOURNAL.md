@@ -14953,3 +14953,174 @@ Date: 2026-07-02
   SHA `881ee29e...e792f`. The next distinct experiment must add a train-only
   class1-positive representation with direct illumination and TP-preservation
   evidence, rather than compressing the already frozen two-model rule.
+
+## Deployment Closure 2026-07-14 - PyTorch and ONNX CPU Certified
+
+- Built one self-contained two-member checkpoint from the exact keeper
+  `1f49d57...482677`, scratch complement `f8bd630...1a549`, and frozen
+  validation rule `6c6397d...a8c8`. Package SHA is
+  `805dce4...918c`; it has fixed batch 1 and explicit image/mask/bbox inputs.
+- Full packaged PyTorch validation replay passed every gate over `2606` rows:
+  packaged members equal independently loaded members, all deployment/frozen
+  decisions match, and frozen metrics replay exactly. Summary SHA is
+  `612a2ad...9d36`.
+- The six-output ONNX Runtime CPU graph passed full validation with maximum
+  probability error `2.980232e-7`, zero PyTorch/frozen decision mismatch, and
+  all gates true. ONNX SHA is `8c99d0a...78b9`; audit summary SHA is
+  `845d110...5241`.
+- GPU backend evidence is negative and gates remain unchanged. ORT CUDA had
+  max probability error `0.006675` and one decision mismatch on the targeted
+  34-case cohort. TensorRT FP16 had full-validation error `0.014805` and two
+  mismatches. TensorRT FP32 with no TF32 and builder O0 matched all `2606`
+  decisions but error `0.008846` still exceeded the declared `0.005` gate.
+- Self-review found and fixed a real TensorRT auditor indentation defect that
+  had skipped schema validation while leaving numerical inference intact. The
+  repaired full run verifies exact three-input/six-output shapes and still
+  rejects the engine; summary SHA is `5856298...2f40`.
+- Package XAI initially failed because inference-only member parameters were
+  frozen. XAI now enables gradients only on the selected in-memory member,
+  records before/after trainable counts and `optimizer_step_performed=false`,
+  and never changes the saved package. Keeper/candidate package smokes both
+  passed native attention, all-method maps, and robustness provenance.
+- Promotion boundary: optional Precision mode is supported on packaged
+  PyTorch FP32 and ONNX Runtime CPU FP32 only. It improves frozen-test class1
+  precision `0.597826 -> 0.666667`, but remains a two-forward operational mode
+  and does not replace the current single-checkpoint full-train recipe.
+  TensorRT export for this package now fails closed unless a research-only
+  override is explicit.
+- Added a VS Code-safe one-command package/audit launcher. It hash-locks all
+  inputs, runs full PyTorch and ONNX CPU validation parity, and executes
+  member-specific all-method XAI on a locked validation cohort without opening
+  test. PowerShell parse, compile, focused tests `15/15`, and launcher
+  preflight pass.
+- The next representation experiment is Counterfactual Illumination
+  Disagreement Transfer readiness: use fixed mild train-only clean/dim/bright/
+  low-contrast views to test whether the scratch member supplies sufficiently
+  dense class1 FN rescue while a separate keeper target protects class1 TP and
+  suppresses `0/2/4->1` FP. This is directional supervision, not generic
+  illumination consistency and not a new ensemble-threshold sweep.
+
+## CIDT Full Readiness 2026-07-14 - Dense but Label-Destructive
+
+- Ran the locked train-only CIDT audit over all `9215` objects and four fixed
+  views. All structural gates passed, no validation/test predictions were used,
+  and filename-only split-source overlap remained zero. Summary SHA is
+  `d4891edf...d7ad`.
+- Non-clean views produced `379` class1 FN-rescue events over `285` unique rows
+  and `276` source groups versus `75` TP breaks. Rescue exceeded break in all
+  five folds and maximum source share was `0.0132`; the earlier sparse clean
+  disagreement problem is therefore genuinely resolved at the density level.
+- Precision risk is also dense: the scratch member created `557` class1 false
+  positives over `478` unique rows while removing `392`. Candidate clean
+  class1 P/R was `0.64394/0.94270` versus keeper `0.70027/0.97597` on train.
+- The sole failed gate was scientifically decisive. Dim and low-contrast views
+  retained only `0.5133/0.5852` of keeper clean class1 TP, below the locked
+  `0.65`; bright retained `0.7746`. These are useful stress tests but unsafe
+  same-label teacher views.
+- Decision: no CIDT trainer smoke and no transform/threshold/weight sweep.
+  Preserve the full artifact and close the exact method. Candidate robustness
+  remains useful only as evidence for a clean-boundary precision mechanism.
+
+## BiCAR Readiness 2026-07-14 - Locked Before Formal Audit
+
+- Re-read the accepted CVPR 2026 CAR paper. It minimizes the spectral norm of a
+  differentiable EMA confusion matrix and reports scratch long-tail gains. The
+  advertised code URL returned 404, so equations 7-9 were transcribed directly
+  from the paper and covered by finite-gradient/off-diagonal/EMA tests.
+- Added paper CAR `||C_hat Lambda||_2` plus one precision-first extension,
+  BiCAR `||Lambda C_hat Lambda||_2`. Left weighting penalizes false positives
+  into rare predicted class 1; right weighting retains the paper's protection
+  against false negatives out of true class 1.
+- Locked a no-validation/no-test audit on the exact clean CIDT train
+  probabilities, strict balanced sampler order, seed 42, five source folds,
+  and paper `alpha/beta/r0/gamma=0.5/0.5/0.2/0.1`. Reconstructed `log(p)` is
+  exact because CAR uses only logit differences.
+- Trainer integration is forbidden until all predeclared occurrence, fold,
+  hard-FP focus, FN protection, CE-cosine, and gradient-scale gates pass. A pass
+  authorizes one matched control/BiCAR 40-batch/full-val/no-test smoke only.
+
+## BiCAR Formal Audit 2026-07-14 - All Readiness Gates Passed
+
+- The first formal run passed every gradient/readiness check but failed the
+  strict sampler contract: epoch exposure was `[1843,1844,1844,1843,1842]`,
+  relative gap `0.0010846 > 0.001`. The gate was retained unchanged.
+- Root cause was remainder rotation by batch index. With two remainder slots
+  per 32-sample/five-class batch, that schedule did not rotate every slot
+  globally. The sampler now starts at `batch_index * remainder`; a regression
+  requires deterministic batches, all classes per batch, and global exposure
+  difference at most one.
+- The exact protocol rerun covered `9215` clean train rows with no validation or
+  test predictions. Exposure became `[1844,1843,1843,1843,1843]`, relative gap
+  `0.0005423`, and every structural gate passed.
+- Candidate BiCAR passed all occurrence and five-fold sign gates. Its class1-FP
+  focus ratio was `2.4582`, FN/TP boost ratio `0.8838`, FP suppression gain over
+  CAR `3.7235x`, FN boost gain `1.2767x`, and paper-weighted gradient norm
+  `0.2330x` CE at cosine `0.9545`.
+- Formal artifact:
+  `runs/audit_bicar_gradient_readiness_full_train_v2_20260714`; summary SHA
+  `7998a85c...02c8`. This authorizes one locked matched smoke only. No
+  current-best command or model has been promoted.
+
+## BiCAR Matched Smoke 2026-07-14 - Correct Direction, Insufficient Effect
+
+- Added default-off stateful CAR/BiCAR trainer wiring, CLI/PowerShell config,
+  natural-frequency weights, one-update-per-batch EMA, checkpoint restore, and
+  history telemetry. A one-batch startup proved finite loss and a finite `5x5`
+  EMA checkpoint state.
+- The first real launch exposed an integration defect before training:
+  `build_configs` read nonexistent `args.use_sam`. It now reads `args.sam`, a
+  regression covers SAM off/on, and the launcher retains native error records
+  when transcripts omit Python stderr. Compile, PowerShell parse, and focused
+  tests `140/140` passed before rerun.
+- The exact repaired 40-batch/full-validation/no-test run completed at
+  `runs/smoke_bicar_locked_40b_fullval_v3_20260714`, with 40 EMA updates and a
+  completed five-class architecture trace. Its checkpoint SHA is
+  `97474ed7...6d3e`.
+- Independent reload is the gate result. Control macro/class1 F1 and class1 P/R
+  were `0.875134/0.654639` and `0.535865/0.841060`; BiCAR reached
+  `0.875354/0.656331` and `0.538136/0.841060`. Precision gain was only
+  `0.002271`, far below the locked `0.02` gate, and all three absolute probe
+  thresholds also failed.
+- Strict row transition audit changed only two of `2606` rows: one useful
+  `2->1` FP removal and one harmful correct-`3` to `2` move. Corrections/harms
+  were `1/1`; class1 FP removed/created `1/0`; FN rescue/TP break `0/0`.
+  Summary SHA is `ae2b155c...fe583`.
+- Standard forensics reproduced class1 F1 `0.656331`, raw-softmax ECE
+  `0.596972`, 24 class1 FN, and persistent `0/2/4->1`, `1->0/2`, and `3->2`
+  boundary buckets. No test rows were used.
+- Paired XAI on changed samples `54,172` found both decisions at numerical
+  near-ties. Attention/rollout remained almost identical, but candidate
+  Grad-CAM foreground mass collapsed `0.9700 -> 0.4786` and border mass rose
+  `0.1310 -> 0.6069`; visual review confirmed the harmful case shifted toward
+  upper background/border. Object desaturation remained dominant over
+  background gray/blur.
+- Decision: close CAR/BiCAR on this checkpoint. The readiness gradient was
+  directionally valid but too weak at the decision level and introduced a
+  non-focus harm. No parameter sweep, 120-batch probe, test opening, or
+  current-best command update is allowed.
+
+## BiCAR Evidence Compaction 2026-07-14 - Rejected Runs Removed Safely
+
+- Compacted the failed launcher, one-batch startup, timeout partial, matched
+  control, and rejected BiCAR candidate into
+  `runs/evidence_bicar_smoke_rejected_20260714` before deleting the five source
+  roots. The compact package keeps `45` files (`1,039,315` bytes), excludes
+  `327` reproducible files (`574,625,725` bytes), and verifies `47` payloads.
+- The retained payload manifest SHA is
+  `4cba5a42d44ac4298fc4dceae1b613239a9e1be3368722c2ecb1c5d715156b19`;
+  cleanup manifest SHA is
+  `ede3f0225d3e9de1df6aae0c32d2b969c66785e73311cec336533681e2bb2a95`.
+  The live changed-case/XAI audit remains at
+  `runs/audit_bicar_smoke_v3_20260714`.
+- Post-cleanup existence and hash checks preserve the deployable keeper
+  `1f49d577...482677`, scratch complement `f8bd6309...1a549`, and current
+  command file `36b9aa1a...40faf`. No model or command promotion occurred.
+- Closure passed compileall, `162/162` focused tests, PowerShell parsing for
+  five wrappers, current full-pipeline/export/video/precision-package
+  preflights, and full pytest `919/919`. The command-packet regression now
+  verifies the exact `2/2/2/3` distribution of full/precision/export/video
+  one-line wrappers instead of a stale total of six.
+- Post-cleanup retention covered `637` run directories with `blockers=[]` at
+  `runs/artifact_retention_audit_after_bicar_cleanup_20260714`. This closes the
+  deployment/CIDT/BiCAR batch for selective staging; protected user files stay
+  outside the commit.

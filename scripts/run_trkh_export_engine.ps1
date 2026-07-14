@@ -87,6 +87,11 @@ Invoke-NativeChecked -FilePath $PythonPath -Name "engine_module_preflight" -Argu
     "-c",
     "import tensorrt, torch, onnxruntime; print({'tensorrt': tensorrt.__version__, 'cuda': torch.cuda.is_available()})"
 )
+Invoke-NativeChecked -FilePath $PythonPath -Name "engine_checkpoint_policy" -Arguments @(
+    "-c",
+    "import sys; from pathlib import Path; from trkh.core.utils import load_checkpoint; from trkh.inference.deploy import validate_tensorrt_export_policy; checkpoint=load_checkpoint(Path(sys.argv[1]), map_location='cpu'); validate_tensorrt_export_policy(checkpoint, skip_trt_engine=False, allow_uncertified_precision_ensemble_tensorrt=False); print('TensorRT export policy ok')",
+    $CheckpointPath
+)
 
 if ($PreflightOnly) {
     [ordered]@{

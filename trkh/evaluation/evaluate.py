@@ -1270,7 +1270,18 @@ def evaluate_model(
                         non_blocking=True,
                     )
                 with autocast_context(device, amp):
-                    if hasattr(model, "forward_features") and hasattr(model, "forward_heads") and hasattr(model, "num_registers"):
+                    if bool(getattr(model, "requires_spatial_metadata", False)):
+                        if image_valid_mask is None or bbox_metadata is None:
+                            raise RuntimeError(
+                                "This classification checkpoint requires image_valid_mask "
+                                "and bbox metadata for certified evaluation."
+                            )
+                        base_output = model(
+                            images,
+                            image_valid_mask=image_valid_mask,
+                            bbox=bbox_metadata,
+                        )
+                    elif hasattr(model, "forward_features") and hasattr(model, "forward_heads") and hasattr(model, "num_registers"):
                         base_features = model.forward_features(
                             images,
                             image_valid_mask=image_valid_mask,
@@ -1345,6 +1356,16 @@ def evaluate_model(
 
                     if tta_runner is not None:
                         def _tta_forward(augmented_images: torch.Tensor):
+                            if bool(getattr(model, "requires_spatial_metadata", False)):
+                                if image_valid_mask is None or bbox_metadata is None:
+                                    raise RuntimeError(
+                                        "Spatial metadata is required for precision-ensemble TTA."
+                                    )
+                                return model(
+                                    augmented_images,
+                                    image_valid_mask=image_valid_mask,
+                                    bbox=bbox_metadata,
+                                )
                             if hasattr(model, "forward_features") and hasattr(model, "forward_heads") and hasattr(model, "num_registers"):
                                 aug_features = model.forward_features(
                                     augmented_images,

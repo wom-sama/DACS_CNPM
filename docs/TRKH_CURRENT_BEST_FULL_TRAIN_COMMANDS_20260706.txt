@@ -2,6 +2,7 @@ TRKH current-best commands for VS Code PowerShell
 Created: 2026-07-06
 Selected recipe preflight-verified: 2026-07-14
 Last challenger audited: 2026-07-14
+Precision deployment backend audit completed: 2026-07-14
 
 CURRENT SELECTED VERSION
 
@@ -15,10 +16,17 @@ CURRENT SELECTED VERSION
   this checkpoint. The wrapper below therefore still resumes the selected
   keeper; it does not promote a rejected experimental checkpoint.
 - The 2026-07-14 scratch run stopped at epoch 23. Its independent validation
-  macro/class-1 F1 was 0.874172/0.654639, so it also does not replace the
-  keeper. A validation-locked two-checkpoint precision mode reached final-test
-  0.887869/0.675676 with class-1 precision 0.666667, but is not promoted here
-  until ONNX/TensorRT/video wrappers reproduce the dual-model rule.
+  macro/class-1 F1 was 0.874172/0.654639, so it does not replace the keeper.
+- A validation-locked two-checkpoint precision mode reached final-test
+  macro/class-1 F1 0.887869/0.675676 and raised class-1 precision from
+  0.597826 to 0.666667. It is now an OPTIONAL high-precision deployment mode
+  on packaged PyTorch FP32 and ONNX Runtime CPU FP32. It is not a better
+  single-model training recipe.
+- Precision-package PyTorch replay passed all full-validation gates. ONNX CPU
+  passed with max probability error 2.980232e-7 and zero decision mismatch.
+  ONNX CUDA, TensorRT FP16, and TensorRT FP32 noTF32/O0 failed the frozen
+  probability/decision gate. Do not use a TensorRT engine for this package as
+  a certified backend.
 
 WHY THESE COMMANDS ARE SAFE TO PASTE IN VS CODE
 
@@ -63,7 +71,26 @@ writes status `validation_gate_rejected`, skips test, and does not update the
 latest deploy pointer. Do not use final-test outputs to alter thresholds,
 losses, or model selection; test remains a final report only.
 
-3) EXPORT THE COMPLETED PIPELINE TO ONNX + TENSORRT FP16 .ENGINE
+3) ONE-COMMAND OPTIONAL PRECISION PACKAGE + FULL VAL PARITY + ONNX CPU + XAI
+
+Preflight only:
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "D:\DataAI\AIEx\TRKH\scripts\run_trkh_precision_ensemble_pipeline.ps1" -RunName "preflight_precision_ensemble_$(Get-Date -Format yyyyMMdd_HHmmss)" -PreflightOnly
+
+Build and audit the locked package without reopening test:
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "D:\DataAI\AIEx\TRKH\scripts\run_trkh_precision_ensemble_pipeline.ps1" -RunName "precision_ensemble_certified_$(Get-Date -Format yyyyMMdd_HHmmss)"
+
+This command hash-verifies both source checkpoints and the frozen validation
+protocol, builds one self-contained checkpoint, runs exact full-validation
+PyTorch parity, exports a fixed-batch three-input/six-output ONNX model, runs
+full ONNX Runtime CPU parity, then runs member-specific native attention,
+rollout, Grad-CAM, and robustness XAI on 12 locked validation cases per member.
+It writes runs\latest_precision_ensemble.json only after every gate passes.
+The final test is not rerun because its frozen one-time result is already
+recorded and this command performs no model/rule selection.
+
+4) EXPORT THE SINGLE-CHECKPOINT PIPELINE TO ONNX + TENSORRT FP16 .ENGINE
 
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "D:\DataAI\AIEx\TRKH\scripts\run_trkh_export_engine.ps1"
 
@@ -77,7 +104,11 @@ Export the currently selected keeper directly, without first running command 2:
 
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "D:\DataAI\AIEx\TRKH\scripts\run_trkh_export_engine.ps1" -Checkpoint "D:\DataAI\AIEx\TRKH\runs\probe_v8_yolof_pairroute_teacherfocusbinary015_boundarydrop_bboxprior_120b_2e_20260701\checkpoints\best.pt"
 
-4) TEST A VIDEO WITH THE TENSORRT ENGINE (separate command)
+The deploy module now blocks TensorRT export for a precision-ensemble package
+by default because every tested GPU backend failed its declared parity gate.
+The commands above remain valid for the selected single-checkpoint keeper.
+
+5) TEST A VIDEO WITH THE SINGLE-CHECKPOINT TENSORRT ENGINE (separate command)
 
 Replace D:\VIDEO\input.mp4 with the real video path:
 
@@ -86,9 +117,19 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File "D:\DataAI\AIEx\TRKH\scr
 The video wrapper reads the latest checkpoint and default FP16 engine. It now
 supports classification-only TensorRT engines; bbox outputs are not required.
 
-5) TEST THE SAME VIDEO WITH PYTORCH CHECKPOINT (comparison/fallback)
+6) TEST THE SAME VIDEO WITH SINGLE-CHECKPOINT PYTORCH (comparison/fallback)
 
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "D:\DataAI\AIEx\TRKH\scripts\run_trkh_test_video.ps1" -Source "D:\VIDEO\input.mp4" -UsePyTorch -SaveOutput
+
+7) TEST THE OPTIONAL PRECISION PACKAGE WITH PYTORCH (separate command)
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "D:\DataAI\AIEx\TRKH\scripts\run_trkh_test_video.ps1" -Checkpoint "D:\DataAI\AIEx\TRKH\runs\precision_ensemble_checkpoint_preflight_20260714\precision_ensemble.pt" -Source "D:\VIDEO\input.mp4" -UsePyTorch -SaveOutput
+
+Image-only video does not provide the audited object bbox/mask inputs. The
+precision package therefore labels this path unverified_full_frame_fallback;
+use it for an operational video check, not as evidence that object-crop
+validation/test metrics transfer to full frames. No precision-package
+TensorRT video command is published until an engine passes the unchanged gate.
 
 UPDATE POLICY
 
@@ -98,7 +139,8 @@ all of the following together before publishing a new command:
 1. selected checkpoint and recipe defaults in run_trkh_current_best_full_pipeline.ps1;
 2. the selected-version metrics and commands in this TXT file;
 3. TRKH_5CLASS_RESEARCH_JOURNAL.md, TODO_TRKH_5CLASS.md, and the trkh-5class skill;
-4. PowerShell parse, full-pipeline -PreflightOnly, engine -PreflightOnly, and focused tests.
+4. PowerShell parse, full-pipeline -PreflightOnly, precision-pipeline
+   -PreflightOnly, engine -PreflightOnly, video -PreflightOnly, and focused tests.
 
 Never update these commands from a smoke-only gain, a validation-oracle result,
 or a test-tuned result.

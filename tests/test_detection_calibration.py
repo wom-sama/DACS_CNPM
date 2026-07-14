@@ -3223,19 +3223,33 @@ dataset_balance:
         self.assertEqual(repeated_labels.count(3), labels.count(3))
         self.assertGreater(repeated_labels.count(2) / max(1, repeated_labels.count(3)), 0.25)
 
-    def test_strict_balanced_sampler_keeps_all_class_exposure_within_ten_percent(self):
+    def test_strict_balanced_sampler_rotates_remainder_across_the_epoch(self):
         labels = [0] * 1941 + [1] * 541 + [2] * 1920 + [3] * 2520 + [4] * 2293
         sampler = StrictBalancedBatchSampler(
             labels=labels,
-            batch_size=48,
+            batch_size=32,
             num_classes=5,
             epoch_multiplier=1.0,
             seed=42,
         )
         summary = sampler.exposure_summary()
-        self.assertLessEqual(summary["relative_gap"], 0.10)
-        self.assertLessEqual(abs(summary["total_samples"] - len(labels)), 48)
+        self.assertEqual(summary["total_samples"], 9216)
+        self.assertLessEqual(
+            summary["max_class_exposure"] - summary["min_class_exposure"],
+            1,
+        )
         self.assertEqual(len(summary["class_exposure_counts"]), 5)
+
+        first_epoch = list(iter(sampler))
+        repeated_epoch = list(iter(sampler))
+        self.assertEqual(first_epoch, repeated_epoch)
+        self.assertEqual(len(first_epoch), summary["num_batches"])
+        for batch_indices in first_epoch:
+            batch_counts = [0] * 5
+            for sample_index in batch_indices:
+                batch_counts[labels[sample_index]] += 1
+            self.assertTrue(all(count > 0 for count in batch_counts))
+            self.assertLessEqual(max(batch_counts) - min(batch_counts), 1)
 
     def test_class_aware_scale_does_not_amplify_photometric_by_default(self):
         transform = build_train_transform(

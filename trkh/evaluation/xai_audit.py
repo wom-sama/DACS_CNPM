@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import inspect
 from collections import OrderedDict, defaultdict
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence
+from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 import torch
@@ -35,6 +36,12 @@ def parse_args() -> argparse.Namespace:
         description="XAI audit nhe cho classification-only fail/low-confidence cases."
     )
     parser.add_argument("--checkpoint", type=Path, required=True)
+    parser.add_argument(
+        "--ensemble-member",
+        choices=("keeper", "candidate"),
+        default=None,
+        help="Required for a packaged precision ensemble; XAI is member-specific.",
+    )
     parser.add_argument("--data", type=Path, default=default_data_yaml())
     parser.add_argument(
         "--classification-folder-yolo-data",
@@ -112,6 +119,90 @@ def parse_args() -> argparse.Namespace:
         default=0.0,
     )
     return parser.parse_args()
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _select_xai_model(
+    *,
+    model: torch.nn.Module,
+    checkpoint: Dict[str, object],
+    checkpoint_path: Path,
+    ensemble_member: Optional[str],
+) -> Tuple[torch.nn.Module, Dict[str, object]]:
+    model_config = checkpoint.get("model_config", {})
+    is_ensemble = bool(
+        isinstance(model_config, Mapping)
+        and str(model_config.get("model_type", "")).strip().lower()
+        == "precision_ensemble"
+    )
+    if not is_ensemble:
+        if ensemble_member is not None:
+            raise ValueError("--ensemble-member is valid only for a precision ensemble.")
+        return model, {"enabled": False, "reason": "single_model_checkpoint"}
+    if ensemble_member is None:
+        raise ValueError(
+            "Packaged precision ensemble requires --ensemble-member keeper or candidate; "
+            "there is no native aggregate attention map."
+        )
+    member_getter = getattr(model, "member", None)
+    if not callable(member_getter):
+        raise TypeError("Precision-ensemble model does not expose member selection.")
+    selected_name = str(ensemble_member).strip().lower()
+    selected_model = member_getter(selected_name)
+    total_parameter_count = sum(
+        int(parameter.numel()) for parameter in selected_model.parameters()
+    )
+    trainable_parameter_count_before = sum(
+        int(parameter.numel())
+        for parameter in selected_model.parameters()
+        if parameter.requires_grad
+    )
+    # Deployment packages freeze both members. Gradient-based XAI needs an
+    # in-memory autograd graph but never updates or serializes these weights.
+    selected_model.requires_grad_(True)
+    trainable_parameter_count_after = sum(
+        int(parameter.numel())
+        for parameter in selected_model.parameters()
+        if parameter.requires_grad
+    )
+    provenance = checkpoint.get("precision_ensemble_provenance", {})
+    if not isinstance(provenance, Mapping):
+        raise ValueError("Precision-ensemble checkpoint has no provenance payload.")
+    state_hash_key = f"{selected_name}_packaged_state_sha256"
+    source_hash_key = f"{selected_name}_checkpoint_sha256"
+    source_path_key = f"{selected_name}_checkpoint"
+    summary = {
+        "enabled": True,
+        "aggregate_attention_produced": False,
+        "selected_member": selected_name,
+        "package_checkpoint": str(Path(checkpoint_path).resolve()),
+        "package_checkpoint_sha256": _file_sha256(checkpoint_path),
+        "member_packaged_state_sha256": provenance.get(state_hash_key),
+        "member_source_checkpoint": provenance.get(source_path_key),
+        "member_source_checkpoint_sha256": provenance.get(source_hash_key),
+        "frozen_protocol_sha256": provenance.get("frozen_protocol_sha256"),
+        "xai_autograd": {
+            "in_memory_only": True,
+            "optimizer_step_performed": False,
+            "total_parameter_count": total_parameter_count,
+            "trainable_parameter_count_before": trainable_parameter_count_before,
+            "trainable_parameter_count_after": trainable_parameter_count_after,
+            "requires_grad_reenabled": (
+                trainable_parameter_count_after
+                > trainable_parameter_count_before
+            ),
+        },
+    }
+    if not summary["member_packaged_state_sha256"]:
+        raise ValueError(f"Precision-ensemble provenance is missing {state_hash_key}.")
+    return selected_model, summary
 
 
 def _build_dataset(
@@ -1200,6 +1291,13 @@ def main() -> None:
     args = parse_args()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model, checkpoint, class_names = load_model(args.checkpoint, device)
+    model, ensemble_member_provenance = _select_xai_model(
+        model=model,
+        checkpoint=checkpoint,
+        checkpoint_path=args.checkpoint,
+        ensemble_member=args.ensemble_member,
+    )
+    model.to(device).eval()
     patch_evidence_linear_verifier_summary = {"enabled": False}
     if args.patch_evidence_linear_verifier_json is not None:
         load_verifier = getattr(model, "load_patch_evidence_linear_verifier_export", None)
@@ -1254,7 +1352,15 @@ def main() -> None:
         focus_false_negative_cases=args.focus_false_negative_cases,
         explicit_sample_indices=explicit_indices,
     )
-    output_dir = args.output_dir or args.checkpoint.resolve().parent.parent / f"xai_audit_{args.split}"
+    default_output_name = f"xai_audit_{args.split}"
+    if bool(ensemble_member_provenance.get("enabled", False)):
+        default_output_name += "_" + str(
+            ensemble_member_provenance["selected_member"]
+        )
+    output_dir = (
+        args.output_dir
+        or args.checkpoint.resolve().parent.parent / default_output_name
+    )
     output_dir = ensure_dir(output_dir)
     attention_depth = count_attention_layers(model)
     layer_index = resolve_layer_index(args.layer, attention_depth) if attention_depth > 0 else 0
@@ -1365,6 +1471,7 @@ def main() -> None:
             image_valid_mask=image_valid_mask,
         )
         enriched = dict(case)
+        enriched["ensemble_member_provenance"] = ensemble_member_provenance
         enriched["case_dir"] = str(case_dir.resolve())
         enriched["viz"] = viz
         if args.robustness_probes:
@@ -1397,6 +1504,7 @@ def main() -> None:
     xai_metrics = _aggregate_xai_metrics(enriched_cases)
     summary = {
         "checkpoint": str(args.checkpoint.resolve()),
+        "ensemble_member_provenance": ensemble_member_provenance,
         "data": str(args.data.resolve()),
         "classification_folder_yolo_data": (
             str(args.classification_folder_yolo_data.resolve())

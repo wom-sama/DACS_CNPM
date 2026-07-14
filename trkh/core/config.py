@@ -709,6 +709,12 @@ class TrainConfig:
     pairwise_confusion_sources: str = "head"
     pairwise_confusion_start_epoch: int = 1
     pairwise_confusion_normalize: bool = True
+    confusion_spectral_loss_weight: float = 0.0
+    confusion_spectral_ema_momentum: float = 0.5
+    confusion_spectral_frequency_smoothing: float = 0.2
+    confusion_spectral_margin: float = 0.1
+    confusion_spectral_start_epoch: int = 1
+    confusion_spectral_bidirectional: bool = False
     mutual_channel_loss_weight: float = 0.0
     mutual_channel_top_k: int = 8
     mutual_channel_diversity_weight: float = 0.20

@@ -238,6 +238,12 @@ param(
     [string]$PairwiseConfusionSources = "head",
     [int]$PairwiseConfusionStartEpoch = 1,
     [bool]$PairwiseConfusionNormalize = $true,
+    [double]$ConfusionSpectralLossWeight = 0.0,
+    [double]$ConfusionSpectralEmaMomentum = 0.5,
+    [double]$ConfusionSpectralFrequencySmoothing = 0.2,
+    [double]$ConfusionSpectralMargin = 0.1,
+    [int]$ConfusionSpectralStartEpoch = 1,
+    [bool]$ConfusionSpectralBidirectional = $false,
     [string]$SampleWeightManifest = "",
     [double]$SampleWeightFactor = 1.0,
     [double]$SampleWeightMax = 5.0,
@@ -893,6 +899,21 @@ if ($BorderAttentionSuppressionTemperature -le 0.0) {
 }
 if ($BorderAttentionSuppressionStartEpoch -lt 1) {
     throw "BorderAttentionSuppressionStartEpoch phai >= 1."
+}
+if ($ConfusionSpectralLossWeight -lt 0.0) {
+    throw "ConfusionSpectralLossWeight phai >= 0."
+}
+if ($ConfusionSpectralEmaMomentum -lt 0.0 -or $ConfusionSpectralEmaMomentum -ge 1.0) {
+    throw "ConfusionSpectralEmaMomentum phai nam trong [0, 1)."
+}
+if ($ConfusionSpectralFrequencySmoothing -le 0.0) {
+    throw "ConfusionSpectralFrequencySmoothing phai > 0."
+}
+if ($ConfusionSpectralStartEpoch -lt 1) {
+    throw "ConfusionSpectralStartEpoch phai >= 1."
+}
+if ($ConfusionSpectralLossWeight -gt 0.0 -and $DisableBalancedEpochSampling) {
+    throw "CAR/BiCAR yeu cau strict balanced epoch sampling."
 }
 if ($RegisterAttentionAlignmentLossWeight -lt 0.0 -or $RegisterAttentionAlignmentBboxMarginRatio -lt 0.0 -or $RegisterAttentionAlignmentAgreementWeight -lt 0.0 -or $RegisterAttentionAlignmentForegroundWeight -lt 0.0) {
     throw "RegisterAttentionAlignment tham so phai >= 0."
@@ -1712,6 +1733,12 @@ if ($PreflightOnly) {
         pairwise_confusion_sources = $PairwiseConfusionSources
         pairwise_confusion_start_epoch = $PairwiseConfusionStartEpoch
         pairwise_confusion_normalize = [bool]$PairwiseConfusionNormalize
+        confusion_spectral_loss_weight = $ConfusionSpectralLossWeight
+        confusion_spectral_ema_momentum = $ConfusionSpectralEmaMomentum
+        confusion_spectral_frequency_smoothing = $ConfusionSpectralFrequencySmoothing
+        confusion_spectral_margin = $ConfusionSpectralMargin
+        confusion_spectral_start_epoch = $ConfusionSpectralStartEpoch
+        confusion_spectral_bidirectional = [bool]$ConfusionSpectralBidirectional
         sample_weight_manifest = $SampleWeightManifest
         sample_weight_factor = $SampleWeightFactor
         sample_weight_max = $SampleWeightMax
@@ -2381,6 +2408,11 @@ try {
         "--pairwise-confusion-loss-weight", "$PairwiseConfusionLossWeight",
         "--pairwise-confusion-sources", "$PairwiseConfusionSources",
         "--pairwise-confusion-start-epoch", "$PairwiseConfusionStartEpoch",
+        "--confusion-spectral-loss-weight", "$ConfusionSpectralLossWeight",
+        "--confusion-spectral-ema-momentum", "$ConfusionSpectralEmaMomentum",
+        "--confusion-spectral-frequency-smoothing", "$ConfusionSpectralFrequencySmoothing",
+        "--confusion-spectral-margin", "$ConfusionSpectralMargin",
+        "--confusion-spectral-start-epoch", "$ConfusionSpectralStartEpoch",
         "--mutual-channel-loss-weight", "$MutualChannelLossWeight",
         "--mutual-channel-top-k", "$MutualChannelTopK",
         "--mutual-channel-diversity-weight", "$MutualChannelDiversityWeight",
@@ -3225,6 +3257,9 @@ if ($ClassIndependentHead) {
     if (-not $PairwiseConfusionNormalize) {
         $TrainArgs += @("--disable-pairwise-confusion-normalize")
     }
+    if ($ConfusionSpectralBidirectional) {
+        $TrainArgs += @("--confusion-spectral-bidirectional")
+    }
     if ($EvalSurfaceDetailAmplification) {
         $TrainArgs += @("--eval-surface-detail-amplification")
     }
@@ -3657,6 +3692,12 @@ if ($ClassIndependentHead) {
         pairwise_confusion_sources = $PairwiseConfusionSources
         pairwise_confusion_start_epoch = $PairwiseConfusionStartEpoch
         pairwise_confusion_normalize = [bool]$PairwiseConfusionNormalize
+        confusion_spectral_loss_weight = $ConfusionSpectralLossWeight
+        confusion_spectral_ema_momentum = $ConfusionSpectralEmaMomentum
+        confusion_spectral_frequency_smoothing = $ConfusionSpectralFrequencySmoothing
+        confusion_spectral_margin = $ConfusionSpectralMargin
+        confusion_spectral_start_epoch = $ConfusionSpectralStartEpoch
+        confusion_spectral_bidirectional = [bool]$ConfusionSpectralBidirectional
         sample_weight_manifest = $SampleWeightManifest
         sample_weight_factor = $SampleWeightFactor
         sample_weight_max = $SampleWeightMax
@@ -3910,6 +3951,7 @@ if ($ClassIndependentHead) {
 
     $previousErrorActionPreference = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
+    $nativeErrorCountBefore = $Error.Count
     try {
         & $Python -m trkh.training.train @TrainArgs
         $exitCode = $LASTEXITCODE
@@ -3918,7 +3960,17 @@ if ($ClassIndependentHead) {
         $ErrorActionPreference = $previousErrorActionPreference
     }
     if ($exitCode -ne 0) {
-        throw "Training command exited with code $exitCode"
+        $newNativeErrorCount = [Math]::Max(0, $Error.Count - $nativeErrorCountBefore)
+        if ($newNativeErrorCount -gt 0) {
+            $nativeErrors = @($Error | Select-Object -First $newNativeErrorCount)
+            [Array]::Reverse($nativeErrors)
+            $nativeErrors | Out-String |
+                Set-Content -Path (Join-Path $RunDir "train_native_errors.txt")
+        }
+        throw (
+            "Training command exited with code $exitCode. " +
+            "Xem train_native_errors.txt neu native stderr khong hien trong transcript."
+        )
     }
 }
 catch {

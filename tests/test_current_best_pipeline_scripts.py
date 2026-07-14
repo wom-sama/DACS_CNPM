@@ -63,7 +63,16 @@ def test_command_file_uses_absolute_one_line_wrappers() -> None:
         if line.startswith("powershell.exe -NoProfile -ExecutionPolicy Bypass -File")
     ]
 
-    assert len(command_lines) == 6
+    expected_wrapper_counts = {
+        "run_trkh_current_best_full_pipeline.ps1": 2,
+        "run_trkh_precision_ensemble_pipeline.ps1": 2,
+        "run_trkh_export_engine.ps1": 2,
+        "run_trkh_test_video.ps1": 3,
+    }
+
+    assert len(command_lines) == sum(expected_wrapper_counts.values())
+    for wrapper, expected_count in expected_wrapper_counts.items():
+        assert sum(wrapper in line for line in command_lines) == expected_count
     assert all("`" not in line for line in command_lines)
     assert all("D:\\DataAI\\AIEx\\TRKH\\scripts\\" in line for line in command_lines)
     assert all("2>&1" not in line for line in command_lines)

@@ -73,6 +73,10 @@ from trkh.training.friendly_adversarial import (
     build_eroded_bbox_mask,
     generate_friendly_adversarial_examples,
 )
+from trkh.training.confusion_spectral import (
+    ConfusionSpectralEMAState,
+    confusion_aware_spectral_regularizer,
+)
 from trkh.training.losses import (
     BalancedSoftmaxFocalLoss,
     FocalCrossEntropyLoss,
@@ -2749,6 +2753,41 @@ def parse_args() -> argparse.Namespace:
         help="Tat L2 normalize truoc pairwise confusion; mac dinh bat de scale on dinh.",
     )
     parser.add_argument(
+        "--confusion-spectral-loss-weight",
+        type=float,
+        default=0.0,
+        help="Trong so CAR/BiCAR tren EMA confusion matrix; 0 de tat.",
+    )
+    parser.add_argument(
+        "--confusion-spectral-ema-momentum",
+        type=float,
+        default=0.5,
+        help="EMA momentum beta cua CAR/BiCAR.",
+    )
+    parser.add_argument(
+        "--confusion-spectral-frequency-smoothing",
+        type=float,
+        default=0.2,
+        help="Tan suat smoothing r0 trong trong so lop CAR/BiCAR.",
+    )
+    parser.add_argument(
+        "--confusion-spectral-margin",
+        type=float,
+        default=0.1,
+        help="Soft confusion margin gamma cua CAR/BiCAR.",
+    )
+    parser.add_argument(
+        "--confusion-spectral-start-epoch",
+        type=int,
+        default=1,
+        help="Epoch 1-based bat dau cong CAR/BiCAR loss.",
+    )
+    parser.add_argument(
+        "--confusion-spectral-bidirectional",
+        action="store_true",
+        help="Dung BiCAR Lambda*C_ema*Lambda thay cho paper CAR C_ema*Lambda.",
+    )
+    parser.add_argument(
         "--mutual-channel-loss-weight",
         type=float,
         default=0.0,
@@ -5405,6 +5444,23 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
             "--pairwise-confusion-sources chi ho tro head, patch, registers, logits, all; "
             f"khong hop le: {sorted(invalid_pairwise_confusion_sources)}"
         )
+    if not math.isfinite(args.confusion_spectral_loss_weight) or args.confusion_spectral_loss_weight < 0.0:
+        raise ValueError("--confusion-spectral-loss-weight phai la so huu han >= 0.")
+    if not 0.0 <= args.confusion_spectral_ema_momentum < 1.0:
+        raise ValueError("--confusion-spectral-ema-momentum phai nam trong [0, 1).")
+    if (
+        not math.isfinite(args.confusion_spectral_frequency_smoothing)
+        or args.confusion_spectral_frequency_smoothing <= 0.0
+    ):
+        raise ValueError("--confusion-spectral-frequency-smoothing phai la so huu han > 0.")
+    if not math.isfinite(args.confusion_spectral_margin):
+        raise ValueError("--confusion-spectral-margin phai la so huu han.")
+    if args.confusion_spectral_start_epoch < 0:
+        raise ValueError("--confusion-spectral-start-epoch phai >= 0.")
+    if args.confusion_spectral_loss_weight > 0.0 and args.sam:
+        raise ValueError("CAR/BiCAR khong ho tro SAM hai-pass vi EMA chi duoc cap nhat mot lan moi batch.")
+    if args.confusion_spectral_loss_weight > 0.0 and args.disable_balanced_epoch_sampling:
+        raise ValueError("CAR/BiCAR readiness yeu cau strict balanced epoch sampling.")
     if args.mutual_channel_loss_weight < 0.0:
         raise ValueError("--mutual-channel-loss-weight phai >= 0.")
     if args.mutual_channel_top_k <= 0:
@@ -6726,6 +6782,14 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         pairwise_confusion_sources=args.pairwise_confusion_sources,
         pairwise_confusion_start_epoch=args.pairwise_confusion_start_epoch,
         pairwise_confusion_normalize=not args.disable_pairwise_confusion_normalize,
+        confusion_spectral_loss_weight=args.confusion_spectral_loss_weight,
+        confusion_spectral_ema_momentum=args.confusion_spectral_ema_momentum,
+        confusion_spectral_frequency_smoothing=(
+            args.confusion_spectral_frequency_smoothing
+        ),
+        confusion_spectral_margin=args.confusion_spectral_margin,
+        confusion_spectral_start_epoch=args.confusion_spectral_start_epoch,
+        confusion_spectral_bidirectional=bool(args.confusion_spectral_bidirectional),
         mutual_channel_loss_weight=args.mutual_channel_loss_weight,
         mutual_channel_top_k=args.mutual_channel_top_k,
         mutual_channel_diversity_weight=args.mutual_channel_diversity_weight,
@@ -18257,6 +18321,15 @@ def _forward_train_loss(
     pairwise_confusion_sources: Union[str, Sequence[str]] = "head",
     pairwise_confusion_start_epoch: int = 1,
     pairwise_confusion_normalize: bool = True,
+    confusion_spectral_state: Optional[ConfusionSpectralEMAState] = None,
+    confusion_spectral_loss_weight: float = 0.0,
+    confusion_spectral_class_counts: Optional[Sequence[int]] = None,
+    confusion_spectral_ema_momentum: float = 0.5,
+    confusion_spectral_frequency_smoothing: float = 0.2,
+    confusion_spectral_margin: float = 0.1,
+    confusion_spectral_start_epoch: int = 1,
+    confusion_spectral_bidirectional: bool = False,
+    confusion_spectral_update_state: bool = True,
     mutual_channel_loss_weight: float = 0.0,
     mutual_channel_top_k: int = 8,
     mutual_channel_diversity_weight: float = 0.20,
@@ -18816,6 +18889,17 @@ def _forward_train_loss(
             subcenter_proxy_selected_subcenter_count = 0.0
             ordinal_boundary_loss = logits.sum() * 0.0
             pairwise_confusion_loss = logits.sum() * 0.0
+            confusion_spectral_loss = logits.sum() * 0.0
+            confusion_spectral_batch_norm = 0.0
+            confusion_spectral_ema_norm = 0.0
+            confusion_spectral_weighted_norm = 0.0
+            confusion_spectral_class_weight_min = 0.0
+            confusion_spectral_class_weight_max = 0.0
+            confusion_spectral_updates = float(
+                confusion_spectral_state.updates
+                if confusion_spectral_state is not None
+                else 0
+            )
             mutual_channel_loss = logits.sum() * 0.0
             complement_entropy_loss = logits.sum() * 0.0
             distillation_loss = logits.sum() * 0.0
@@ -20566,6 +20650,59 @@ def _forward_train_loss(
                 )
                 loss = loss + float(pairwise_confusion_loss_weight) * pairwise_confusion_loss
             if (
+                float(confusion_spectral_loss_weight) > 0.0
+                and int(epoch_index) >= int(confusion_spectral_start_epoch)
+            ):
+                target_indices = _classification_target_indices(targets, logits)
+                if target_indices is None:
+                    raise ValueError("CAR/BiCAR yeu cau hard classification targets.")
+                if confusion_spectral_state is None:
+                    raise ValueError("CAR/BiCAR state chua duoc khoi tao.")
+                if confusion_spectral_class_counts is None:
+                    raise ValueError("CAR/BiCAR yeu cau natural train class counts.")
+                confusion_spectral_result = confusion_aware_spectral_regularizer(
+                    logits,
+                    target_indices,
+                    class_counts=confusion_spectral_class_counts,
+                    previous_ema=confusion_spectral_state.ema_confusion,
+                    momentum=confusion_spectral_ema_momentum,
+                    smoothing=confusion_spectral_frequency_smoothing,
+                    margin=confusion_spectral_margin,
+                    bidirectional=confusion_spectral_bidirectional,
+                )
+                confusion_spectral_loss = confusion_spectral_result.loss
+                if confusion_spectral_update_state:
+                    confusion_spectral_state.update(
+                        confusion_spectral_result.ema_confusion
+                    )
+                confusion_spectral_batch_norm = float(
+                    torch.linalg.matrix_norm(
+                        confusion_spectral_result.batch_confusion.float()
+                    ).detach().cpu().item()
+                )
+                confusion_spectral_ema_norm = float(
+                    torch.linalg.matrix_norm(
+                        confusion_spectral_result.ema_confusion.float()
+                    ).detach().cpu().item()
+                )
+                confusion_spectral_weighted_norm = float(
+                    torch.linalg.matrix_norm(
+                        confusion_spectral_result.weighted_confusion.float()
+                    ).detach().cpu().item()
+                )
+                confusion_spectral_class_weight_min = float(
+                    confusion_spectral_result.class_weights.min().detach().cpu().item()
+                )
+                confusion_spectral_class_weight_max = float(
+                    confusion_spectral_result.class_weights.max().detach().cpu().item()
+                )
+                confusion_spectral_updates = float(confusion_spectral_state.updates)
+                loss = (
+                    loss
+                    + float(confusion_spectral_loss_weight)
+                    * confusion_spectral_loss
+                )
+            if (
                 torch.is_tensor(targets)
                 and float(mutual_channel_loss_weight) > 0.0
                 and int(epoch_index) >= int(mutual_channel_start_epoch)
@@ -21349,6 +21486,12 @@ def _forward_train_loss(
                             else 0.0
                         )
                         - (
+                            float(confusion_spectral_loss_weight)
+                            * confusion_spectral_loss
+                            if int(epoch_index) >= int(confusion_spectral_start_epoch)
+                            else 0.0
+                        )
+                        - (
                             float(mutual_channel_loss_weight) * mutual_channel_loss
                             if int(epoch_index) >= int(mutual_channel_start_epoch)
                             else 0.0
@@ -21892,6 +22035,23 @@ def _forward_train_loss(
                 **deep_abstention_stats,
                 "ordinal_boundary_loss": float(ordinal_boundary_loss.detach().cpu().item()),
                 "pairwise_confusion_loss": float(pairwise_confusion_loss.detach().cpu().item()),
+                "confusion_spectral_loss": float(
+                    confusion_spectral_loss.detach().cpu().item()
+                ),
+                "confusion_spectral_weighted_loss": float(
+                    float(confusion_spectral_loss_weight)
+                    * confusion_spectral_loss.detach().cpu().item()
+                ),
+                "confusion_spectral_batch_norm": confusion_spectral_batch_norm,
+                "confusion_spectral_ema_norm": confusion_spectral_ema_norm,
+                "confusion_spectral_weighted_norm": confusion_spectral_weighted_norm,
+                "confusion_spectral_class_weight_min": (
+                    confusion_spectral_class_weight_min
+                ),
+                "confusion_spectral_class_weight_max": (
+                    confusion_spectral_class_weight_max
+                ),
+                "confusion_spectral_updates": confusion_spectral_updates,
                 "mutual_channel_loss": float(mutual_channel_loss.detach().cpu().item()),
                 "complement_entropy_loss": float(
                     complement_entropy_loss.detach().cpu().item()
@@ -22501,6 +22661,14 @@ def train_one_epoch(
     pairwise_confusion_sources: Union[str, Sequence[str]] = "head",
     pairwise_confusion_start_epoch: int = 1,
     pairwise_confusion_normalize: bool = True,
+    confusion_spectral_state: Optional[ConfusionSpectralEMAState] = None,
+    confusion_spectral_loss_weight: float = 0.0,
+    confusion_spectral_class_counts: Optional[Sequence[int]] = None,
+    confusion_spectral_ema_momentum: float = 0.5,
+    confusion_spectral_frequency_smoothing: float = 0.2,
+    confusion_spectral_margin: float = 0.1,
+    confusion_spectral_start_epoch: int = 1,
+    confusion_spectral_bidirectional: bool = False,
     mutual_channel_loss_weight: float = 0.0,
     mutual_channel_top_k: int = 8,
     mutual_channel_diversity_weight: float = 0.20,
@@ -22902,6 +23070,14 @@ def train_one_epoch(
         "deep_abstention_conditional_accuracy": 0.0,
         "ordinal_boundary_loss": 0.0,
         "pairwise_confusion_loss": 0.0,
+        "confusion_spectral_loss": 0.0,
+        "confusion_spectral_weighted_loss": 0.0,
+        "confusion_spectral_batch_norm": 0.0,
+        "confusion_spectral_ema_norm": 0.0,
+        "confusion_spectral_weighted_norm": 0.0,
+        "confusion_spectral_class_weight_min": 0.0,
+        "confusion_spectral_class_weight_max": 0.0,
+        "confusion_spectral_updates": 0.0,
         "mutual_channel_loss": 0.0,
         "complement_entropy_loss": 0.0,
         "targeted_margin_loss": 0.0,
@@ -23635,6 +23811,17 @@ def train_one_epoch(
                 pairwise_confusion_sources=pairwise_confusion_sources,
                 pairwise_confusion_start_epoch=pairwise_confusion_start_epoch,
                 pairwise_confusion_normalize=pairwise_confusion_normalize,
+                confusion_spectral_state=confusion_spectral_state,
+                confusion_spectral_loss_weight=confusion_spectral_loss_weight,
+                confusion_spectral_class_counts=confusion_spectral_class_counts,
+                confusion_spectral_ema_momentum=confusion_spectral_ema_momentum,
+                confusion_spectral_frequency_smoothing=(
+                    confusion_spectral_frequency_smoothing
+                ),
+                confusion_spectral_margin=confusion_spectral_margin,
+                confusion_spectral_start_epoch=confusion_spectral_start_epoch,
+                confusion_spectral_bidirectional=confusion_spectral_bidirectional,
+                confusion_spectral_update_state=True,
                 mutual_channel_loss_weight=mutual_channel_loss_weight,
                 mutual_channel_top_k=mutual_channel_top_k,
                 mutual_channel_diversity_weight=mutual_channel_diversity_weight,
@@ -24656,6 +24843,27 @@ def train_one_epoch(
                             pairwise_confusion_sources=pairwise_confusion_sources,
                             pairwise_confusion_start_epoch=pairwise_confusion_start_epoch,
                             pairwise_confusion_normalize=pairwise_confusion_normalize,
+                            confusion_spectral_state=confusion_spectral_state,
+                            confusion_spectral_loss_weight=(
+                                confusion_spectral_loss_weight
+                            ),
+                            confusion_spectral_class_counts=(
+                                confusion_spectral_class_counts
+                            ),
+                            confusion_spectral_ema_momentum=(
+                                confusion_spectral_ema_momentum
+                            ),
+                            confusion_spectral_frequency_smoothing=(
+                                confusion_spectral_frequency_smoothing
+                            ),
+                            confusion_spectral_margin=confusion_spectral_margin,
+                            confusion_spectral_start_epoch=(
+                                confusion_spectral_start_epoch
+                            ),
+                            confusion_spectral_bidirectional=(
+                                confusion_spectral_bidirectional
+                            ),
+                            confusion_spectral_update_state=False,
                             mutual_channel_loss_weight=mutual_channel_loss_weight,
                             mutual_channel_top_k=mutual_channel_top_k,
                             mutual_channel_diversity_weight=mutual_channel_diversity_weight,
@@ -25176,6 +25384,10 @@ def train_one_epoch(
     }
     for key, value in train_loss_components.items():
         train_artifact_stats[key] = value / max(1, batch_count)
+    if confusion_spectral_state is not None:
+        train_artifact_stats["confusion_spectral_updates"] = float(
+            confusion_spectral_state.updates
+        )
     final_lr = optimizer.param_groups[0]["lr"] if optimizer.param_groups else 0.0
     return loss_sum / max(1, batch_count), train_artifact_stats, float(final_lr)
 
@@ -27072,6 +27284,15 @@ def main() -> None:
         class_name_mode=args.class_name_mode,
         expected_num_classes=args.expected_num_classes or None,
     )
+    if float(train_config.confusion_spectral_loss_weight) > 0.0:
+        if detection_mode:
+            raise ValueError("CAR/BiCAR chi ho tro classification-only training.")
+        if not bool(train_config.balanced_epoch_sampling):
+            raise ValueError("CAR/BiCAR readiness yeu cau strict balanced epoch sampling.")
+        if bool(train_config.use_sam):
+            raise ValueError("CAR/BiCAR khong ho tro SAM hai-pass.")
+        if int(train_config.batch_size) < int(data_spec.num_classes):
+            raise ValueError("CAR/BiCAR yeu cau batch size >= so class de moi batch co du class.")
     paired_yolo_data_spec = None
     if args.classification_folder_yolo_data is not None:
         if data_spec.data_format != "classification_folder":
@@ -29062,6 +29283,54 @@ def main() -> None:
             ),
         )
         print({"resume": resume_summary}, flush=True)
+    confusion_spectral_state: Optional[ConfusionSpectralEMAState] = None
+    if float(train_config.confusion_spectral_loss_weight) > 0.0:
+        natural_class_counts = [int(value) for value in primary_train_class_counts]
+        if (
+            len(natural_class_counts) != int(data_spec.num_classes)
+            or any(value <= 0 for value in natural_class_counts)
+        ):
+            raise ValueError(
+                "CAR/BiCAR yeu cau natural train class counts duong cho moi class."
+            )
+        resume_confusion_state = None
+        if resume_checkpoint is not None and not bool(args.resume_reset_epoch):
+            raw_state = resume_checkpoint.get("confusion_spectral_state")
+            if raw_state is not None and not isinstance(raw_state, Mapping):
+                raise ValueError("confusion_spectral_state trong checkpoint khong hop le.")
+            resume_confusion_state = raw_state
+        confusion_spectral_state = ConfusionSpectralEMAState.from_state_dict(
+            resume_confusion_state,
+            num_classes=int(data_spec.num_classes),
+            device=device,
+        )
+        print(
+            {
+                "confusion_spectral": {
+                    "enabled": True,
+                    "method": (
+                        "bicar"
+                        if train_config.confusion_spectral_bidirectional
+                        else "car"
+                    ),
+                    "loss_weight": float(train_config.confusion_spectral_loss_weight),
+                    "ema_momentum": float(train_config.confusion_spectral_ema_momentum),
+                    "frequency_smoothing": float(
+                        train_config.confusion_spectral_frequency_smoothing
+                    ),
+                    "margin": float(train_config.confusion_spectral_margin),
+                    "start_epoch": int(train_config.confusion_spectral_start_epoch),
+                    "natural_class_counts": natural_class_counts,
+                    "state_updates": int(confusion_spectral_state.updates),
+                    "state_source": (
+                        "resume_checkpoint"
+                        if resume_confusion_state is not None
+                        else "fresh"
+                    ),
+                }
+            },
+            flush=True,
+        )
     if (not detection_mode) and float(train_config.subcenter_proxy_loss_weight) > 0.0:
         loaded_proxy_head = False
         if resume_checkpoint is not None:
@@ -29347,6 +29616,18 @@ def main() -> None:
         "offline_distillation": to_serializable(offline_distillation_summary),
         "teacher_features": to_serializable(teacher_feature_summary),
         "early_learning_regularization": to_serializable(elr_summary),
+        "confusion_spectral": {
+            "enabled": confusion_spectral_state is not None,
+            "method": (
+                "bicar" if train_config.confusion_spectral_bidirectional else "car"
+            ),
+            "natural_class_counts": [int(value) for value in primary_train_class_counts],
+            "state_updates": int(
+                confusion_spectral_state.updates
+                if confusion_spectral_state is not None
+                else 0
+            ),
+        },
     }
     json_dump(run_dir / "resolved_config.json", config_payload)
     parameter_count = int(config_payload["parameter_count"])
@@ -30026,6 +30307,24 @@ def main() -> None:
                     pairwise_confusion_sources=train_config.pairwise_confusion_sources,
                     pairwise_confusion_start_epoch=train_config.pairwise_confusion_start_epoch,
                     pairwise_confusion_normalize=train_config.pairwise_confusion_normalize,
+                    confusion_spectral_state=confusion_spectral_state,
+                    confusion_spectral_loss_weight=(
+                        train_config.confusion_spectral_loss_weight
+                    ),
+                    confusion_spectral_class_counts=primary_train_class_counts,
+                    confusion_spectral_ema_momentum=(
+                        train_config.confusion_spectral_ema_momentum
+                    ),
+                    confusion_spectral_frequency_smoothing=(
+                        train_config.confusion_spectral_frequency_smoothing
+                    ),
+                    confusion_spectral_margin=train_config.confusion_spectral_margin,
+                    confusion_spectral_start_epoch=(
+                        train_config.confusion_spectral_start_epoch
+                    ),
+                    confusion_spectral_bidirectional=(
+                        train_config.confusion_spectral_bidirectional
+                    ),
                     mutual_channel_loss_weight=train_config.mutual_channel_loss_weight,
                     mutual_channel_top_k=train_config.mutual_channel_top_k,
                     mutual_channel_diversity_weight=train_config.mutual_channel_diversity_weight,
@@ -31348,6 +31647,30 @@ def main() -> None:
                         "pairwise_confusion_loss",
                         0.0,
                     ),
+                    "train_confusion_spectral_loss": train_artifact_stats.get(
+                        "confusion_spectral_loss", 0.0
+                    ),
+                    "train_confusion_spectral_weighted_loss": train_artifact_stats.get(
+                        "confusion_spectral_weighted_loss", 0.0
+                    ),
+                    "train_confusion_spectral_batch_norm": train_artifact_stats.get(
+                        "confusion_spectral_batch_norm", 0.0
+                    ),
+                    "train_confusion_spectral_ema_norm": train_artifact_stats.get(
+                        "confusion_spectral_ema_norm", 0.0
+                    ),
+                    "train_confusion_spectral_weighted_norm": train_artifact_stats.get(
+                        "confusion_spectral_weighted_norm", 0.0
+                    ),
+                    "train_confusion_spectral_class_weight_min": train_artifact_stats.get(
+                        "confusion_spectral_class_weight_min", 0.0
+                    ),
+                    "train_confusion_spectral_class_weight_max": train_artifact_stats.get(
+                        "confusion_spectral_class_weight_max", 0.0
+                    ),
+                    "train_confusion_spectral_updates": train_artifact_stats.get(
+                        "confusion_spectral_updates", 0.0
+                    ),
                     "train_mutual_channel_loss": train_artifact_stats.get(
                         "mutual_channel_loss",
                         0.0,
@@ -31933,6 +32256,10 @@ def main() -> None:
                     data_summary=data_summary,
                     imbalance_summary=imbalance_summary,
                 )
+                if confusion_spectral_state is not None:
+                    checkpoint_payload["confusion_spectral_state"] = (
+                        confusion_spectral_state.state_dict()
+                    )
                 _propagate_curriculum_transfer_metadata(
                     checkpoint_payload,
                     resume_checkpoint,
@@ -32361,6 +32688,14 @@ def main() -> None:
                         "train_deep_abstention_conditional_accuracy",
                         "train_ordinal_boundary_loss",
                         "train_pairwise_confusion_loss",
+                        "train_confusion_spectral_loss",
+                        "train_confusion_spectral_weighted_loss",
+                        "train_confusion_spectral_batch_norm",
+                        "train_confusion_spectral_ema_norm",
+                        "train_confusion_spectral_weighted_norm",
+                        "train_confusion_spectral_class_weight_min",
+                        "train_confusion_spectral_class_weight_max",
+                        "train_confusion_spectral_updates",
                         "train_mutual_channel_loss",
                         "train_complement_entropy_loss",
                         "train_targeted_margin_loss",

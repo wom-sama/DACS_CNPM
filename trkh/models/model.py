@@ -13,6 +13,61 @@ from torch import Tensor, nn
 from torch.utils.checkpoint import checkpoint as gradient_checkpoint
 from torchvision import models as tv_models
 
+
+def _adaptive_average_matrix(
+    input_size: int,
+    output_size: int,
+) -> List[List[float]]:
+    """Return the exact bin weights used by adaptive average pooling."""
+    input_size = int(input_size)
+    output_size = int(output_size)
+    if input_size <= 0 or output_size <= 0:
+        raise ValueError("Adaptive-pooling dimensions must be positive.")
+    rows: List[List[float]] = []
+    for output_index in range(output_size):
+        start = math.floor(output_index * input_size / output_size)
+        end = math.ceil((output_index + 1) * input_size / output_size)
+        scale = 1.0 / float(end - start)
+        row = [0.0] * input_size
+        for input_index in range(start, end):
+            row[input_index] = scale
+        rows.append(row)
+    return rows
+
+
+def _onnx_exact_adaptive_avg_pool2d(
+    inputs: Tensor,
+    output_size: int | Tuple[int, int],
+) -> Tensor:
+    """Decompose exact fixed-shape adaptive pooling into ONNX MatMul ops."""
+    if isinstance(output_size, int):
+        output_height = output_width = int(output_size)
+    else:
+        output_height, output_width = [int(value) for value in output_size]
+    input_height = int(inputs.shape[-2])
+    input_width = int(inputs.shape[-1])
+    height_weights = inputs.new_tensor(
+        _adaptive_average_matrix(input_height, output_height)
+    )
+    width_weights = inputs.new_tensor(
+        _adaptive_average_matrix(input_width, output_width)
+    )
+    pooled_width = torch.matmul(inputs, width_weights.transpose(0, 1))
+    return torch.matmul(
+        pooled_width.transpose(-2, -1),
+        height_weights.transpose(0, 1),
+    ).transpose(-2, -1)
+
+
+def _exportable_adaptive_avg_pool2d(
+    inputs: Tensor,
+    output_size: int | Tuple[int, int],
+) -> Tensor:
+    if torch.onnx.is_in_onnx_export():
+        return _onnx_exact_adaptive_avg_pool2d(inputs, output_size)
+    return F.adaptive_avg_pool2d(inputs, output_size=output_size)
+
+
 def drop_path(x: Tensor, drop_prob: float = 0.0, training: bool = False) -> Tensor:
     if drop_prob == 0.0 or not training:
         return x
@@ -2546,10 +2601,9 @@ class LocalZoomImageExpert(nn.Module):
         image_float = (image.to(dtype=torch.float32) * self.rgb_std.to(image.device)) + self.rgb_mean.to(image.device)
         image_float = image_float.clamp(0.0, 1.0)
         if max(int(image_float.shape[-2]), int(image_float.shape[-1])) > self.score_size:
-            image_float = F.interpolate(
+            image_float = _exportable_adaptive_avg_pool2d(
                 image_float,
-                size=(self.score_size, self.score_size),
-                mode="area",
+                output_size=(self.score_size, self.score_size),
             )
         hue, saturation, value = self._rgb_to_hsv_maps(image_float)
         luminance = 0.299 * image_float[:, 0] + 0.587 * image_float[:, 1] + 0.114 * image_float[:, 2]
@@ -2796,10 +2850,9 @@ class HighFrequencyTextureExpert(nn.Module):
         image_float = (image.to(dtype=torch.float32) * self.rgb_std.to(image.device)) + self.rgb_mean.to(image.device)
         image_float = image_float.clamp(0.0, 1.0)
         if max(int(image_float.shape[-2]), int(image_float.shape[-1])) > self.analysis_size:
-            image_float = F.interpolate(
+            image_float = _exportable_adaptive_avg_pool2d(
                 image_float,
-                size=(self.analysis_size, self.analysis_size),
-                mode="area",
+                output_size=(self.analysis_size, self.analysis_size),
             )
         return image_float
 
@@ -3232,10 +3285,9 @@ class ColorStatisticFusion(nn.Module):
         image_float = (image.to(dtype=torch.float32) * self.rgb_std) + self.rgb_mean
         image_float = image_float.clamp(0.0, 1.0)
         if max(int(image_float.shape[-2]), int(image_float.shape[-1])) > self.max_stats_size:
-            image_float = F.interpolate(
+            image_float = _exportable_adaptive_avg_pool2d(
                 image_float,
-                size=(self.max_stats_size, self.max_stats_size),
-                mode="area",
+                output_size=(self.max_stats_size, self.max_stats_size),
             )
         flat = image_float.flatten(2)
         global_mean = flat.mean(dim=-1)
@@ -3371,10 +3423,9 @@ class DefectStatisticFusion(ColorStatisticFusion):
         image_float = (image.to(dtype=torch.float32) * self.rgb_std) + self.rgb_mean
         image_float = image_float.clamp(0.0, 1.0)
         if max(int(image_float.shape[-2]), int(image_float.shape[-1])) > self.max_stats_size:
-            image_float = F.interpolate(
+            image_float = _exportable_adaptive_avg_pool2d(
                 image_float,
-                size=(self.max_stats_size, self.max_stats_size),
-                mode="area",
+                output_size=(self.max_stats_size, self.max_stats_size),
             )
 
         hue, saturation, value = self._rgb_to_hsv_maps(image_float)
@@ -3566,10 +3617,9 @@ class ForegroundSurfaceStatisticFusion(DefectStatisticFusion):
         image_float = (image.to(dtype=torch.float32) * self.rgb_std) + self.rgb_mean
         image_float = image_float.clamp(0.0, 1.0)
         if max(int(image_float.shape[-2]), int(image_float.shape[-1])) > self.max_stats_size:
-            image_float = F.interpolate(
+            image_float = _exportable_adaptive_avg_pool2d(
                 image_float,
-                size=(self.max_stats_size, self.max_stats_size),
-                mode="area",
+                output_size=(self.max_stats_size, self.max_stats_size),
             )
 
         hue, saturation, value = self._rgb_to_hsv_maps(image_float)
@@ -4201,7 +4251,10 @@ class EdgeStatisticTokenBranch(nn.Module):
         image_float = (image.to(dtype=torch.float32) * self.rgb_std) + self.rgb_mean
         image_float = image_float.clamp(0.0, 1.0)
         if max(int(image_float.shape[-2]), int(image_float.shape[-1])) > self.max_stats_size:
-            image_float = F.interpolate(image_float, size=(self.max_stats_size, self.max_stats_size), mode="area")
+            image_float = _exportable_adaptive_avg_pool2d(
+                image_float,
+                output_size=(self.max_stats_size, self.max_stats_size),
+            )
         gray = (
             image_float[:, 0:1] * 0.299
             + image_float[:, 1:2] * 0.587
@@ -4218,7 +4271,7 @@ class EdgeStatisticTokenBranch(nn.Module):
         )
         flat_edge = magnitude.flatten(1)
         flat_gray = gray.flatten(1)
-        pooled = F.adaptive_avg_pool2d(magnitude, output_size=(4, 4)).flatten(1)
+        pooled = _exportable_adaptive_avg_pool2d(magnitude, output_size=(4, 4)).flatten(1)
         stats = torch.cat(
             (
                 flat_edge.mean(dim=1, keepdim=True),
@@ -4261,7 +4314,7 @@ class StemTokenBranch(nn.Module):
             return image.new_zeros((image.shape[0], 0, self.embed_dim))
         if stem_features is None or stem_features.ndim != 4:
             return image.new_zeros((image.shape[0], self.num_tokens, self.embed_dim))
-        pooled = F.adaptive_avg_pool2d(stem_features, output_size=1).flatten(1)
+        pooled = _exportable_adaptive_avg_pool2d(stem_features, output_size=1).flatten(1)
         tokens = self.proj(pooled)
         return tokens.view(stem_features.shape[0], self.num_tokens, self.embed_dim)
 
@@ -4366,11 +4419,11 @@ class PatchDetailEnhancer(nn.Module):
             ),
             dim=1,
         )
-        detail_grid = F.adaptive_avg_pool2d(detail_input, output_size=grid_size)
+        detail_grid = _exportable_adaptive_avg_pool2d(detail_input, output_size=grid_size)
         detail_tokens = self.proj(detail_grid).flatten(2).transpose(1, 2)
         detail_tokens = self.dropout(self.norm(detail_tokens))
         scale = self.residual_scale.to(dtype=detail_tokens.dtype).clamp(0.0, 1.0)
-        detail_map = F.adaptive_avg_pool2d(
+        detail_map = _exportable_adaptive_avg_pool2d(
             high_frequency.abs().mean(dim=1, keepdim=True) + edge_magnitude,
             output_size=grid_size,
         )
@@ -4753,7 +4806,10 @@ class ConcurrentLocalInitializer(nn.Module):
         if stem_features.ndim != 4:
             raise ValueError("ConcurrentLocalInitializer expects [B, C, H, W].")
         height, width = [max(1, int(value)) for value in grid_size]
-        pooled = F.adaptive_avg_pool2d(stem_features, output_size=(height, width))
+        pooled = _exportable_adaptive_avg_pool2d(
+            stem_features,
+            output_size=(height, width),
+        )
         return self.projection(pooled)
 
 
@@ -6927,7 +6983,10 @@ class VisionTransformerWithRegisters(nn.Module):
         grad_x = F.pad((gray[:, :, :, 1:] - gray[:, :, :, :-1]).abs(), (0, 1, 0, 0))
         grad_y = F.pad((gray[:, :, 1:, :] - gray[:, :, :-1, :]).abs(), (0, 0, 0, 1))
         detail = local_contrast + 0.5 * (grad_x + grad_y)
-        detail_prior = F.adaptive_avg_pool2d(detail, output_size=grid_size).flatten(1)
+        detail_prior = _exportable_adaptive_avg_pool2d(
+            detail,
+            output_size=grid_size,
+        ).flatten(1)
 
         rgb_mean = image_float.new_tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1)
         rgb_std = image_float.new_tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1)
@@ -6967,11 +7026,11 @@ class VisionTransformerWithRegisters(nn.Module):
             & (F.avg_pool2d(detail, kernel_size=3, stride=1, padding=1).squeeze(1) > 0.025)
         ).to(dtype=image_float.dtype)
         color_prior_map = torch.maximum(torch.maximum(green_yellow, brown_or_orange), dark_defect) * non_padding
-        color_prior = F.adaptive_avg_pool2d(
+        color_prior = _exportable_adaptive_avg_pool2d(
             color_prior_map.unsqueeze(1),
             output_size=grid_size,
         ).flatten(1)
-        non_padding_prior = F.adaptive_avg_pool2d(
+        non_padding_prior = _exportable_adaptive_avg_pool2d(
             non_padding.unsqueeze(1),
             output_size=grid_size,
         ).flatten(1)
@@ -6999,10 +7058,9 @@ class VisionTransformerWithRegisters(nn.Module):
                 valid_mask = image_valid_mask
             else:
                 raise ValueError("image_valid_mask phai co shape [B,H,W] hoac [B,1,H,W].")
-            valid_fraction = F.interpolate(
+            valid_fraction = _exportable_adaptive_avg_pool2d(
                 valid_mask.to(device=image.device, dtype=torch.float32),
-                size=grid_size,
-                mode="area",
+                output_size=grid_size,
             ).flatten(1)
             prior = prior * valid_fraction
         return self._normalize_token_scores(prior)
@@ -7147,9 +7205,12 @@ class VisionTransformerWithRegisters(nn.Module):
         x = self.mixstyle(x)
         stem_features = x
         batch_size = x.shape[0]
+        # Deployment fixes spatial dimensions at export time and keeps only the
+        # batch axis dynamic. Materializing these values also gives the legacy
+        # ONNX exporter constant adaptive-pooling output sizes.
         grid_size = (
-            x.shape[-2] // self.patch_embed.patch_size,
-            x.shape[-1] // self.patch_embed.patch_size,
+            int(x.shape[-2] // self.patch_embed.patch_size),
+            int(x.shape[-1] // self.patch_embed.patch_size),
         )
         patch_tokens = self.patch_embed(x)
         shifted_patch_residual = None
@@ -7545,7 +7606,10 @@ class VisionTransformerWithRegisters(nn.Module):
                     self.high_frequency_texture_expert(input_image)
                 )
         if self.cnn_feature_fusion:
-            features["cnn_pooled"] = F.adaptive_avg_pool2d(stem_features, output_size=1).flatten(1)
+            features["cnn_pooled"] = _exportable_adaptive_avg_pool2d(
+                stem_features,
+                output_size=1,
+            ).flatten(1)
         if detail_map is not None:
             features["detail_map"] = detail_map
         if image_valid_mask is not None:
@@ -7833,10 +7897,9 @@ class VisionTransformerWithRegisters(nn.Module):
         mask = mask.to(device=device, dtype=torch.float32)
         if tuple(mask.shape[-2:]) != tuple(input_spatial_size):
             mask = F.interpolate(mask, size=input_spatial_size, mode="nearest")
-        valid_fraction = F.interpolate(
+        valid_fraction = _exportable_adaptive_avg_pool2d(
             mask,
-            size=grid_size,
-            mode="area",
+            output_size=grid_size,
         ).flatten(1)
         key_padding_mask = valid_fraction <= 0.05
         all_masked = key_padding_mask.all(dim=1)
@@ -11365,6 +11428,60 @@ def build_model_from_checkpoint(
     class_names = checkpoint.get("class_names", [])
     resolved_num_classes = int(num_classes or len(class_names))
     model_config = dict(checkpoint.get("model_config", {}))
+    checkpoint_model_type = str(model_config.get("model_type", "")).strip().lower()
+    if checkpoint_model_type == "precision_ensemble":
+        if resolved_num_classes < 2:
+            raise ValueError("Precision-ensemble checkpoint has no valid class order.")
+        ensemble_config = model_config.get("precision_ensemble")
+        if not isinstance(ensemble_config, dict):
+            raise ValueError("Precision-ensemble checkpoint is missing precision_ensemble config.")
+        member_configs = ensemble_config.get("member_model_configs")
+        if not isinstance(member_configs, dict):
+            raise ValueError("Precision-ensemble checkpoint is missing member model configs.")
+        keeper_config = member_configs.get("keeper")
+        candidate_config = member_configs.get("candidate")
+        if not isinstance(keeper_config, dict) or not isinstance(candidate_config, dict):
+            raise ValueError("Precision-ensemble member configs must contain keeper and candidate.")
+        keeper_config = dict(keeper_config)
+        candidate_config = dict(candidate_config)
+        if override_image_size is not None:
+            keeper_config["image_size"] = int(override_image_size)
+            candidate_config["image_size"] = int(override_image_size)
+        if override_stem_pooling_mode is not None:
+            keeper_config["stem_pooling_mode"] = str(override_stem_pooling_mode)
+            candidate_config["stem_pooling_mode"] = str(override_stem_pooling_mode)
+        if override_stem_softpool_blend is not None:
+            keeper_config["stem_softpool_blend"] = float(override_stem_softpool_blend)
+            candidate_config["stem_softpool_blend"] = float(override_stem_softpool_blend)
+
+        keeper_model = create_model(
+            num_classes=resolved_num_classes,
+            model_config=keeper_config,
+        )
+        candidate_model = create_model(
+            num_classes=resolved_num_classes,
+            model_config=candidate_config,
+        )
+        from trkh.models.precision_ensemble import PrecisionEnsembleClassifier
+
+        model = PrecisionEnsembleClassifier(
+            keeper_model,
+            candidate_model,
+            num_classes=resolved_num_classes,
+            candidate_weight=float(ensemble_config["candidate_weight"]),
+            focus_class=int(ensemble_config["focus_class"]),
+            focus_margin_offset=float(ensemble_config["focus_margin_offset"]),
+            minimum_probability=float(
+                ensemble_config.get("minimum_probability", 1e-8)
+            ),
+        )
+        load_model_state(model, checkpoint.get("model_state", {}), strict=True)
+        model.validate_rule(
+            candidate_weight=float(ensemble_config["candidate_weight"]),
+            focus_class=int(ensemble_config["focus_class"]),
+            focus_margin_offset=float(ensemble_config["focus_margin_offset"]),
+        )
+        return model
     if "model_type" not in model_config:
         state_keys = checkpoint.get("model_state", {}).keys()
         model_config["model_type"] = (

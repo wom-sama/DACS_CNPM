@@ -2195,9 +2195,11 @@
 - [x] Replace pruned-QKV pseudo-attention with validated full-grid native last-
   block attention. Rerun matched candidate/keeper smoke and manually inspect
   five hashed correction/harm/FP/FN cases with zero fallback.
-- [ ] Keep the current single-checkpoint full-train/export/video commands on
-  the deployable keeper. The precision ensemble is higher on frozen test but
-  requires dual-model ONNX/TensorRT/video equivalence before command promotion.
+- [x] Keep the current single-checkpoint full-train/export/video recipe on the
+  deployable keeper. Publish the precision ensemble separately only after its
+  packaged PyTorch and ONNX CPU paths pass full parity; do not require a failed
+  TensorRT backend to relabel the two passing backends. This boundary is now
+  implemented and documented.
 - [ ] Do not repeat seed/epoch/SWA/soup/member-weight/margin/threshold sweeps.
   Next GPU work must use train-only supervision with separate late member
   paths, explicit keeper-TP protection, and conservative `0/2/4->1` control.
@@ -2273,3 +2275,93 @@
   The next experiment must introduce direct train-only class1-positive evidence
   with explicit illumination robustness and TP preservation, not another
   output-rule compression or linear basis adapter.
+
+## Cap nhat 2026-07-14 - Precision Deployment and Next Representation Gate
+
+- [x] Build and strictly reload the self-contained precision package; verify
+  source/protocol/package hashes and exact `2606`-row PyTorch validation replay.
+- [x] Export the fixed-batch, three-input, six-output ONNX graph and pass full
+  ONNX Runtime CPU parity at max probability error `2.980232e-7` with zero
+  decision mismatch.
+- [x] Reject ORT CUDA, TensorRT FP16, and TensorRT FP32 noTF32/O0 under the
+  unchanged backend gates. Do not promote exact current-val argmax when the
+  probability error is `0.008846 > 0.005`.
+- [x] Repair actual TensorRT schema validation, add strict targeted ONNX probes,
+  and make precision-ensemble TensorRT export fail closed by default.
+- [x] Make package XAI explicitly member-specific and inference-only. Verify
+  keeper/candidate provenance, native attention, all-method maps, robustness,
+  package/member hashes, and no optimizer step.
+- [x] Add and preflight a one-line-safe PowerShell pipeline for hash-locked
+  package build, full PyTorch validation, ONNX CPU validation, and 12-case XAI
+  per member. Keep the already frozen one-time test closed during replay.
+- [x] Compact only superseded failed package/backend probe roots after copying
+  complete summaries/row mismatches and writing a reread SHA manifest. Preserve
+  the package, certified ONNX, full PyTorch/ONNX summaries, failed-backend full
+  summaries, and every frozen validation/test/XAI artifact.
+- [x] Run compileall, focused tests `162/162`, full pytest `919/919`, all
+  full-pipeline/export/video/precision wrapper preflights, and retention over
+  `637` run directories with `blockers=[]`. Keep protected user files outside
+  selective staging; complete cached-diff review, commit, and push next.
+- [x] Implement a no-test Counterfactual Illumination Disagreement Transfer
+  readiness auditor. Use only `yolo_f/train`, exact source-group folds, fixed
+  mild clean/dim/bright/low-contrast transforms, and the locked keeper/scratch
+  hashes; write row-level correction/harm cohorts and transform provenance.
+- [x] Before any trainer smoke, require the readiness audit to show a denser
+  class1 rescue signal than the closed sparse clean disagreement (`~21/1280`),
+  zero train/val/test source leakage, stable signed directions across folds,
+  and an explicit keeper class1-TP protection cohort.
+- [x] Close CIDT before training because the full audit failed its locked
+  transform-label-retention gate. The signal was dense (`379` rescue events,
+  `285` unique rows, all five folds favorable), but keeper class1-TP retention
+  under dim/low-contrast was only `0.5133/0.5852 < 0.65`. Summary SHA is
+  `d4891edf...d7ad`; do not sweep transform factors or reuse these views as
+  distillation targets.
+- [x] If readiness passes, add one default-off late-member directional loss:
+  rescue true class1 only when the counterfactual scratch evidence is correct,
+  preserve keeper class1 TP, and suppress candidate-created `0/2/4->1` FP.
+  Run one finite-gradient preflight and one matched 40-batch/full-val/no-test
+  smoke; do not sweep transforms, thresholds, weights, seed, LR, or run length.
+  This conditional action is canceled for the locked CIDT protocol because its
+  readiness gate failed.
+- [x] Research CVPR 2026 CAR and transcribe equations 7-9 from the accepted PDF;
+  the advertised official repository returned 404. Add tested paper CAR and a
+  frequency-symmetric BiCAR primitive that weights both true-class columns and
+  predicted-class rows of the EMA confusion matrix.
+- [x] Lock the BiCAR train-only protocol before formal execution: exact CIDT
+  summary hash, clean train rows only, strict sampler/seed, paper
+  `alpha/beta/r0/gamma=0.5/0.5/0.2/0.1`, occurrence/fold gradient audits, and
+  no validation/test predictions.
+- [x] Run the formal CAR/BiCAR gradient audit. Only if every declared direction,
+  focus-ratio, gradient-scale, and five-fold gate passes, implement trainer
+  wiring and run one matched control/BiCAR 40-batch/full-val/no-test smoke.
+  V1 correctly failed the strict sampler exposure gate; fix global remainder
+  rotation without relaxing the gate. V2 then passed every gate with summary
+  SHA `7998a85c...02c8`, FP/FN gains over CAR `3.7235x/1.2767x`, and weighted
+  gradient ratio `0.2330x` CE.
+- [x] Wire BiCAR into the trainer as default-off stateful EMA loss with locked
+  paper values. Pass finite-gradient/config/checkpoint tests, then run exactly
+  one matched control/BiCAR `40`-batch, one-epoch, full-validation, no-test
+  smoke from scratch SHA `f8bd6309...1a549`; do not sweep any setting.
+- [x] Fix the pre-train `args.use_sam` integration failure without changing the
+  scientific protocol; add SAM on/off regression and preserve native launcher
+  errors when a transcript omits Python stderr.
+- [x] Reject BiCAR after independent full-validation reload. It only improves
+  class1 precision `0.535865 -> 0.538136`, keeps recall `0.841060`, and changes
+  two rows with corrections/harms `1/1`; it misses both the relative precision
+  gate and absolute `0.880/0.680/0.60` probe gates.
+- [x] Complete paired all-method XAI/robustness on both changed rows plus
+  standard forensics/confusion/boundary audits. Candidate Grad-CAM foreground
+  mass falls `0.9700 -> 0.4786` and border mass rises `0.1310 -> 0.6069`.
+- [ ] Do not sweep CAR/BiCAR weight, margin, EMA, smoothing, sampler, seed, LR,
+  checkpoint, or run length. Do not run its 120-batch probe or test.
+- [x] Compact the five rejected BiCAR smoke/startup roots into `45` retained
+  files and `47` verified payloads. Preserve payload manifest SHA
+  `4cba5a42...156b19`, the live changed-case/XAI audit, keeper, scratch, and
+  current command hashes; remove `574,625,725` bytes of reproducible payloads.
+- [x] Close the combined stage with compileall, `162/162` focused tests,
+  `919/919` full pytest, five-wrapper parse, four operational preflights, and
+  retention over `637` run directories with `blockers=[]`.
+- [ ] Keep current-best full-train/export/video commands unchanged. Select the
+  next distinct method only after a train-only readiness audit proves a denser
+  decision-level class1 precision effect with explicit TP preservation; a
+  favorable infinitesimal gradient alone is insufficient.

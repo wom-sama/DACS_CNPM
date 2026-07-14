@@ -197,6 +197,7 @@ def predict_tensor_outputs(
     model: nn.Module,
     images: torch.Tensor,
     image_valid_mask: Optional[torch.Tensor] = None,
+    bbox: Optional[torch.Tensor] = None,
     amp: bool = True,
     tta: bool = False,
     tta_brightness_delta: float = 0.08,
@@ -206,6 +207,24 @@ def predict_tensor_outputs(
     images = ensure_temporal_input(images, temporal_frames).to(device, non_blocking=True)
     if image_valid_mask is not None:
         image_valid_mask = image_valid_mask.to(device, non_blocking=True, dtype=torch.bool)
+    if bbox is not None:
+        bbox = bbox.to(device, non_blocking=True, dtype=torch.float32)
+    requires_spatial_metadata = bool(
+        getattr(model, "requires_spatial_metadata", False)
+    )
+    spatial_metadata_fallback = False
+    if requires_spatial_metadata:
+        if image_valid_mask is None:
+            image_valid_mask = torch.ones(
+                (int(images.shape[0]), int(images.shape[-2]), int(images.shape[-1])),
+                device=device,
+                dtype=torch.bool,
+            )
+            spatial_metadata_fallback = True
+        if bbox is None:
+            bbox = images.new_tensor((0.5, 0.5, 1.0, 1.0)).view(1, 4)
+            bbox = bbox.expand(int(images.shape[0]), -1)
+            spatial_metadata_fallback = True
 
     logits_views = []
     merged_boxes = []
@@ -219,8 +238,26 @@ def predict_tensor_outputs(
                     saturation_delta=tta_brightness_delta,
                     num_aug=4,
                 )
-                tta_outputs = tta_runner.forward(model, images)
+                if requires_spatial_metadata:
+                    def _metadata_tta_forward(augmented_images: torch.Tensor):
+                        return model(
+                            augmented_images,
+                            image_valid_mask=image_valid_mask,
+                            bbox=bbox,
+                        )
+
+                    tta_outputs = tta_runner.forward(
+                        model,
+                        images,
+                        forward_fn=_metadata_tta_forward,
+                    )
+                else:
+                    tta_outputs = tta_runner.forward(model, images)
                 result = {"logits": tta_outputs["logits"].float()}
+                if spatial_metadata_fallback:
+                    result["spatial_metadata_fallback"] = torch.ones(
+                        (), device=device, dtype=torch.bool
+                    )
                 if tta_outputs.get("boxes") is not None:
                     result["boxes"] = tta_outputs["boxes"].float()
                 if tta_outputs.get("objectness_logits") is not None:
@@ -228,7 +265,13 @@ def predict_tensor_outputs(
                 return result
 
         with autocast_context(device, amp):
-            if (
+            if requires_spatial_metadata:
+                model_output = model(
+                    images,
+                    image_valid_mask=image_valid_mask,
+                    bbox=bbox,
+                )
+            elif (
                 image_valid_mask is not None
                 and hasattr(model, "forward_features")
                 and hasattr(model, "forward_heads")
@@ -247,6 +290,10 @@ def predict_tensor_outputs(
     result = {
         "logits": torch.stack(logits_views, dim=0).mean(dim=0),
     }
+    if spatial_metadata_fallback:
+        result["spatial_metadata_fallback"] = torch.ones(
+            (), device=device, dtype=torch.bool
+        )
     if merged_boxes:
         result["boxes"] = torch.stack(merged_boxes, dim=0).mean(dim=0)
     if objectness_views:
@@ -258,6 +305,7 @@ def predict_tensor_probabilities(
     model: nn.Module,
     images: torch.Tensor,
     image_valid_mask: Optional[torch.Tensor] = None,
+    bbox: Optional[torch.Tensor] = None,
     amp: bool = True,
     tta: bool = False,
     tta_brightness_delta: float = 0.08,
@@ -266,6 +314,7 @@ def predict_tensor_probabilities(
         model=model,
         images=images,
         image_valid_mask=image_valid_mask,
+        bbox=bbox,
         amp=amp,
         tta=tta,
         tta_brightness_delta=tta_brightness_delta,
@@ -538,6 +587,13 @@ def predict(
             confidence_threshold=confidence_threshold,
         )
         result["image_path"] = str(image_path.resolve())
+        if bool(
+            prediction_outputs.get(
+                "spatial_metadata_fallback",
+                torch.zeros((), dtype=torch.bool),
+            ).detach().cpu().item()
+        ):
+            result["spatial_metadata_mode"] = "unverified_full_frame_fallback"
         return result
 
     raw_detections = post_process_detections(
@@ -725,28 +781,119 @@ def export_onnx(
                 return logits, boxes, objectness_logits
             return logits, boxes
 
-    export_model = OnnxExportWrapper(model).eval()
+    class SpatialMetadataOnnxExportWrapper(nn.Module):
+        def __init__(self, base_model: nn.Module) -> None:
+            super().__init__()
+            self.base_model = base_model
+
+        def forward(self, images, image_valid_mask, bbox):
+            deployment_outputs = getattr(
+                self.base_model,
+                "deployment_outputs",
+                None,
+            )
+            if callable(deployment_outputs):
+                return deployment_outputs(
+                    images,
+                    image_valid_mask=image_valid_mask,
+                    bbox=bbox,
+                )
+            model_output = self.base_model(
+                images,
+                image_valid_mask=image_valid_mask,
+                bbox=bbox,
+            )
+            logits, boxes, objectness_logits = extract_detection_from_model_output(
+                model_output
+            )
+            if boxes is None:
+                return logits
+            if objectness_logits is not None:
+                return logits, boxes, objectness_logits
+            return logits, boxes
+
+    requires_spatial_metadata = bool(
+        getattr(model, "requires_spatial_metadata", False)
+    )
+    supports_dynamic_batch = bool(
+        getattr(model, "supports_dynamic_batch", True)
+    )
+    if requires_spatial_metadata:
+        image_valid_mask = torch.ones(
+            (1, image_size, image_size),
+            device=dummy.device,
+            dtype=torch.float32,
+        )
+        bbox = torch.tensor(
+            ((0.5, 0.5, 1.0, 1.0),),
+            device=dummy.device,
+            dtype=torch.float32,
+        )
+        export_model = SpatialMetadataOnnxExportWrapper(model).eval()
+        export_args = (dummy, image_valid_mask, bbox)
+        input_names = ["images", "image_valid_mask", "bbox"]
+        deployment_outputs = getattr(model, "deployment_outputs", None)
+        if callable(deployment_outputs):
+            sample_output = deployment_outputs(
+                dummy,
+                image_valid_mask=image_valid_mask,
+                bbox=bbox,
+            )
+        else:
+            sample_output = model(
+                dummy,
+                image_valid_mask=image_valid_mask,
+                bbox=bbox,
+            )
+    else:
+        export_model = OnnxExportWrapper(model).eval()
+        export_args = dummy
+        input_names = ["images"]
+        sample_output = model(dummy)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    logits, boxes, objectness_logits = extract_detection_from_model_output(model(dummy))
-    output_names = ["logits"] if boxes is None else ["logits", "bbox"]
-    if objectness_logits is not None:
-        output_names.append("objectness_logits")
-    dynamic_axes = {
-        "images": {0: "batch"},
-        "logits": {0: "batch"},
-    }
-    if boxes is not None:
-        dynamic_axes["bbox"] = {0: "batch"}
-    if objectness_logits is not None:
-        dynamic_axes["objectness_logits"] = {0: "batch"}
+    deployment_output_names = tuple(
+        str(name) for name in getattr(model, "deployment_output_names", ())
+    )
+    if deployment_output_names:
+        if not isinstance(sample_output, tuple):
+            raise TypeError("deployment_outputs must return a tuple of tensors.")
+        if len(sample_output) != len(deployment_output_names):
+            raise ValueError(
+                "deployment output name/tensor count mismatch: "
+                f"names={len(deployment_output_names)}, tensors={len(sample_output)}"
+            )
+        logits = sample_output[0]
+        boxes = None
+        objectness_logits = None
+        output_names = list(deployment_output_names)
+    else:
+        logits, boxes, objectness_logits = extract_detection_from_model_output(sample_output)
+        output_names = ["logits"] if boxes is None else ["logits", "bbox"]
+        if objectness_logits is not None:
+            output_names.append("objectness_logits")
+    dynamic_axes = None
+    if supports_dynamic_batch:
+        dynamic_axes = {
+            "images": {0: "batch"},
+            "logits": {0: "batch"},
+        }
+        if requires_spatial_metadata:
+            dynamic_axes["image_valid_mask"] = {0: "batch"}
+            dynamic_axes["bbox"] = {0: "batch"}
+        for output_name in output_names:
+            dynamic_axes[output_name] = {0: "batch"}
+        if boxes is not None:
+            dynamic_axes["bbox"] = {0: "batch"}
+        if objectness_logits is not None:
+            dynamic_axes["objectness_logits"] = {0: "batch"}
     torch.onnx.export(
         export_model,
-        dummy,
+        export_args,
         output_path,
         export_params=True,
         opset_version=opset,
         do_constant_folding=True,
-        input_names=["images"],
+        input_names=input_names,
         output_names=output_names,
         dynamic_axes=dynamic_axes,
     )

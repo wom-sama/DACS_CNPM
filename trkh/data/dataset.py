@@ -3943,7 +3943,8 @@ class StrictBalancedBatchSampler(Sampler[List[int]]):
         ]
 
         if remainder > 0:
-            start = batch_index % class_count
+            # Rotate every extra slot globally so epoch exposure differs by at most one.
+            start = (batch_index * remainder) % class_count
             for extra_index in range(remainder):
                 class_index = self.active_classes[(start + extra_index) % class_count]
                 for allocation_index, (allocated_class, count) in enumerate(allocations):
