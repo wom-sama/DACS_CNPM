@@ -8131,6 +8131,8 @@ def _initial_training_progress_from_resume(
     progress = {
         "start_epoch": 1,
         "best_macro_f1": -1.0,
+        "best_macro_f1_epoch": None,
+        "selected_checkpoint_macro_f1": None,
         "best_epoch": 0,
         "best_selection_metric_name": "",
         "best_selection_metric_value": None,
@@ -8158,7 +8160,22 @@ def _initial_training_progress_from_resume(
 
     progress["start_epoch"] = max(1, int(resume_summary.get("next_epoch", 1) or 1))
     progress["best_macro_f1"] = float(resume_checkpoint.get("best_macro_f1", -1.0) or -1.0)
+    best_macro_f1_epoch = resume_checkpoint.get("best_macro_f1_epoch")
+    progress["best_macro_f1_epoch"] = (
+        int(best_macro_f1_epoch) if best_macro_f1_epoch is not None else None
+    )
     progress["best_epoch"] = int(resume_checkpoint.get("best_epoch", resume_checkpoint.get("epoch", 0)) or 0)
+    selected_checkpoint_macro_f1 = resume_checkpoint.get("selected_checkpoint_macro_f1")
+    if selected_checkpoint_macro_f1 is None:
+        checkpoint_epoch = int(resume_checkpoint.get("epoch", 0) or 0)
+        checkpoint_metrics = resume_checkpoint.get("metrics")
+        if checkpoint_epoch == int(progress["best_epoch"]) and isinstance(checkpoint_metrics, dict):
+            selected_checkpoint_macro_f1 = checkpoint_metrics.get("macro_f1")
+    progress["selected_checkpoint_macro_f1"] = (
+        float(selected_checkpoint_macro_f1)
+        if selected_checkpoint_macro_f1 is not None
+        else None
+    )
     best_selection_metric = resume_checkpoint.get("best_selection_metric")
     if not isinstance(best_selection_metric, dict):
         best_selection_metric = resume_checkpoint.get("selection_metric", {})
@@ -8200,6 +8217,8 @@ def _save_interrupt_checkpoint(
     best_selection_metric_value: Optional[float],
     best_selection_metric_higher_is_better: bool,
     epochs_without_improvement: int,
+    best_macro_f1_epoch: Optional[int] = None,
+    selected_checkpoint_macro_f1: Optional[float] = None,
     stage1_auto_advance_epoch: Optional[int] = None,
     model_ema: Optional[ModelEMA] = None,
     resume_checkpoint: Optional[Mapping[str, object]] = None,
@@ -8207,6 +8226,14 @@ def _save_interrupt_checkpoint(
     checkpoint = {
         "epoch": int(epoch),
         "best_macro_f1": float(best_macro_f1),
+        "best_macro_f1_epoch": (
+            int(best_macro_f1_epoch) if best_macro_f1_epoch is not None else None
+        ),
+        "selected_checkpoint_macro_f1": (
+            float(selected_checkpoint_macro_f1)
+            if selected_checkpoint_macro_f1 is not None
+            else None
+        ),
         "model_state": model.state_dict(),
         "optimizer_state": optimizer.state_dict(),
         "scheduler_state": scheduler.state_dict() if hasattr(scheduler, "state_dict") else None,
@@ -28516,6 +28543,12 @@ def main() -> None:
     )
     start_epoch = int(resume_progress["start_epoch"])
     best_macro_f1 = float(resume_progress["best_macro_f1"])
+    best_macro_f1_epoch = resume_progress["best_macro_f1_epoch"]
+    if best_macro_f1_epoch is not None:
+        best_macro_f1_epoch = int(best_macro_f1_epoch)
+    selected_checkpoint_macro_f1 = resume_progress["selected_checkpoint_macro_f1"]
+    if selected_checkpoint_macro_f1 is not None:
+        selected_checkpoint_macro_f1 = float(selected_checkpoint_macro_f1)
     best_selection_metric_name = str(resume_progress["best_selection_metric_name"])
     best_selection_metric_value = resume_progress["best_selection_metric_value"]
     best_selection_metric_higher_is_better = bool(resume_progress["best_selection_metric_higher_is_better"])
@@ -29586,6 +29619,7 @@ def main() -> None:
                 current_macro_f1 = float(val_metrics["macro_f1"])
                 if current_macro_f1 > best_macro_f1:
                     best_macro_f1 = current_macro_f1
+                    best_macro_f1_epoch = int(epoch)
                 selection_metric_name, selection_metric_value, selection_metric_higher_is_better = (
                     _resolve_checkpoint_selection(
                         model_config=model_config,
@@ -31095,9 +31129,12 @@ def main() -> None:
                     best_selection_metric_value = float(selection_metric_value)
                     best_selection_metric_higher_is_better = bool(selection_metric_higher_is_better)
                     best_epoch = int(epoch)
+                    selected_checkpoint_macro_f1 = float(current_macro_f1)
                     epochs_without_improvement = 0
                     best_payload = dict(checkpoint_payload)
                     best_payload["best_macro_f1"] = best_macro_f1
+                    best_payload["best_macro_f1_epoch"] = best_macro_f1_epoch
+                    best_payload["selected_checkpoint_macro_f1"] = selected_checkpoint_macro_f1
                     best_payload["best_epoch"] = best_epoch
                     best_payload["best_selection_metric"] = {
                         "name": best_selection_metric_name,
@@ -31123,6 +31160,8 @@ def main() -> None:
 
                 checkpoint_payload["best_epoch"] = best_epoch
                 checkpoint_payload["best_macro_f1"] = best_macro_f1
+                checkpoint_payload["best_macro_f1_epoch"] = best_macro_f1_epoch
+                checkpoint_payload["selected_checkpoint_macro_f1"] = selected_checkpoint_macro_f1
                 checkpoint_payload["best_selection_metric"] = {
                     "name": best_selection_metric_name,
                     "value": best_selection_metric_value,
@@ -31676,6 +31715,8 @@ def main() -> None:
                     best_selection_metric_value=best_selection_metric_value,
                     best_selection_metric_higher_is_better=best_selection_metric_higher_is_better,
                     epochs_without_improvement=epochs_without_improvement,
+                    best_macro_f1_epoch=best_macro_f1_epoch,
+                    selected_checkpoint_macro_f1=selected_checkpoint_macro_f1,
                     stage1_auto_advance_epoch=stage1_auto_advance_epoch,
                     model_ema=model_ema,
                     resume_checkpoint=resume_checkpoint,
@@ -31920,7 +31961,11 @@ def main() -> None:
 
     summary = {
         "best_epoch": best_epoch,
+        "selected_checkpoint_macro_f1": selected_checkpoint_macro_f1,
         "best_macro_f1": best_macro_f1,
+        "best_macro_f1_semantics": "legacy alias for max_observed_macro_f1",
+        "max_observed_macro_f1": best_macro_f1,
+        "max_observed_macro_f1_epoch": best_macro_f1_epoch,
         "best_selection_metric_name": best_selection_metric_name,
         "best_selection_metric_value": best_selection_metric_value,
         "best_selection_metric_higher_is_better": best_selection_metric_higher_is_better,

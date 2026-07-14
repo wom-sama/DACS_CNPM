@@ -1,6 +1,7 @@
 TRKH current-best commands for VS Code PowerShell
 Created: 2026-07-06
-Updated and preflight-verified: 2026-07-11
+Selected recipe preflight-verified: 2026-07-14
+Last challenger audited: 2026-07-14
 
 CURRENT SELECTED VERSION
 
@@ -13,6 +14,11 @@ CURRENT SELECTED VERSION
 - The 2026-07-11 30-epoch continuation stopped at epoch 5 and did not replace
   this checkpoint. The wrapper below therefore still resumes the selected
   keeper; it does not promote a rejected experimental checkpoint.
+- The 2026-07-14 scratch run stopped at epoch 23. Its independent validation
+  macro/class-1 F1 was 0.874172/0.654639, so it also does not replace the
+  keeper. A validation-locked two-checkpoint precision mode reached final-test
+  0.887869/0.675676 with class-1 precision 0.666667, but is not promoted here
+  until ONNX/TensorRT/video wrappers reproduce the dual-model rule.
 
 WHY THESE COMMANDS ARE SAFE TO PASTE IN VS CODE
 

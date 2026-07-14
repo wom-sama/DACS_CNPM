@@ -3753,6 +3753,8 @@ dataset_balance:
         checkpoint = {
             "epoch": 104,
             "best_macro_f1": 0.994,
+            "best_macro_f1_epoch": 103,
+            "selected_checkpoint_macro_f1": 0.993,
             "best_epoch": 104,
             "best_selection_metric": {
                 "name": "detection_f1",
@@ -3779,9 +3781,13 @@ dataset_balance:
 
         self.assertEqual(inherited["start_epoch"], 105)
         self.assertAlmostEqual(inherited["best_selection_metric_value"], 0.8518)
+        self.assertEqual(inherited["best_macro_f1_epoch"], 103)
+        self.assertAlmostEqual(inherited["selected_checkpoint_macro_f1"], 0.993)
         self.assertEqual(reset["start_epoch"], 1)
         self.assertEqual(reset["best_epoch"], 0)
         self.assertEqual(reset["best_macro_f1"], -1.0)
+        self.assertIsNone(reset["best_macro_f1_epoch"])
+        self.assertIsNone(reset["selected_checkpoint_macro_f1"])
         self.assertIsNone(reset["best_selection_metric_value"])
         self.assertEqual(reset["source_completed_epoch"], 104)
         self.assertEqual(reset["source_best_epoch"], 104)

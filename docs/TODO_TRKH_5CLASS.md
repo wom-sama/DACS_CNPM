@@ -2177,3 +2177,47 @@
   method only if it introduces a new direct class1-positive representation or
   supervision source, not another part-map regularizer, prettier XAI target,
   frozen readout, context crop, or post-hoc suppressor.
+- [x] Independently audit the user-completed 23-epoch random-init run. Reject
+  `best.pt` at macro/class1 `0.874172/0.654639` and epoch-23 EMA at
+  `0.877334/0.657895` versus keeper `0.882925/0.678261`.
+- [x] Separate raw `last.pt/model_state` from validation `ema_model_state` with
+  a strict 185-tensor extractor. Correct future run-summary semantics so
+  selector epoch/macro and maximum-observed macro/epoch are explicit.
+- [x] Lock and execute five source-grouped folds before test. Preserve the
+  stable keeper/candidate `0.60/0.40`, class1-margin `0.034` precision rule:
+  OOF `0.886214/0.683544`, locked val `0.890298/0.696774`, all 14 gates pass.
+- [x] Open final test once with the frozen summary hash. Record macro/class1
+  `0.887869/0.675676`, class1 P/R `0.666667/0.684932`; no further test-fitted
+  ensemble, threshold, calibration, or member-weight variant is permitted.
+- [x] Compare full clean/occlusion/dim/bright/low-contrast robustness. Keep the
+  scratch member's real illumination-recall complement as a supervision clue,
+  not as permission to promote its 110 validation class1 false positives.
+- [x] Replace pruned-QKV pseudo-attention with validated full-grid native last-
+  block attention. Rerun matched candidate/keeper smoke and manually inspect
+  five hashed correction/harm/FP/FN cases with zero fallback.
+- [ ] Keep the current single-checkpoint full-train/export/video commands on
+  the deployable keeper. The precision ensemble is higher on frozen test but
+  requires dual-model ONNX/TensorRT/video equivalence before command promotion.
+- [ ] Do not repeat seed/epoch/SWA/soup/member-weight/margin/threshold sweeps.
+  Next GPU work must use train-only supervision with separate late member
+  paths, explicit keeper-TP protection, and conservative `0/2/4->1` control.
+- [x] Remove only superseded blend/native-XAI-v1/final-state binaries through a
+  reread manifest with exact hashes. Preserve `best.pt` and formal evidence;
+  reclaim `147,976,192` observed bytes and pass retention over 613 directories.
+- [x] Close this stage with focused `28/28`, full pytest `850/850`, four
+  PowerShell parse checks, one-command full-pipeline preflight, TensorRT export
+  preflight, and PyTorch video preflight. Protected user paths remain unstaged.
+- [x] Harden probability/audit provenance after self-review: reject nonfinite,
+  negative, and zero-sum vectors; require exact locked-summary SHA for test;
+  validate each row split from `image_path`; refuse nonempty outputs; validate
+  paired XAI cohort fields and hash every input `case.json`.
+- [x] Replay all six readiness artifacts bit-identically at summary SHA
+  `6c6397d...a8c8`; replay paired XAI `30/30` plus native `5/5` with known
+  sources, zero missing tiles, and zero native fallback.
+- [x] Re-run compile, focused tests `33/33`, and full pytest `859/859` after
+  hardening; pass full-pipeline/export/video preflights and retention over 614
+  run directories. Keep the deployable keeper and commands unchanged.
+- [ ] Implement the next distinct train-only late-member representation only
+  after this closure is committed. It must preserve keeper class-1 TP while
+  learning the scratch member's illumination complement, and must pass direct
+  `0/2/4->1` precision gates before any full 30-epoch run.

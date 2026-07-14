@@ -1,7 +1,9 @@
+import pytest
 import torch
 from PIL import Image
 
 from trkh.evaluation.attention_viz import (
+    build_last_layer_attention_heatmap,
     _disable_inplace_modules_for_hooks,
     _supports_trkh_feature_metadata as _viz_supports_trkh_feature_metadata,
 )
@@ -10,6 +12,7 @@ from trkh.evaluation.xai_audit import (
     _crop_image_from_tensor,
     _dataset_tensor_and_crop,
     _forward_logits_with_optional_bbox,
+    _select_cases,
     _supports_trkh_feature_metadata,
     _tensor_from_crop,
 )
@@ -28,6 +31,37 @@ class _TimmLikeClassifier(torch.nn.Module):
     def forward(self, images: torch.Tensor) -> torch.Tensor:
         pooled = images.mean(dim=(1, 2, 3), keepdim=False).unsqueeze(1)
         return self.head(pooled)
+
+
+def test_last_layer_attention_heatmap_uses_full_unpruned_grid() -> None:
+    attention = torch.zeros(1, 2, 5, 5)
+    attention[:, :, 0, 4] = 1.0
+
+    heatmap = build_last_layer_attention_heatmap(
+        attentions={7: attention},
+        grid_size=(2, 2),
+        prefix_tokens=1,
+        reduction="mean",
+        output_size=(8, 8),
+        query_tokens="cls",
+    )
+
+    assert heatmap.shape == (8, 8)
+    peak_y, peak_x = divmod(int(heatmap.argmax()), heatmap.shape[1])
+    assert peak_y >= 4
+    assert peak_x >= 4
+
+
+def test_last_layer_attention_heatmap_rejects_pruned_tokens() -> None:
+    with pytest.raises(ValueError, match="full patch grid"):
+        build_last_layer_attention_heatmap(
+            attentions=[torch.zeros(1, 2, 4, 4)],
+            grid_size=(2, 2),
+            prefix_tokens=1,
+            reduction="mean",
+            output_size=(8, 8),
+            query_tokens="cls",
+        )
 
 
 def test_crop_image_from_normalized_tensor_round_trips_shape() -> None:
@@ -145,3 +179,66 @@ def test_disable_inplace_modules_for_hooked_gradcam_models() -> None:
     assert model[1].inplace is False
     assert model[2].inplace is False
     assert _disable_inplace_modules_for_hooks(model) == []
+
+
+def test_select_cases_can_prioritize_focus_false_positives_and_negatives() -> None:
+    records = [
+        {
+            "sample_index": 0,
+            "target_index": 0,
+            "prediction_index": 1,
+            "confidence": 0.80,
+            "margin": 0.20,
+            "correct": 0,
+        },
+        {
+            "sample_index": 1,
+            "target_index": 1,
+            "prediction_index": 0,
+            "confidence": 0.75,
+            "margin": 0.15,
+            "correct": 0,
+        },
+        {
+            "sample_index": 2,
+            "target_index": 2,
+            "prediction_index": 0,
+            "confidence": 0.99,
+            "margin": 0.50,
+            "correct": 0,
+        },
+    ]
+
+    selected = _select_cases(
+        records,
+        num_classes=3,
+        max_cases=2,
+        mistake_cases=0,
+        low_confidence_cases=0,
+        close_margin_cases=0,
+        per_class_cases=0,
+        focus_class_index=1,
+        focus_false_positive_cases=1,
+        focus_false_negative_cases=1,
+    )
+
+    assert [row["sample_index"] for row in selected] == [0, 1]
+    assert [row["audit_reason"] for row in selected] == [
+        "focus_class_false_positive",
+        "focus_class_false_negative",
+    ]
+
+
+def test_select_cases_rejects_invalid_requested_focus_class() -> None:
+    with pytest.raises(ValueError, match="outside num_classes"):
+        _select_cases(
+            [],
+            num_classes=2,
+            max_cases=2,
+            mistake_cases=0,
+            low_confidence_cases=0,
+            close_margin_cases=0,
+            per_class_cases=0,
+            focus_class_index=2,
+            focus_false_positive_cases=1,
+        )

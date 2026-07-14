@@ -55,6 +55,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--low-confidence-cases", type=int, default=8)
     parser.add_argument("--close-margin-cases", type=int, default=8)
     parser.add_argument("--per-class-cases", type=int, default=2)
+    parser.add_argument("--focus-class-index", type=int, default=1)
+    parser.add_argument("--focus-false-positive-cases", type=int, default=0)
+    parser.add_argument("--focus-false-negative-cases", type=int, default=0)
     parser.add_argument(
         "--sample-indices",
         type=str,
@@ -534,8 +537,20 @@ def _select_cases(
     low_confidence_cases: int,
     close_margin_cases: int,
     per_class_cases: int,
+    focus_class_index: int = 1,
+    focus_false_positive_cases: int = 0,
+    focus_false_negative_cases: int = 0,
     explicit_sample_indices: Optional[Sequence[int]] = None,
 ) -> List[Dict[str, object]]:
+    if int(max_cases) < 0:
+        raise ValueError("max_cases must be nonnegative.")
+    if (
+        int(focus_false_positive_cases) > 0
+        or int(focus_false_negative_cases) > 0
+    ) and not 0 <= int(focus_class_index) < int(num_classes):
+        raise ValueError(
+            f"focus_class_index={focus_class_index} is outside num_classes={num_classes}."
+        )
     selected: "OrderedDict[int, Dict[str, object]]" = OrderedDict()
 
     def add_many(items: Sequence[Dict[str, object]], reason: str, limit: int) -> None:
@@ -564,6 +579,36 @@ def _select_cases(
             return list(selected.values())[:max_cases]
 
     mistakes = [record for record in records if int(record.get("correct", 0)) == 0]
+    focus_false_positives = [
+        record
+        for record in mistakes
+        if int(record.get("prediction_index", -1)) == int(focus_class_index)
+        and int(record.get("target_index", -1)) != int(focus_class_index)
+    ]
+    add_many(
+        sorted(
+            focus_false_positives,
+            key=lambda item: float(item.get("confidence", 0.0)),
+            reverse=True,
+        ),
+        "focus_class_false_positive",
+        focus_false_positive_cases,
+    )
+    focus_false_negatives = [
+        record
+        for record in mistakes
+        if int(record.get("target_index", -1)) == int(focus_class_index)
+        and int(record.get("prediction_index", -1)) != int(focus_class_index)
+    ]
+    add_many(
+        sorted(
+            focus_false_negatives,
+            key=lambda item: float(item.get("confidence", 0.0)),
+            reverse=True,
+        ),
+        "focus_class_false_negative",
+        focus_false_negative_cases,
+    )
     add_many(
         sorted(mistakes, key=lambda item: float(item.get("confidence", 0.0)), reverse=True),
         "high_confidence_mistake",
@@ -1204,6 +1249,9 @@ def main() -> None:
         low_confidence_cases=args.low_confidence_cases,
         close_margin_cases=args.close_margin_cases,
         per_class_cases=args.per_class_cases,
+        focus_class_index=args.focus_class_index,
+        focus_false_positive_cases=args.focus_false_positive_cases,
+        focus_false_negative_cases=args.focus_false_negative_cases,
         explicit_sample_indices=explicit_indices,
     )
     output_dir = args.output_dir or args.checkpoint.resolve().parent.parent / f"xai_audit_{args.split}"

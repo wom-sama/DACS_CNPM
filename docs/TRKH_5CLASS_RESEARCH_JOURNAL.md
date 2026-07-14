@@ -14799,3 +14799,59 @@ Date: 2026-07-02
   PowerShell parse checks, current-best preflight, and retention over 610 run
   directories with `blockers=[]`. Keeper/current-command hashes remain
   unchanged and protected user paths remain untracked.
+
+## Full Run 2026-07-14 - Random-Init Recall Complement, Precision Ensemble
+
+- Audited the completed 7.245M-parameter scratch run through epoch 23. The
+  fair selector chose epoch 20; independent `best.pt` validation reached only
+  macro/class1 `0.874172/0.654639`, class1 P/R `0.535865/0.841060`, with
+  `127/110/24` TP/FP/FN versus keeper `0.882925/0.678261` and `117/77/34`.
+- Verified `last.pt` semantics. Raw `model_state` was
+  `0.862000/0.626632`; extracted `ema_model_state` was
+  `0.877334/0.657895`. Added a strict EMA extractor and corrected future run
+  summaries so selector-chosen checkpoint macro is not confused with maximum
+  observed macro from another epoch.
+- Locked a validation-only five-source-fold precision ensemble. All 14 gates
+  passed; OOF macro/class1 was `0.886214/0.683544`. The median rule is
+  keeper/candidate `0.60/0.40` plus class1 margin `0.034`; locked validation
+  reached `0.890298/0.696774`, class1 P/R `0.679245/0.715232`.
+- Applied the frozen rule once to final test: macro/class1 F1 improved
+  `0.886517/0.666667 -> 0.887869/0.675676`, and class1 precision improved
+  `0.597826 -> 0.666667`, while recall fell `0.753425 -> 0.684932`.
+- Robustness proves genuine member complement. The scratch member is worse on
+  clean/occlusion but better in class1 F1 under dim/bright/low-contrast views:
+  `0.527316/0.524272/0.546875` versus keeper
+  `0.435331/0.512821/0.491429`.
+- Fixed XAI provenance: pruned late-QKV maps were feature-map fallbacks, not
+  native attention. A no-pruning `return_attention=True` path now validates the
+  full grid and records block 7. Ten of ten candidate/keeper smoke maps are
+  native, with zero fallback; visual review still identifies foreground
+  maturity/surface ambiguity rather than a wide-background shortcut.
+- Decision: reject both scratch checkpoints as single-model replacements.
+  Retain the two-checkpoint rule as an optional precision research candidate,
+  but do not promote current-best commands until dual ONNX/TensorRT/video
+  equivalence exists. Do not test-tune weights/margins or sweep nearby seeds.
+- Guarded cleanup hashed and removed two exploratory blend roots, the
+  superseded native-attention v1 contact sheets, `last.pt`, and the reproducible
+  epoch-23 EMA extraction checkpoint. It deleted 13 files/`148,024,034`
+  declared bytes with `147,976,192` observed free-byte gain while preserving
+  the candidate best checkpoint and all formal audit hashes.
+- Closure passed focused tests `28/28`, full pytest `850/850`, four PowerShell
+  parse checks, current full-pipeline/export/video preflights, and retention
+  over 613 run directories with `blockers=[]`. Current command content still
+  selects the keeper, but its audit/preflight date is now 2026-07-14 and its
+  updated SHA is `881ee29e...e792f`.
+- Post-review hardened the formal tools before commit. Probability ingestion
+  and direct application now reject nonfinite/negative/zero-sum vectors; a
+  frozen test apply requires exact summary SHA; split is checked on every
+  `image_path`, so CSV renaming cannot bypass the test guard. Existing six-file
+  readiness output replayed bit-identical with summary `6c6397d...a8c8`.
+- Native attention now fails closed if `return_attention=True` omits a full
+  token grid. Paired XAI validates cohort/case alignment and attention source,
+  refuses output overwrite/name collision, and hashes all `case.json` inputs.
+  Replays passed `30/30` precision cases and `5/5` native cases with zero
+  missing tiles; native fallback remained zero.
+- Post-review focused tests passed `33/33`; full pytest passed `859/859` with
+  250 dependency warnings. Current full-pipeline/export/video preflights passed
+  and retention passed over 614 run directories with `blockers=[]`. No metric,
+  checkpoint, raw dataset, final-test decision, or current-best command changed.

@@ -290,6 +290,50 @@ def summarize_heatmap_focus(
     }
 
 
+def _last_attention_item(attentions):
+    if isinstance(attentions, dict):
+        if not attentions:
+            raise ValueError("Native attention requires at least one attention map.")
+        layer = sorted(attentions)[-1]
+        return layer, attentions[layer]
+    ordered = list(attentions)
+    if not ordered:
+        raise ValueError("Native attention requires at least one attention map.")
+    return len(ordered) - 1, ordered[-1]
+
+
+def build_last_layer_attention_heatmap(
+    attentions,
+    grid_size: Tuple[int, int],
+    prefix_tokens: int,
+    reduction: str,
+    output_size: Tuple[int, int],
+    query_tokens: str = "cls_register_mean",
+) -> np.ndarray:
+    _, attention = _last_attention_item(attentions)
+    if attention.ndim == 4:
+        if int(attention.shape[0]) != 1:
+            raise ValueError("Native attention visualization requires batch size 1.")
+        attention = attention[0]
+    if attention.ndim != 3:
+        raise ValueError("Native attention map must have shape [heads, tokens, tokens].")
+
+    expected_tokens = int(prefix_tokens) + int(grid_size[0]) * int(grid_size[1])
+    if int(attention.shape[-2]) != expected_tokens or int(attention.shape[-1]) != expected_tokens:
+        raise ValueError(
+            "Native attention must contain the full patch grid: "
+            f"expected {expected_tokens} tokens, got {tuple(attention.shape[-2:])}."
+        )
+    return build_attention_heatmap(
+        attention=attention.detach().cpu(),
+        grid_size=(int(grid_size[0]), int(grid_size[1])),
+        prefix_tokens=int(prefix_tokens),
+        reduction=reduction,
+        output_size=output_size,
+        query_tokens=query_tokens,
+    )
+
+
 def _capture_forward(
     model,
     tensor: torch.Tensor,
@@ -308,6 +352,7 @@ def _capture_forward(
     feature_spec = resolve_feature_hook(model, feature_source=feature_source)
     attention_spec = resolve_attention_hook(model, layer_index)
     need_grad = method in ("gradcam", "both", "all")
+    need_native_attention = method in ("attention", "both", "all")
     need_rollout = method in ("rollout", "all")
     need_grad_rollout = method in ("grad_rollout", "all")
     supports_trkh_metadata = _supports_trkh_feature_metadata(model)
@@ -348,9 +393,12 @@ def _capture_forward(
             if need_grad:
                 logits[:, selected_class].sum().backward()
 
+    native_attention_heatmap = None
+    native_attention_source = None
+    native_attention_grid_size = None
     rollout_heatmap = None
     register_attention_summary = None
-    if need_rollout and supports_trkh_metadata:
+    if (need_native_attention or need_rollout) and supports_trkh_metadata:
         with torch.no_grad():
             features = model.forward_features(
                 tensor,
@@ -366,10 +414,27 @@ def _capture_forward(
                 features["bbox"] = bbox_metadata.to(device=tensor.device)
         attentions = features.get("attentions") if isinstance(features, dict) else None
         grid_size = features.get("grid_size") if isinstance(features, dict) else None
+        if not attentions or grid_size is None:
+            raise RuntimeError(
+                "forward_features(return_attention=True) did not return full-grid "
+                "attention metadata."
+            )
         prefix_tokens = attention_spec.prefix_tokens if attention_spec is not None else int(
             1 + int(getattr(model, "num_registers", 0))
         )
-        if attentions and grid_size is not None:
+        if need_native_attention:
+            native_attention_heatmap = build_last_layer_attention_heatmap(
+                attentions=attentions,
+                grid_size=grid_size,
+                prefix_tokens=prefix_tokens,
+                reduction=head_reduction,
+                output_size=crop_image.size,
+                query_tokens=query_tokens,
+            )
+            native_layer, _ = _last_attention_item(attentions)
+            native_attention_source = f"forward_features.return_attention.blocks[{native_layer}]"
+            native_attention_grid_size = [int(grid_size[0]), int(grid_size[1])]
+        if need_rollout:
             rollout_heatmap = build_attention_rollout_heatmap(
                 attentions=attentions,
                 grid_size=grid_size,
@@ -378,11 +443,11 @@ def _capture_forward(
                 query_tokens=query_tokens,
                 start_layer=rollout_start_layer,
             )
-            register_attention_summary = summarize_register_attention(
-                attentions=attentions,
-                prefix_tokens=prefix_tokens,
-                register_prefix_tokens=1 + int(getattr(model, "num_registers", 0)),
-            )
+        register_attention_summary = summarize_register_attention(
+            attentions=attentions,
+            prefix_tokens=prefix_tokens,
+            register_prefix_tokens=1 + int(getattr(model, "num_registers", 0)),
+        )
 
     grad_rollout_heatmap = None
     if need_grad_rollout and supports_trkh_metadata:
@@ -402,35 +467,43 @@ def _capture_forward(
                 features["bbox"] = bbox_metadata.to(device=tensor.device)
             attentions = features.get("attentions") if isinstance(features, dict) else None
             grid_size = features.get("grid_size") if isinstance(features, dict) else None
+            if not attentions or grid_size is None:
+                raise RuntimeError(
+                    "Gradient rollout requires full-grid attention from "
+                    "forward_features(return_attention=True)."
+                )
             prefix_tokens = attention_spec.prefix_tokens if attention_spec is not None else int(
                 1 + int(getattr(model, "num_registers", 0))
             )
-            if attentions and grid_size is not None:
-                for attention in attentions.values() if isinstance(attentions, dict) else attentions:
-                    if torch.is_tensor(attention):
-                        attention.retain_grad()
-                if hasattr(model, "head_input_from_features") and hasattr(model, "head"):
-                    logits = classification_logits_from_features(model, features)
-                elif hasattr(model, "forward_heads"):
-                    logits, _ = extract_bbox_from_model_output(model.forward_heads(features))
-                else:
-                    logits, _ = extract_bbox_from_model_output(model(tensor))
-                selected_class = int(logits.argmax(dim=1)[0].item()) if target_class is None else int(target_class)
-                logits[:, selected_class].sum().backward()
-                grad_rollout_heatmap = build_gradient_weighted_attention_rollout_heatmap(
+            for attention in attentions.values() if isinstance(attentions, dict) else attentions:
+                if torch.is_tensor(attention):
+                    attention.retain_grad()
+            if hasattr(model, "head_input_from_features") and hasattr(model, "head"):
+                logits = classification_logits_from_features(model, features)
+            elif hasattr(model, "forward_heads"):
+                logits, _ = extract_bbox_from_model_output(model.forward_heads(features))
+            else:
+                logits, _ = extract_bbox_from_model_output(model(tensor))
+            selected_class = (
+                int(logits.argmax(dim=1)[0].item())
+                if target_class is None
+                else int(target_class)
+            )
+            logits[:, selected_class].sum().backward()
+            grad_rollout_heatmap = build_gradient_weighted_attention_rollout_heatmap(
+                attentions=attentions,
+                grid_size=grid_size,
+                prefix_tokens=prefix_tokens,
+                output_size=crop_image.size,
+                query_tokens=query_tokens,
+                start_layer=rollout_start_layer,
+            )
+            if register_attention_summary is None:
+                register_attention_summary = summarize_register_attention(
                     attentions=attentions,
-                    grid_size=grid_size,
                     prefix_tokens=prefix_tokens,
-                    output_size=crop_image.size,
-                    query_tokens=query_tokens,
-                    start_layer=rollout_start_layer,
+                    register_prefix_tokens=1 + int(getattr(model, "num_registers", 0)),
                 )
-                if register_attention_summary is None:
-                    register_attention_summary = summarize_register_attention(
-                        attentions=attentions,
-                        prefix_tokens=prefix_tokens,
-                        register_prefix_tokens=1 + int(getattr(model, "num_registers", 0)),
-                    )
 
     result: Dict[str, object] = {
         "probabilities": probabilities,
@@ -448,7 +521,11 @@ def _capture_forward(
     if register_attention_summary:
         result["register_attention"] = register_attention_summary
 
-    if recorder.activations is not None and method in ("attention", "both", "all"):
+    if native_attention_heatmap is not None:
+        result["attention_heatmap"] = native_attention_heatmap
+        result["attention_source"] = native_attention_source
+        result["attention_grid_size"] = native_attention_grid_size
+    elif recorder.activations is not None and method in ("attention", "both", "all"):
         attention_grid_size = None
         if attention_spec is not None and recorder.qkv_output is not None:
             num_tokens = int(recorder.qkv_output.shape[1])
