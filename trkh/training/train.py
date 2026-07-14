@@ -368,13 +368,16 @@ def parse_args() -> argparse.Namespace:
             "coatnet_mbconv",
             "inceptionnext_atto_tokenizer",
             "moganet_xt_tokenizer",
+            "starnet_s2_tokenizer",
         ),
         default="conv_pool",
         help=(
             "Early convolutional hierarchy. coatnet_mbconv reuses the scratch "
             "CoAtNet-Nano stem plus its first two MBConv stages; "
             "inceptionnext_atto_tokenizer uses official Atto stages 1-3; "
-            "moganet_xt_tokenizer uses MogaNet-XT stages 1-3 to the 16x16 token grid."
+            "moganet_xt_tokenizer uses MogaNet-XT stages 1-3; "
+            "starnet_s2_tokenizer uses official StarNet-S2 stages 1-3 to the "
+            "16x16 token grid."
         ),
     )
     parser.add_argument(

@@ -15491,3 +15491,165 @@ Date: 2026-07-02
 - No current-best command was changed: InceptionNeXt failed the locked
   validation/precision/TP-preservation gates, so it is not a promotable
   single-checkpoint candidate.
+
+## StarNet-S2 Tokenizer Lock 2026-07-15 - Local Multiplicative Evidence
+
+- Rechecked the accepted CVPR 2024 paper and official Apache-2.0 source at
+  commit `c999eb50840a44f9f1d92e8f7d2c22cd645a6d5e`; reviewed
+  `imagenet/starnet.py` SHA is
+  `4e9eb1f58ea51427eebe17baf9891a3e1d73d000597c032a700176c954c3031a`.
+- Official S2 uses base width `32`, depths `1/2/6/2`, expansion `4`, and local
+  `ReLU6(f1(x))*f2(x)` blocks between two `7x7` depthwise convolutions. The
+  paper reports `74.8` ImageNet top-1, `3.7M` parameters, and `2.0 ms` P100
+  latency, but uses 300 epochs; those numbers do not establish TRKH convergence.
+- The paper's sum counterfactual loses `3.1` top-1 points overall and attributes
+  the strongest single-stage gain to stage 3. The locked TRKH candidate uses
+  exact S2 stages 1-3 (`32/64/128`, `1/2/6`) so six of nine star blocks operate
+  at the informative `128`-channel stage before all eight existing Transformer
+  blocks.
+- Locked
+  `docs/TRKH_5CLASS_STARNET_S2_TOKENIZER_READINESS_PROTOCOL_20260715.md`
+  before implementation. Stage A is train-only and requires exact graph,
+  deterministic round-trip, all-branch gradients, same-weight star-vs-sum
+  evidence, five-class sensitivity, runtime `<=1.75x`, and peak VRAM below
+  `7.75 GiB`. Validation/test and current-best commands remain closed.
+
+### StarNet-S2 Stage-A result
+
+- Implemented the official S2 stages 1-3 as default-off
+  `starnet_s2_tokenizer`, preserving all eight TRKH Transformer blocks and the
+  default control schema/logits. Conv biases, BN placement, ReLU6, expansion
+  `4`, two depthwise `7x7` paths, and actual official initialization behavior
+  are explicit and checkpoint-safe.
+- The formal train-only run at
+  `runs/audit_starnet_s2_stage_a_20260715` passed every gate. Summary SHA is
+  `7fdb0192...ddcaa`; manifest SHA is `8e8710f9...633fb`. No validation/test
+  loader was constructed.
+- Candidate/control parameters are `8,345,974/7,245,590`; peak is
+  `2.12805 GiB`; matched batch-32 BF16 runtime is `1.075267x` control. All
+  FP32/BF16 gradient families are live in every one of the nine blocks.
+- Same-weight star-vs-sum output differences are nontrivial in all blocks, with
+  minimum mean absolute delta `0.022263`; balanced train sensitivity is live
+  for classes `0..4`. This authorizes exactly one `120b x 2e`, full-val,
+  no-test matched smoke, which is now running.
+
+## StarNet-S2 Closure 2026-07-15 - FP Reduction by Discarding Class1 TP
+
+- The authorized matched smoke completed at
+  `runs/audit_starnet_s2_matched_smoke_pair_20260715`. Control/candidate
+  checkpoint SHAs are `d0c1522a...d6913` and `008c2f4f...51376`; comparison
+  summary SHA is `8642e6c1...9f80`. Both independent reloads used all `2606`
+  `yolo_f/val` objects and no test split.
+- Control/candidate macro F1 was `0.779446 -> 0.769836`; class1 P/R/F1 was
+  `0.388235/0.655629/0.487685 -> 0.372197/0.549669/0.443850`. Runtime was
+  `545.035 -> 524.135 s`, or `0.96165x`, so the failure is behavioral rather
+  than a resource regression.
+- Across `281` changed decisions, StarNet made `114` corrections and `124`
+  harms. It reduced focus `0/2/4->1` false positives `154 -> 138`, but rescued
+  only `7` class1 FN while breaking `23` class1 TP and creating `43` new
+  `3->2` harms. Precision also fell by `0.01604`; this is not the requested
+  precision improvement.
+- The full post-smoke audit summary is
+  `runs/audit_starnet_s2_matched_smoke_pair_20260715/postsmoke_audit/summary.json`,
+  SHA `a8eab240e750c2b7352e3d570edce630b902624b3a53b057b3bbe141ce52a1db`.
+  It passed architecture/native-MHSA/attribution/surface-signal checks but failed
+  the pair gate, three-of-five robustness gate, and class1-recall preservation.
+  Five-epoch, probe, full-train, and test permission are all false.
+- Robustness macro F1 candidate-minus-control deltas were clean `-0.00996`,
+  center occlusion `+0.00041`, dim `-0.03693`, bright `-0.00249`, and low
+  contrast `-0.07239`. StarNet won only `1/5`; worst class1-recall delta was
+  `-0.14570` under bright light. The robustness comparison SHA is
+  `6a71dcf9...98235`.
+- Paired XAI used the exact 16-case transition cohort, native block-7 MHSA for
+  every case, and zero grad-rollout fallback. Candidate attention foreground
+  mass fell `0.93488 -> 0.90735` while border mass rose
+  `0.17510 -> 0.21741`; Grad-CAM foreground mass rose to `0.96597` and border
+  mass fell to `0.10511`. This metric disagreement is why contact sheets were
+  inspected rather than treating one heatmap family as sufficient.
+- Manual review of all seven category sheets found that FP removals often came
+  from abandoning one localized edge/spot cue, but class1 TP breaks and new
+  `3->2` harms showed fragmented native attention or grad-rollout collapsed onto
+  one small texture region. Corrections and FN rescues sometimes benefited from
+  the same local selectivity. A replacement tokenizer therefore trades one
+  ambiguity for another; any next texture signal must remain complementary to
+  the keeper semantic path and explicitly protect class1 TP.
+- Object desaturation remained causal (`0.05782` absolute drop) while the
+  largest background gray/blur effect was only `0.00342`. Wide context is not
+  the limiting signal in this transition. Do not sweep StarNet depth, width,
+  expansion, kernel, LR, seed, loss, augmentation, or run length.
+
+### Audit throughput repair
+
+- Full prediction forensics was spending about seven minutes per checkpoint
+  recomputing identical image statistics. `audit_prediction_forensics` now has
+  ordered worker execution plus a fail-closed `--image-stats-cache` that checks
+  row count, sample index, resolved image path, every statistic column, and
+  source SHA before reuse.
+- Independent control/candidate computation matched all `2606/2606` image-stat
+  rows. Candidate live and cache-replay CSVs were bit-identical at SHA
+  `83de616a...6906`; replay took about `4.6 s`. The generic post-smoke launcher
+  now reuses the verified control cache for the candidate. This changes audit
+  cost only, not model metrics.
+
+### StarNet-S2 evidence compaction and retention
+
+- Compacted only the two rejected matched-smoke roots after every transition,
+  robustness, trace, forensics, confusion, paired-XAI, and perturbation stage
+  completed. `runs/evidence_starnet_s2_matched_smoke_rejected_20260715` keeps
+  `322` copied files and `324` hash-verified payloads; payload-manifest SHA is
+  `ce98ce76...bef86`.
+- Four rejected checkpoint binaries totaling `375,651,277` bytes were excluded.
+  Cleanup manifest SHA is `92cd39e9...c590`; both source roots were verified
+  absent and the observed free-space gain was `415,756,288` bytes. Raw dataset
+  content was not part of the operation.
+- Retention rerun
+  `runs/artifact_retention_audit_20260715_starnet_closure` passed over `653`
+  directories with both compacted originals absent and `blockers=[]`; summary
+  SHA is `d87dabd4...c1c1`, with `76.165 GiB` free on `D:` at audit time.
+- Keeper, scratch complement, and current-command hashes remain
+  `1f49d577...482677`, `f8bd6309...1a549`, and `36b9aa1a...40faf`.
+  The completed post-smoke status/summary is the replay evidence after
+  intentional checkpoint compaction; do not recreate rejected checkpoints only
+  to preflight the post-smoke wrapper.
+
+### StarNet-S2 engineering closure
+
+- Closure passed package compileall, focused tests `43/43`, and full pytest
+  `997/997`. Ten affected/current PowerShell launchers parsed with zero errors.
+- Operational preflights all returned exit code `0`: current-best full pipeline
+  with the optional final-test request, frozen precision package, TensorRT
+  single-checkpoint export, PyTorch video, and the StarNet matched-smoke
+  launcher. The full-pipeline preflight still resolves 30 epochs, patience 3,
+  independent-reload gates `0.882925/0.678261`, train-side
+  `skip_final_test=true`, and direct native invocation with `$LASTEXITCODE`.
+- The StarNet smoke preflight revalidated locked source/data/Stage-A hashes,
+  `120b x 2e`, full validation, and `test_allowed=false` without creating a
+  run. The post-smoke launcher was parser-checked only because its rejected
+  checkpoints were intentionally compacted after the completed audit.
+- No model was promoted and the VS Code command packet was not edited. StarNet
+  is below the keeper on macro F1, class1 precision, recall, F1, TP retention,
+  and robustness; changing the full-train command would violate the locked
+  single-checkpoint promotion policy.
+
+### Next representation research
+
+- Rechecked the accepted ICCV 2023 paper
+  [Learning Gabor Texture Features for Fine-Grained Recognition](https://openaccess.thecvf.com/content/ICCV2023/html/Zhu_Learning_Gabor_Texture_Features_for_Fine-Grained_Recognition_ICCV_2023_paper.html)
+  and its official supplement. The method adds a learnable Gabor texture branch
+  to, rather than replacing, a semantic CNN; constrains `theta/sigma_x/sigma_y/W`,
+  splits filters into low/high-frequency ranges, then applies a Learnable
+  Histogram Operator and Filter Correlation Module.
+- The paper ablations reject the shortcuts already known to fail locally:
+  fixed Gabor parameters lose `4.3` points, removing frequency separation loses
+  `2.7`, and replacing LHO with handcrafted mean/variance/max/min loses `2.9`.
+  The supplement shows `N=32` remains a useful low-cost setting and `M=8` is the
+  chosen histogram resolution.
+- No author-provided implementation was found. Any TRKH work must therefore be
+  labeled an equation-traceable compact adaptation, not an exact reproduction.
+  Lock a train-only protocol before code: constrained low/high filters, live
+  LHO/FCM gradients, noncollapsed responses, illumination behavior, near-keeper
+  initialization, materialized export equivalence, runtime/VRAM, and an absolute
+  keeper precision/recall/TP gate before one matched no-test smoke.
+- Keeper, scratch complement, and current command hashes remain
+  `1f49d577...482677`, `f8bd6309...1a549`, and `36b9aa1a...40faf`. StarNet is
+  not promoted, so the VS Code full-train command remains unchanged.

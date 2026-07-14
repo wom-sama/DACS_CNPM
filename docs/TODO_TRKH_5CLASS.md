@@ -2481,7 +2481,7 @@
   forensics/confusions, 16-case paired native-attention/rollout/Grad-CAM XAI,
   and perturbations. Candidate won `0/5` macro conditions, had worst class1
   recall delta `-0.36424`, and used zero attribution fallback.
-- [ ] Do not sweep InceptionNeXt depth/width/kernel/ratio/layer-scale,
+- [x] Do not sweep InceptionNeXt depth/width/kernel/ratio/layer-scale,
   optimizer, LR, seed, loss, augmentation, checkpoint, or run length. Do not
   run its five-epoch continuation, full train, or test.
 - [x] Compact only the two rejected InceptionNeXt smoke roots after preserving
@@ -2493,8 +2493,53 @@
   pytest `979/979`, seven clean PowerShell parses, and five operational
   preflights. Preserve keeper/scratch/current-command hashes and do not promote
   the rejected tokenizer.
-- [ ] Research and lock official StarNet-S2 stages 1-3 before implementation.
+- [x] Research and lock official StarNet-S2 stages 1-3 before implementation.
   The next candidate must use local multiplicative feature interactions while
   retaining all eight TRKH Transformer blocks, and must gate class1 TP breaks,
   `0/2/4->1` FP, illumination behavior, runtime, and no-test provenance before
   any matched smoke.
+- [x] Implement default-off `starnet_s2_tokenizer` exactly as locked, including
+  same-weight star-vs-sum mechanism evidence, every-branch gradients, strict
+  checkpoint/config round-trip, and a train-only Stage-A resource audit.
+  Stage A passed with summary SHA `7fdb0192...ddcaa`, `1.0753x` runtime,
+  `2.1281 GiB` peak, and all nine star interactions live.
+- [x] Run one `120b x 2e`, full-validation, no-test matched smoke only if every
+  StarNet Stage-A gate passes. The exact control/candidate macro/class1 F1 was
+  `0.779446/0.487685 -> 0.769836/0.443850`; class1 P/R fell
+  `0.388235/0.655629 -> 0.372197/0.549669`. No test split was opened.
+- [x] Complete StarNet transitions, robustness, architecture trace, paired XAI,
+  and perturbation review. It reduced locked `0/2/4->1` FP by `16`, but broke
+  `23` class1 TP, rescued only `7` FN, created `43` new `3->2` harms, and won
+  only `1/5` robustness macro conditions. Post-smoke summary SHA is
+  `a8eab240...2a1db`; five-epoch/probe/full/test permission is denied.
+- [x] Reject StarNet-S2 without a depth/width/kernel/expansion/LR/seed/loss/
+  augmentation/run-length sweep. Its local multiplicative tokenizer made
+  attention more fragmented and border-heavy on important harms while object
+  desaturation remained much more causal than background perturbations.
+- [x] Preserve and compact the two rejected StarNet smoke roots after all audit
+  stages completed. Evidence root
+  `runs\evidence_starnet_s2_matched_smoke_rejected_20260715` keeps `322`
+  copied files and `324` verified payloads at manifest SHA
+  `ce98ce76...bef86`; four checkpoint binaries totaling `375,651,277` bytes
+  were excluded. Cleanup manifest SHA is `92cd39e9...c590`, observed free-space
+  gain is `415,756,288` bytes, and both original smoke roots are absent.
+- [x] Rerun StarNet retention and protected-hash checks. Audit
+  `runs\artifact_retention_audit_20260715_starnet_closure` passed over `653`
+  directories with `2/2` compacted originals absent, `blockers=[]`, and summary
+  SHA `d87dabd4...c1c1`. Keeper, scratch complement, and current-command hashes
+  remain `1f49d577...482677`, `f8bd6309...1a549`, and
+  `36b9aa1a...40faf`.
+- [x] Close StarNet engineering with compileall, focused tests `43/43`, full
+  pytest `997/997`, ten clean PowerShell parses, and five operational
+  preflights: current-best with optional final-test request, precision package,
+  TensorRT export, PyTorch video, and StarNet matched smoke. All wrappers use
+  direct native invocation with `$LASTEXITCODE`; no compacted checkpoint was
+  recreated and no test split was opened by the closure checks.
+- [x] Review the explicit StarNet/generic-tokenizer/audit cache diff and stage
+  only the 28 dependency-coherent files. `BaoCao/` and both untracked
+  deep-research reports remain unstaged; commit and push this closure batch.
+- [ ] Lock a train-only protocol for a compact learnable-Gabor texture residual
+  before implementation. It must be an equation-traceable ICCV-2023 LHO/FCM
+  adaptation, preserve the keeper semantic/CNN/Transformer path, use constrained
+  low/high-frequency experts, remain deployable, and pass precision plus class1-
+  TP preservation gates before one no-test matched smoke.

@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import math
 import re
 import shutil
 import sys
 from collections import Counter, defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Dict, Iterable, List, Mapping, Sequence, Tuple
 
@@ -18,6 +20,21 @@ from trkh.data.dataset import _pseudo_foreground_mask_array
 
 
 PROBABILITY_COLUMN = re.compile(r"^prob_(\d+)(?:_(.*))?$")
+IMAGE_STAT_FIELDS = (
+    "image_status",
+    "width",
+    "height",
+    "brightness_mean",
+    "brightness_std",
+    "contrast_proxy",
+    "highlight_ratio",
+    "shadow_ratio",
+    "saturation_mean",
+    "foreground_fraction",
+    "suspected_background_ratio",
+    "border_brightness_mean",
+    "center_brightness_mean",
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -53,6 +70,21 @@ def parse_args() -> argparse.Namespace:
         default=0,
         help="Optional cap for image-stat rows. 0 means all rows.",
     )
+    parser.add_argument(
+        "--image-stats-workers",
+        type=int,
+        default=4,
+        help="Ordered worker count for image statistics. Use 1 for serial execution.",
+    )
+    parser.add_argument(
+        "--image-stats-cache",
+        type=Path,
+        default=None,
+        help=(
+            "Optional predictions_forensics.csv from the exact same ordered image cohort. "
+            "Row count, sample_index, image_path, and image-stat columns are verified."
+        ),
+    )
     parser.add_argument("--top-k-images", type=int, default=25)
     parser.add_argument("--copy-images", action="store_true", default=False)
     return parser.parse_args()
@@ -66,6 +98,14 @@ def _read_csv(path: Path) -> Tuple[List[Dict[str, str]], List[str]]:
     if not rows:
         raise ValueError(f"Prediction CSV is empty: {path}")
     return rows, fieldnames
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _path(row: Mapping[str, str]) -> str:
@@ -305,6 +345,66 @@ def _image_stats(path: str, foreground_margin: float, mode: str) -> Dict[str, fl
     }
 
 
+def _ordered_image_stats(
+    paths: Sequence[str],
+    *,
+    foreground_margin: float,
+    mode: str,
+    max_rows: int,
+    workers: int,
+) -> List[Dict[str, float | str]]:
+    row_limit = len(paths) if int(max_rows) <= 0 else min(len(paths), int(max_rows))
+    selected_paths = list(paths[:row_limit])
+
+    def evaluate(path: str) -> Dict[str, float | str]:
+        return _image_stats(path, float(foreground_margin), str(mode))
+
+    if int(workers) <= 1 or len(selected_paths) <= 1:
+        completed = [evaluate(path) for path in selected_paths]
+    else:
+        with ThreadPoolExecutor(max_workers=int(workers)) as executor:
+            completed = list(executor.map(evaluate, selected_paths))
+    completed.extend(
+        {"image_status": "skipped_by_limit"}
+        for _ in range(len(paths) - row_limit)
+    )
+    return completed
+
+
+def _load_image_stats_cache(
+    cache_path: Path,
+    source_rows: Sequence[Mapping[str, str]],
+) -> List[Dict[str, float | str]]:
+    cache_rows, cache_fields = _read_csv(Path(cache_path))
+    if len(cache_rows) != len(source_rows):
+        raise ValueError(
+            "Image-stat cache row count mismatch: "
+            f"{len(cache_rows)} != {len(source_rows)}"
+        )
+    missing_fields = [field for field in IMAGE_STAT_FIELDS if field not in cache_fields]
+    if missing_fields:
+        raise ValueError(f"Image-stat cache is missing columns: {missing_fields}")
+
+    image_stats: List[Dict[str, float | str]] = []
+    for index, (source_row, cache_row) in enumerate(zip(source_rows, cache_rows)):
+        source_sample = _int_value(source_row, ("sample_index",), index)
+        cache_sample = _int_value(cache_row, ("sample_index",), index)
+        if source_sample != cache_sample:
+            raise ValueError(
+                f"Image-stat cache sample_index mismatch at row {index}: "
+                f"{cache_sample} != {source_sample}"
+            )
+        source_path = str(Path(_path(source_row)).resolve())
+        cache_image_path = str(Path(_path(cache_row)).resolve())
+        if source_path != cache_image_path:
+            raise ValueError(
+                f"Image-stat cache image_path mismatch at row {index}: "
+                f"{cache_image_path!r} != {source_path!r}"
+            )
+        image_stats.append({field: cache_row.get(field, "") for field in IMAGE_STAT_FIELDS})
+    return image_stats
+
+
 def _bucket_for(row: Mapping[str, object]) -> List[str]:
     buckets: List[str] = []
     if int(row["target_index"]) != int(row["prediction_index"]):
@@ -391,8 +491,20 @@ def main() -> None:
     enriched: List[Dict[str, object]] = []
     max_image_stats = int(args.max_image_stats)
     image_stats_mode = str(args.image_stats_mode)
+    image_paths = [_path(row) for row in rows]
+    image_stats_cache = Path(args.image_stats_cache).resolve() if args.image_stats_cache else None
+    if image_stats_cache is not None:
+        image_stats = _load_image_stats_cache(image_stats_cache, rows)
+    else:
+        image_stats = _ordered_image_stats(
+            image_paths,
+            foreground_margin=float(args.foreground_margin),
+            mode=image_stats_mode,
+            max_rows=max_image_stats,
+            workers=max(1, int(args.image_stats_workers)),
+        )
     for index, source_row in enumerate(rows):
-        image_path = _path(source_row)
+        image_path = image_paths[index]
         target = int(targets[index])
         prediction = int(predictions[index])
         enriched_row: Dict[str, object] = {
@@ -411,10 +523,7 @@ def main() -> None:
                 for class_index, class_name in enumerate(class_names)
             },
         }
-        if max_image_stats > 0 and index >= max_image_stats:
-            enriched_row.update({"image_status": "skipped_by_limit"})
-        else:
-            enriched_row.update(_image_stats(image_path, float(args.foreground_margin), image_stats_mode))
+        enriched_row.update(image_stats[index])
         if (index + 1) % 500 == 0:
             print(
                 f"processed {index + 1}/{len(rows)} rows forensics",
@@ -519,6 +628,13 @@ def main() -> None:
         "top_buckets": bucket_rows[:20],
         "pair_metrics": pair_rows,
         "copied_images": copied,
+        "image_stats": {
+            "mode": image_stats_mode,
+            "max_rows": max_image_stats,
+            "workers": max(1, int(args.image_stats_workers)),
+            "cache": str(image_stats_cache) if image_stats_cache is not None else "",
+            "cache_sha256": _sha256(image_stats_cache) if image_stats_cache is not None else "",
+        },
         "leakage_note": (
             "This tool only summarizes a supplied prediction CSV. Use train/val reports "
             "for development; use test reports only after the model and thresholds are frozen."
