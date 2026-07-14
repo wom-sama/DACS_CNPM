@@ -15124,3 +15124,73 @@ Date: 2026-07-02
   `runs/artifact_retention_audit_after_bicar_cleanup_20260714`. This closes the
   deployment/CIDT/BiCAR batch for selective staging; protected user files stay
   outside the commit.
+
+## MORE Readiness Lock 2026-07-14 - Parameter-Space Tail Capacity
+
+- Reviewed NeurIPS 2025 MORE after excluding locally closed loss/head/router,
+  BBN/RIDE, LoRA-like output adapter, stock hybrid, localization, SSL, and
+  current-embedding routes. MORE is distinct because it decomposes convolution
+  weights into general plus mergeable low-rank tail capacity and trains the
+  decomposition with a class-prior-weighted logit-discrepancy objective.
+- Keeper inventory contains exactly five `Conv2d` modules and only `431,200`
+  convolution parameters, so a paper-faithful all-convolution implementation is
+  bounded and can merge to zero inference overhead.
+- Locked `docs/TRKH_5CLASS_MORE_READINESS_PROTOCOL_20260714.md` before code.
+  It fixes rank ratio `0.1`, paper-normalized `A'=2` (`A=10` for five classes),
+  SGD settings, seed 42, the exact CIDT five source folds, and a matched
+  low-rank control. No validation/test information may enter readiness.
+- Unlike BiCAR's infinitesimal-gradient gate, MORE must demonstrate at least 47
+  train-OOF hard-decision changes, class1 precision `+0.015`, F1 `+0.005`,
+  explicit FP/TP safety, favorable fold signs, and paper-style tail/general
+  logit-discrepancy ordering before trainer integration is permitted.
+- Added mergeable MORE primitives and seven unit tests. The keeper wraps all
+  five expected convolutions with `57,464` tail parameters; zero-tail and
+  general-only logits are bit-exact. A TF32-enabled exploratory merge looked
+  too loose, but deterministic FP32/no-TF32 replay reduced merge error to
+  about `1e-7`, preserving the locked `1e-5` gate.
+- A metric-free 64-row train-only scale check fixed SGD LR at the paper's
+  `3e-4`: after two steps mean/max logit delta was `0.00110/0.00386`. Larger
+  rates were not selected and will not be revisited. Stage A now requires one
+  matched 20-batch fold-0 preflight with at least two control/MORE decision
+  differences before the expensive five-fold OOF audit.
+
+## MORE Functional Closure 2026-07-14 - Correct Algebra, No Selective Effect
+
+- Implemented `trkh/models/model_rebalancing.py` and the hash-locked train-only
+  auditor `trkh/tools/audit_more_model_rebalancing_readiness.py`. Focused
+  compile and tests passed `12/12` after correcting the auditor to import the
+  existing public `directional_event_masks` helper rather than a nonexistent
+  private symbol.
+- Formal output is
+  `runs/audit_more_functional_preflight_fold0_20b_20260714`. Summary SHA-256 is
+  `05c853dc228faf7948dc4e95baf7268696a9838cc2444cb64ab83dc8f3352d6c`;
+  ordered prediction CSV SHA-256 is
+  `d00da0b5e46905f3504b5273bc03f8c3ad3adf3ac43fdb97b4299aa5e67e78c2`.
+  Provenance is exact train-only CIDT fold 0 with `7372` fit rows, the locked
+  first `1280` shuffled fit rows, all `1843` held-out rows, and zero source
+  overlap. Validation and test were not read.
+- The implementation is functional: all five expected convolutions and
+  `57,464` tail parameters match inventory; zero-tail/general errors are zero;
+  control/MORE merge errors are `4.02e-7/2.98e-7`; base hashes are unchanged;
+  both factors receive finite nonzero gradients; and candidate discrepancy is
+  nonzero. Thus the failure is not an algebra, gradient, or merge defect.
+- The locked material-effect gate fails. Control and MORE have identical
+  predictions on all `1843` rows and identical macro/class1 F1
+  `0.949338/0.849206`; there are zero corrections, harms, FP removals, FP
+  creations, FN rescues, or TP breaks. Candidate/control probability max and
+  mean absolute differences are only `0.024745/0.000280`.
+- More importantly for the requested precision bias, candidate p1 rises on
+  `1431/1843` rows by mean `+0.000244`; mean p1 gain is larger for true class
+  2 (`+0.000406`) and class 3 (`+0.000375`) than true class1 (`+0.000225`).
+  Candidate class1/nonfocus tail-logit L2 ratio is `0.9631x`, opposite the
+  required `>=1.25x` tail ordering. The class-prior discrepancy is active but
+  does not create selective class1-positive capacity on this frozen keeper.
+- Per the locked protocol, MORE is closed before five-fold OOF, trainer
+  integration, validation, image smoke, XAI, probe, or test. Do not sweep
+  rank/layer/LR/amplitude/seed/budget or unfreeze the base under the same
+  formulation. Current-best full-train/export/video commands remain unchanged.
+- Closure passed compileall, focused tests `12/12`, complete pytest `931/931`,
+  and retention over `639` run directories with `blockers=[]` at
+  `runs/artifact_retention_audit_after_more_closure_20260714`. Keeper, scratch
+  complement, and command TXT hashes remain exactly
+  `1f49d577...482677`, `f8bd6309...1a549`, and `36b9aa1a...40faf`.

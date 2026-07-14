@@ -2365,3 +2365,41 @@
   next distinct method only after a train-only readiness audit proves a denser
   decision-level class1 precision effect with explicit TP preservation; a
   favorable infinitesimal gradient alone is insufficient.
+
+## Cap nhat 2026-07-14 - MORE Parameter-Space Rebalancing
+
+- [x] Research NeurIPS 2025 MORE and cross-check it against closed local
+  families. Confirm that the keeper has exactly five mergeable `Conv2d`
+  modules (`431,200` parameters), so this is a bounded representation change
+  rather than another output head or loss-only retry.
+- [x] Lock `docs/TRKH_5CLASS_MORE_READINESS_PROTOCOL_20260714.md` before code:
+  all five convolutions, rank ratio `0.1`, seed `42`, paper `A'=2`/`A=10`,
+  matched `A=0` control, exact CIDT five source folds, no validation/test, and
+  no hyperparameter sweep.
+- [x] Implement mergeable MORE convolution primitives and tests for zero-tail
+  keeper equivalence, general-only path, finite tail gradients, exact merge,
+  state-dict compatibility, and deterministic initialization.
+- [x] Lock SGD LR `3e-4` from the paper after a metric-free 64-row train-only
+  scale check (`2` steps: mean/max logit delta `0.00110/0.00386`). Keep
+  deterministic no-TF32 merge gate `<=1e-5`; isolated keeper replay reaches
+  approximately `1e-7`.
+- [x] Run the locked fold-0 functional preflight at
+  `runs/audit_more_functional_preflight_fold0_20b_20260714`. All structural,
+  algebra, freeze, gradient, and merge gates pass, but MORE changes `0/1843`
+  hard decisions versus control and has class1/nonfocus tail-logit L2 ratio
+  only `0.9631x`; Stage A therefore fails exactly as predeclared.
+- [x] Close full `9215`-row five-fold train-only OOF, trainer integration,
+  validation, probe, test, and parameter sweeps for MORE. The candidate raises
+  class1 probability on `1431/1843` rows with mean only `+0.000244`, strongest
+  on true classes 2/3 rather than class1, so this is neither material nor a
+  precision-selective tail signal.
+- [x] Keep the current-best commands unchanged. MORE cannot reach promotion
+  because Stage A failed, so no OOF, validation smoke, probe, or XAI run is
+  authorized for this method.
+- [ ] Do not revisit MORE by changing rank/layer/LR/amplitude/seed/budget or by
+  unfreezing the base on this keeper. Select a genuinely different train-only
+  representation signal with a predeclared decision-density and class1-TP/
+  nonfocus-FP gate before allocating another image-model smoke.
+- [x] Close MORE engineering with compileall, focused `12/12`, full pytest
+  `931/931`, and retention over `639` run directories with `blockers=[]`;
+  keeper/scratch/current-command hashes are unchanged.
