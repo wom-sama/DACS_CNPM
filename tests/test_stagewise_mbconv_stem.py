@@ -60,6 +60,7 @@ def test_default_stem_architecture_remains_legacy_conv_pool() -> None:
     assert model.stem_architecture == "conv_pool"
     assert not any("mbconv_stages" in key for key in model.state_dict())
     assert not any("blocks3" in key for key in model.state_dict())
+    assert not any("token_mixer.dwconv_w" in key for key in model.state_dict())
 
 
 def test_unknown_stem_architecture_is_rejected() -> None:

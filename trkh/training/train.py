@@ -363,11 +363,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--stem-channels", type=int, default=32)
     parser.add_argument(
         "--stem-architecture",
-        choices=("conv_pool", "coatnet_mbconv", "moganet_xt_tokenizer"),
+        choices=(
+            "conv_pool",
+            "coatnet_mbconv",
+            "inceptionnext_atto_tokenizer",
+            "moganet_xt_tokenizer",
+        ),
         default="conv_pool",
         help=(
             "Early convolutional hierarchy. coatnet_mbconv reuses the scratch "
             "CoAtNet-Nano stem plus its first two MBConv stages; "
+            "inceptionnext_atto_tokenizer uses official Atto stages 1-3; "
             "moganet_xt_tokenizer uses MogaNet-XT stages 1-3 to the 16x16 token grid."
         ),
     )

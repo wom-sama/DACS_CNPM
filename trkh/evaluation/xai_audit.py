@@ -91,7 +91,11 @@ def parse_args() -> argparse.Namespace:
         choices=("attention", "rollout", "grad_rollout", "gradcam", "both", "all"),
         default="both",
     )
-    parser.add_argument("--feature-source", choices=("auto", "patch_embed", "stem_last", "last_conv"), default="auto")
+    parser.add_argument(
+        "--feature-source",
+        choices=("auto", "patch_embed", "stem_output", "stem_last", "last_conv"),
+        default="auto",
+    )
     parser.add_argument("--rollout-start-layer", type=int, default=0)
     parser.add_argument("--robustness-probes", action="store_true", default=False)
     parser.add_argument("--review-high-confidence", type=float, default=0.95)

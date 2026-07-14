@@ -13,6 +13,7 @@ from torch import Tensor, nn
 from torch.utils.checkpoint import checkpoint as gradient_checkpoint
 from torchvision import models as tv_models
 
+from trkh.models.inceptionnext_atto_tokenizer import InceptionNeXtAttoTokenizer
 from trkh.models.moga_surface_tokenizer import MogaXTTokenizer
 from trkh.models.visual_contrast_attention import VisualContrastAttention
 
@@ -5647,11 +5648,12 @@ class VisionTransformerWithRegisters(nn.Module):
         if self.stem_architecture not in {
             "conv_pool",
             "coatnet_mbconv",
+            "inceptionnext_atto_tokenizer",
             "moganet_xt_tokenizer",
         }:
             raise ValueError(
                 "stem_architecture must be one of: conv_pool, coatnet_mbconv, "
-                "moganet_xt_tokenizer; "
+                "inceptionnext_atto_tokenizer, moganet_xt_tokenizer; "
                 f"got {stem_architecture!r}."
             )
         self.stem_pooling_mode = str(stem_pooling_mode).strip().lower()
@@ -5997,7 +5999,9 @@ class VisionTransformerWithRegisters(nn.Module):
             raise ValueError(f"Khong ho tro head_pooling={head_pooling!r}.")
 
         if use_cnn_stem:
-            if self.stem_architecture == "moganet_xt_tokenizer":
+            if self.stem_architecture == "inceptionnext_atto_tokenizer":
+                self.stem = InceptionNeXtAttoTokenizer(in_channels=in_channels)
+            elif self.stem_architecture == "moganet_xt_tokenizer":
                 self.stem = MogaXTTokenizer(in_channels=in_channels)
             elif self.stem_architecture == "coatnet_mbconv":
                 if int(in_channels) != 3:
@@ -6513,6 +6517,8 @@ class VisionTransformerWithRegisters(nn.Module):
             self.high_frequency_texture_expert = None
 
         self.apply(self._init_weights)
+        if isinstance(self.stem, InceptionNeXtAttoTokenizer):
+            self.stem.reset_parameters()
         self._init_parameter_tensors()
         if self.deep_abstention_head is not None:
             initial_probability = min(

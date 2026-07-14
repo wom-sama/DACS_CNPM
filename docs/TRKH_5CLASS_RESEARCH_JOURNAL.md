@@ -15383,3 +15383,111 @@ Date: 2026-07-02
   multi-direction surface evidence while avoiding Moga's serial multi-order
   cost. A new protocol and train-only resource audit are required before code
   may open validation.
+
+## InceptionNeXt-Atto Tokenizer Lock 2026-07-15 - Parallel Surface Paths
+
+- Reviewed the accepted CVPR 2024 paper and official Apache-2.0 repository at
+  commit `3f9769c6...cb535`; official `models/inceptionnext.py` SHA is
+  `aed1b0a9...7b88`. The paper attributes large-kernel ConvNet inefficiency to
+  memory access and replaces a dense large depthwise kernel with parallel
+  identity, square, horizontal-band, and vertical-band channel groups.
+- Chose official `inceptionnext_atto`, not a hand-scaled variant. Its first
+  three stages are exactly depths `2/2/6`, widths `40/80/160`, band kernel
+  `9`, and branch ratio `0.25`. Ten blocks reach `16x16`, after which the
+  unchanged eight-block TRKH Transformer performs global reasoning.
+- Locked
+  `docs/TRKH_5CLASS_INCEPTIONNEXT_ATTO_TOKENIZER_READINESS_PROTOCOL_20260715.md`
+  before implementation. The candidate must pass deterministic schema,
+  checkpoint, full component gradients, four-branch activation, five-class
+  sensitivity, parameter, `7.75 GiB`, and `1.75x` runtime gates using train
+  only. Validation, test, smoke, and current-best commands remain closed.
+
+## InceptionNeXt-Atto Closure 2026-07-15 - Foreground Focus Without Selectivity
+
+- Implemented the exact official Atto stage-1-to-3 tokenizer as a default-off
+  TRKH stem. Stage A passed all train-only checks at
+  `runs/audit_inceptionnext_atto_stage_a_20260715`: summary SHA
+  `8b1b4e6d...6ff41a5`, manifest SHA `62c80bc9...4108f`, candidate/control
+  parameters `8,298,198/7,245,590`, peak `2.0435 GiB`, and runtime `0.8710x`.
+  No validation/test loader was constructed at readiness.
+- Completed the one authorized `120b x 2e`, full-val, no-test matched pair.
+  Pair summary SHA is `163d4d1c...0d8bb`. Independent macro F1 fell
+  `0.768491 -> 0.732042`; class-1 P/R/F1 fell
+  `0.357143/0.629139/0.455635 -> 0.330049/0.443709/0.378531`.
+  Calibration became slightly less extreme (`ECE 0.49972 -> 0.46806`, NLL
+  `1.19451 -> 1.17621`), but this did not improve decisions or precision.
+- Candidate reduced locked class-1 FP `168 -> 134`, yet removed almost the
+  same number of true positives: changed decisions `277`, corrections/harms
+  `77/144`, FN rescues/TP breaks `5/33`, and new `3->2` harms `20`. All four
+  nonfocus F1 values fell. This is conservative nonselection, not agricultural
+  false-alarm control.
+- Full robustness confirmed illumination instability. Candidate won `0/5`
+  macro comparisons with clean/occlusion/dim/bright/low-contrast deltas
+  `-0.03644/-0.04020/-0.04542/-0.00388/-0.02313`. Under dim, class-1 recall
+  rose but FP expanded to `281` and precision fell to `0.24259`; under bright,
+  TP collapsed to `45` and recall to `0.29801`. Worst recall delta versus
+  control was `-0.36424`.
+- Completed trace, two full forensics/confusion audits, 32 all-method XAI case
+  exports, seven manually inspected paired contact sheets, and perturbation
+  analysis. Paired XAI summary SHA is `69338aa0...9cae9`; post-smoke summary
+  SHA is `66e47a4d...f2841`. Native attention provenance was valid and all
+  eight grad-rollout layers had gradients with zero fallback.
+- Candidate attention foreground mass increased by `0.01998`, but Stage-3
+  Grad-CAM border mass increased by `0.07774`. Object desaturation caused an
+  absolute prediction drop `0.09399` versus at most `0.00164` for background
+  gray/blur. Contact sheets show broad color/surface activation on true-class1
+  breaks and `3->2` harms, while some severe-damage FP additions attend healthy
+  edges or background. Wide background remains secondary to surface/color
+  representation and illumination-sensitive boundaries.
+- Stage B, robustness, and TP-preservation gates fail. No five-epoch run, full
+  train, test, or nearby InceptionNeXt sweep is allowed. The current keeper,
+  recall-complement scratch checkpoint, and VS Code command recipe remain
+  unchanged.
+- Compacted the two rejected smoke roots only after preserving all nonbinary
+  evidence. `runs/evidence_inceptionnext_atto_matched_smoke_rejected_20260715`
+  contains `324` verified payloads; payload-manifest SHA is
+  `de69c464...6e443`. Four checkpoint files totaling `374,414,639` bytes were
+  excluded, and the verified cleanup observed `414,355,456` freed bytes.
+- Post-cleanup retention at
+  `runs/artifact_retention_audit_20260715_inceptionnext_closure` passed over
+  `649` directories, checked `179` compacted originals with zero remaining,
+  and reported `blockers=[]`; summary SHA is `15e68726...60ccc`. Keeper,
+  scratch complement, post-smoke evidence, and current-command hashes remain
+  `1f49d577...482677`, `f8bd6309...1a549`, `66e47a4d...f2841`, and
+  `36b9aa1a...40faf`.
+
+### Next representation research
+
+- Rechecked the CVPR 2024 *Rewrite the Stars* paper and official Apache-2.0
+  repository at commit `c999eb50840a44f9f1d92e8f7d2c22cd645a6d5e`;
+  official `imagenet/starnet.py` SHA is
+  `4e9eb1f58ea51427eebe17baf9891a3e1d73d000597c032a700176c954c3031a`.
+- StarNet-S2 is distinct from the rejected pooled compact-bilinear head:
+  `ReLU6(f1(x)) * f2(x)` creates local multiplicative channel interactions in
+  every spatial block before pooling or Transformer tokenization. Official S2
+  uses base width `32`, depths `1/2/6/2`, expansion `4`, depthwise kernel `7`,
+  and reports `74.8` ImageNet top-1 at `3.7M` parameters.
+- A prospective TRKH tokenizer will use only official stages 1-3
+  (`32/64/128`, `1/2/6`, nine star blocks) to reach `16x16`, followed by the
+  unchanged eight Transformer blocks. This is research input only until a
+  no-test protocol locks architecture, gradients, star-vs-sum mechanistic
+  evidence, resource limits, TP protection, FP reduction, and illumination
+  robustness gates.
+
+### InceptionNeXt engineering closure
+
+- Closure verification passed compileall, focused tests `151/151`, and full
+  pytest `979/979`. PowerShell parsing passed for all seven affected/current
+  launchers with zero parser errors.
+- Operational preflights returned exit code `0` for the current-best full
+  pipeline (including the optional final-test request), precision package,
+  TensorRT export, PyTorch video inference, and the rejected InceptionNeXt
+  matched-smoke launcher. All reported the direct native-stderr policy and no
+  `NativeCommandError` pipeline.
+- The post-smoke wrapper cannot be replayed after intentional checkpoint
+  compaction, but its actual completed run is stronger evidence: every status
+  stage is `completed`, the post-smoke summary SHA is
+  `66e47a4d...f2841`, and no test split was opened.
+- No current-best command was changed: InceptionNeXt failed the locked
+  validation/precision/TP-preservation gates, so it is not a promotable
+  single-checkpoint candidate.

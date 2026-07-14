@@ -2464,7 +2464,37 @@
 - [x] Research official InceptionNeXt `atto` at commit
   `3f9769c6...cb535`, source SHA `aed1b0a9...7b88`, and distinguish its
   parallel identity/`3x3`/`1x9`/`9x1` mixer from Moga and FasterNet.
-- [ ] Lock the InceptionNeXt-Atto stage-1-to-3 TRKH tokenizer protocol before
+- [x] Lock the InceptionNeXt-Atto stage-1-to-3 TRKH tokenizer protocol before
   implementation. Require exact official `2/2/6`, `40/80/160`, kernel `9`,
   ratio `0.25`, ten blocks, full five-class sensitivity, and a matched
   batch-32 runtime ratio no greater than `1.75x` before any validation smoke.
+- [x] Implement default-off `inceptionnext_atto_tokenizer`, checkpoint/config/
+  CLI wiring, exact branch/component tests, and the train-only Stage-A audit.
+- [x] Run one matched `120b x 2e`, full-val, no-test precision smoke only if
+  all InceptionNeXt Stage-A gates pass; then run complete transition,
+  robustness, architecture, and paired-XAI audits before any continuation.
+- [x] Close InceptionNeXt after Stage A passed but the matched candidate fell
+  from control macro/class1 F1 `0.768491/0.455635` to
+  `0.732042/0.378531`, class1 P/R fell to `0.330049/0.443709`, and
+  correction/harm plus FN-rescue/TP-break counts were `77/144` and `5/33`.
+- [x] Verify all five robustness conditions, architecture trace, full
+  forensics/confusions, 16-case paired native-attention/rollout/Grad-CAM XAI,
+  and perturbations. Candidate won `0/5` macro conditions, had worst class1
+  recall delta `-0.36424`, and used zero attribution fallback.
+- [ ] Do not sweep InceptionNeXt depth/width/kernel/ratio/layer-scale,
+  optimizer, LR, seed, loss, augmentation, checkpoint, or run length. Do not
+  run its five-epoch continuation, full train, or test.
+- [x] Compact only the two rejected InceptionNeXt smoke roots after preserving
+  all nonbinary evidence and exact hashes; keep Stage A and the complete pair
+  audit live, then rerun retention and protected-hash checks. Compaction kept
+  `324` verified payloads, excluded four binaries, reclaimed `414,355,456`
+  observed bytes, and retention passed over `649` directories with no blocker.
+- [x] Close InceptionNeXt engineering with compileall, focused `151/151`, full
+  pytest `979/979`, seven clean PowerShell parses, and five operational
+  preflights. Preserve keeper/scratch/current-command hashes and do not promote
+  the rejected tokenizer.
+- [ ] Research and lock official StarNet-S2 stages 1-3 before implementation.
+  The next candidate must use local multiplicative feature interactions while
+  retaining all eight TRKH Transformer blocks, and must gate class1 TP breaks,
+  `0/2/4->1` FP, illumination behavior, runtime, and no-test provenance before
+  any matched smoke.

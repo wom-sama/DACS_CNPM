@@ -100,8 +100,17 @@ def _last_conv_in_module(module: nn.Module) -> Tuple[Optional[nn.Module], Option
 def resolve_feature_hook(model: nn.Module, feature_source: str = "auto") -> FeatureHookSpec:
     feature_source = str(feature_source or "auto").strip().lower()
     backbone = getattr(model, "frame_model", model)
-    if feature_source not in {"auto", "patch_embed", "patch_embed.proj", "stem_last", "last_conv"}:
-        raise ValueError("feature_source chi ho tro auto, patch_embed, stem_last, last_conv.")
+    if feature_source not in {
+        "auto",
+        "patch_embed",
+        "patch_embed.proj",
+        "stem_output",
+        "stem_last",
+        "last_conv",
+    }:
+        raise ValueError(
+            "feature_source chi ho tro auto, patch_embed, stem_output, stem_last, last_conv."
+        )
 
     if feature_source in {"auto", "patch_embed", "patch_embed.proj"}:
         if hasattr(backbone, "patch_embed") and hasattr(backbone.patch_embed, "proj"):
@@ -109,10 +118,12 @@ def resolve_feature_hook(model: nn.Module, feature_source: str = "auto") -> Feat
         if feature_source in {"patch_embed", "patch_embed.proj"}:
             raise TypeError("Khong tim thay patch_embed.proj de hook Grad-CAM.")
 
-    if feature_source == "stem_last":
+    if feature_source in {"stem_output", "stem_last"}:
         stem = getattr(backbone, "stem", None)
         if stem is None:
-            raise TypeError("Model khong co CNN stem de hook stem_last.")
+            raise TypeError(f"Model khong co CNN stem de hook {feature_source}.")
+        if feature_source == "stem_output":
+            return FeatureHookSpec(module=stem, source="stem.output")
         stem_conv, stem_name = _last_conv_in_module(stem)
         if stem_conv is None or stem_name is None:
             raise TypeError("Khong tim thay Conv2d trong CNN stem.")

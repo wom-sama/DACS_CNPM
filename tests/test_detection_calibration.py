@@ -270,6 +270,21 @@ class DetectionCalibrationTests(unittest.TestCase):
         self.assertIs(spec.module, model.stem[2][0])
         self.assertTrue(spec.source.startswith("stem."))
 
+    def test_resolve_feature_hook_can_target_complete_stem_output(self):
+        class ToyModel(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.stem = nn.Sequential(
+                    nn.Conv2d(3, 4, kernel_size=3, padding=1),
+                    nn.ReLU(),
+                    nn.Conv2d(4, 8, kernel_size=3, padding=1),
+                )
+
+        model = ToyModel()
+        spec = resolve_feature_hook(model, feature_source="stem_output")
+        self.assertIs(spec.module, model.stem)
+        self.assertEqual(spec.source, "stem.output")
+
     def test_vit_registers_ignores_detection_only_model_config_keys(self):
         model = create_model(
             num_classes=5,
