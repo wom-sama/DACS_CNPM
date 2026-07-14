@@ -13,6 +13,7 @@ from torch import Tensor, nn
 from torch.utils.checkpoint import checkpoint as gradient_checkpoint
 from torchvision import models as tv_models
 
+from trkh.models.moga_surface_tokenizer import MogaXTTokenizer
 from trkh.models.visual_contrast_attention import VisualContrastAttention
 
 
@@ -3313,7 +3314,9 @@ class ColorStatisticFusion(nn.Module):
         lab_center_mean, _ = self._weighted_mean_std(lab, center_weights)
         lab_border_mean, _ = self._weighted_mean_std(lab, border_weights)
         lab_center_minus_border = lab_center_mean - lab_border_mean
-        lab_chroma = torch.sqrt((lab[:, 1] ** 2 + lab[:, 2] ** 2).clamp(min=0.0))
+        lab_chroma = torch.sqrt(
+            (lab[:, 1] ** 2 + lab[:, 2] ** 2).clamp(min=1e-8)
+        )
         color_histograms = torch.cat(
             (
                 self._soft_histogram(hue, global_weights, bins=self.hue_bins, min_value=0.0, max_value=1.0),
@@ -5641,9 +5644,14 @@ class VisionTransformerWithRegisters(nn.Module):
         self.register_positional_embedding = register_positional_embedding
         self.use_cnn_stem = use_cnn_stem
         self.stem_architecture = str(stem_architecture).strip().lower()
-        if self.stem_architecture not in {"conv_pool", "coatnet_mbconv"}:
+        if self.stem_architecture not in {
+            "conv_pool",
+            "coatnet_mbconv",
+            "moganet_xt_tokenizer",
+        }:
             raise ValueError(
-                "stem_architecture must be one of: conv_pool, coatnet_mbconv; "
+                "stem_architecture must be one of: conv_pool, coatnet_mbconv, "
+                "moganet_xt_tokenizer; "
                 f"got {stem_architecture!r}."
             )
         self.stem_pooling_mode = str(stem_pooling_mode).strip().lower()
@@ -5989,7 +5997,9 @@ class VisionTransformerWithRegisters(nn.Module):
             raise ValueError(f"Khong ho tro head_pooling={head_pooling!r}.")
 
         if use_cnn_stem:
-            if self.stem_architecture == "coatnet_mbconv":
+            if self.stem_architecture == "moganet_xt_tokenizer":
+                self.stem = MogaXTTokenizer(in_channels=in_channels)
+            elif self.stem_architecture == "coatnet_mbconv":
                 if int(in_channels) != 3:
                     raise ValueError("coatnet_mbconv stem requires three-channel RGB input.")
                 self.stem = CoAtNetMBConvStem(embed_dim=embed_dim)
@@ -6310,9 +6320,9 @@ class VisionTransformerWithRegisters(nn.Module):
             self.cumulative_ordinal_dropout = None
             self.cumulative_ordinal_head = None
         if self.cnn_feature_fusion:
-            self.cnn_fusion_norm = nn.LayerNorm(embed_dim)
+            self.cnn_fusion_norm = nn.LayerNorm(patch_embed_channels)
             self.cnn_fusion_dropout = nn.Dropout(float(max(0.0, cnn_fusion_dropout)))
-            self.cnn_fusion_head = nn.Linear(embed_dim, num_classes)
+            self.cnn_fusion_head = nn.Linear(patch_embed_channels, num_classes)
         else:
             self.cnn_fusion_norm = nn.Identity()
             self.cnn_fusion_dropout = nn.Identity()

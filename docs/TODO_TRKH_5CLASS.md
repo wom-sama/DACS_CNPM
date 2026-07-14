@@ -2441,3 +2441,30 @@
   method before implementation. It must create direct class1-positive surface
   evidence, preserve keeper TP, suppress `0/2/4->1`, and pass a train-only
   readiness gate before one matched no-test smoke.
+- [x] Research and lock the MogaNet-XT stage-1-to-3 tokenizer at official
+  commit `c83e328b...c0a1` and source SHA `1ac13dfb...79797`. Distinguish it
+  from the rejected two-stage MBConv transplant and keep all eight TRKH
+  Transformer blocks.
+- [x] Implement default-off `moganet_xt_tokenizer` exactly as locked, then run
+  the train-only shape/gradient/component/resource audit. Do not construct a
+  validation/test loader during Stage A. All functional gates passed in v2;
+  summary SHA is `98c27d5e...f406`.
+- [x] Cancel the conditional matched smoke because candidate/control runtime
+  was `1.9983x`, above the locked `1.75x` Stage-A limit. Do not run validation,
+  probe, test, or a Moga depth/width/kernel/layout sweep.
+- [x] Fix the baseline-wide Lab-chroma zero-gradient NaN exposed by Stage A,
+  prove it affected control and candidate equally, and add a zero-chroma input-
+  gradient regression. This XAI repair does not override the Moga rejection.
+- [x] Reject `channels_last` after a metric-free five-repeat resource probe
+  worsened candidate median `0.300960 -> 0.335850 s`; do not integrate it.
+- [x] Close Moga engineering with compileall, focused `13/13`, full pytest
+  `965/965`, five wrapper parses, three operational preflights, and retention
+  over `645` run directories with `blockers=[]`; preserve all three protected
+  hashes and leave current-best commands unchanged.
+- [x] Research official InceptionNeXt `atto` at commit
+  `3f9769c6...cb535`, source SHA `aed1b0a9...7b88`, and distinguish its
+  parallel identity/`3x3`/`1x9`/`9x1` mixer from Moga and FasterNet.
+- [ ] Lock the InceptionNeXt-Atto stage-1-to-3 TRKH tokenizer protocol before
+  implementation. Require exact official `2/2/6`, `40/80/160`, kernel `9`,
+  ratio `0.25`, ten blocks, full five-class sensitivity, and a matched
+  batch-32 runtime ratio no greater than `1.75x` before any validation smoke.

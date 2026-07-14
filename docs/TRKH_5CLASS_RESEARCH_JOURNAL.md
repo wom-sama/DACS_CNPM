@@ -15311,3 +15311,75 @@ Date: 2026-07-02
   Closure passed compileall, full pytest `956/956`, five PowerShell parser
   checks, and current-best/VCA preflights. Current-best commands are
   intentionally unchanged.
+
+## Moga Tokenizer Readiness Lock 2026-07-15 - Multi-Order Surface Encoding
+
+- Rechecked the ICLR 2024 MogaNet paper and official repository rather than
+  inferring a block from memory. Locked official commit
+  `c83e328b...c0a1` and `models/moganet.py` SHA
+  `1ac13dfb...79797`. The paper's mechanism combines feature decomposition,
+  `1:3:4` low/middle/high-order depthwise paths, SiLU gating, and channel
+  aggregation; its ablation does not support extracting only one component.
+- The candidate is a hybrid tokenizer, not a pure MogaNet classifier and not
+  another two-stage MBConv stem. It uses the full MogaNet-XT stage-1-to-3
+  depth `3/3/10` to reach the exact `16x16` patch grid, then retains TRKH's
+  eight Transformer blocks for global reasoning.
+- Locked
+  `docs/TRKH_5CLASS_MOGA_TOKENIZER_READINESS_PROTOCOL_20260715.md` before
+  runtime edits. No pretraining, raw-data change, test opening, parameter
+  sweep, or current-command change is allowed. A train-only shape/gradient/
+  resource gate must pass before the single `120b x 2e` matched smoke.
+
+## Moga Tokenizer Stage-A Closure 2026-07-15 - Functional but Too Slow
+
+- Implemented the complete locked MogaNet-XT stage-1-to-3 tokenizer as a
+  default-off `moganet_xt_tokenizer`, retaining the existing eight TRKH
+  Transformer blocks. The candidate emits `B x 96 x 16 x 16`, and the parent
+  patch embedding performs the locked `1x1`, `96 -> 256` token projection.
+- The first full-recipe forward found a real dimensional assumption in the
+  existing CNN residual classifier. It normalized pooled stem features as
+  `embed_dim=256` even when the actual stem width was `96`. The generic fix
+  now uses `patch_embed_channels`; the control remains exactly `256` and its
+  state schema/hash is unchanged. A regression covers CNN plus branch fusion.
+- The first readiness run then identified a baseline-wide input-gradient NaN
+  in the color-statistic branch. Anomaly detection traced it to Lab chroma
+  `sqrt(a^2+b^2)` at zero. Control and candidate had the same NaN count with
+  token pruning both on and off. Clamping the radicand to `1e-8` restored
+  finite XAI sensitivity and added a zero-chroma gradient regression.
+- The final train-only run is
+  `runs/audit_moga_tokenizer_stage_a_20260715_v2`; summary SHA is
+  `98c27d5e...f406`, artifact-manifest SHA is `4b368e3b...f815`.
+  It used `9215` train objects and no validation/test loader.
+- All functional checks passed: deterministic default control and candidate,
+  strict round-trip, exact `3/3/10` depths and `16` blocks, `256` patch
+  tokens, finite FP32/BF16 logits, all 11 declared gradient families live,
+  nonzero/distinct multi-order branches, and finite sensitivity for classes
+  `0..4`. Candidate/control parameters were `8,503,022/7,245,590`.
+- Resource behavior rejected the method. Candidate peak was safe at
+  `4.2665 GiB`, but median batch-32 BF16 forward/backward was
+  `0.298064 s` versus `0.149159 s`, or `1.998304x`, above the locked
+  `1.75x` limit. A five-repeat `channels_last` probe worsened median time from
+  `0.300960 s` to `0.335850 s`, so it was discarded without a code change.
+- Stage B is canceled. No validation prediction, smoke, XAI comparison,
+  five-epoch probe, test, depth/width/kernel sweep, or current-best command
+  update is permitted for this exact Moga formulation.
+- Removed the superseded pre-Lab-fix audit and both reproducible console logs
+  only after exact SHA/size checks. Cleanup manifest
+  `runs/cleanup_manifest_20260715_moga_stage_a_superseded.json` records
+  `98,384` logical bytes and `102,400` observed freed bytes; the v2 summary and
+  artifact manifest remain live.
+- Closure passed compileall, focused tests `13/13`, full pytest `965/965`, five
+  PowerShell parser checks, current full-pipeline/TensorRT-export/PyTorch-video
+  preflights, and retention over `645` run directories with `blockers=[]`.
+  Keeper, scratch complement, and current command hashes remain
+  `1f49d577...482677`, `f8bd6309...1a549`, and `36b9aa1a...40faf`.
+
+### Next representation direction
+
+- Official InceptionNeXt `atto` is a distinct efficiency-oriented candidate:
+  its first three stages use exact official depths `2/2/6`, widths
+  `40/80/160`, band kernel `9`, and branch ratio `0.25`, reaching `16x16`
+  in ten blocks. Its identity, `3x3`, `1x9`, and `9x1` channel branches retain
+  multi-direction surface evidence while avoiding Moga's serial multi-order
+  cost. A new protocol and train-only resource audit are required before code
+  may open validation.
