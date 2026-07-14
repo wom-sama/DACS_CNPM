@@ -62,6 +62,9 @@ def test_delta_means_is_right_minus_left_and_ignores_nonfinite() -> None:
 
 def test_known_attention_source_accepts_full_grid_return_attention_provenance() -> None:
     assert _known_attention_source("forward_features.return_attention.blocks[7]")
+    assert _known_attention_source(
+        "forward_features.return_attention.late_member_blocks[7]"
+    )
     assert _known_attention_source("feature_map_fallback")
     assert not _known_attention_source("")
     assert not _known_attention_source("forward_features.return_attention.blocks[bad]")

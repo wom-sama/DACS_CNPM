@@ -857,6 +857,46 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--late-class-attention-mlp-ratio", type=float, default=2.0)
     parser.add_argument("--late-class-attention-residual-scale", type=float, default=0.10)
     parser.add_argument(
+        "--late-member-branch",
+        action="store_true",
+        default=False,
+        help=(
+            "Share the early TRKH body and fork a second member after pruning; "
+            "default-off and initialized from the primary path on legacy resume."
+        ),
+    )
+    parser.add_argument("--late-member-fork-after-block", type=int, default=6)
+    parser.add_argument("--late-member-candidate-weight", type=float, default=0.40)
+    parser.add_argument("--late-member-focus-class", type=int, default=1)
+    parser.add_argument("--late-member-focus-margin-offset", type=float, default=0.0)
+    parser.add_argument("--late-member-aux-ce-loss-weight", type=float, default=0.0)
+    parser.add_argument("--late-member-directional-loss-weight", type=float, default=0.0)
+    parser.add_argument("--late-member-preservation-loss-weight", type=float, default=0.0)
+    parser.add_argument(
+        "--late-member-precision-rule-distillation-loss-weight",
+        type=float,
+        default=0.0,
+    )
+    parser.add_argument(
+        "--late-member-precision-rule-correct-boost", type=float, default=5.0
+    )
+    parser.add_argument(
+        "--late-member-precision-rule-distillation-distance",
+        choices=("kl", "logit_l2"),
+        default="kl",
+    )
+    parser.add_argument(
+        "--late-member-directional-negative-classes", type=str, default="0,2,4"
+    )
+    parser.add_argument(
+        "--late-member-directional-min-teacher-gap", type=float, default=0.04
+    )
+    parser.add_argument(
+        "--late-member-directional-hard-target-blend", type=float, default=0.25
+    )
+    parser.add_argument("--late-member-preservation-slack", type=float, default=0.01)
+    parser.add_argument("--late-member-loss-start-epoch", type=int, default=1)
+    parser.add_argument(
         "--mixstyle",
         action="store_true",
         default=False,
@@ -4374,6 +4414,53 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         raise ValueError("--late-class-attention-mlp-ratio phai > 0.")
     if args.late_class_attention_residual_scale < 0.0:
         raise ValueError("--late-class-attention-residual-scale phai >= 0.")
+    if args.late_member_branch and not 1 <= args.late_member_fork_after_block < args.depth:
+        raise ValueError("--late-member-fork-after-block phai nam trong [1, depth-1].")
+    if not 0.0 <= args.late_member_candidate_weight <= 1.0:
+        raise ValueError("--late-member-candidate-weight phai nam trong [0, 1].")
+    if args.late_member_focus_class < 0:
+        raise ValueError("--late-member-focus-class phai >= 0.")
+    if (
+        args.late_member_branch
+        and args.expected_num_classes > 0
+        and args.late_member_focus_class >= args.expected_num_classes
+    ):
+        raise ValueError("--late-member-focus-class nam ngoai so class du kien.")
+    if not 0.0 <= args.late_member_focus_margin_offset < 1.0:
+        raise ValueError("--late-member-focus-margin-offset phai nam trong [0, 1).")
+    if args.late_member_aux_ce_loss_weight < 0.0:
+        raise ValueError("--late-member-aux-ce-loss-weight phai >= 0.")
+    if args.late_member_directional_loss_weight < 0.0:
+        raise ValueError("--late-member-directional-loss-weight phai >= 0.")
+    if args.late_member_preservation_loss_weight < 0.0:
+        raise ValueError("--late-member-preservation-loss-weight phai >= 0.")
+    if args.late_member_precision_rule_distillation_loss_weight < 0.0:
+        raise ValueError(
+            "--late-member-precision-rule-distillation-loss-weight phai >= 0."
+        )
+    if args.late_member_precision_rule_correct_boost < 0.0:
+        raise ValueError("--late-member-precision-rule-correct-boost phai >= 0.")
+    if args.late_member_directional_min_teacher_gap < 0.0:
+        raise ValueError("--late-member-directional-min-teacher-gap phai >= 0.")
+    if not 0.0 <= args.late_member_directional_hard_target_blend <= 1.0:
+        raise ValueError(
+            "--late-member-directional-hard-target-blend phai nam trong [0, 1]."
+        )
+    if args.late_member_preservation_slack < 0.0:
+        raise ValueError("--late-member-preservation-slack phai >= 0.")
+    if args.late_member_loss_start_epoch < 1:
+        raise ValueError("--late-member-loss-start-epoch phai >= 1.")
+    if (
+        (
+            args.late_member_directional_loss_weight > 0.0
+            or args.late_member_precision_rule_distillation_loss_weight > 0.0
+        )
+        and args.distillation_teacher_checkpoint is None
+    ):
+        raise ValueError(
+            "Late-member teacher loss > 0 yeu cau "
+            "--distillation-teacher-checkpoint."
+        )
     if args.branch_token_dropout < 0.0:
         raise ValueError("--branch-token-dropout phai >= 0.")
     if args.branch_color_tokens < 0 or args.branch_edge_tokens < 0 or args.branch_cnn_tokens < 0:
@@ -6103,6 +6190,11 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         late_class_attention_dropout=args.late_class_attention_dropout,
         late_class_attention_mlp_ratio=args.late_class_attention_mlp_ratio,
         late_class_attention_residual_scale=args.late_class_attention_residual_scale,
+        late_member_branch=bool(args.late_member_branch),
+        late_member_fork_after_block=args.late_member_fork_after_block,
+        late_member_candidate_weight=args.late_member_candidate_weight,
+        late_member_focus_class=args.late_member_focus_class,
+        late_member_focus_margin_offset=args.late_member_focus_margin_offset,
         mixstyle=bool(args.mixstyle),
         mixstyle_probability=args.mixstyle_probability,
         mixstyle_alpha=args.mixstyle_alpha,
@@ -6642,7 +6734,10 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         complement_entropy_classes=args.complement_entropy_classes,
         complement_entropy_start_epoch=args.complement_entropy_start_epoch,
         pretrained_distillation=bool(
-            args.pretrained_distillation or args.distillation_teacher_csv is not None
+            args.pretrained_distillation
+            or args.distillation_teacher_csv is not None
+            or args.late_member_directional_loss_weight > 0.0
+            or args.late_member_precision_rule_distillation_loss_weight > 0.0
         ),
         distillation_teacher_checkpoint=str(args.distillation_teacher_checkpoint or ""),
         distillation_teacher_csv=str(args.distillation_teacher_csv or ""),
@@ -6654,6 +6749,31 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         distillation_temperature=args.distillation_temperature,
         distillation_focus_class_index=args.distillation_focus_class_index,
         distillation_focus_class_weight=args.distillation_focus_class_weight,
+        late_member_aux_ce_loss_weight=args.late_member_aux_ce_loss_weight,
+        late_member_directional_loss_weight=args.late_member_directional_loss_weight,
+        late_member_preservation_loss_weight=(
+            args.late_member_preservation_loss_weight
+        ),
+        late_member_precision_rule_distillation_loss_weight=(
+            args.late_member_precision_rule_distillation_loss_weight
+        ),
+        late_member_precision_rule_correct_boost=(
+            args.late_member_precision_rule_correct_boost
+        ),
+        late_member_precision_rule_distillation_distance=(
+            args.late_member_precision_rule_distillation_distance
+        ),
+        late_member_directional_negative_classes=(
+            args.late_member_directional_negative_classes
+        ),
+        late_member_directional_min_teacher_gap=(
+            args.late_member_directional_min_teacher_gap
+        ),
+        late_member_directional_hard_target_blend=(
+            args.late_member_directional_hard_target_blend
+        ),
+        late_member_preservation_slack=args.late_member_preservation_slack,
+        late_member_loss_start_epoch=args.late_member_loss_start_epoch,
         teacher_non_target_distillation_loss_weight=(
             args.teacher_non_target_distillation_loss_weight
         ),
@@ -7240,6 +7360,31 @@ def _keep_frozen_norm_modules_eval(model: nn.Module) -> int:
         module.eval()
         frozen_count += 1
     return frozen_count
+
+
+def _keep_late_member_primary_path_eval(model: nn.Module) -> int:
+    """Keep a frozen keeper path deterministic while training only late members."""
+    prefixes = tuple(
+        str(prefix) for prefix in getattr(model, "_trainable_module_prefixes", ())
+    )
+    if (
+        not bool(getattr(model, "late_member_enabled", False))
+        or not prefixes
+        or any(not prefix.startswith("late_member_") for prefix in prefixes)
+    ):
+        return 0
+
+    frozen_children = 0
+    for module_name, module in model.named_children():
+        if module_name.startswith("late_member_"):
+            module.train(True)
+            continue
+        module.eval()
+        frozen_children += 1
+    # The top-level training flag still enables training-only feature exports and
+    # checkpointing, while every shared/primary child remains deterministic.
+    model.training = True
+    return frozen_children
 
 
 def _preload_resume_checkpoint_for_config(args: argparse.Namespace) -> Tuple[Optional[Path], Optional[Dict[str, object]]]:
@@ -15254,41 +15399,61 @@ def _build_pretrained_distillation_teacher(
     target_class_names: Sequence[str],
     device: torch.device,
 ) -> Tuple[nn.Module, Tensor, Dict[str, object]]:
-    try:
-        import timm
-    except ImportError as exc:  # pragma: no cover - environment dependent.
-        raise RuntimeError(
-            "Pretrained distillation teacher yeu cau package timm."
-        ) from exc
-
     checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
     if not isinstance(checkpoint, dict):
         raise ValueError(f"Teacher checkpoint khong hop le: {checkpoint_path}")
-    teacher_args = checkpoint.get("args", {})
-    teacher_classes = [str(value) for value in checkpoint.get("classes", [])]
-    teacher_model_name = str(
-        teacher_args.get("model", "")
-        if isinstance(teacher_args, dict)
-        else ""
-    ).strip()
-    teacher_state = checkpoint.get("model")
-    if not teacher_model_name or not isinstance(teacher_state, dict):
-        raise ValueError(
-            "Teacher checkpoint phai co args.model va model state theo format baseline TIMM."
+    is_trkh_checkpoint = isinstance(checkpoint.get("model_config"), dict) and isinstance(
+        checkpoint.get("model_state"), dict
+    )
+    if is_trkh_checkpoint:
+        teacher_classes = [
+            str(value) for value in checkpoint.get("class_names", [])
+        ]
+        if not teacher_classes:
+            raise ValueError(
+                "TRKH teacher checkpoint must record non-empty class_names."
+            )
+        teacher_model_name = str(
+            checkpoint.get("model_config", {}).get("model_type", "vit_registers")
         )
+        teacher = build_model_from_checkpoint(
+            dict(checkpoint),
+            num_classes=len(teacher_classes),
+        )
+        teacher_backend = "trkh"
+    else:
+        try:
+            import timm
+        except ImportError as exc:  # pragma: no cover - environment dependent.
+            raise RuntimeError(
+                "TIMM distillation teacher yeu cau package timm."
+            ) from exc
+        teacher_args = checkpoint.get("args", {})
+        teacher_classes = [str(value) for value in checkpoint.get("classes", [])]
+        teacher_model_name = str(
+            teacher_args.get("model", "")
+            if isinstance(teacher_args, dict)
+            else ""
+        ).strip()
+        teacher_state = checkpoint.get("model")
+        if not teacher_model_name or not isinstance(teacher_state, dict):
+            raise ValueError(
+                "Teacher checkpoint phai la TRKH model_state/model_config hoac "
+                "baseline TIMM args.model/model."
+            )
+        teacher = timm.create_model(
+            teacher_model_name,
+            pretrained=False,
+            num_classes=len(teacher_classes),
+        )
+        teacher.load_state_dict(teacher_state, strict=True)
+        teacher_backend = "timm"
     missing_classes = sorted(set(target_class_names) - set(teacher_classes))
     if missing_classes or len(teacher_classes) != len(target_class_names):
         raise ValueError(
             "Teacher class names khong khop dataset: "
             f"teacher={teacher_classes} target={list(target_class_names)}"
         )
-
-    teacher = timm.create_model(
-        teacher_model_name,
-        pretrained=False,
-        num_classes=len(teacher_classes),
-    )
-    teacher.load_state_dict(teacher_state, strict=True)
     teacher_total_parameters = sum(
         int(parameter.numel()) for parameter in teacher.parameters()
     )
@@ -15301,6 +15466,7 @@ def _build_pretrained_distillation_teacher(
     summary = {
         "enabled": True,
         "checkpoint": str(Path(checkpoint_path).resolve()),
+        "backend": teacher_backend,
         "model": teacher_model_name,
         "teacher_classes": teacher_classes,
         "target_classes": list(target_class_names),
@@ -17373,6 +17539,319 @@ def _teacher_focus_binary_loss_from_logits(
     )
 
 
+def _late_member_specialist_losses_from_features(
+    *,
+    features: Optional[Dict[str, Tensor]],
+    teacher_logits: Optional[Tensor],
+    hard_labels: Optional[Tensor],
+    targets,
+    focus_class: int,
+    negative_classes: Union[str, Sequence[int]],
+    min_teacher_gap: float,
+    hard_target_blend: float,
+    preservation_slack: float,
+) -> Tuple[Tensor, Tensor, Tensor, Dict[str, float]]:
+    candidate_logits = (
+        features.get("late_member_logits") if isinstance(features, dict) else None
+    )
+    primary_logits = (
+        features.get("late_member_primary_logits")
+        if isinstance(features, dict)
+        else None
+    )
+    reference = candidate_logits if torch.is_tensor(candidate_logits) else primary_logits
+    if not torch.is_tensor(reference):
+        raise ValueError("Late-member specialist loss requires late-member logits.")
+    zero = reference.sum() * 0.0
+    stats = {
+        "positive_fraction": 0.0,
+        "negative_fraction": 0.0,
+        "positive_count": 0.0,
+        "negative_count": 0.0,
+        "protect_positive_fraction": 0.0,
+        "protect_negative_fraction": 0.0,
+        "candidate_focus_probability": 0.0,
+        "primary_focus_probability": 0.0,
+        "teacher_focus_probability": 0.0,
+    }
+    if (
+        not torch.is_tensor(candidate_logits)
+        or not torch.is_tensor(primary_logits)
+        or candidate_logits.ndim != 2
+        or tuple(candidate_logits.shape) != tuple(primary_logits.shape)
+    ):
+        raise ValueError("Late-member candidate/primary logits must have matching [B, C] shapes.")
+    num_classes = int(candidate_logits.size(1))
+    focus = int(focus_class)
+    if not 0 <= focus < num_classes:
+        raise ValueError(f"Late-member focus class {focus} is outside [0, {num_classes - 1}].")
+    if hard_labels is not None and torch.is_tensor(hard_labels):
+        target_indices = hard_labels.to(
+            device=candidate_logits.device,
+            dtype=torch.long,
+        ).view(-1)
+    else:
+        target_indices = _classification_target_indices(targets, candidate_logits)
+    if target_indices is None or int(target_indices.numel()) != int(candidate_logits.size(0)):
+        return zero, zero, zero, stats
+
+    negatives = _parse_angular_margin_classes(
+        negative_classes,
+        num_classes=num_classes,
+    )
+    negatives = [class_index for class_index in negatives if class_index != focus]
+    if not negatives:
+        raise ValueError("Late-member directional loss requires non-focus negative classes.")
+    negative_tensor = torch.tensor(
+        negatives,
+        device=candidate_logits.device,
+        dtype=torch.long,
+    )
+    primary_probabilities = F.softmax(primary_logits.detach().float(), dim=1)
+    candidate_probabilities = F.softmax(candidate_logits.float(), dim=1)
+    primary_focus = primary_probabilities[:, focus].clamp(min=1e-6, max=1.0 - 1e-6)
+    candidate_focus = candidate_probabilities[:, focus].clamp(min=1e-6, max=1.0 - 1e-6)
+    primary_predictions = primary_probabilities.argmax(dim=1)
+    true_focus = target_indices == focus
+    true_negative = torch.isin(target_indices, negative_tensor)
+
+    nonfocus_indices = torch.tensor(
+        [class_index for class_index in range(num_classes) if class_index != focus],
+        device=candidate_logits.device,
+        dtype=torch.long,
+    )
+    candidate_binary_logits = candidate_logits.float()[:, focus] - torch.logsumexp(
+        candidate_logits.float().index_select(1, nonfocus_indices),
+        dim=1,
+    )
+    auxiliary_ce = F.cross_entropy(candidate_logits.float(), target_indices).to(
+        dtype=candidate_logits.dtype
+    )
+
+    protect_positive = true_focus & (primary_predictions == focus)
+    protect_negative = true_negative & (primary_predictions != focus)
+    slack = max(0.0, float(preservation_slack))
+    preservation_terms: List[Tensor] = []
+    if bool(protect_positive.any().item()):
+        preservation_terms.append(
+            F.relu(primary_focus[protect_positive] - candidate_focus[protect_positive] - slack)
+        )
+    if bool(protect_negative.any().item()):
+        preservation_terms.append(
+            F.relu(candidate_focus[protect_negative] - primary_focus[protect_negative] - slack)
+        )
+    preservation_loss = (
+        torch.cat(preservation_terms).mean().to(dtype=candidate_logits.dtype)
+        if preservation_terms
+        else zero
+    )
+
+    directional_loss = zero
+    if teacher_logits is not None:
+        if (
+            not torch.is_tensor(teacher_logits)
+            or teacher_logits.ndim != 2
+            or tuple(teacher_logits.shape) != tuple(candidate_logits.shape)
+        ):
+            raise ValueError("Late-member teacher logits must match candidate logits [B, C].")
+        teacher_probabilities = F.softmax(teacher_logits.detach().float(), dim=1)
+        teacher_focus = teacher_probabilities[:, focus].clamp(min=1e-6, max=1.0 - 1e-6)
+        teacher_predictions = teacher_probabilities.argmax(dim=1)
+        gap = max(0.0, float(min_teacher_gap))
+        positive = (
+            true_focus
+            & (teacher_predictions == focus)
+            & (teacher_focus >= primary_focus + gap)
+        )
+        negative = (
+            true_negative
+            & (teacher_predictions != focus)
+            & (teacher_focus + gap <= primary_focus)
+        )
+        selected = positive | negative
+        if bool(selected.any().item()):
+            blend = min(1.0, max(0.0, float(hard_target_blend)))
+            hard_focus = true_focus.to(dtype=teacher_focus.dtype)
+            directional_targets = (
+                teacher_focus * (1.0 - blend) + hard_focus * blend
+            ).clamp(min=1e-6, max=1.0 - 1e-6)
+            per_sample = F.binary_cross_entropy_with_logits(
+                candidate_binary_logits[selected],
+                directional_targets[selected],
+                reduction="none",
+            )
+            weights = (teacher_focus - primary_focus).abs()[selected].clamp(min=1e-4)
+            directional_loss = (
+                (per_sample * weights).sum() / weights.sum().clamp(min=1e-12)
+            ).to(dtype=candidate_logits.dtype)
+        batch_size = max(1, int(candidate_logits.size(0)))
+        stats.update(
+            {
+                "positive_fraction": float(positive.sum().detach().cpu().item()) / batch_size,
+                "negative_fraction": float(negative.sum().detach().cpu().item()) / batch_size,
+                "positive_count": float(positive.sum().detach().cpu().item()),
+                "negative_count": float(negative.sum().detach().cpu().item()),
+                "teacher_focus_probability": float(teacher_focus.mean().detach().cpu().item()),
+            }
+        )
+    batch_size = max(1, int(candidate_logits.size(0)))
+    stats.update(
+        {
+            "protect_positive_fraction": (
+                float(protect_positive.sum().detach().cpu().item()) / batch_size
+            ),
+            "protect_negative_fraction": (
+                float(protect_negative.sum().detach().cpu().item()) / batch_size
+            ),
+            "candidate_focus_probability": float(
+                candidate_focus.mean().detach().cpu().item()
+            ),
+            "primary_focus_probability": float(primary_focus.mean().detach().cpu().item()),
+        }
+    )
+    return auxiliary_ce, directional_loss, preservation_loss, stats
+
+
+def _late_member_precision_rule_distillation_loss_from_features(
+    *,
+    features: Optional[Dict[str, Tensor]],
+    teacher_logits: Optional[Tensor],
+    hard_labels: Optional[Tensor],
+    targets,
+    candidate_weight: float,
+    focus_class: int,
+    focus_margin_offset: float,
+    correct_boost: float,
+    distance: str,
+) -> Tuple[Tensor, Dict[str, float]]:
+    fused_logits = (
+        features.get("late_member_fused_logits")
+        if isinstance(features, dict)
+        else None
+    )
+    primary_logits = (
+        features.get("late_member_primary_logits")
+        if isinstance(features, dict)
+        else None
+    )
+    if (
+        not torch.is_tensor(fused_logits)
+        or not torch.is_tensor(primary_logits)
+        or not torch.is_tensor(teacher_logits)
+        or fused_logits.ndim != 2
+        or tuple(fused_logits.shape) != tuple(primary_logits.shape)
+        or tuple(fused_logits.shape) != tuple(teacher_logits.shape)
+    ):
+        raise ValueError(
+            "Late-member precision-rule distillation requires matching fused, "
+            "primary, and teacher logits [B, C]."
+        )
+    num_classes = int(fused_logits.size(1))
+    focus = int(focus_class)
+    if not 0 <= focus < num_classes:
+        raise ValueError(
+            f"Late-member focus class {focus} is outside [0, {num_classes - 1}]."
+        )
+    member_weight = float(candidate_weight)
+    if not 0.0 <= member_weight <= 1.0:
+        raise ValueError("Late-member candidate weight must be in [0, 1].")
+    offset = float(focus_margin_offset)
+    if not 0.0 <= offset < 1.0:
+        raise ValueError("Late-member focus margin offset must be in [0, 1).")
+    boost = float(correct_boost)
+    if boost < 0.0:
+        raise ValueError("Late-member precision-rule correct boost must be >= 0.")
+    distance_mode = str(distance).strip().lower()
+    if distance_mode not in {"kl", "logit_l2"}:
+        raise ValueError(
+            "Late-member precision-rule distance must be 'kl' or 'logit_l2'."
+        )
+
+    if hard_labels is not None and torch.is_tensor(hard_labels):
+        target_indices = hard_labels.to(
+            device=fused_logits.device,
+            dtype=torch.long,
+        ).view(-1)
+    else:
+        target_indices = _classification_target_indices(targets, fused_logits)
+    if target_indices is None or int(target_indices.numel()) != int(fused_logits.size(0)):
+        raise ValueError(
+            "Late-member precision-rule distillation requires one hard label per row."
+        )
+
+    primary_probabilities = F.softmax(primary_logits.detach().float(), dim=1)
+    teacher_probabilities = F.softmax(teacher_logits.detach().float(), dim=1)
+    rule_probabilities = (
+        primary_probabilities * (1.0 - member_weight)
+        + teacher_probabilities * member_weight
+    )
+    if offset > 0.0:
+        rule_probabilities = rule_probabilities.clone()
+        rule_probabilities[:, focus] = (
+            rule_probabilities[:, focus] - offset
+        ).clamp_min(1e-8)
+    rule_probabilities = rule_probabilities.clamp_min(1e-8)
+    rule_probabilities = rule_probabilities / rule_probabilities.sum(
+        dim=1,
+        keepdim=True,
+    ).clamp_min(1e-8)
+
+    student_log_probabilities = F.log_softmax(fused_logits.float(), dim=1)
+    target_log_probabilities = rule_probabilities.log()
+    if distance_mode == "kl":
+        per_sample_distance = F.kl_div(
+            student_log_probabilities,
+            rule_probabilities,
+            reduction="none",
+        ).sum(dim=1)
+    else:
+        per_sample_distance = 0.5 * (
+            student_log_probabilities - target_log_probabilities
+        ).pow(2).sum(dim=1)
+    primary_predictions = primary_probabilities.argmax(dim=1)
+    primary_correct = primary_predictions.eq(target_indices)
+    weights = 1.0 + boost * primary_correct.to(dtype=per_sample_distance.dtype)
+    loss = (per_sample_distance * weights).sum() / weights.sum().clamp_min(1e-8)
+
+    student_probabilities = student_log_probabilities.exp().detach()
+    rule_predictions = rule_probabilities.argmax(dim=1)
+    batch_size = max(1, int(fused_logits.size(0)))
+    stats = {
+        "precision_rule_dense_fraction": 1.0,
+        "precision_rule_primary_correct_fraction": float(
+            primary_correct.sum().detach().cpu().item()
+        )
+        / batch_size,
+        "precision_rule_primary_disagreement_fraction": float(
+            rule_predictions.ne(primary_predictions).sum().detach().cpu().item()
+        )
+        / batch_size,
+        "precision_rule_target_focus_probability": float(
+            rule_probabilities[:, focus].mean().detach().cpu().item()
+        ),
+        "precision_rule_student_focus_probability": float(
+            student_probabilities[:, focus].mean().cpu().item()
+        ),
+        "precision_rule_mean_absolute_probability_error": float(
+            (student_probabilities - rule_probabilities)
+            .abs()
+            .mean()
+            .detach()
+            .cpu()
+            .item()
+        ),
+        "precision_rule_logit_rmse": float(
+            (student_log_probabilities.detach() - target_log_probabilities)
+            .pow(2)
+            .mean()
+            .sqrt()
+            .cpu()
+            .item()
+        ),
+    }
+    return loss.to(dtype=fused_logits.dtype), stats
+
+
 def _teacher_pairwise_margin_loss_from_features(
     *,
     model: nn.Module,
@@ -17791,6 +18270,17 @@ def _forward_train_loss(
     distillation_temperature: float = 2.0,
     distillation_focus_class_index: int = 1,
     distillation_focus_class_weight: float = 1.0,
+    late_member_aux_ce_loss_weight: float = 0.0,
+    late_member_directional_loss_weight: float = 0.0,
+    late_member_preservation_loss_weight: float = 0.0,
+    late_member_precision_rule_distillation_loss_weight: float = 0.0,
+    late_member_precision_rule_correct_boost: float = 5.0,
+    late_member_precision_rule_distillation_distance: str = "kl",
+    late_member_directional_negative_classes: Union[str, Sequence[int]] = "0,2,4",
+    late_member_directional_min_teacher_gap: float = 0.04,
+    late_member_directional_hard_target_blend: float = 0.25,
+    late_member_preservation_slack: float = 0.01,
+    late_member_loss_start_epoch: int = 1,
     offline_teacher_probabilities: Optional[Tensor] = None,
     teacher_non_target_distillation_loss_weight: float = 0.0,
     teacher_non_target_distillation_classes: Union[str, Sequence[int]] = "0,1,2,4",
@@ -18329,6 +18819,28 @@ def _forward_train_loss(
             mutual_channel_loss = logits.sum() * 0.0
             complement_entropy_loss = logits.sum() * 0.0
             distillation_loss = logits.sum() * 0.0
+            late_member_aux_ce_loss = logits.sum() * 0.0
+            late_member_directional_loss = logits.sum() * 0.0
+            late_member_preservation_loss = logits.sum() * 0.0
+            late_member_precision_rule_distillation_loss = logits.sum() * 0.0
+            late_member_stats = {
+                "positive_fraction": 0.0,
+                "negative_fraction": 0.0,
+                "positive_count": 0.0,
+                "negative_count": 0.0,
+                "protect_positive_fraction": 0.0,
+                "protect_negative_fraction": 0.0,
+                "candidate_focus_probability": 0.0,
+                "primary_focus_probability": 0.0,
+                "teacher_focus_probability": 0.0,
+                "precision_rule_dense_fraction": 0.0,
+                "precision_rule_primary_correct_fraction": 0.0,
+                "precision_rule_primary_disagreement_fraction": 0.0,
+                "precision_rule_target_focus_probability": 0.0,
+                "precision_rule_student_focus_probability": 0.0,
+                "precision_rule_mean_absolute_probability_error": 0.0,
+                "precision_rule_logit_rmse": 0.0,
+            }
             teacher_non_target_distillation_loss = logits.sum() * 0.0
             teacher_non_target_distillation_fraction = 0.0
             teacher_non_target_distillation_teacher_confidence = logits.new_tensor(0.0)
@@ -20323,32 +20835,126 @@ def _forward_train_loss(
                     + float(teacher_feature_contrastive_loss_weight)
                     * teacher_feature_contrastive_loss
                 )
+            online_teacher_logits: Optional[Tensor] = None
             if (
                 distillation_teacher is not None
                 and distillation_class_indices is not None
-                and float(distillation_loss_weight) > 0.0
+                and (
+                    float(distillation_loss_weight) > 0.0
+                    or float(late_member_directional_loss_weight) > 0.0
+                    or float(late_member_precision_rule_distillation_loss_weight) > 0.0
+                )
             ):
                 with torch.no_grad():
-                    teacher_logits = distillation_teacher(images)
-                    if isinstance(teacher_logits, (tuple, list)):
-                        teacher_logits = teacher_logits[0]
-                    if isinstance(teacher_logits, dict):
-                        teacher_logits = teacher_logits.get("logits")
+                    _teacher_features, teacher_outputs = _forward_model_outputs(
+                        distillation_teacher,
+                        images,
+                        image_valid_mask=image_valid_mask,
+                        bbox_metadata=bbox_metadata,
+                        bbox_token_prior=bbox_token_prior_metadata,
+                    )
+                    teacher_logits, _teacher_boxes = extract_bbox_from_model_output(
+                        teacher_outputs
+                    )
                     if not torch.is_tensor(teacher_logits) or teacher_logits.ndim != 2:
                         raise ValueError("Teacher phai tra ve classification logits [B, C].")
-                    teacher_logits = teacher_logits.index_select(
+                    online_teacher_logits = teacher_logits.index_select(
                         1,
                         distillation_class_indices,
                     )
+            if online_teacher_logits is not None and float(distillation_loss_weight) > 0.0:
                 distillation_loss = _distillation_loss(
                     student_logits=logits,
-                    teacher_logits=teacher_logits,
+                    teacher_logits=online_teacher_logits,
                     targets=targets,
                     temperature=distillation_temperature,
                     focus_class_index=distillation_focus_class_index,
                     focus_class_weight=distillation_focus_class_weight,
                 )
                 loss = loss + float(distillation_loss_weight) * distillation_loss
+            if (
+                int(epoch_index) >= int(late_member_loss_start_epoch)
+                and (
+                    float(late_member_aux_ce_loss_weight) > 0.0
+                    or float(late_member_directional_loss_weight) > 0.0
+                    or float(late_member_preservation_loss_weight) > 0.0
+                )
+            ):
+                if (
+                    float(late_member_directional_loss_weight) > 0.0
+                    and online_teacher_logits is None
+                ):
+                    raise ValueError(
+                        "Late-member directional loss requires an online teacher."
+                    )
+                (
+                    late_member_aux_ce_loss,
+                    late_member_directional_loss,
+                    late_member_preservation_loss,
+                    late_member_stats,
+                ) = _late_member_specialist_losses_from_features(
+                    features=features,
+                    teacher_logits=online_teacher_logits,
+                    hard_labels=labels,
+                    targets=targets,
+                    focus_class=int(
+                        getattr(
+                            getattr(model, "module", model),
+                            "late_member_focus_class",
+                            1,
+                        )
+                    ),
+                    negative_classes=late_member_directional_negative_classes,
+                    min_teacher_gap=late_member_directional_min_teacher_gap,
+                    hard_target_blend=late_member_directional_hard_target_blend,
+                    preservation_slack=late_member_preservation_slack,
+                )
+                loss = (
+                    loss
+                    + float(late_member_aux_ce_loss_weight) * late_member_aux_ce_loss
+                    + float(late_member_directional_loss_weight)
+                    * late_member_directional_loss
+                    + float(late_member_preservation_loss_weight)
+                    * late_member_preservation_loss
+                )
+            if (
+                int(epoch_index) >= int(late_member_loss_start_epoch)
+                and float(late_member_precision_rule_distillation_loss_weight) > 0.0
+            ):
+                if online_teacher_logits is None:
+                    raise ValueError(
+                        "Late-member precision-rule distillation requires an online teacher."
+                    )
+                late_member_model = getattr(model, "module", model)
+                (
+                    late_member_precision_rule_distillation_loss,
+                    precision_rule_stats,
+                ) = _late_member_precision_rule_distillation_loss_from_features(
+                    features=features,
+                    teacher_logits=online_teacher_logits,
+                    hard_labels=labels,
+                    targets=targets,
+                    candidate_weight=float(
+                        getattr(late_member_model, "late_member_candidate_weight", 0.40)
+                    ),
+                    focus_class=int(
+                        getattr(late_member_model, "late_member_focus_class", 1)
+                    ),
+                    focus_margin_offset=float(
+                        getattr(
+                            late_member_model,
+                            "late_member_focus_margin_offset",
+                            0.0,
+                        )
+                    ),
+                    correct_boost=late_member_precision_rule_correct_boost,
+                    distance=late_member_precision_rule_distillation_distance,
+                )
+                late_member_stats.update(precision_rule_stats)
+                loss = loss + (
+                    float(late_member_precision_rule_distillation_loss_weight)
+                    * late_member_precision_rule_distillation_loss
+                )
             if (
                 offline_teacher_probabilities is not None
                 and float(distillation_loss_weight) > 0.0
@@ -20789,6 +21395,30 @@ def _forward_train_loss(
                             else 0.0
                         )
                         - float(distillation_loss_weight) * distillation_loss
+                        - (
+                            float(late_member_aux_ce_loss_weight)
+                            * late_member_aux_ce_loss
+                            if int(epoch_index) >= int(late_member_loss_start_epoch)
+                            else 0.0
+                        )
+                        - (
+                            float(late_member_directional_loss_weight)
+                            * late_member_directional_loss
+                            if int(epoch_index) >= int(late_member_loss_start_epoch)
+                            else 0.0
+                        )
+                        - (
+                            float(late_member_preservation_loss_weight)
+                            * late_member_preservation_loss
+                            if int(epoch_index) >= int(late_member_loss_start_epoch)
+                            else 0.0
+                        )
+                        - (
+                            float(late_member_precision_rule_distillation_loss_weight)
+                            * late_member_precision_rule_distillation_loss
+                            if int(epoch_index) >= int(late_member_loss_start_epoch)
+                            else 0.0
+                        )
                         - (
                             float(elr_loss_weight) * elr_loss
                             if int(epoch_index) >= int(elr_start_epoch)
@@ -21290,6 +21920,22 @@ def _forward_train_loss(
                 "focused_false_positive_focus_probability": float(
                     focused_false_positive_focus_probability.detach().cpu().item()
                 ),
+                "late_member_aux_ce_loss": float(
+                    late_member_aux_ce_loss.detach().cpu().item()
+                ),
+                "late_member_directional_loss": float(
+                    late_member_directional_loss.detach().cpu().item()
+                ),
+                "late_member_preservation_loss": float(
+                    late_member_preservation_loss.detach().cpu().item()
+                ),
+                "late_member_precision_rule_distillation_loss": float(
+                    late_member_precision_rule_distillation_loss.detach().cpu().item()
+                ),
+                **{
+                    f"late_member_{key}": float(value)
+                    for key, value in late_member_stats.items()
+                },
                 "teacher_focus_margin_loss": float(
                     teacher_focus_margin_loss.detach().cpu().item()
                 ),
@@ -21868,6 +22514,17 @@ def train_one_epoch(
     distillation_temperature: float = 2.0,
     distillation_focus_class_index: int = 1,
     distillation_focus_class_weight: float = 1.0,
+    late_member_aux_ce_loss_weight: float = 0.0,
+    late_member_directional_loss_weight: float = 0.0,
+    late_member_preservation_loss_weight: float = 0.0,
+    late_member_precision_rule_distillation_loss_weight: float = 0.0,
+    late_member_precision_rule_correct_boost: float = 5.0,
+    late_member_precision_rule_distillation_distance: str = "kl",
+    late_member_directional_negative_classes: Union[str, Sequence[int]] = "0,2,4",
+    late_member_directional_min_teacher_gap: float = 0.04,
+    late_member_directional_hard_target_blend: float = 0.25,
+    late_member_preservation_slack: float = 0.01,
+    late_member_loss_start_epoch: int = 1,
     teacher_non_target_distillation_loss_weight: float = 0.0,
     teacher_non_target_distillation_classes: Union[str, Sequence[int]] = "0,1,2,4",
     teacher_non_target_distillation_temperature: float = 2.0,
@@ -22024,6 +22681,7 @@ def train_one_epoch(
 ) -> Tuple[float, Dict[str, float], float]:
     model.train()
     _keep_frozen_norm_modules_eval(model)
+    _keep_late_member_primary_path_eval(model)
     batch_sampler = getattr(dataloader, "batch_sampler", None)
     if batch_sampler is not None and hasattr(batch_sampler, "set_epoch"):
         batch_sampler.set_epoch(epoch_index)
@@ -22256,6 +22914,26 @@ def train_one_epoch(
         "focused_false_positive_margin_loss": 0.0,
         "focused_false_positive_margin_fraction": 0.0,
         "focused_false_positive_focus_probability": 0.0,
+        "late_member_aux_ce_loss": 0.0,
+        "late_member_directional_loss": 0.0,
+        "late_member_preservation_loss": 0.0,
+        "late_member_precision_rule_distillation_loss": 0.0,
+        "late_member_positive_fraction": 0.0,
+        "late_member_negative_fraction": 0.0,
+        "late_member_positive_count": 0.0,
+        "late_member_negative_count": 0.0,
+        "late_member_protect_positive_fraction": 0.0,
+        "late_member_protect_negative_fraction": 0.0,
+        "late_member_candidate_focus_probability": 0.0,
+        "late_member_primary_focus_probability": 0.0,
+        "late_member_teacher_focus_probability": 0.0,
+        "late_member_precision_rule_dense_fraction": 0.0,
+        "late_member_precision_rule_primary_correct_fraction": 0.0,
+        "late_member_precision_rule_primary_disagreement_fraction": 0.0,
+        "late_member_precision_rule_target_focus_probability": 0.0,
+        "late_member_precision_rule_student_focus_probability": 0.0,
+        "late_member_precision_rule_mean_absolute_probability_error": 0.0,
+        "late_member_precision_rule_logit_rmse": 0.0,
         "teacher_focus_margin_loss": 0.0,
         "teacher_focus_margin_fraction": 0.0,
         "teacher_focus_margin_focus_probability": 0.0,
@@ -22970,6 +23648,33 @@ def train_one_epoch(
                 distillation_temperature=distillation_temperature,
                 distillation_focus_class_index=distillation_focus_class_index,
                 distillation_focus_class_weight=distillation_focus_class_weight,
+                late_member_aux_ce_loss_weight=late_member_aux_ce_loss_weight,
+                late_member_directional_loss_weight=(
+                    late_member_directional_loss_weight
+                ),
+                late_member_preservation_loss_weight=(
+                    late_member_preservation_loss_weight
+                ),
+                late_member_precision_rule_distillation_loss_weight=(
+                    late_member_precision_rule_distillation_loss_weight
+                ),
+                late_member_precision_rule_correct_boost=(
+                    late_member_precision_rule_correct_boost
+                ),
+                late_member_precision_rule_distillation_distance=(
+                    late_member_precision_rule_distillation_distance
+                ),
+                late_member_directional_negative_classes=(
+                    late_member_directional_negative_classes
+                ),
+                late_member_directional_min_teacher_gap=(
+                    late_member_directional_min_teacher_gap
+                ),
+                late_member_directional_hard_target_blend=(
+                    late_member_directional_hard_target_blend
+                ),
+                late_member_preservation_slack=late_member_preservation_slack,
+                late_member_loss_start_epoch=late_member_loss_start_epoch,
                 offline_teacher_probabilities=offline_teacher_probabilities,
                 teacher_non_target_distillation_loss_weight=(
                     teacher_non_target_distillation_loss_weight
@@ -23964,6 +24669,37 @@ def train_one_epoch(
                             distillation_temperature=distillation_temperature,
                             distillation_focus_class_index=distillation_focus_class_index,
                             distillation_focus_class_weight=distillation_focus_class_weight,
+                            late_member_aux_ce_loss_weight=(
+                                late_member_aux_ce_loss_weight
+                            ),
+                            late_member_directional_loss_weight=(
+                                late_member_directional_loss_weight
+                            ),
+                            late_member_preservation_loss_weight=(
+                                late_member_preservation_loss_weight
+                            ),
+                            late_member_precision_rule_distillation_loss_weight=(
+                                late_member_precision_rule_distillation_loss_weight
+                            ),
+                            late_member_precision_rule_correct_boost=(
+                                late_member_precision_rule_correct_boost
+                            ),
+                            late_member_precision_rule_distillation_distance=(
+                                late_member_precision_rule_distillation_distance
+                            ),
+                            late_member_directional_negative_classes=(
+                                late_member_directional_negative_classes
+                            ),
+                            late_member_directional_min_teacher_gap=(
+                                late_member_directional_min_teacher_gap
+                            ),
+                            late_member_directional_hard_target_blend=(
+                                late_member_directional_hard_target_blend
+                            ),
+                            late_member_preservation_slack=(
+                                late_member_preservation_slack
+                            ),
+                            late_member_loss_start_epoch=late_member_loss_start_epoch,
                             offline_teacher_probabilities=replay_offline_teacher_probabilities,
                             teacher_non_target_distillation_loss_weight=(
                                 teacher_non_target_distillation_loss_weight
@@ -25665,12 +26401,18 @@ def main() -> None:
             or bool(args.shifted_patch_tokenization)
             or bool(args.gated_relative_position_attention)
             or bool(args.late_class_attention_pooling)
+            or bool(args.late_member_branch)
             or bool(args.complementary_patch_suppression_head)
             or float(args.patch_evidence_router_loss_weight) > 0.0
             or float(args.bbox_token_label_loss_weight) > 0.0
             or float(args.teacher_pairwise_margin_loss_weight) > 0.0
             or float(args.focus_auc_rank_loss_weight) > 0.0
             or float(args.focus_partial_auc_loss_weight) > 0.0
+            or float(args.late_member_aux_ce_loss_weight) > 0.0
+            or float(args.late_member_directional_loss_weight) > 0.0
+            or float(args.late_member_preservation_loss_weight) > 0.0
+            or float(args.late_member_precision_rule_distillation_loss_weight) > 0.0
+            or bool(str(args.distillation_teacher_checkpoint or "").strip())
             or bool(str(args.distillation_teacher_csv or "").strip())
             or bool(str(args.sample_weight_manifest or "").strip())
         ):
@@ -25710,13 +26452,52 @@ def main() -> None:
                 args.bbox_token_label_start_epoch
             )
             train_config.distillation_teacher_csv = str(args.distillation_teacher_csv or "")
+            train_config.distillation_teacher_checkpoint = str(
+                args.distillation_teacher_checkpoint or ""
+            )
             train_config.pretrained_distillation = bool(
-                args.pretrained_distillation or args.distillation_teacher_csv is not None
+                args.pretrained_distillation
+                or args.distillation_teacher_csv is not None
+                or args.late_member_directional_loss_weight > 0.0
+                or args.late_member_precision_rule_distillation_loss_weight > 0.0
             )
             train_config.distillation_weight = (
                 float(args.distillation_weight)
-                if train_config.pretrained_distillation
+                if args.pretrained_distillation or args.distillation_teacher_csv is not None
                 else 0.0
+            )
+            train_config.late_member_aux_ce_loss_weight = float(
+                args.late_member_aux_ce_loss_weight
+            )
+            train_config.late_member_directional_loss_weight = float(
+                args.late_member_directional_loss_weight
+            )
+            train_config.late_member_preservation_loss_weight = float(
+                args.late_member_preservation_loss_weight
+            )
+            train_config.late_member_precision_rule_distillation_loss_weight = float(
+                args.late_member_precision_rule_distillation_loss_weight
+            )
+            train_config.late_member_precision_rule_correct_boost = float(
+                args.late_member_precision_rule_correct_boost
+            )
+            train_config.late_member_precision_rule_distillation_distance = str(
+                args.late_member_precision_rule_distillation_distance
+            )
+            train_config.late_member_directional_negative_classes = str(
+                args.late_member_directional_negative_classes
+            )
+            train_config.late_member_directional_min_teacher_gap = float(
+                args.late_member_directional_min_teacher_gap
+            )
+            train_config.late_member_directional_hard_target_blend = float(
+                args.late_member_directional_hard_target_blend
+            )
+            train_config.late_member_preservation_slack = float(
+                args.late_member_preservation_slack
+            )
+            train_config.late_member_loss_start_epoch = int(
+                args.late_member_loss_start_epoch
             )
             train_config.teacher_focus_margin_loss_weight = float(
                 args.teacher_focus_margin_loss_weight
@@ -26024,6 +26805,39 @@ def main() -> None:
                     "reason": (
                         "allow checkpoint-safe late class-attention pooling "
                         "without rebuilding the full checkpoint config from CLI"
+                    ),
+                },
+                flush=True,
+            )
+        if bool(args.late_member_branch):
+            model_config.late_member_branch = True
+            model_config.late_member_fork_after_block = int(
+                args.late_member_fork_after_block
+            )
+            model_config.late_member_candidate_weight = float(
+                args.late_member_candidate_weight
+            )
+            model_config.late_member_focus_class = int(args.late_member_focus_class)
+            model_config.late_member_focus_margin_offset = float(
+                args.late_member_focus_margin_offset
+            )
+            print(
+                {
+                    "resume_cli_model_extension": {
+                        "late_member_branch": True,
+                        "late_member_fork_after_block": (
+                            model_config.late_member_fork_after_block
+                        ),
+                        "late_member_candidate_weight": (
+                            model_config.late_member_candidate_weight
+                        ),
+                        "late_member_focus_class": model_config.late_member_focus_class,
+                        "late_member_focus_margin_offset": (
+                            model_config.late_member_focus_margin_offset
+                        ),
+                    },
+                    "reason": (
+                        "checkpoint-compatible keeper-initialized late-member branch"
                     ),
                 },
                 flush=True,
@@ -28244,6 +29058,7 @@ def main() -> None:
                 or bool(args.patch_evidence_router_head)
                 or float(args.patch_evidence_router_loss_weight) > 0.0
                 or bool(args.late_class_attention_pooling)
+                or bool(args.late_member_branch)
             ),
         )
         print({"resume": resume_summary}, flush=True)
@@ -28285,6 +29100,7 @@ def main() -> None:
                     or bool(args.patch_evidence_router_head)
                     or float(args.patch_evidence_router_loss_weight) > 0.0
                     or bool(args.late_class_attention_pooling)
+                    or bool(args.late_member_branch)
                 ),
             )
             if ema_partial_load_summary is not None:
@@ -29227,6 +30043,39 @@ def main() -> None:
                     distillation_temperature=train_config.distillation_temperature,
                     distillation_focus_class_index=train_config.distillation_focus_class_index,
                     distillation_focus_class_weight=train_config.distillation_focus_class_weight,
+                    late_member_aux_ce_loss_weight=(
+                        train_config.late_member_aux_ce_loss_weight
+                    ),
+                    late_member_directional_loss_weight=(
+                        train_config.late_member_directional_loss_weight
+                    ),
+                    late_member_preservation_loss_weight=(
+                        train_config.late_member_preservation_loss_weight
+                    ),
+                    late_member_precision_rule_distillation_loss_weight=(
+                        train_config.late_member_precision_rule_distillation_loss_weight
+                    ),
+                    late_member_precision_rule_correct_boost=(
+                        train_config.late_member_precision_rule_correct_boost
+                    ),
+                    late_member_precision_rule_distillation_distance=(
+                        train_config.late_member_precision_rule_distillation_distance
+                    ),
+                    late_member_directional_negative_classes=(
+                        train_config.late_member_directional_negative_classes
+                    ),
+                    late_member_directional_min_teacher_gap=(
+                        train_config.late_member_directional_min_teacher_gap
+                    ),
+                    late_member_directional_hard_target_blend=(
+                        train_config.late_member_directional_hard_target_blend
+                    ),
+                    late_member_preservation_slack=(
+                        train_config.late_member_preservation_slack
+                    ),
+                    late_member_loss_start_epoch=(
+                        train_config.late_member_loss_start_epoch
+                    ),
                     teacher_non_target_distillation_loss_weight=(
                         train_config.teacher_non_target_distillation_loss_weight
                     ),
@@ -30547,6 +31396,86 @@ def main() -> None:
                         "focused_false_positive_focus_probability",
                         0.0,
                     ),
+                    "train_late_member_aux_ce_loss": train_artifact_stats.get(
+                        "late_member_aux_ce_loss",
+                        0.0,
+                    ),
+                    "train_late_member_directional_loss": train_artifact_stats.get(
+                        "late_member_directional_loss",
+                        0.0,
+                    ),
+                    "train_late_member_preservation_loss": train_artifact_stats.get(
+                        "late_member_preservation_loss",
+                        0.0,
+                    ),
+                    "train_late_member_precision_rule_distillation_loss": train_artifact_stats.get(
+                        "late_member_precision_rule_distillation_loss",
+                        0.0,
+                    ),
+                    "train_late_member_positive_fraction": train_artifact_stats.get(
+                        "late_member_positive_fraction",
+                        0.0,
+                    ),
+                    "train_late_member_negative_fraction": train_artifact_stats.get(
+                        "late_member_negative_fraction",
+                        0.0,
+                    ),
+                    "train_late_member_positive_count": train_artifact_stats.get(
+                        "late_member_positive_count",
+                        0.0,
+                    ),
+                    "train_late_member_negative_count": train_artifact_stats.get(
+                        "late_member_negative_count",
+                        0.0,
+                    ),
+                    "train_late_member_protect_positive_fraction": train_artifact_stats.get(
+                        "late_member_protect_positive_fraction",
+                        0.0,
+                    ),
+                    "train_late_member_protect_negative_fraction": train_artifact_stats.get(
+                        "late_member_protect_negative_fraction",
+                        0.0,
+                    ),
+                    "train_late_member_candidate_focus_probability": train_artifact_stats.get(
+                        "late_member_candidate_focus_probability",
+                        0.0,
+                    ),
+                    "train_late_member_primary_focus_probability": train_artifact_stats.get(
+                        "late_member_primary_focus_probability",
+                        0.0,
+                    ),
+                    "train_late_member_teacher_focus_probability": train_artifact_stats.get(
+                        "late_member_teacher_focus_probability",
+                        0.0,
+                    ),
+                    "train_late_member_precision_rule_dense_fraction": train_artifact_stats.get(
+                        "late_member_precision_rule_dense_fraction",
+                        0.0,
+                    ),
+                    "train_late_member_precision_rule_primary_correct_fraction": train_artifact_stats.get(
+                        "late_member_precision_rule_primary_correct_fraction",
+                        0.0,
+                    ),
+                    "train_late_member_precision_rule_primary_disagreement_fraction": train_artifact_stats.get(
+                        "late_member_precision_rule_primary_disagreement_fraction",
+                        0.0,
+                    ),
+                    "train_late_member_precision_rule_target_focus_probability": train_artifact_stats.get(
+                        "late_member_precision_rule_target_focus_probability",
+                        0.0,
+                    ),
+                    "train_late_member_precision_rule_student_focus_probability": train_artifact_stats.get(
+                        "late_member_precision_rule_student_focus_probability",
+                        0.0,
+                    ),
+                    "train_late_member_precision_rule_mean_absolute_probability_error": train_artifact_stats.get(
+                        "late_member_precision_rule_mean_absolute_probability_error",
+                        0.0,
+                    ),
+                    "train_late_member_precision_rule_logit_rmse": train_artifact_stats.get(
+                        "late_member_precision_rule_logit_rmse",
+                        0.0,
+                    ),
                     "train_teacher_focus_margin_loss": train_artifact_stats.get(
                         "teacher_focus_margin_loss",
                         0.0,
@@ -31444,6 +32373,26 @@ def main() -> None:
                         "train_focused_false_positive_margin_loss",
                         "train_focused_false_positive_margin_fraction",
                         "train_focused_false_positive_focus_probability",
+                        "train_late_member_aux_ce_loss",
+                        "train_late_member_directional_loss",
+                        "train_late_member_preservation_loss",
+                        "train_late_member_precision_rule_distillation_loss",
+                        "train_late_member_positive_fraction",
+                        "train_late_member_negative_fraction",
+                        "train_late_member_positive_count",
+                        "train_late_member_negative_count",
+                        "train_late_member_protect_positive_fraction",
+                        "train_late_member_protect_negative_fraction",
+                        "train_late_member_candidate_focus_probability",
+                        "train_late_member_primary_focus_probability",
+                        "train_late_member_teacher_focus_probability",
+                        "train_late_member_precision_rule_dense_fraction",
+                        "train_late_member_precision_rule_primary_correct_fraction",
+                        "train_late_member_precision_rule_primary_disagreement_fraction",
+                        "train_late_member_precision_rule_target_focus_probability",
+                        "train_late_member_precision_rule_student_focus_probability",
+                        "train_late_member_precision_rule_mean_absolute_probability_error",
+                        "train_late_member_precision_rule_logit_rmse",
                         "train_teacher_focus_margin_loss",
                         "train_teacher_focus_margin_fraction",
                         "train_teacher_focus_margin_focus_probability",

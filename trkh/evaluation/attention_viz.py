@@ -414,6 +414,11 @@ def _capture_forward(
                 features["bbox"] = bbox_metadata.to(device=tensor.device)
         attentions = features.get("attentions") if isinstance(features, dict) else None
         grid_size = features.get("grid_size") if isinstance(features, dict) else None
+        attention_member = (
+            str(features.get("attention_member", "primary"))
+            if isinstance(features, dict)
+            else "primary"
+        )
         if not attentions or grid_size is None:
             raise RuntimeError(
                 "forward_features(return_attention=True) did not return full-grid "
@@ -432,7 +437,12 @@ def _capture_forward(
                 query_tokens=query_tokens,
             )
             native_layer, _ = _last_attention_item(attentions)
-            native_attention_source = f"forward_features.return_attention.blocks[{native_layer}]"
+            source_blocks = (
+                "late_member_blocks" if attention_member == "late_member" else "blocks"
+            )
+            native_attention_source = (
+                f"forward_features.return_attention.{source_blocks}[{native_layer}]"
+            )
             native_attention_grid_size = [int(grid_size[0]), int(grid_size[1])]
         if need_rollout:
             rollout_heatmap = build_attention_rollout_heatmap(

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from collections import OrderedDict
 import json
 import math
@@ -5470,6 +5471,11 @@ class VisionTransformerWithRegisters(nn.Module):
         late_class_attention_dropout: float = 0.05,
         late_class_attention_mlp_ratio: float = 2.0,
         late_class_attention_residual_scale: float = 0.10,
+        late_member_branch: bool = False,
+        late_member_fork_after_block: int = 6,
+        late_member_candidate_weight: float = 0.40,
+        late_member_focus_class: int = 1,
+        late_member_focus_margin_offset: float = 0.0,
         mixstyle: bool = False,
         mixstyle_probability: float = 0.5,
         mixstyle_alpha: float = 0.1,
@@ -5782,6 +5788,23 @@ class VisionTransformerWithRegisters(nn.Module):
             min(max(frequency_selective_blend, 0.0), 1.0)
         )
         self.late_class_attention_pooling_enabled = bool(late_class_attention_pooling)
+        self.late_member_enabled = bool(late_member_branch)
+        self.late_member_fork_after_block = int(late_member_fork_after_block)
+        if self.late_member_enabled and not 1 <= self.late_member_fork_after_block < int(depth):
+            raise ValueError(
+                "late_member_fork_after_block must leave at least one shared and one "
+                f"member-specific block; got fork={self.late_member_fork_after_block}, "
+                f"depth={int(depth)}."
+            )
+        self.late_member_candidate_weight = float(late_member_candidate_weight)
+        if not 0.0 <= self.late_member_candidate_weight <= 1.0:
+            raise ValueError("late_member_candidate_weight must be in [0, 1].")
+        self.late_member_focus_class = int(late_member_focus_class)
+        if not 0 <= self.late_member_focus_class < int(num_classes):
+            raise ValueError("late_member_focus_class is outside the class range.")
+        self.late_member_focus_margin_offset = float(late_member_focus_margin_offset)
+        if not 0.0 <= self.late_member_focus_margin_offset < 1.0:
+            raise ValueError("late_member_focus_margin_offset must be in [0, 1).")
         self.mixstyle_enabled = bool(mixstyle and use_cnn_stem)
         self.detail_patch_enhancement = bool(detail_patch_enhancement)
         self.pairwise_margin_head_enabled = bool(pairwise_margin_head)
@@ -6455,11 +6478,88 @@ class VisionTransformerWithRegisters(nn.Module):
             nn.init.zeros_(self.cumulative_ordinal_head.weight)
             if self.cumulative_ordinal_head.bias is not None:
                 nn.init.zeros_(self.cumulative_ordinal_head.bias)
+        self._initialize_late_member_modules()
 
     def _init_parameter_tensors(self) -> None:
         nn.init.trunc_normal_(self.cls_token, std=0.02)
         nn.init.trunc_normal_(self.register_tokens, std=0.02)
         nn.init.trunc_normal_(self.pos_embed, std=0.02)
+
+    def _initialize_late_member_modules(self) -> None:
+        self.late_member_blocks = nn.ModuleList()
+        self.late_member_norm = None
+        self.late_member_head = None
+        self.late_member_fine_grained_pool = None
+        self.late_member_pairwise_margin_norm = None
+        self.late_member_pairwise_margin_dropout = None
+        self.late_member_pairwise_margin_head = None
+        self.late_member_cnn_fusion_norm = None
+        self.late_member_cnn_fusion_dropout = None
+        self.late_member_cnn_fusion_head = None
+        self.late_member_bbox_spatial_fusion_head = None
+        if not self.late_member_enabled:
+            return
+
+        prune_layers = tuple(int(index) + 1 for index in self.token_prune_schedule)
+        if prune_layers and max(prune_layers) > self.late_member_fork_after_block:
+            raise ValueError(
+                "Late-member branching requires token pruning to finish at or before "
+                f"the fork; prune_layers={prune_layers}, "
+                f"fork_after_block={self.late_member_fork_after_block}."
+            )
+        unsupported_modules = {
+            "frequency_selective_pool": self.frequency_selective_pool,
+            "patch_memory_adapter": self.patch_memory_adapter,
+            "late_class_attention_pool": self.late_class_attention_pool,
+            "color_fusion_head": self.color_fusion_head,
+            "defect_fusion_head": self.defect_fusion_head,
+            "foreground_surface_fusion_head": self.foreground_surface_fusion_head,
+            "foreground_surface_pairwise_head": self.foreground_surface_pairwise_head,
+            "interior_boundary_pairwise_head": self.interior_boundary_pairwise_head,
+            "bilinear_patch_fusion_head": self.bilinear_patch_fusion_head,
+            "complementary_patch_suppression_head": self.complementary_patch_suppression_head,
+            "patch_objectness_guided_head": self.patch_objectness_guided_head,
+            "bbox_prior_patch_context_head": self.bbox_prior_patch_context_head,
+            "micro_detail_patch_expert": self.micro_detail_patch_expert,
+            "part_token_learner": self.part_token_learner,
+            "part_token_pairwise_learner": self.part_token_pairwise_learner,
+            "patch_evidence_router_head": self.patch_evidence_router_head,
+            "local_zoom_image_expert": self.local_zoom_image_expert,
+            "high_frequency_texture_expert": self.high_frequency_texture_expert,
+            "focus_class_head": self.focus_class_head,
+            "topk_reassessment_head": self.topk_reassessment_head,
+            "ordinal_maturity_head": self.ordinal_maturity_head,
+            "cumulative_ordinal_head": self.cumulative_ordinal_head,
+        }
+        unsupported_enabled = sorted(
+            name for name, module in unsupported_modules.items() if module is not None
+        )
+        if self.layer_token_fusion_enabled:
+            unsupported_enabled.append("layer_token_fusion")
+        if unsupported_enabled:
+            raise ValueError(
+                "Late-member branch does not yet duplicate these active readouts: "
+                + ", ".join(unsupported_enabled)
+            )
+
+        self.late_member_blocks = copy.deepcopy(
+            self.blocks[self.late_member_fork_after_block :]
+        )
+        self.late_member_norm = copy.deepcopy(self.norm)
+        self.late_member_head = copy.deepcopy(self.head)
+        self.late_member_fine_grained_pool = copy.deepcopy(self.fine_grained_pool)
+        self.late_member_pairwise_margin_norm = copy.deepcopy(self.pairwise_margin_norm)
+        self.late_member_pairwise_margin_dropout = copy.deepcopy(
+            self.pairwise_margin_dropout
+        )
+        self.late_member_pairwise_margin_head = copy.deepcopy(self.pairwise_margin_head)
+        if self.cnn_fusion_head is not None:
+            self.late_member_cnn_fusion_norm = copy.deepcopy(self.cnn_fusion_norm)
+            self.late_member_cnn_fusion_dropout = copy.deepcopy(self.cnn_fusion_dropout)
+            self.late_member_cnn_fusion_head = copy.deepcopy(self.cnn_fusion_head)
+        self.late_member_bbox_spatial_fusion_head = copy.deepcopy(
+            self.bbox_spatial_fusion_head
+        )
 
     @staticmethod
     def _parse_csv_numbers(value: Any, cast) -> List[Any]:
@@ -6641,6 +6741,47 @@ class VisionTransformerWithRegisters(nn.Module):
                     dtype=target.dtype,
                 )
                 adapted_state[branch_key] = target
+        if self.late_member_enabled:
+            current_state = self.state_dict()
+            late_prefix_sources = {
+                "late_member_norm.": "norm.",
+                "late_member_head.": "head.",
+                "late_member_fine_grained_pool.": "fine_grained_pool.",
+                "late_member_pairwise_margin_norm.": "pairwise_margin_norm.",
+                "late_member_pairwise_margin_head.": "pairwise_margin_head.",
+                "late_member_cnn_fusion_norm.": "cnn_fusion_norm.",
+                "late_member_cnn_fusion_head.": "cnn_fusion_head.",
+                "late_member_bbox_spatial_fusion_head.": "bbox_spatial_fusion_head.",
+            }
+            for target_key, target_tensor in current_state.items():
+                if target_key in adapted_state:
+                    continue
+                source_key = None
+                if target_key.startswith("late_member_blocks."):
+                    suffix = target_key[len("late_member_blocks.") :]
+                    block_text, separator, remainder = suffix.partition(".")
+                    if separator and block_text.isdigit():
+                        source_block = (
+                            self.late_member_fork_after_block + int(block_text)
+                        )
+                        source_key = f"blocks.{source_block}.{remainder}"
+                else:
+                    for target_prefix, source_prefix in late_prefix_sources.items():
+                        if target_key.startswith(target_prefix):
+                            source_key = source_prefix + target_key[len(target_prefix) :]
+                            break
+                if source_key is None or source_key not in adapted_state:
+                    continue
+                source_tensor = adapted_state[source_key]
+                if not torch.is_tensor(source_tensor):
+                    raise ValueError(f"Late-member source is not a tensor: {source_key}")
+                if tuple(source_tensor.shape) != tuple(target_tensor.shape):
+                    raise ValueError(
+                        "Late-member initialization shape mismatch: "
+                        f"target={target_key}{tuple(target_tensor.shape)}, "
+                        f"source={source_key}{tuple(source_tensor.shape)}"
+                    )
+                adapted_state[target_key] = source_tensor.detach().clone()
         missing_keys, unexpected_keys = self.load_state_dict(adapted_state, strict=False)
         if strict and (missing_keys or unexpected_keys):
             raise RuntimeError(
@@ -7129,6 +7270,9 @@ class VisionTransformerWithRegisters(nn.Module):
         layer_token_fusion_scores: List[Tensor] = []
         layer_token_fusion_indices: List[Tensor] = []
         concurrent_local_traces: List[Dict[str, Tensor]] = []
+        late_member_seed_tokens: Optional[Tensor] = None
+        late_member_patch_indices: Optional[Tensor] = None
+        late_member_attention_maps: Dict[int, Tensor] = {}
         for block_index, block in enumerate(self.blocks):
             layer_key = str(int(block_index + 1))
             should_prune = pruning_enabled and block_index in self.token_prune_schedule
@@ -7233,6 +7377,12 @@ class VisionTransformerWithRegisters(nn.Module):
                         prefix_count=self.num_prefix_tokens,
                         patch_indices=patch_indices,
                     )
+            if (
+                self.late_member_enabled
+                and int(block_index + 1) == self.late_member_fork_after_block
+            ):
+                late_member_seed_tokens = tokens
+                late_member_patch_indices = patch_indices
             if return_trace:
                 block_token_shapes.append(tuple(int(value) for value in tokens.shape))
                 block_patch_indices.append(patch_indices.detach().clone())
@@ -7251,6 +7401,44 @@ class VisionTransformerWithRegisters(nn.Module):
                 multi_granularity_logits[layer_key] = self.multi_granularity_aux_heads[
                     layer_key
                 ](pooled_aux)
+        late_member_tokens = None
+        if self.late_member_enabled:
+            if late_member_seed_tokens is None or late_member_patch_indices is None:
+                raise RuntimeError("Late-member fork was not reached during forward_features.")
+            late_member_tokens = late_member_seed_tokens
+            for late_block_index, late_block in enumerate(self.late_member_blocks):
+                if return_attention:
+                    late_member_tokens, late_member_attention = late_block(
+                        late_member_tokens,
+                        return_attention=True,
+                        grid_size=grid_size,
+                        prefix_count=self.num_prefix_tokens,
+                        patch_indices=late_member_patch_indices,
+                    )
+                    late_member_attention_maps[
+                        self.late_member_fork_after_block + int(late_block_index)
+                    ] = late_member_attention
+                elif self.gradient_checkpointing and self.training:
+                    late_member_tokens = gradient_checkpoint(
+                        lambda current_tokens, current_block=late_block: current_block(
+                            current_tokens,
+                            grid_size=grid_size,
+                            prefix_count=self.num_prefix_tokens,
+                            patch_indices=late_member_patch_indices,
+                        ),
+                        late_member_tokens,
+                        use_reentrant=False,
+                    )
+                else:
+                    late_member_tokens = late_block(
+                        late_member_tokens,
+                        grid_size=grid_size,
+                        prefix_count=self.num_prefix_tokens,
+                        patch_indices=late_member_patch_indices,
+                    )
+            if self.late_member_norm is None:
+                raise RuntimeError("Late-member norm is missing.")
+            late_member_tokens = self.late_member_norm(late_member_tokens)
         tokens = self.norm(tokens)
 
         cls_out = tokens[:, 0]
@@ -7272,6 +7460,24 @@ class VisionTransformerWithRegisters(nn.Module):
             "patch_indices": patch_indices,
             "pooled": self.pool_tokens_for_head(cls_out, reg_out, branch_out),
         }
+        if late_member_tokens is not None and late_member_patch_indices is not None:
+            late_register_end = 1 + self.num_registers
+            late_branch_end = late_register_end + self.num_branch_tokens
+            late_cls = late_member_tokens[:, 0]
+            late_registers = late_member_tokens[:, 1:late_register_end]
+            late_branches = late_member_tokens[:, late_register_end:late_branch_end]
+            late_patches = late_member_tokens[:, late_branch_end:]
+            features["late_member_cls"] = late_cls
+            features["late_member_registers"] = late_registers
+            features["late_member_branch_tokens"] = late_branches
+            features["late_member_patches"] = late_patches
+            features["late_member_tokens"] = late_member_tokens
+            features["late_member_patch_indices"] = late_member_patch_indices
+            features["late_member_pooled"] = self.pool_tokens_for_head(
+                late_cls,
+                late_registers,
+                late_branches,
+            )
         if layer_token_fusion_feature is not None:
             features["layer_token_fusion_feature"] = layer_token_fusion_feature
         if concurrent_local_state is not None:
@@ -7353,7 +7559,21 @@ class VisionTransformerWithRegisters(nn.Module):
                 key_padding_mask = key_padding_mask.gather(1, patch_indices)
             features["memory_key_padding_mask"] = key_padding_mask
         if attention_maps:
-            features["attentions"] = attention_maps
+            if late_member_attention_maps:
+                late_path_attention_maps = {
+                    int(layer_index): attention
+                    for layer_index, attention in attention_maps.items()
+                    if int(layer_index) < self.late_member_fork_after_block
+                }
+                late_path_attention_maps.update(late_member_attention_maps)
+                features["primary_attentions"] = attention_maps
+                features["late_member_attentions"] = late_path_attention_maps
+                # XAI on a late-member model should explain the newly trained path.
+                features["attentions"] = late_path_attention_maps
+                features["attention_member"] = "late_member"
+            else:
+                features["attentions"] = attention_maps
+                features["attention_member"] = "primary"
         if self.color_fusion_head is not None:
             features["color_logits"] = self.color_fusion_head(input_image)
         if self.defect_fusion_head is not None:
@@ -7725,6 +7945,108 @@ class VisionTransformerWithRegisters(nn.Module):
                 pooled = late_output
             features["late_class_attention_feature"] = pooled
         return pooled
+
+    def late_member_logits_from_features(self, features: Dict[str, Tensor]) -> Tensor:
+        if not self.late_member_enabled:
+            raise RuntimeError("Late-member branch is disabled.")
+        if self.late_member_head is None:
+            raise RuntimeError("Late-member classification head is missing.")
+        if self.patch_evidence_linear_verifier is not None:
+            raise ValueError(
+                "Late-member fusion cannot be combined with the post-hoc patch verifier."
+            )
+        pooled = features.get("late_member_pooled")
+        patches = features.get("late_member_patches")
+        if not torch.is_tensor(pooled) or not torch.is_tensor(patches):
+            raise KeyError("Late-member features are missing from forward_features output.")
+
+        key_padding_mask = features.get("memory_key_padding_mask")
+        valid_mask = (
+            ~key_padding_mask.to(dtype=torch.bool)
+            if torch.is_tensor(key_padding_mask)
+            else None
+        )
+        if self.late_member_fine_grained_pool is not None:
+            patch_attention = self.late_member_fine_grained_pool.attention_weights(
+                pooled,
+                patches,
+                valid_mask=valid_mask,
+            )
+            features["late_member_fine_grained_attention"] = patch_attention
+            pooled = self.late_member_fine_grained_pool(
+                pooled,
+                patches,
+                attention=patch_attention,
+            )
+        features["late_member_head_input"] = pooled
+        logits = self.late_member_head(pooled)
+
+        if self.late_member_cnn_fusion_head is not None and "cnn_pooled" in features:
+            if (
+                self.late_member_cnn_fusion_norm is None
+                or self.late_member_cnn_fusion_dropout is None
+            ):
+                raise RuntimeError("Late-member CNN fusion modules are incomplete.")
+            cnn_features = self.late_member_cnn_fusion_norm(features["cnn_pooled"])
+            cnn_features = self.late_member_cnn_fusion_dropout(cnn_features)
+            logits = logits + self.late_member_cnn_fusion_head(cnn_features)
+
+        bbox_value = features.get("bbox")
+        if self.late_member_bbox_spatial_fusion_head is not None and torch.is_tensor(
+            bbox_value
+        ):
+            bbox_logits = self.late_member_bbox_spatial_fusion_head(
+                bbox_value,
+                dtype=logits.dtype,
+                return_trace=False,
+            )
+            features["late_member_bbox_spatial_logits"] = bbox_logits
+            if self.bbox_spatial_fusion_logit_scale > 0.0:
+                logits = logits + bbox_logits.to(dtype=logits.dtype) * float(
+                    self.bbox_spatial_fusion_logit_scale
+                )
+
+        if self.late_member_pairwise_margin_head is not None:
+            if (
+                self.late_member_pairwise_margin_norm is None
+                or self.late_member_pairwise_margin_dropout is None
+            ):
+                raise RuntimeError("Late-member pairwise modules are incomplete.")
+            pairwise_input = self.late_member_pairwise_margin_norm(pooled)
+            pairwise_input = self.late_member_pairwise_margin_dropout(pairwise_input)
+            pairwise_logits = self.late_member_pairwise_margin_head(pairwise_input)
+            features["late_member_pairwise_margin_logits"] = pairwise_logits
+            logits = logits + self.pairwise_margin_adjustment(pairwise_logits, logits)
+        return logits
+
+    def fuse_late_member_logits(
+        self,
+        primary_logits: Tensor,
+        candidate_logits: Tensor,
+    ) -> Tensor:
+        if tuple(primary_logits.shape) != tuple(candidate_logits.shape):
+            raise ValueError(
+                "Late-member logits shape mismatch: "
+                f"primary={tuple(primary_logits.shape)}, "
+                f"candidate={tuple(candidate_logits.shape)}"
+            )
+        candidate_weight = float(self.late_member_candidate_weight)
+        primary_probabilities = F.softmax(primary_logits.float(), dim=1)
+        candidate_probabilities = F.softmax(candidate_logits.float(), dim=1)
+        probabilities = (
+            primary_probabilities * (1.0 - candidate_weight)
+            + candidate_probabilities * candidate_weight
+        )
+        if self.late_member_focus_margin_offset > 0.0:
+            probabilities = probabilities.clone()
+            probabilities[:, self.late_member_focus_class] = (
+                probabilities[:, self.late_member_focus_class]
+                - float(self.late_member_focus_margin_offset)
+            ).clamp_min(1e-8)
+        probabilities = probabilities / probabilities.sum(dim=1, keepdim=True).clamp_min(
+            1e-8
+        )
+        return probabilities.clamp_min(1e-8).log().to(dtype=primary_logits.dtype)
 
     def pairwise_margin_logits_from_head_input(self, head_input: Tensor) -> Optional[Tensor]:
         if self.pairwise_margin_head is None:
@@ -9081,6 +9403,11 @@ class DETRVisionTransformerWithRegisters(VisionTransformerWithRegisters):
         late_class_attention_dropout: float = 0.05,
         late_class_attention_mlp_ratio: float = 2.0,
         late_class_attention_residual_scale: float = 0.10,
+        late_member_branch: bool = False,
+        late_member_fork_after_block: int = 6,
+        late_member_candidate_weight: float = 0.40,
+        late_member_focus_class: int = 1,
+        late_member_focus_margin_offset: float = 0.0,
         mixstyle: bool = False,
         mixstyle_probability: float = 0.5,
         mixstyle_alpha: float = 0.1,
@@ -9377,6 +9704,11 @@ class DETRVisionTransformerWithRegisters(VisionTransformerWithRegisters):
             late_class_attention_dropout=late_class_attention_dropout,
             late_class_attention_mlp_ratio=late_class_attention_mlp_ratio,
             late_class_attention_residual_scale=late_class_attention_residual_scale,
+            late_member_branch=late_member_branch,
+            late_member_fork_after_block=late_member_fork_after_block,
+            late_member_candidate_weight=late_member_candidate_weight,
+            late_member_focus_class=late_member_focus_class,
+            late_member_focus_margin_offset=late_member_focus_margin_offset,
             mixstyle=mixstyle,
             mixstyle_probability=mixstyle_probability,
             mixstyle_alpha=mixstyle_alpha,
@@ -10212,6 +10544,17 @@ def classification_logits_from_features(model: nn.Module, features: Dict[str, Te
             if isinstance(features.get("trace"), dict):
                 features["trace"]["cumulative_ordinal_logits"] = cumulative_logits.detach()
             logits = logits + cumulative_adjust_fn(cumulative_logits, logits)
+    late_member_fn = getattr(model, "late_member_logits_from_features", None)
+    late_member_fuse_fn = getattr(model, "fuse_late_member_logits", None)
+    if bool(getattr(model, "late_member_enabled", False)):
+        if not callable(late_member_fn) or not callable(late_member_fuse_fn):
+            raise RuntimeError("Late-member model is missing its readout or fusion method.")
+        primary_logits = logits
+        candidate_logits = late_member_fn(features)
+        features["late_member_primary_logits"] = primary_logits
+        features["late_member_logits"] = candidate_logits
+        logits = late_member_fuse_fn(primary_logits, candidate_logits)
+        features["late_member_fused_logits"] = logits
     linear_verifier = getattr(model, "patch_evidence_linear_verifier", None)
     patches = features.get("patches")
     if linear_verifier is not None and torch.is_tensor(patches) and patches.ndim == 3:

@@ -134,7 +134,7 @@ def _mean(rows: Sequence[Mapping[str, object]], field: str) -> Optional[float]:
 def _known_attention_source(value: object) -> bool:
     source = str(value)
     return source in {"native_attention", "feature_map_fallback"} or re.fullmatch(
-        r"forward_features\.return_attention\.blocks\[\d+\]",
+        r"forward_features\.return_attention\.(?:blocks|late_member_blocks)\[\d+\]",
         source,
     ) is not None
 

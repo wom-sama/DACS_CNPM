@@ -14855,3 +14855,101 @@ Date: 2026-07-02
   250 dependency warnings. Current full-pipeline/export/video preflights passed
   and retention passed over 614 run directories with `blockers=[]`. No metric,
   checkpoint, raw dataset, final-test decision, or current-best command changed.
+
+## Late-Member Readiness 2026-07-14 - Splice, Directional, Dense KL
+
+- Implemented a default-off shared-body late member forked after block 6,
+  checkpoint-safe initialization, primary-path freezing/eval locking, native
+  late-member attention provenance, strict prediction-transition audit, and
+  focused regressions. Direct scratch block-7/8 transplant failed at
+  `0.142509/0.134868` validation macro/class1, proving feature-basis
+  incompatibility rather than a missing fusion weight.
+- A keeper-initialized fused-CE control reached independent validation
+  `0.880918/0.670588`; it made `8/10` corrections/harms and rescued/broke
+  class-1 FN/TP `0/3`. Native XAI remained fruit/surface sensitive, so the
+  separate path is functional but ordinary CE does not preserve precision.
+- The valid sparse teacher-disagreement smoke reached
+  `0.880357/0.668622`, class-1 P/R `0.600000/0.754967`, with `10/13`
+  corrections/harms and FN-rescue/TP-break `1/4`. Only about `14` positive and
+  `7` negative rows were selected across 40 batches; the in-sample scratch
+  teacher is too agreement-heavy for hard disagreement transfer.
+- Read Hydra and Positive-Congruent Training and added dense focal distillation
+  of the already frozen `0.60 keeper + 0.40 scratch - 0.034 class1` rule into
+  only the late branch. Unit/runtime preflight verified exact fusion arithmetic,
+  frozen primary/teacher gradients, full-row coverage, and inherited offset.
+- Temperature-1 KL was also rejected: independent validation
+  macro/class1 `0.879181/0.664723`, class-1 P/R
+  `0.593750/0.754967`; versus keeper it made `9/14/1`
+  corrections/harms/wrong-to-wrong, rescued/broke FN/TP `1/4`, and
+  removed/created FP `3/4`. Dense KL averaged only `0.001541` against total
+  train loss `0.837789`, so fused CE still dominated.
+- The exact 12-transition XAI cohort used native late block 7 for every case.
+  Foreground mass was `0.9066/0.9445/0.8657/0.9108`; object desaturation drop
+  `0.0731` dominated background blur/gray `-0.0059/-0.0038`. All rows were
+  near-ties around pale-green surface/shadow/boundary evidence. Wide context
+  remains unsupported.
+- Decision: no probe, test, or current-best command update. Do not sweep the
+  rejected directional gap/weight or KL weight/focal boost. The one justified
+  follow-up is PCT's direct focal logit-matching distance against the same
+  frozen rule, locked in the late-member protocol before execution.
+- The locked FD-LM preflight was finite with exact model-owned fusion and
+  late-path-only gradients. Its matched 40-batch checkpoint SHA is
+  `8ffdc348...abed5`; train FD-LM/logit RMSE was `0.008318/0.057633` with full
+  dense coverage and only `1.1719%` frozen-rule/keeper argmax disagreement.
+- Independent FP32 full validation reached macro/class1
+  `0.879775/0.666667`, class-1 P/R `0.596859/0.754967`, and TP/FP/FN
+  `114/77/37`. Versus keeper it changed 23 rows with `9/13/1`
+  corrections/harms/wrong-to-wrong, rescued/broke FN/TP `1/4`, and
+  removed/created FP `3/3`; it fails the precision-oriented gate and receives
+  no probe or test.
+- All 11 important class-1 transitions used native late block-7 XAI with zero
+  fallback and were near-ties. Foreground mass was
+  `0.9009/0.9426/0.8672/0.9082`; object desaturation drop `0.0669` dominated
+  background blur/gray `-0.0073/-0.0052`, but visual review still found
+  edge/background/surrounding-object peaks among precision harms.
+- Decision: close output-only late-member rule compression without any nearby
+  distance/weight/temperature/fork/run-length sweep. The next distinct gate is
+  a train-held-out direct feature-matching/stitching diagnostic that measures
+  basis compatibility before an adapter is allowed into an image smoke.
+
+## Feature-Basis Stitching 2026-07-14 - Compatible, Precision-Unsafe
+
+- Locked the no-test protocol before implementation: exact keeper/scratch
+  hashes, forks 5/6/7, direct full-rank affine token and CNN maps, exact
+  `patch_indices` intersections, fixed ridge ratio, five source-grouped train
+  folds, train-OOF fork selection, and one validation opening.
+- Added the streaming readiness audit and focused regressions. The 128-row
+  preflight had zero oracle replay error, patch intersection `0.9289`, and all
+  direct/functional checks passed without selecting a fork.
+- The full run covered `9215` train objects and `8064` train source groups. All
+  forks passed OOF compatibility. Fork 5 won by stitched/native-scratch
+  probability MAE `0.009962`, with agreement `0.957244`, patch intersection
+  `0.933314`, token/prefix/patch R2
+  `0.860077/0.876004/0.858384`, and CNN R2 `0.994715`.
+- The single `2606`-row validation opening had zero train-source overlap and
+  preserved direct compatibility: probability MAE `0.010463`, agreement
+  `0.944359`, and exact oracle replay. Fused macro/class1 F1 improved
+  `0.882925/0.678261 -> 0.890221/0.700337`; class1 precision improved
+  `0.603093 -> 0.712329`, FP fell `77 -> 42`, and corrections/harms were
+  `40/23`.
+- The candidate is still rejected because class1 recall fell to `0.688742` and
+  it broke `15` keeper class1 TP while rescuing only `2` FN. These fail the
+  predeclared recall `>=0.70` and TP-break `<=10` gates. TP-break and FP-removal
+  keeper `p1` means were nearly identical (`0.2640/0.2646`), so a nearby
+  confidence threshold is not justified. No adapter checkpoint, probe, test,
+  or current-best command update was made.
+- Guarded cleanup compacted 14 rejected late-member and stitching-preflight
+  roots into 1302 verified payloads with evidence SHA
+  `4da79083...984b`, excluded 17 reproducible binaries (`1,206,777,473`
+  bytes), and reclaimed `1,382,727,680` observed bytes. The formal full audit
+  remains at `runs/audit_feature_basis_stitching_full_5fold_20260714`; its
+  summary SHA is `726627e0...a42335`.
+- Closure passed compileall, focused tests `34/34`, full pytest `889/889`, four
+  PowerShell parse checks, current full-pipeline/export/video preflights, and
+  retention over 618 run directories with `blockers=[]`. Keeper, scratch, and
+  current-command hashes remained exact.
+- Decision: close linear feature-basis stitching and all nearby fork/ridge/map/
+  role/nonlinearity/rule sweeps. Keep the deployable keeper and current command
+  SHA `881ee29e...e792f`. The next distinct experiment must add a train-only
+  class1-positive representation with direct illumination and TP-preservation
+  evidence, rather than compressing the already frozen two-model rule.

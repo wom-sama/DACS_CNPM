@@ -2221,3 +2221,55 @@
   after this closure is committed. It must preserve keeper class-1 TP while
   learning the scratch member's illumination complement, and must pass direct
   `0/2/4->1` precision gates before any full 30-epoch run.
+- [x] Implement and audit the keeper-initialized fork-after-6 late member,
+  direct-splice control, frozen-primary fused-CE control, sparse directional
+  teacher transfer, and strict full-validation transition accounting.
+- [x] Reject sparse directional transfer: only about `21/1280` smoke rows were
+  selected; independent macro/class1 is `0.880357/0.668622`, with
+  FN-rescue/TP-break `1/4` and `10/13` corrections/harms.
+- [x] Implement dense focal distillation of the frozen precision rule with
+  model-owned fusion parameters and exact unit/runtime checks. Reject
+  temperature-1 KL at independent `0.879181/0.664723`, class-1 precision
+  `0.593750`, and `9/14` corrections/harms.
+- [x] Complete native late-block-7 all-method XAI on every important class-1
+  transition. Object desaturation remains causal; wide background does not.
+- [x] Implement the single predeclared Positive-Congruent FD-LM distance
+  (`0.5*L2` on normalized rule/student logits), run one finite-gradient
+  preflight, then the matched 40-batch/full-val/no-test gate.
+- [x] If and only if FD-LM passes precision `0.65`, recall `0.71`, class-1 F1
+  `0.69`, macro `0.887`, FP `60`, TP-break `10`, and correction/harm gates,
+  run the 120-batch/two-epoch probe. Otherwise close late-member dual-rule
+  compression without a weight/temperature/seed/run-length sweep. FD-LM was
+  rejected at `0.879775/0.666667`, class-1 P/R `0.596859/0.754967`, with
+  `9/13` corrections/harms and FN-rescue/TP-break `1/4`; no probe was run.
+- [x] Complete FD-LM transition/XAI closure on all 11 important class-1
+  changes. Native late-block-7 attention had zero fallback; all cases were
+  near-ties and precision harms still included edge/background peaks.
+- [x] Lock a no-test feature-basis compatibility protocol before another
+  architecture smoke. Compare keeper and scratch internal representations by
+  direct matching on train-held-out source groups, account for pruned-token
+  index intersections, and reject any adapter that only improves task loss
+  through out-of-distribution stitched activations.
+- [x] Complete full `9215`-row five-source-fold feature-basis audit. All forks
+  pass OOF compatibility; fork 5 wins by probability MAE `0.009962` with token/
+  prefix/patch/CNN R2 `0.8601/0.8760/0.8584/0.9947` and agreement `0.9572`.
+- [x] Reject fork-5 linear stitching on its single validation opening. It raises
+  macro/class1 F1 `0.882925/0.678261 -> 0.890221/0.700337`, raises class1
+  precision `0.603093 -> 0.712329`, and cuts FP `77 -> 42`, but recall
+  `0.688742` and TP-break `15` fail the locked `0.70/10` gates. No adapter
+  checkpoint, probe, or test is permitted.
+- [x] Compact 14 rejected late-member/stitch-preflight roots through verified
+  evidence SHA `4da79083...984b`; preserve 1302 payloads, exclude 17 binaries,
+  and reclaim `1,382,727,680` observed bytes. Keeper, scratch, full stitching
+  audit, and current command hashes remain unchanged.
+- [x] Close the stage with compileall, focused tests `34/34`, full pytest
+  `889/889`, four PowerShell parse checks, full-pipeline/export/video
+  preflights, and retention over `618` run directories with `blockers=[]`.
+- [ ] Do not sweep feature-stitch fork/ridge/map/nonlinearity/token roles,
+  fusion weight, margin, seed, or split. Keeper class1 TP-break and FP-removal
+  confidence overlap too strongly for a nearby post-hoc suppressor.
+- [ ] Keep current-best full-train/export/video commands unchanged until one
+  single-checkpoint candidate passes the locked validation gate and probe.
+  The next experiment must introduce direct train-only class1-positive evidence
+  with explicit illumination robustness and TP preservation, not another
+  output-rule compression or linear basis adapter.
