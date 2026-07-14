@@ -36,6 +36,7 @@ param(
     [double]$SourceContextAuxConsistencyWeight = 0.0,
     [double]$SourceContextAuxBboxMarginRatio = 0.04,
     [double]$SourceContextAuxAttentionTemperature = 0.20,
+    [bool]$TokenPruning = $true,
     [double]$TokenPruneBboxWeight = 0.0,
     [double]$TokenPruneBboxMarginRatio = 0.04,
     [ValidateSet("bbox", "crop_bbox")]
@@ -251,7 +252,7 @@ param(
     [double]$GroupDroLossWeight = 0.0,
     [double]$GroupDroTemperature = 0.35,
     [int]$GroupDroMinSamples = 1,
-    [string]$HardSampleManifest = "runs\mango_cls_256_5class_defectstat_v3_30e\hard_mining_train_only\hard_samples_train_only.csv",
+    [string]$HardSampleManifest = "",
     [double]$HardSampleRepeatFactor = 1.6,
     [string]$AmbiguousSoftTargetManifest = "",
     [double]$AmbiguousSoftTargetAlpha = 0.25,
@@ -566,6 +567,9 @@ param(
     [string]$GatedRelativePositionAttentionLayers = "1,2,3,4",
     [double]$GatedRelativePositionAttentionMaxMix = 0.25,
     [double]$GatedRelativePositionAttentionLocalityStrength = 1.0,
+    [bool]$VisualContrastAttention = $false,
+    [string]$VisualContrastAttentionLayers = "1,2,3,4,5,6,7,8",
+    [int]$VisualContrastTokens = 64,
     [bool]$LayerTokenFusion = $false,
     [string]$LayerTokenFusionLayers = "2,4,6",
     [int]$LayerTokenFusionTopK = 4,
@@ -884,6 +888,19 @@ if ($ConcurrentLocalGlobalKernelSize -lt 3 -or ($ConcurrentLocalGlobalKernelSize
 }
 if ($GatedRelativePositionAttentionMaxMix -le 0.0 -or $GatedRelativePositionAttentionMaxMix -gt 1.0 -or $GatedRelativePositionAttentionLocalityStrength -le 0.0) {
     throw "GatedRelativePositionAttention max-mix/locality-strength khong hop le."
+}
+$visualContrastSide = [int][Math]::Sqrt([double]$VisualContrastTokens)
+if ($VisualContrastTokens -le 0 -or ($visualContrastSide * $visualContrastSide) -ne $VisualContrastTokens) {
+    throw "VisualContrastTokens phai la so chinh phuong duong."
+}
+if ($VisualContrastAttention -and $TokenPruning) {
+    throw "VisualContrastAttention yeu cau TokenPruning=`$false de giu dense patch grid."
+}
+if ($VisualContrastAttention -and $EarlyTokenMaskKeepRate -lt 1.0) {
+    throw "VisualContrastAttention yeu cau EarlyTokenMaskKeepRate=1.0."
+}
+if ($VisualContrastAttention -and $GatedRelativePositionAttention) {
+    throw "VisualContrastAttention khong the dung cung GatedRelativePositionAttention."
 }
 if ($BoundaryCenterTeacherMinConfidence -lt 0.0) {
     throw "BoundaryCenterTeacherMinConfidence phai >= 0."
@@ -1482,6 +1499,7 @@ if ($PreflightOnly) {
         source_context_aux_consistency_weight = $SourceContextAuxConsistencyWeight
         source_context_aux_bbox_margin_ratio = $SourceContextAuxBboxMarginRatio
         source_context_aux_attention_temperature = $SourceContextAuxAttentionTemperature
+        token_pruning = [bool]$TokenPruning
         token_prune_bbox_weight = $TokenPruneBboxWeight
         token_prune_bbox_margin_ratio = $TokenPruneBboxMarginRatio
         bbox_token_prior_source = $BboxTokenPriorSource
@@ -1982,6 +2000,9 @@ if ($PreflightOnly) {
         gated_relative_position_attention_layers = $GatedRelativePositionAttentionLayers
         gated_relative_position_attention_max_mix = $GatedRelativePositionAttentionMaxMix
         gated_relative_position_attention_locality_strength = $GatedRelativePositionAttentionLocalityStrength
+        visual_contrast_attention = [bool]$VisualContrastAttention
+        visual_contrast_attention_layers = $VisualContrastAttentionLayers
+        visual_contrast_tokens = $VisualContrastTokens
         layer_token_fusion = [bool]$LayerTokenFusion
         layer_token_fusion_layers = $LayerTokenFusionLayers
         layer_token_fusion_top_k = $LayerTokenFusionTopK
@@ -2204,7 +2225,6 @@ try {
         "--branch-token-dropout", "0.08",
         "--detail-patch-enhancement",
         "--detail-patch-dropout", "0.05",
-        "--token-pruning",
         "--token-prune-layers", "2,5",
         "--token-keep-rates", "0.85,0.65",
         "--token-prune-foreground-weight", "0.45",
@@ -3203,6 +3223,16 @@ if ($ClassIndependentHead) {
             "--gated-relative-position-attention-locality-strength", "$GatedRelativePositionAttentionLocalityStrength"
         )
     }
+    if ($TokenPruning) {
+        $TrainArgs += @("--token-pruning")
+    }
+    if ($VisualContrastAttention) {
+        $TrainArgs += @(
+            "--visual-contrast-attention",
+            "--visual-contrast-attention-layers", "$VisualContrastAttentionLayers",
+            "--visual-contrast-tokens", "$VisualContrastTokens"
+        )
+    }
     if ($ShiftedPatchTokenization) {
         $TrainArgs += @("--shifted-patch-tokenization")
     }
@@ -3313,6 +3343,7 @@ if ($ClassIndependentHead) {
         source_context_aux_consistency_weight = $SourceContextAuxConsistencyWeight
         source_context_aux_bbox_margin_ratio = $SourceContextAuxBboxMarginRatio
         source_context_aux_attention_temperature = $SourceContextAuxAttentionTemperature
+        token_pruning = [bool]$TokenPruning
         token_prune_bbox_weight = $TokenPruneBboxWeight
         token_prune_bbox_margin_ratio = $TokenPruneBboxMarginRatio
         bbox_token_prior_source = $BboxTokenPriorSource
@@ -3936,6 +3967,9 @@ if ($ClassIndependentHead) {
         gated_relative_position_attention_layers = $GatedRelativePositionAttentionLayers
         gated_relative_position_attention_max_mix = $GatedRelativePositionAttentionMaxMix
         gated_relative_position_attention_locality_strength = $GatedRelativePositionAttentionLocalityStrength
+        visual_contrast_attention = [bool]$VisualContrastAttention
+        visual_contrast_attention_layers = $VisualContrastAttentionLayers
+        visual_contrast_tokens = $VisualContrastTokens
         layer_token_fusion = [bool]$LayerTokenFusion
         layer_token_fusion_layers = $LayerTokenFusionLayers
         layer_token_fusion_top_k = $LayerTokenFusionTopK

@@ -110,6 +110,17 @@ def flatten_xai_case(payload: Mapping[str, object]) -> Dict[str, object]:
                 payload,
                 ("viz", "heatmap_focus", method, metric),
             )
+    for field in (
+        "selected_layer_count",
+        "gradient_layer_count",
+        "fallback_layer_count",
+        "missing_gradient_layer_count",
+        "zero_weight_fallback_layer_count",
+    ):
+        row[f"grad_rollout_{field}"] = _nested_float(
+            payload,
+            ("viz", "grad_rollout_provenance", field),
+        )
     for probe in ROBUSTNESS_PROBES:
         for metric in ("original_prediction_drop", "target_probability_drop"):
             row[f"{probe}_{metric}"] = _nested_float(
@@ -134,7 +145,8 @@ def _mean(rows: Sequence[Mapping[str, object]], field: str) -> Optional[float]:
 def _known_attention_source(value: object) -> bool:
     source = str(value)
     return source in {"native_attention", "feature_map_fallback"} or re.fullmatch(
-        r"forward_features\.return_attention\.(?:blocks|late_member_blocks)\[\d+\]",
+        r"forward_features\.return_attention\.(?:blocks|late_member_blocks)\[\d+\]"
+        r"(?:\.(?:mhsa_probability|vca_effective_positive|mixed))?",
         source,
     ) is not None
 
@@ -169,6 +181,11 @@ def _aggregate(rows: Sequence[Mapping[str, object]], model_prefix: str) -> Dict[
             for probe in ROBUSTNESS_PROBES
             for metric in ("original_prediction_drop", "target_probability_drop")
         ],
+        "grad_rollout_selected_layer_count",
+        "grad_rollout_gradient_layer_count",
+        "grad_rollout_fallback_layer_count",
+        "grad_rollout_missing_gradient_layer_count",
+        "grad_rollout_zero_weight_fallback_layer_count",
     ]
     return {
         "rows": int(len(rows)),
@@ -253,6 +270,33 @@ def _image_tile(path: Optional[Path], size: Tuple[int, int]) -> Image.Image:
     return canvas
 
 
+def _grad_rollout_title(
+    name: str,
+    cases: Mapping[str, Mapping[str, object]],
+    keys: Sequence[str],
+) -> str:
+    fallback_cases = 0
+    for key in keys:
+        viz = cases[key].get("viz")
+        provenance = (
+            viz.get("grad_rollout_provenance") if isinstance(viz, Mapping) else None
+        )
+        fallback_layers = (
+            provenance.get("fallback_layer_count")
+            if isinstance(provenance, Mapping)
+            else 0
+        )
+        try:
+            fallback_cases += int(float(fallback_layers or 0) > 0.0)
+        except (TypeError, ValueError):
+            fallback_cases += 1
+    if keys and fallback_cases == len(keys):
+        return f"{name} rollout fallback"
+    if fallback_cases:
+        return f"{name} grad-rollout (mixed)"
+    return f"{name} grad-rollout"
+
+
 def _render_contact_sheet(
     *,
     category: str,
@@ -273,8 +317,8 @@ def _render_contact_sheet(
         (f"{right_name} native attention", "right", "attention"),
         (f"{left_name} Grad-CAM", "left", "gradcam"),
         (f"{right_name} Grad-CAM", "right", "gradcam"),
-        (f"{left_name} grad-rollout", "left", "grad_rollout"),
-        (f"{right_name} grad-rollout", "right", "grad_rollout"),
+        (_grad_rollout_title(left_name, left_cases, keys), "left", "grad_rollout"),
+        (_grad_rollout_title(right_name, right_cases, keys), "right", "grad_rollout"),
     )
     width = tile_size[0] * len(columns)
     height = header_height + (tile_size[1] + label_height) * len(keys)
@@ -452,6 +496,16 @@ def run_paired_xai_cohort_audit(
         int(all_summary[prefix]["attention_sources"].get("feature_map_fallback", 0)) > 0
         for prefix in (left_prefix, right_prefix)
     )
+    grad_rollout_fallback_cases = {
+        prefix: int(
+            sum(
+                float(row.get(f"{prefix}_grad_rollout_fallback_layer_count", 0.0))
+                > 0.0
+                for row in paired_rows
+            )
+        )
+        for prefix in (left_prefix, right_prefix)
+    }
     if not attention_sources_valid:
         raise ValueError("Paired XAI contains missing or unknown attention provenance.")
 
@@ -502,6 +556,15 @@ def run_paired_xai_cohort_audit(
             "interpretation": (
                 "Fallback heatmaps are structural feature maps, not native Transformer attention. "
                 "Use Grad-CAM and grad-rollout as the primary attribution evidence when fallback is present."
+            ),
+        },
+        "grad_rollout_provenance": {
+            "fallback_case_count": grad_rollout_fallback_cases,
+            "fallback_present": any(grad_rollout_fallback_cases.values()),
+            "interpretation": (
+                "A fallback layer uses ordinary attention rollout because its returned "
+                "attention tensor has no usable gradient path to the selected logit. "
+                "Do not interpret fallback cases as gradient-weighted attribution."
             ),
         },
         "contact_sheets": contact_sheets,

@@ -215,6 +215,23 @@ class DetectionCalibrationTests(unittest.TestCase):
         self.assertTrue(float(heatmap.max()) <= 1.0)
         self.assertGreater(float(heatmap.max()), 0.0)
 
+    def test_gradient_weighted_rollout_reports_missing_gradient_fallback(self):
+        attention = torch.eye(6).unsqueeze(0).repeat(2, 1, 1)
+        heatmap, provenance = build_gradient_weighted_attention_rollout_heatmap(
+            attentions=[attention],
+            grid_size=(2, 2),
+            prefix_tokens=2,
+            output_size=(8, 8),
+            query_tokens="cls_register_mean",
+            return_metadata=True,
+        )
+
+        self.assertEqual(tuple(heatmap.shape), (8, 8))
+        self.assertEqual(provenance["gradient_layer_count"], 0)
+        self.assertEqual(provenance["fallback_layer_count"], 1)
+        self.assertEqual(provenance["missing_gradient_layer_count"], 1)
+        self.assertFalse(provenance["all_layers_gradient_weighted"])
+
     def test_register_attention_summary_reports_similarity(self):
         attention = torch.zeros(1, 2, 6, 6)
         attention[:, :, :, :] = 1.0 / 6.0

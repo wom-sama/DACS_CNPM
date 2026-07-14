@@ -264,7 +264,8 @@ def build_gradient_weighted_attention_rollout_heatmap(
     output_size: Tuple[int, int],
     query_tokens: str = "cls_register_mean",
     start_layer: int = 0,
-) -> np.ndarray:
+    return_metadata: bool = False,
+) -> Union[np.ndarray, Tuple[np.ndarray, Dict[str, object]]]:
     if isinstance(attentions, dict):
         ordered = [attentions[index] for index in sorted(attentions)]
     else:
@@ -277,6 +278,9 @@ def build_gradient_weighted_attention_rollout_heatmap(
     device = selected[0].device
     num_tokens = int(selected[0].shape[-1])
     rollout = torch.eye(num_tokens, device=device, dtype=selected[0].dtype)
+    gradient_layer_count = 0
+    missing_gradient_layer_count = 0
+    zero_weight_fallback_layer_count = 0
     for attention in selected:
         if attention.ndim == 4:
             attention_for_grad = attention[0]
@@ -290,10 +294,14 @@ def build_gradient_weighted_attention_rollout_heatmap(
             gradient = gradient[0]
         if gradient is None:
             weighted = attention_for_grad
+            missing_gradient_layer_count += 1
         else:
             weighted = torch.relu(gradient) * attention_for_grad
             if float(weighted.detach().sum().abs().item()) <= 1e-12:
                 weighted = attention_for_grad
+                zero_weight_fallback_layer_count += 1
+            else:
+                gradient_layer_count += 1
 
         fused = weighted.mean(dim=0).clamp(min=0)
         fused = fused + torch.eye(num_tokens, device=fused.device, dtype=fused.dtype)
@@ -309,7 +317,24 @@ def build_gradient_weighted_attention_rollout_heatmap(
         mode="bicubic",
         align_corners=False,
     )[0, 0]
-    return _normalize_heatmap(heatmap)
+    normalized = _normalize_heatmap(heatmap)
+    if not return_metadata:
+        return normalized
+    fallback_layer_count = (
+        int(missing_gradient_layer_count) + int(zero_weight_fallback_layer_count)
+    )
+    metadata: Dict[str, object] = {
+        "selected_layer_count": int(len(selected)),
+        "gradient_layer_count": int(gradient_layer_count),
+        "fallback_layer_count": fallback_layer_count,
+        "missing_gradient_layer_count": int(missing_gradient_layer_count),
+        "zero_weight_fallback_layer_count": int(zero_weight_fallback_layer_count),
+        "all_layers_gradient_weighted": fallback_layer_count == 0,
+        "fallback_behavior": (
+            "unweighted_attention_rollout_for_missing_or_nonpositive_gradient_layers"
+        ),
+    }
+    return normalized, metadata
 
 
 def _entropy_1d(values: Tensor) -> float:

@@ -15194,3 +15194,120 @@ Date: 2026-07-02
   `runs/artifact_retention_audit_after_more_closure_20260714`. Keeper, scratch
   complement, and command TXT hashes remain exactly
   `1f49d577...482677`, `f8bd6309...1a549`, and `36b9aa1a...40faf`.
+
+## VCA Readiness Lock 2026-07-14 - Full-Grid Regional Contrast
+
+- After MORE failed, searched recent primary sources for a representation
+  change rather than another class loss/head/router. NeurIPS 2025 LinearDiff
+  reports Visual-Contrast Attention as a drop-in ViT attention that pools a
+  compact query grid, forms learned positive and negative streams, and uses
+  their differential interactions at both global and patch-query stages.
+- Reviewed the official repository at commit
+  `3fb5ee100cfdd5c6e482cf1bade58a61dc24e3d1`; the classification source SHA is
+  `df6b87825cc8628ac3fc28a06a9fe17f83f9ecae0b83908cbb7b159da4f6c8ab`.
+  The local implementation will follow the equations while correcting the
+  official DeiT-only assumption that there is exactly one prefix token.
+- VCA is not the rejected DCAL/PWCA route. PWCA injected a second image only
+  during training and removed that interaction at inference; VCA derives both
+  streams from the same image and becomes the inference attention. It is also
+  distinct from closed GPSA/local-window/LeFF/concurrent-CNN/class-query routes.
+- Locked `docs/TRKH_5CLASS_VCA_READINESS_PROTOCOL_20260714.md` before code.
+  The core hypothesis combines VCA with removal of token pruning in both
+  matched variants: preserve every `16x16` surface patch, then ask whether
+  explicit regional contrast reduces `0/2/4->1` FP without losing class1 TP.
+- The first run is fixed to eight VCA blocks, `64` contrast tokens, seed 42,
+  no VCA-specific loss, matched dense MHSA control, and `120b x 2e` only after
+  functional/resource checks. Full validation and all-method XAI are mandatory;
+  test and current-best commands remain closed.
+
+### VCA Stage-A implementation and result
+
+- Added prefix-aware VCA with the official two-stage differential equations,
+  explicit dense-grid guards, compatible QKV/projection names, full-grid
+  `vca_effective_positive` XAI provenance, per-layer lambda/mass/norm traces,
+  config/CLI/resume/V8 wiring, and architecture-trace export. The default MHSA
+  schema remains unchanged when VCA is disabled.
+- Corrected an earlier protocol description after tracing the real scratch
+  model: `16x16` patches plus seven prefix tokens gives `263`, because the
+  model has class + four register + color branch + edge branch tokens.
+- `runs/audit_vca_stage_a_train_only_20260714` passed every train-only gate.
+  Summary SHA is `c904e765...ec30b5e`; validation/test were not loaded.
+  VCA added `285184` parameters, AMP batch 32 peaked at `2.979 GiB`, and all
+  required parameter families received finite nonzero FP32 and AMP gradients.
+- All eight attention maps were finite, nonnegative `1x8x263x263` tensors with
+  maximum normalization error `2.384186e-7`. Stage A therefore grants only the
+  one locked matched smoke, not five-epoch/full-train/current-command promotion.
+- Added `scripts/run_trkh_vca_matched_smoke.ps1`, locked to the real scratch
+  launcher SHA `a493309e...fad6`. Its preflight and both training parsers verify
+  no pruning, no attention-view supervision, attention dropout zero, seed 42,
+  `120b x 2e`, full validation, and no final test.
+
+## VCA Matched Smoke Closure 2026-07-15 - Regional Contrast Is Precision-Unsafe
+
+- Completed the only authorized dense-MHSA/VCA `120b x 2e` matched pair on
+  full `yolo_f/val=2606`; no test prediction or raw-data edit was used. Pair
+  summary SHA is `bdd9b73c...e7cbf`.
+- Independent control/candidate macro F1 was `0.770209 -> 0.760897`.
+  Class-1 P/R/F1 was
+  `0.383621/0.589404/0.464752 -> 0.333333/0.529801/0.409207`.
+  VCA therefore degraded both sides of the agricultural precision/recall
+  boundary instead of suppressing false alarms.
+- VCA changed `163` decisions with `64/72` corrections/harms, rescued/broke
+  class-1 FN/TP `5/14`, increased focus FP `141 -> 158`, and created `10` new
+  `3->2` harms. Full confusion changed class-1 `TP/FP/FN`
+  `89/143/62 -> 80/160/71`; `4->1` alone increased by `14`.
+- Robustness was unfavorable in four of five conditions: clean, center
+  occlusion, dim, bright, and low-contrast macro deltas were
+  `-0.007369/-0.014145/-0.002757/+0.002388/-0.002085`. The trace remained
+  finite with nonzero Stage-I/II contrast, so this is a behavioral rejection,
+  not a dead module.
+- Deterministic 16-case paired XAI showed native foreground mass
+  `-0.067451`, background `+0.067451`, border `+0.023086`, and rollout
+  foreground `-0.043898`. TP breaks/harms often moved Grad-CAM toward hands,
+  leaves, bright background, and borders; some added FP still attended the
+  fruit, proving that class selectivity is also deficient.
+- Self-review found that `vca_effective_positive` has no gradient path to the
+  selected logit. Candidate grad-rollout silently equaled ordinary rollout in
+  all `16` cases (`0/8` gradient layers, `8/8` fallback layers), while control
+  had `8/8` valid layers. XAI now records this provenance, labels fallback
+  sheets, and the hardened closure removes all invalid `grad_rollout_*` deltas.
+  Hardened summary SHA is `d398c767...aa5eb`.
+- All eight metric gates failed where material. Five-epoch/full-train
+  permissions are false. Do not sweep VCA layer count, contrast tokens,
+  lambda, embedding initialization, pruning, LR, seed, epoch count, or add a
+  VCA-specific loss on this formulation.
+
+### Full-run interpretation and precision priority
+
+- The 2026-07-14 random-init full run converged within the budget (`23` epochs,
+  best epoch `20`) and is a useful high-recall complement, but not a better
+  keeper: independent macro/class-1 F1 is `0.874172/0.654639`, class-1 P/R
+  `0.535865/0.841060`, versus keeper `0.882925/0.678261` and P/R
+  `0.603093/0.774834`. It creates `33` extra clean-validation class-1 FP.
+- The frozen five-source-fold two-member precision rule remains operational
+  evidence only. It improves final-test class-1 precision/F1 to
+  `0.666667/0.675676` while recall falls to `0.684932`; it costs two forward
+  passes and is not a single-model training promotion.
+- Next architecture work must internalize conservative nonfocus rejection while
+  preserving true class-1 surface evidence. More recall weighting, generic
+  foreground forcing, output calibration, and wide-context suppression are
+  not supported by the accumulated audits.
+
+### VCA retention and worktree hygiene
+
+- Compacted both rejected smoke roots into
+  `runs/evidence_vca_matched_smoke_rejected_20260715`. Repaired a real CLI
+  exclusion bug by appending custom globs to mandatory binary defaults and by
+  verifying each mistaken checkpoint SHA before deletion. The compact payload
+  manifest is `22e572a2...7f998`; `26` source payloads remain and `280` files
+  (`393620720` bytes) are represented as excluded.
+- Removed only the three superseded pre-provenance XAI roots after matching all
+  16 case names and replacement summaries. Manifest
+  `cleanup_manifest_20260715_vca_superseded_xai.json` records `32480814`
+  logical bytes; provenance-correct XAI remains live.
+- Retention passed over `643` run directories with no blockers. Keeper,
+  scratch complement, and VS Code command TXT hashes remain
+  `1f49d577...482677`, `f8bd6309...1a549`, and `36b9aa1a...40faf`.
+  Closure passed compileall, full pytest `956/956`, five PowerShell parser
+  checks, and current-best/VCA preflights. Current-best commands are
+  intentionally unchanged.

@@ -993,6 +993,24 @@ def main() -> None:
                 values = trace.get(trace_key)
                 if torch.is_tensor(values):
                     record[record_key] = values.detach().cpu().float().tolist()
+        visual_contrast_layers = trace.get("visual_contrast_attention_layers")
+        if torch.is_tensor(visual_contrast_layers):
+            record["visual_contrast_attention_layers"] = [
+                int(value) for value in visual_contrast_layers.detach().cpu().tolist()
+            ]
+            for trace_key in (
+                "visual_contrast_lambda_stage1",
+                "visual_contrast_lambda_stage2",
+                "visual_contrast_stage1_positive_mass",
+                "visual_contrast_stage1_negative_mass",
+                "visual_contrast_stage2_positive_mass",
+                "visual_contrast_stage2_negative_mass",
+                "visual_contrast_stage1_contrast_norm",
+                "visual_contrast_stage2_contrast_norm",
+            ):
+                values = trace.get(trace_key)
+                if torch.is_tensor(values):
+                    record[trace_key] = values.detach().cpu().float().tolist()
         concurrent_layers = trace.get("concurrent_local_global_layers")
         if torch.is_tensor(concurrent_layers):
             record["concurrent_local_global_layers"] = [

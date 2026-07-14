@@ -2138,6 +2138,27 @@ def parse_args() -> argparse.Namespace:
         default=1.0,
     )
     parser.add_argument(
+        "--visual-contrast-attention",
+        action="store_true",
+        default=False,
+        help=(
+            "Replace selected dense MHSA blocks with prefix-aware Visual-Contrast "
+            "Attention. Token pruning must be disabled."
+        ),
+    )
+    parser.add_argument(
+        "--visual-contrast-attention-layers",
+        type=str,
+        default="1,2,3,4,5,6,7,8",
+        help="Comma-separated 1-based transformer layers that use VCA.",
+    )
+    parser.add_argument(
+        "--visual-contrast-tokens",
+        type=int,
+        default=64,
+        help="Positive/negative regional token count per VCA stream; must be square.",
+    )
+    parser.add_argument(
         "--focus-class-aux-loss-weight",
         type=float,
         default=0.0,
@@ -4920,6 +4941,32 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         raise ValueError(
             "--gated-relative-position-attention-locality-strength phai > 0."
         )
+    visual_contrast_side = math.isqrt(int(args.visual_contrast_tokens))
+    if (
+        int(args.visual_contrast_tokens) <= 0
+        or visual_contrast_side * visual_contrast_side
+        != int(args.visual_contrast_tokens)
+    ):
+        raise ValueError("--visual-contrast-tokens phai la so chinh phuong duong.")
+    if bool(args.visual_contrast_attention) and bool(args.token_pruning):
+        raise ValueError(
+            "--visual-contrast-attention yeu cau tat --token-pruning de giu dense grid."
+        )
+    if (
+        bool(args.visual_contrast_attention)
+        and float(args.early_token_mask_keep_rate) < 1.0
+    ):
+        raise ValueError(
+            "--visual-contrast-attention yeu cau --early-token-mask-keep-rate=1.0."
+        )
+    if (
+        bool(args.visual_contrast_attention)
+        and bool(args.gated_relative_position_attention)
+    ):
+        raise ValueError(
+            "Visual-Contrast Attention khong the dung dong thoi voi gated relative "
+            "position attention."
+        )
     if args.shifted_patch_shift <= 0:
         raise ValueError("--shifted-patch-shift phai > 0.")
     if args.shifted_patch_residual_scale < 0.0:
@@ -6221,6 +6268,9 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         gated_relative_position_attention_locality_strength=(
             args.gated_relative_position_attention_locality_strength
         ),
+        visual_contrast_attention=bool(args.visual_contrast_attention),
+        visual_contrast_attention_layers=args.visual_contrast_attention_layers,
+        visual_contrast_tokens=args.visual_contrast_tokens,
         layer_token_fusion=bool(args.layer_token_fusion),
         layer_token_fusion_layers=args.layer_token_fusion_layers,
         layer_token_fusion_top_k=args.layer_token_fusion_top_k,
@@ -8230,6 +8280,18 @@ def _is_allowed_resume_extension_key(key: str) -> bool:
     return (
         ".local_patch_mixer." in text
         or ".attn.relative_position_attention." in text
+        or any(
+            marker in text
+            for marker in (
+                ".attn.positive_embedding",
+                ".attn.negative_embedding",
+                ".attn.stage1_lambda_",
+                ".attn.stage2_lambda_",
+                ".attn.stage1_norm.",
+                ".attn.stage2_norm.",
+                ".attn.depthwise_value.",
+            )
+        )
     )
 
 
@@ -26612,6 +26674,7 @@ def main() -> None:
             or bool(args.patch_evidence_router_head)
             or bool(args.shifted_patch_tokenization)
             or bool(args.gated_relative_position_attention)
+            or bool(args.visual_contrast_attention)
             or bool(args.late_class_attention_pooling)
             or bool(args.late_member_branch)
             or bool(args.complementary_patch_suppression_head)
@@ -26869,6 +26932,40 @@ def main() -> None:
                     "reason": (
                         "allow checkpoint-safe patch-relative attention without "
                         "rebuilding the full checkpoint config from CLI"
+                    ),
+                },
+                flush=True,
+            )
+        if bool(args.visual_contrast_attention):
+            if bool(model_config.token_pruning) or float(
+                model_config.early_token_mask_keep_rate
+            ) < 1.0:
+                raise ValueError(
+                    "Visual-Contrast Attention resume extension requires dense tokens. "
+                    "Use --resume-use-cli-config with token pruning disabled."
+                )
+            if bool(model_config.gated_relative_position_attention):
+                raise ValueError(
+                    "Visual-Contrast Attention resume extension conflicts with gated "
+                    "relative position attention."
+                )
+            model_config.visual_contrast_attention = True
+            model_config.visual_contrast_attention_layers = str(
+                args.visual_contrast_attention_layers
+            )
+            model_config.visual_contrast_tokens = int(args.visual_contrast_tokens)
+            print(
+                {
+                    "resume_cli_model_extension": {
+                        "visual_contrast_attention": True,
+                        "visual_contrast_attention_layers": (
+                            model_config.visual_contrast_attention_layers
+                        ),
+                        "visual_contrast_tokens": model_config.visual_contrast_tokens,
+                    },
+                    "reason": (
+                        "allow dense-grid visual-contrast attention while preserving "
+                        "compatible qkv/proj checkpoint parameters"
                     ),
                 },
                 flush=True,
@@ -29278,6 +29375,7 @@ def main() -> None:
                 bool(args.resume_use_cli_config)
                 or bool(args.patch_evidence_router_head)
                 or float(args.patch_evidence_router_loss_weight) > 0.0
+                or bool(args.visual_contrast_attention)
                 or bool(args.late_class_attention_pooling)
                 or bool(args.late_member_branch)
             ),
@@ -29368,6 +29466,7 @@ def main() -> None:
                     bool(args.resume_use_cli_config)
                     or bool(args.patch_evidence_router_head)
                     or float(args.patch_evidence_router_loss_weight) > 0.0
+                    or bool(args.visual_contrast_attention)
                     or bool(args.late_class_attention_pooling)
                     or bool(args.late_member_branch)
                 ),

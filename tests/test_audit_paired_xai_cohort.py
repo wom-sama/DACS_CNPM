@@ -4,6 +4,7 @@ import pytest
 
 from trkh.tools.audit_paired_xai_cohort import (
     _delta_means,
+    _grad_rollout_title,
     _known_attention_source,
     _validate_case_alignment,
     flatten_xai_case,
@@ -21,6 +22,13 @@ def _case(sample_index: int, foreground: float, drop: float) -> dict:
         "review_flags": ["flag"],
         "viz": {
             "attention_source": "feature_map_fallback",
+            "grad_rollout_provenance": {
+                "selected_layer_count": 8,
+                "gradient_layer_count": 6,
+                "fallback_layer_count": 2,
+                "missing_gradient_layer_count": 2,
+                "zero_weight_fallback_layer_count": 0,
+            },
             "heatmap_focus": {
                 "gradcam": {
                     "foreground_mass": foreground,
@@ -47,6 +55,15 @@ def test_flatten_xai_case_preserves_provenance_and_missing_metrics() -> None:
     assert row["gradcam_foreground_mass"] == pytest.approx(0.9)
     assert row["object_desaturate_original_prediction_drop"] == pytest.approx(0.12)
     assert math.isnan(row["rollout_foreground_mass"])
+    assert row["grad_rollout_gradient_layer_count"] == pytest.approx(6)
+    assert row["grad_rollout_fallback_layer_count"] == pytest.approx(2)
+
+
+def test_grad_rollout_title_discloses_fallback() -> None:
+    cases = {"7": _case(7, 0.9, 0.12)}
+    assert _grad_rollout_title("candidate", cases, ["7"]) == (
+        "candidate rollout fallback"
+    )
 
 
 def test_delta_means_is_right_minus_left_and_ignores_nonfinite() -> None:
@@ -64,6 +81,12 @@ def test_known_attention_source_accepts_full_grid_return_attention_provenance() 
     assert _known_attention_source("forward_features.return_attention.blocks[7]")
     assert _known_attention_source(
         "forward_features.return_attention.late_member_blocks[7]"
+    )
+    assert _known_attention_source(
+        "forward_features.return_attention.blocks[7].vca_effective_positive"
+    )
+    assert _known_attention_source(
+        "forward_features.return_attention.blocks[3].mhsa_probability"
     )
     assert _known_attention_source("feature_map_fallback")
     assert not _known_attention_source("")

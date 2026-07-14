@@ -23,6 +23,22 @@ DEFAULT_EXCLUDE_GLOBS = (
 )
 
 
+def combine_exclude_globs(additional_globs: Sequence[str] = ()) -> Tuple[str, ...]:
+    """Append user exclusions to the binary defaults without case duplicates."""
+    combined: List[str] = []
+    seen = set()
+    for pattern in (*DEFAULT_EXCLUDE_GLOBS, *tuple(additional_globs)):
+        normalized = str(pattern).strip()
+        if not normalized:
+            continue
+        key = normalized.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        combined.append(normalized)
+    return tuple(combined)
+
+
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -413,7 +429,7 @@ def main() -> None:
         runs_root=runs_root,
         output_dir=output_dir,
         sources=sources,
-        exclude_globs=tuple(args.exclude_glob or DEFAULT_EXCLUDE_GLOBS),
+        exclude_globs=combine_exclude_globs(args.exclude_glob or ()),
         notes=args.note,
         test_data_used=args.test_data_used == "yes",
         protected_paths=args.protected_path,

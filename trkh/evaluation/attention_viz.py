@@ -440,8 +440,22 @@ def _capture_forward(
             source_blocks = (
                 "late_member_blocks" if attention_member == "late_member" else "blocks"
             )
+            attention_representations = (
+                features.get("attention_representations", {})
+                if isinstance(features, dict)
+                else {}
+            )
+            attention_representation = (
+                attention_representations.get(
+                    int(native_layer),
+                    features.get("attention_representation", "mhsa_probability"),
+                )
+                if isinstance(attention_representations, dict)
+                else "mhsa_probability"
+            )
             native_attention_source = (
-                f"forward_features.return_attention.{source_blocks}[{native_layer}]"
+                f"forward_features.return_attention.{source_blocks}[{native_layer}]."
+                f"{attention_representation}"
             )
             native_attention_grid_size = [int(grid_size[0]), int(grid_size[1])]
         if need_rollout:
@@ -460,6 +474,7 @@ def _capture_forward(
         )
 
     grad_rollout_heatmap = None
+    grad_rollout_provenance = None
     if need_grad_rollout and supports_trkh_metadata:
         model.zero_grad(set_to_none=True)
         with torch.enable_grad():
@@ -500,13 +515,17 @@ def _capture_forward(
                 else int(target_class)
             )
             logits[:, selected_class].sum().backward()
-            grad_rollout_heatmap = build_gradient_weighted_attention_rollout_heatmap(
+            (
+                grad_rollout_heatmap,
+                grad_rollout_provenance,
+            ) = build_gradient_weighted_attention_rollout_heatmap(
                 attentions=attentions,
                 grid_size=grid_size,
                 prefix_tokens=prefix_tokens,
                 output_size=crop_image.size,
                 query_tokens=query_tokens,
                 start_layer=rollout_start_layer,
+                return_metadata=True,
             )
             if register_attention_summary is None:
                 register_attention_summary = summarize_register_attention(
@@ -528,6 +547,8 @@ def _capture_forward(
         result["rollout_heatmap"] = rollout_heatmap
     if grad_rollout_heatmap is not None:
         result["grad_rollout_heatmap"] = grad_rollout_heatmap
+    if grad_rollout_provenance is not None:
+        result["grad_rollout_provenance"] = grad_rollout_provenance
     if register_attention_summary:
         result["register_attention"] = register_attention_summary
 
@@ -659,6 +680,8 @@ def analyze_tensor(
             prefix="grad_rollout",
         )
         heatmap_focus["grad_rollout"] = summarize_heatmap_focus(capture["grad_rollout_heatmap"], crop_image)
+        if capture.get("grad_rollout_provenance") is not None:
+            result["grad_rollout_provenance"] = capture["grad_rollout_provenance"]
 
     if method in ("gradcam", "both", "all") and "gradcam_heatmap" in capture:
         result["gradcam"] = {

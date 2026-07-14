@@ -6,6 +6,7 @@ import pytest
 
 from trkh.tools.compact_rejected_run_evidence import (
     _verify_payload_manifest,
+    combine_exclude_globs,
     compact_rejected_run_evidence,
     refresh_compacted_evidence_metadata,
 )
@@ -13,6 +14,13 @@ from trkh.tools.compact_rejected_run_evidence import (
 
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def test_combine_exclude_globs_appends_defaults_and_deduplicates_case():
+    combined = combine_exclude_globs(("*.png", "*.PT", "*.jpg", "*.PNG"))
+
+    assert combined[:6] == ("*.pt", "*.pth", "*.ckpt", "*.engine", "*.onnx", "*.plan")
+    assert combined[6:] == ("*.png", "*.jpg")
 
 
 def test_compactor_verifies_payloads_and_deletes_only_declared_sources(tmp_path):

@@ -2403,3 +2403,41 @@
 - [x] Close MORE engineering with compileall, focused `12/12`, full pytest
   `931/931`, and retention over `639` run directories with `blockers=[]`;
   keeper/scratch/current-command hashes are unchanged.
+
+## Cap nhat 2026-07-14 - Linear Differential Visual-Contrast Attention
+
+- [x] Review the NeurIPS 2025 LinearDiff paper and official implementation at
+  commit `3fb5ee1...e3d1`; verify source SHA `df6b8782...c8ab` and distinguish
+  within-image inference VCA from the closed train-only natural-distractor PWCA.
+- [x] Lock `docs/TRKH_5CLASS_VCA_READINESS_PROTOCOL_20260714.md` before code:
+  all eight blocks, full `16x16` patch grid, `64` contrast tokens, no pruning
+  in either matched variant, no new loss, seed 42, and no hyperparameter sweep.
+- [x] Implement prefix-aware VCA, derived full-grid attention provenance,
+  config/CLI/V8 wiring, conflict checks, checkpoint round trip, and focused
+  shape/gradient/XAI tests without changing default behavior.
+- [x] Pass the real-batch Stage-A gradient/resource preflight: all gates passed,
+  `285184` added parameters, batch-32 AMP peak `2.979 GiB`, all component
+  gradients live, and all eight `263x263` XAI maps normalized.
+- [x] Run exactly one source-hash-locked matched `120b x 2e`, full-val, no-test
+  control/candidate pair with `scripts/run_trkh_vca_matched_smoke.ps1`.
+- [x] Audit the matched pair with independent reload, calibration,
+  confusion/transitions, robustness, architecture trace, native attention,
+  rollout, Grad-CAM, and changed-case XAI; advance only if every
+  macro/class1 precision/F1/recall, transition, nonfocus, runtime, VRAM, and
+  XAI gate passes. VCA failed eight material gates: macro/class1 F1 fell,
+  class1 precision/recall fell, focus FP rose `141 -> 158`, TP breaks were
+  `14`, harms exceeded corrections, and new `3->2` harms were `10`.
+- [x] Harden grad-rollout provenance: candidate VCA had no usable gradient in
+  all `16` cases, so remove `grad_rollout_*` deltas from valid attribution and
+  retain native attention, ordinary rollout, Grad-CAM, and perturbation only.
+- [x] Close VCA without a five-epoch probe, full train, test, or hyperparameter
+  sweep. Compact rejected smoke evidence, repair mandatory binary exclusions,
+  remove superseded XAI after replacement checks, and pass retention over
+  `643` run directories; compileall, full pytest `956/956`, five wrapper parses,
+  and current-best/VCA preflights also pass.
+- [x] Keep current-best full-train/export/video commands unchanged because no
+  single-checkpoint VCA candidate passed the independent validation gate.
+- [ ] Research and lock the next distinct precision-selective representation
+  method before implementation. It must create direct class1-positive surface
+  evidence, preserve keeper TP, suppress `0/2/4->1`, and pass a train-only
+  readiness gate before one matched no-test smoke.

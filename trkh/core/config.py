@@ -291,6 +291,9 @@ class ModelConfig:
     gated_relative_position_attention_layers: str = "1,2,3,4"
     gated_relative_position_attention_max_mix: float = 0.25
     gated_relative_position_attention_locality_strength: float = 1.0
+    visual_contrast_attention: bool = False
+    visual_contrast_attention_layers: str = "1,2,3,4,5,6,7,8"
+    visual_contrast_tokens: int = 64
     layer_token_fusion: bool = False
     layer_token_fusion_layers: str = "2,4,6"
     layer_token_fusion_top_k: int = 4

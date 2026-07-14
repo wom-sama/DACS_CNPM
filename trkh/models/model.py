@@ -13,6 +13,8 @@ from torch import Tensor, nn
 from torch.utils.checkpoint import checkpoint as gradient_checkpoint
 from torchvision import models as tv_models
 
+from trkh.models.visual_contrast_attention import VisualContrastAttention
+
 
 def _adaptive_average_matrix(
     input_size: int,
@@ -5188,19 +5190,39 @@ class CustomTransformerEncoderLayer(nn.Module):
         gated_relative_position_attention: bool = False,
         relative_position_max_mix: float = 0.25,
         relative_position_locality_strength: float = 1.0,
+        visual_contrast_attention: bool = False,
+        visual_contrast_tokens: int = 64,
+        block_depth: int = 0,
     ) -> None:
         super().__init__()
+        if bool(visual_contrast_attention) and bool(gated_relative_position_attention):
+            raise ValueError(
+                "Visual-Contrast Attention cannot share a block with gated relative "
+                "position attention."
+            )
         hidden_dim = int(dim * mlp_ratio)
         self.norm1 = nn.LayerNorm(dim)
-        self.attn = MultiHeadSelfAttention(
-            dim=dim,
-            num_heads=num_heads,
-            attention_dropout=attention_dropout,
-            projection_dropout=dropout,
-            gated_relative_position_attention=gated_relative_position_attention,
-            relative_position_max_mix=relative_position_max_mix,
-            relative_position_locality_strength=relative_position_locality_strength,
+        self.attn = (
+            VisualContrastAttention(
+                dim=dim,
+                num_heads=num_heads,
+                visual_contrast_tokens=visual_contrast_tokens,
+                block_depth=block_depth,
+                attention_dropout=attention_dropout,
+                projection_dropout=dropout,
+            )
+            if bool(visual_contrast_attention)
+            else MultiHeadSelfAttention(
+                dim=dim,
+                num_heads=num_heads,
+                attention_dropout=attention_dropout,
+                projection_dropout=dropout,
+                gated_relative_position_attention=gated_relative_position_attention,
+                relative_position_max_mix=relative_position_max_mix,
+                relative_position_locality_strength=relative_position_locality_strength,
+            )
         )
+        self.visual_contrast_attention_enabled = bool(visual_contrast_attention)
         self.drop_path1 = DropPath(drop_path_rate)
         self.norm2 = nn.LayerNorm(dim)
         self.mlp = (
@@ -5507,6 +5529,9 @@ class VisionTransformerWithRegisters(nn.Module):
         gated_relative_position_attention_layers: str = "1,2,3,4",
         gated_relative_position_attention_max_mix: float = 0.25,
         gated_relative_position_attention_locality_strength: float = 1.0,
+        visual_contrast_attention: bool = False,
+        visual_contrast_attention_layers: str = "1,2,3,4,5,6,7,8",
+        visual_contrast_tokens: int = 64,
         layer_token_fusion: bool = False,
         layer_token_fusion_layers: str = "2,4,6",
         layer_token_fusion_top_k: int = 4,
@@ -5819,6 +5844,36 @@ class VisionTransformerWithRegisters(nn.Module):
         self.gated_relative_position_attention_enabled = bool(
             self.gated_relative_position_attention_layer_numbers
         )
+        self.visual_contrast_attention_layer_numbers = (
+            _parse_auxiliary_layer_indices(
+                visual_contrast_attention_layers,
+                int(depth),
+            )
+            if bool(visual_contrast_attention)
+            else []
+        )
+        self.visual_contrast_attention_enabled = bool(
+            self.visual_contrast_attention_layer_numbers
+        )
+        self.visual_contrast_tokens = int(visual_contrast_tokens)
+        visual_contrast_side = math.isqrt(self.visual_contrast_tokens)
+        if self.visual_contrast_attention_enabled:
+            if (
+                self.visual_contrast_tokens <= 0
+                or visual_contrast_side * visual_contrast_side
+                != self.visual_contrast_tokens
+            ):
+                raise ValueError("visual_contrast_tokens must be a positive perfect square.")
+            if bool(token_pruning) or float(early_token_mask_keep_rate) < 1.0:
+                raise ValueError(
+                    "Visual-Contrast Attention requires a complete dense patch grid; "
+                    "disable token pruning and early token masking."
+                )
+            if self.gated_relative_position_attention_enabled:
+                raise ValueError(
+                    "Visual-Contrast Attention and gated relative position attention "
+                    "cannot be enabled in the same model."
+                )
         self.layer_token_fusion_enabled = bool(layer_token_fusion)
         self.layer_token_fusion_layer_numbers = (
             _parse_auxiliary_layer_indices(layer_token_fusion_layers, int(depth))
@@ -6065,6 +6120,12 @@ class VisionTransformerWithRegisters(nn.Module):
                     relative_position_locality_strength=(
                         gated_relative_position_attention_locality_strength
                     ),
+                    visual_contrast_attention=(
+                        int(index + 1)
+                        in self.visual_contrast_attention_layer_numbers
+                    ),
+                    visual_contrast_tokens=self.visual_contrast_tokens,
+                    block_depth=index,
                 )
                 for index in range(depth)
             ]
@@ -6680,6 +6741,10 @@ class VisionTransformerWithRegisters(nn.Module):
             "pos_embed",
             "branch_type_embed",
             "residual_scale",
+            "positive_embedding",
+            "negative_embedding",
+            "lambda_q",
+            "lambda_k",
         )
 
     def set_gradient_checkpointing(self, enabled: bool = True) -> None:
@@ -7521,6 +7586,23 @@ class VisionTransformerWithRegisters(nn.Module):
             "patch_indices": patch_indices,
             "pooled": self.pool_tokens_for_head(cls_out, reg_out, branch_out),
         }
+        if attention_maps:
+            attention_representations = {
+                int(layer_index): (
+                    "vca_effective_positive"
+                    if int(layer_index + 1)
+                    in self.visual_contrast_attention_layer_numbers
+                    else "mhsa_probability"
+                )
+                for layer_index in attention_maps
+            }
+            features["attention_representations"] = attention_representations
+            unique_attention_representations = set(attention_representations.values())
+            features["attention_representation"] = (
+                next(iter(unique_attention_representations))
+                if len(unique_attention_representations) == 1
+                else "mixed"
+            )
         if late_member_tokens is not None and late_member_patch_indices is not None:
             late_register_end = 1 + self.num_registers
             late_branch_end = late_register_end + self.num_branch_tokens
@@ -7796,6 +7878,33 @@ class VisionTransformerWithRegisters(nn.Module):
                     ):
                         features["trace"][output_key] = torch.stack(
                             [entry[trace_key] for _, entry in relative_position_entries],
+                            dim=0,
+                        )
+            if self.visual_contrast_attention_enabled:
+                visual_contrast_entries = []
+                for layer_number in self.visual_contrast_attention_layer_numbers:
+                    module = self.blocks[int(layer_number) - 1].attn
+                    module_trace = module.trace() if hasattr(module, "trace") else {}
+                    if module_trace:
+                        visual_contrast_entries.append((int(layer_number), module_trace))
+                if visual_contrast_entries:
+                    features["trace"]["visual_contrast_attention_layers"] = torch.tensor(
+                        [layer for layer, _ in visual_contrast_entries],
+                        device=tokens.device,
+                        dtype=torch.long,
+                    )
+                    for trace_key in (
+                        "lambda_stage1",
+                        "lambda_stage2",
+                        "stage1_positive_mass",
+                        "stage1_negative_mass",
+                        "stage2_positive_mass",
+                        "stage2_negative_mass",
+                        "stage1_contrast_norm",
+                        "stage2_contrast_norm",
+                    ):
+                        features["trace"][f"visual_contrast_{trace_key}"] = torch.stack(
+                            [entry[trace_key] for _, entry in visual_contrast_entries],
                             dim=0,
                         )
             if layer_token_fusion_feature is not None:
@@ -9446,6 +9555,9 @@ class DETRVisionTransformerWithRegisters(VisionTransformerWithRegisters):
         gated_relative_position_attention_layers: str = "1,2,3,4",
         gated_relative_position_attention_max_mix: float = 0.25,
         gated_relative_position_attention_locality_strength: float = 1.0,
+        visual_contrast_attention: bool = False,
+        visual_contrast_attention_layers: str = "1,2,3,4,5,6,7,8",
+        visual_contrast_tokens: int = 64,
         layer_token_fusion: bool = False,
         layer_token_fusion_layers: str = "2,4,6",
         layer_token_fusion_top_k: int = 4,
@@ -9745,6 +9857,9 @@ class DETRVisionTransformerWithRegisters(VisionTransformerWithRegisters):
             gated_relative_position_attention_locality_strength=(
                 gated_relative_position_attention_locality_strength
             ),
+            visual_contrast_attention=visual_contrast_attention,
+            visual_contrast_attention_layers=visual_contrast_attention_layers,
+            visual_contrast_tokens=visual_contrast_tokens,
             layer_token_fusion=layer_token_fusion,
             layer_token_fusion_layers=layer_token_fusion_layers,
             layer_token_fusion_top_k=layer_token_fusion_top_k,
