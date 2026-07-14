@@ -2140,3 +2140,40 @@
   protection.
 - [ ] Keep current-best full-train/export/video commands unchanged; this
   matched candidate did not pass the locked validation gate.
+- [x] Read the PDiscoFormer paper and official MIT implementation at commit
+  `1a872e2b...f33`; distinguish semantic background/presence/equivariance/TV/
+  entropy part discovery from the rejected four-part TRKH pairwise head.
+- [x] Write a locked no-test semantic-part readiness protocol before code:
+  keeper hash, K=2+background, exact CW90 view, matched CE control, official-
+  form loss weights, five source folds, 12 epochs, direct class1/direction/
+  collapse gates, and no hyperparameter sweep.
+- [x] Add the standalone cache/head/audit tool and nine regressions. Fix the
+  real keeper-head fallback plus `Subset.sample_paths` provenance bug before
+  accepting the 128/128 preflight contract.
+- [x] Complete full `9215/2606`, `8064/2577`-group evidence with zero overlap,
+  exact keeper `0.882925/0.678261`, `16x16` grid, `167x256` post-pruning tokens,
+  zero rotation-grid mismatch, five head-OOF folds, and no test/checkpoint.
+- [x] Reject candidate: OOF control/candidate is
+  `0.882467/0.619691 -> 0.865934/0.574402`; validation is
+  `0.846990/0.560606 -> 0.812924/0.477733`; class1 wins only `1/5` folds.
+- [x] Audit direct safety: versus keeper validation, candidate has
+  `66/172/27` corrections/harms/neutral, FP remove/create `52/12`, and FN
+  rescue/TP break `2/60`; do not convert AUROC `0.62185/0.57105` into routing.
+- [x] Inspect the balanced 14-row contact sheet. Candidate background dominates
+  inside the fruit (`0.79041`), foreground masses collapse to
+  `0.05334/0.12963`, and parts map broad color plus hands/lower edges rather
+  than stable class1-positive evidence.
+- [x] Independently rebuild all CSV metrics/folds/transitions/AUROC and replay
+  cache/artifact hashes. Compact about `2.085GB` of reproducible caches, keep
+  13-file/`7,284,956`-byte full evidence, and pass retention over 610 runs.
+- [x] Close with compileall, focused `16/16`, full pytest `834/834`, four
+  PowerShell parse checks, exact keeper/current-command hashes, and current-
+  best `-PreflightOnly` without a generated run.
+- [ ] Do not sweep PDisco semantic-part K/loss weights/transform/temperature/
+  layer/pruning/optimizer/LR/epochs/dropout/background prior/residual/router on
+  this keeper. Reopen only after a new representation independently protects
+  class1 TP and supplies stable foreground-positive support.
+- [ ] Keep current-best train/export/video commands unchanged. Select the next
+  method only if it introduces a new direct class1-positive representation or
+  supervision source, not another part-map regularizer, prettier XAI target,
+  frozen readout, context crop, or post-hoc suppressor.

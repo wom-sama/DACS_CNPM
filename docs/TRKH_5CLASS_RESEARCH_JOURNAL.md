@@ -14751,3 +14751,51 @@ Date: 2026-07-02
   parse checks for all four PowerShell wrappers. Current-best
   `-PreflightOnly` confirms 30 epochs, effective batch 64, empty class scale,
   train-side test skipped, exact keeper, and no generated run directory.
+
+## Readiness 2026-07-12 - PDiscoFormer-Style Semantic Parts Rejected
+
+- Read the PDiscoFormer paper and official MIT code before implementation;
+  inspected commit `1a872e2b...f33`. Unlike the old four-part TRKH attention
+  pool, the fixed candidate uses two foreground prototypes plus background,
+  Gumbel assignment, shared part classification, part dropout, presence,
+  equivariance, orthogonality, TV, background-presence, and pixel entropy.
+- Locked the protocol before code because the paper's reported gains rely on a
+  frozen pretrained DINOv2 representation while the keeper is scratch-trained.
+  This was a frozen-representation readiness gate, not a PDiscoFormer
+  reproduction or permission for an integrated image smoke.
+- Added `trkh.tools.audit_pdisco_semantic_part_readiness` and nine regressions.
+  Self-review fixed the keeper-head fallback and a `Subset` path bug that had
+  collapsed a first capped cache into one source group. The invalid 29-file
+  cache was hashed before deletion; the successful 128/128 preflight had
+  `127/127` source groups, zero overlap, exact rotation geometry, and finite
+  matched training.
+- Full FP32 keeper evidence covered `9215/2606` rows and `8064/2577` source
+  groups with zero overlap. Token geometry was fixed `16x16`, post-pruning
+  `167x256`, and original/rotated grid-valid mismatch was zero. Five source
+  folds and final heads ran for 12 epochs without test or checkpoints.
+- Control/candidate OOF macro-class1 was
+  `0.882467/0.619691 -> 0.865934/0.574402`; validation was
+  `0.846990/0.560606 -> 0.812924/0.477733`, both below direct keeper
+  `0.882925/0.678261`. Candidate won class1 in only `1/5` folds.
+- Candidate versus keeper validation changed 265 rows with `66/172/27`
+  corrections/harms/neutral, removed/created class1 FP `52/12`, but rescued/
+  broke class1 FN/TP only `2/60`. Direction AUROC `0.62185/0.57105` OOF/val
+  does not make this recall-unsafe suppressor routable.
+- Structural priors worked but collapsed discriminative foreground: candidate
+  equivariance rose `0.71559 -> 0.83517`, TV fell `1.02609 -> 0.33383`, and
+  entropy fell `0.04341 -> 0.01001`, while foreground part masses became only
+  `0.05334/0.12963` and background reached `0.79041` inside the fruit bbox.
+- Fourteen-row visual review confirms one part contracts to hands/lower edge/
+  sparse residuals and the other covers broad fruit color; corrections and
+  harms have the same pattern. Manual verdict and ten automated gates fail.
+- Decision: no image smoke, test, residual, or current-best update. Do not sweep
+  K/loss/transform/temperature/layer/pruning/optimizer/LR/epoch/dropout/router.
+  Reopen only after a new representation independently creates stable
+  class1-positive foreground support.
+- Independent CSV/fold/transition/AUROC and 2.041GB cache-hash replay passed.
+  Cache compaction reclaimed about `2.085GB`; full compact evidence is
+  13 files/`7,284,956` bytes with manifest `4bf77a95...97ed5`.
+- Closure passed compileall, focused tests `16/16`, full pytest `834/834`, four
+  PowerShell parse checks, current-best preflight, and retention over 610 run
+  directories with `blockers=[]`. Keeper/current-command hashes remain
+  unchanged and protected user paths remain untracked.
