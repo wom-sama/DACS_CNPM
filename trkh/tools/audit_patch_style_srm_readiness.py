@@ -699,6 +699,7 @@ class _SRMEquationExportWrapper(nn.Module):
         super().__init__()
         self.module = copy.deepcopy(module).cpu().eval()
         self.prefix_count = int(prefix_count)
+        self.eval()
 
     def forward(self, hidden: Tensor) -> Tensor:
         return self.module(hidden, prefix_count=self.prefix_count)
@@ -708,6 +709,7 @@ class _SRMFullExportWrapper(nn.Module):
     def __init__(self, model: nn.Module) -> None:
         super().__init__()
         self.model = copy.deepcopy(model).cpu().eval()
+        self.eval()
 
     def forward(self, images: Tensor, bbox: Tensor, image_mask: Tensor) -> Tensor:
         features = self.model.forward_features(
@@ -729,6 +731,7 @@ def _onnx_compare(
     import onnx
     import onnxruntime as ort
 
+    wrapper.eval()
     torch.onnx.export(
         wrapper,
         inputs,
@@ -738,6 +741,7 @@ def _onnx_compare(
         opset_version=17,
         do_constant_folding=True,
     )
+    wrapper.eval()
     model = onnx.load(str(path))
     onnx.checker.check_model(model)
     session = ort.InferenceSession(str(path), providers=["CPUExecutionProvider"])
@@ -753,6 +757,7 @@ def _onnx_compare(
         )[0]
     )
     return {
+        "succeeded": True,
         "path": str(path.resolve()),
         "sha256": _sha256(path),
         "opset": 17,
@@ -768,6 +773,23 @@ def _onnx_compare(
     }
 
 
+def _failed_export(path: Path, error: Exception) -> Dict[str, object]:
+    return {
+        "succeeded": False,
+        "path": str(path.resolve()),
+        "sha256": _sha256(path) if path.is_file() else None,
+        "opset": 17,
+        "batch_contract": "static_batch_1",
+        "providers": [],
+        "shape": [],
+        "finite": False,
+        "maximum_absolute_error": 1e9,
+        "argmax_match": False,
+        "error_type": type(error).__name__,
+        "error": str(error),
+    }
+
+
 def _export_diagnostics(
     *,
     candidate: nn.Module,
@@ -779,12 +801,16 @@ def _export_diagnostics(
     hidden = torch.linspace(-1.0, 1.0, steps=1 * 11 * module.hidden_dim).reshape(
         1, 11, module.hidden_dim
     )
-    isolated = _onnx_compare(
-        wrapper=_SRMEquationExportWrapper(module, prefix_count=3),
-        inputs=(hidden,),
-        input_names=("hidden",),
-        path=output_dir / "patch_style_srm_equation.onnx",
-    )
+    isolated_path = output_dir / "patch_style_srm_equation.onnx"
+    try:
+        isolated = _onnx_compare(
+            wrapper=_SRMEquationExportWrapper(module, prefix_count=3),
+            inputs=(hidden,),
+            input_names=("hidden",),
+            path=isolated_path,
+        )
+    except Exception as error:
+        isolated = _failed_export(isolated_path, error)
 
     wrapper = _SRMFullExportWrapper(candidate)
     cpu_images = images[:STATIC_EXPORT_BATCH_SIZE].detach().float().cpu()
@@ -801,12 +827,16 @@ def _export_diagnostics(
             dtype=torch.bool,
         )
     cpu_mask = mask_value[:STATIC_EXPORT_BATCH_SIZE].detach().bool().cpu()
-    full = _onnx_compare(
-        wrapper=wrapper,
-        inputs=(cpu_images, cpu_bbox, cpu_mask),
-        input_names=("images", "bbox", "image_mask"),
-        path=output_dir / "patch_style_srm_candidate.onnx",
-    )
+    full_path = output_dir / "patch_style_srm_candidate.onnx"
+    try:
+        full = _onnx_compare(
+            wrapper=wrapper,
+            inputs=(cpu_images, cpu_bbox, cpu_mask),
+            input_names=("images", "bbox", "image_mask"),
+            path=full_path,
+        )
+    except Exception as error:
+        full = _failed_export(full_path, error)
     return {"isolated": isolated, "full": full}
 
 
@@ -1652,13 +1682,15 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
             for row in post["lighting_gate_response"]
         )
         >= 1e-4,
-        "isolated_onnx_error_lte_1e5": float(
-            post["export"]["isolated"]["maximum_absolute_error"]
+        "isolated_onnx_error_lte_1e5": bool(
+            post["export"]["isolated"]["succeeded"]
         )
+        and float(post["export"]["isolated"]["maximum_absolute_error"])
         <= MAX_ONNX_ERROR,
-        "full_onnx_error_lte_1e5_argmax_match": float(
-            post["export"]["full"]["maximum_absolute_error"]
+        "full_onnx_error_lte_1e5_argmax_match": bool(
+            post["export"]["full"]["succeeded"]
         )
+        and float(post["export"]["full"]["maximum_absolute_error"])
         <= MAX_ONNX_ERROR
         and bool(post["export"]["full"]["argmax_match"]),
         "runtime_ratio_lte_1p15": float(post["runtime_ratio"])
@@ -1782,37 +1814,42 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
     ]
     report_path = output_dir / "report.md"
     report_path.write_text("\n".join(report) + "\n", encoding="utf-8")
+    manifest_artifacts = [
+        {
+            "path": str(summary_path.resolve()),
+            "sha256": _sha256(summary_path),
+            "role": "stage_a_summary",
+        },
+        {
+            "path": str(predictions_path.resolve()),
+            "sha256": _sha256(predictions_path),
+            "role": "ordered_train_holdout_predictions",
+        },
+        {
+            "path": str(illumination_path.resolve()),
+            "sha256": _sha256(illumination_path),
+            "role": "ordered_train_holdout_illumination_predictions",
+        },
+    ]
+    for export_key, role in (
+        ("isolated", "isolated_srm_onnx"),
+        ("full", "candidate_full_onnx"),
+    ):
+        export_row = post["export"][export_key]
+        if export_row.get("sha256"):
+            manifest_artifacts.append(
+                {
+                    "path": export_row["path"],
+                    "sha256": export_row["sha256"],
+                    "role": role,
+                    "export_succeeded": bool(export_row["succeeded"]),
+                }
+            )
     manifest = {
         "raw_dataset_modified": False,
         "validation_used": False,
         "test_used": False,
-        "artifacts": [
-            {
-                "path": str(summary_path.resolve()),
-                "sha256": _sha256(summary_path),
-                "role": "stage_a_summary",
-            },
-            {
-                "path": str(predictions_path.resolve()),
-                "sha256": _sha256(predictions_path),
-                "role": "ordered_train_holdout_predictions",
-            },
-            {
-                "path": str(illumination_path.resolve()),
-                "sha256": _sha256(illumination_path),
-                "role": "ordered_train_holdout_illumination_predictions",
-            },
-            {
-                "path": post["export"]["isolated"]["path"],
-                "sha256": post["export"]["isolated"]["sha256"],
-                "role": "isolated_srm_onnx",
-            },
-            {
-                "path": post["export"]["full"]["path"],
-                "sha256": post["export"]["full"]["sha256"],
-                "role": "candidate_full_onnx",
-            },
-        ],
+        "artifacts": manifest_artifacts,
     }
     manifest_path = output_dir / "artifact_manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")

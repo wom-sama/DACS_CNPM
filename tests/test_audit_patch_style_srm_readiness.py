@@ -3,12 +3,17 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+import torch
+
+from trkh.models.patch_style_recalibration import PatchStyleRecalibration
 
 from trkh.tools.audit_patch_style_srm_readiness import (
     EXPECTED_SRM_LAYERS,
     STATIC_EXPORT_BATCH_SIZE,
     _candidate_config,
     _expected_state_additions,
+    _onnx_compare,
+    _SRMEquationExportWrapper,
     assess_patch_style_srm_stage_a,
     parse_args,
 )
@@ -138,3 +143,20 @@ def test_stage_a_defaults_and_powershell_wrapper_are_locked() -> None:
     assert "validation_used = $false" in script
     assert "test_used = $false" in script
     assert "2>&1" not in script
+
+
+def test_static_batch_one_equation_export_keeps_batch_norm_in_eval(tmp_path) -> None:
+    module = PatchStyleRecalibration(16).train()
+    wrapper = _SRMEquationExportWrapper(module, prefix_count=2)
+    assert wrapper.training is False
+    assert wrapper.module.bn.training is False
+    result = _onnx_compare(
+        wrapper=wrapper,
+        inputs=(torch.randn(1, 7, 16),),
+        input_names=("hidden",),
+        path=tmp_path / "srm.onnx",
+    )
+    assert result["succeeded"] is True
+    assert result["batch_contract"] == "static_batch_1"
+    assert result["maximum_absolute_error"] <= 1e-6
+    assert wrapper.module.bn.training is False
