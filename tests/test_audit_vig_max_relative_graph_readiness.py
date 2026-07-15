@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 from trkh.tools.audit_vig_max_relative_graph_readiness import (
     EXPECTED_ADDED_PARAMETERS,
     EXPECTED_GRAPH_LAYERS,
+    LOCKED_PROTOCOL_SHA256,
     _candidate_config,
     _expected_state_additions,
     assess_vig_graph_stage_a,
@@ -71,6 +73,15 @@ def test_locked_defaults_and_candidate_config() -> None:
     assert config["dynamic_graph_mixer_bottleneck_dim"] == 64
     assert config["dynamic_graph_mixer_k"] == 9
     assert config["pretrained"] is False
+
+
+def test_locked_protocol_hash_matches_precommitted_file() -> None:
+    protocol = (
+        Path(__file__).resolve().parents[1]
+        / "docs"
+        / "TRKH_5CLASS_VIG_MAX_RELATIVE_GRAPH_READINESS_PROTOCOL_20260715.md"
+    )
+    assert hashlib.sha256(protocol.read_bytes()).hexdigest() == LOCKED_PROTOCOL_SHA256
 
 
 def test_expected_checkpoint_additions_are_exact() -> None:
