@@ -27,6 +27,7 @@ from trkh.models.cross_covariance_attention import (
     SharedProjectionCrossCovarianceAttention,
 )
 from trkh.models.dynamic_graph_mixer import MaxRelativeDynamicGraphMixer
+from trkh.models.deep_class_prompt import DeepClassPrompt
 
 
 def _adaptive_average_matrix(
@@ -5722,6 +5723,9 @@ class VisionTransformerWithRegisters(nn.Module):
         dynamic_graph_mixer_layers: str = "2,5",
         dynamic_graph_mixer_bottleneck_dim: int = 64,
         dynamic_graph_mixer_k: int = 9,
+        deep_class_prompt: bool = False,
+        deep_class_prompt_logit_scale: float = 0.10,
+        deep_class_prompt_init_seed: int = 20260715,
         patch_style_recalibration: bool = False,
         patch_style_recalibration_layers: str = "2,5",
         layer_token_fusion: bool = False,
@@ -5856,6 +5860,11 @@ class VisionTransformerWithRegisters(nn.Module):
         self.shifted_patch_residual_scale = float(shifted_patch_residual_scale)
         self.gradient_checkpointing = bool(gradient_checkpointing)
         self.embed_dim = int(embed_dim)
+        self.deep_class_prompt_enabled = bool(deep_class_prompt)
+        self.deep_class_prompt_logit_scale = float(deep_class_prompt_logit_scale)
+        self.deep_class_prompt_init_seed = int(deep_class_prompt_init_seed)
+        if self.deep_class_prompt_logit_scale < 0.0:
+            raise ValueError("deep_class_prompt_logit_scale must be >= 0.")
         self.head_pooling = str(head_pooling).strip().lower()
         self.classification_mlp_head_enabled = bool(classification_mlp_head)
         self.subcenter_proxy_head_enabled = bool(subcenter_proxy_head)
@@ -7001,6 +7010,16 @@ class VisionTransformerWithRegisters(nn.Module):
             nn.init.zeros_(self.cumulative_ordinal_head.weight)
             if self.cumulative_ordinal_head.bias is not None:
                 nn.init.zeros_(self.cumulative_ordinal_head.bias)
+        self.deep_class_prompt = (
+            DeepClassPrompt(
+                depth=int(depth),
+                num_classes=int(num_classes),
+                embed_dim=int(embed_dim),
+                init_seed=self.deep_class_prompt_init_seed,
+            )
+            if self.deep_class_prompt_enabled
+            else None
+        )
         self._initialize_late_member_modules()
 
     def _init_parameter_tensors(self) -> None:
@@ -7053,6 +7072,7 @@ class VisionTransformerWithRegisters(nn.Module):
             "topk_reassessment_head": self.topk_reassessment_head,
             "ordinal_maturity_head": self.ordinal_maturity_head,
             "cumulative_ordinal_head": self.cumulative_ordinal_head,
+            "deep_class_prompt": self.deep_class_prompt,
         }
         unsupported_enabled = sorted(
             name for name, module in unsupported_modules.items() if module is not None
@@ -7374,8 +7394,12 @@ class VisionTransformerWithRegisters(nn.Module):
         patch_indices: Tensor,
         foreground_prior: Optional[Tensor],
         bbox_patch_prior: Optional[Tensor],
+        prefix_count: Optional[int] = None,
     ) -> Tuple[Tensor, Tensor, Tensor]:
-        patch_tokens = tokens[:, self.num_prefix_tokens :]
+        resolved_prefix_count = int(
+            self.num_prefix_tokens if prefix_count is None else prefix_count
+        )
+        patch_tokens = tokens[:, resolved_prefix_count:]
         if patch_tokens.ndim != 3 or patch_tokens.size(1) == 0:
             batch_size = int(tokens.size(0))
             empty_feature = tokens.new_zeros((batch_size, self.embed_dim))
@@ -7384,7 +7408,7 @@ class VisionTransformerWithRegisters(nn.Module):
             return empty_feature, empty_scores, empty_indices
         if attention.ndim != 4:
             raise ValueError("layer token fusion expects attention [B,H,N,N].")
-        scores = attention[:, :, 0, self.num_prefix_tokens :].detach().float().mean(dim=1)
+        scores = attention[:, :, 0, resolved_prefix_count:].detach().float().mean(dim=1)
         if tuple(scores.shape) != tuple(patch_tokens.shape[:2]):
             scores = patch_tokens.detach().float().norm(dim=-1)
         if (
@@ -7584,9 +7608,12 @@ class VisionTransformerWithRegisters(nn.Module):
         foreground_prior: Tensor,
         original_patch_count: int,
         keep_rate: float,
+        prefix_count: Optional[int] = None,
     ) -> Tuple[Tensor, Tensor, Dict[str, Tensor]]:
-        prefix_count = int(self.num_prefix_tokens)
-        patch_tokens = tokens[:, prefix_count:]
+        resolved_prefix_count = int(
+            self.num_prefix_tokens if prefix_count is None else prefix_count
+        )
+        patch_tokens = tokens[:, resolved_prefix_count:]
         current_patch_count = int(patch_tokens.size(1))
         target_patch_count = max(1, int(math.ceil(float(original_patch_count) * float(keep_rate))))
         target_patch_count = min(current_patch_count, target_patch_count)
@@ -7597,8 +7624,10 @@ class VisionTransformerWithRegisters(nn.Module):
             }
             return tokens, patch_indices, empty
 
-        query_count = max(1, prefix_count)
-        attention_score = attention[:, :, :query_count, prefix_count:].mean(dim=(1, 2))
+        query_count = max(1, int(self.num_prefix_tokens))
+        attention_score = attention[
+            :, :, :query_count, resolved_prefix_count:
+        ].mean(dim=(1, 2))
         gathered_prior = foreground_prior.gather(1, patch_indices)
         score = self._normalize_token_scores(attention_score)
         if self.token_prune_foreground_weight > 0.0:
@@ -7614,7 +7643,9 @@ class VisionTransformerWithRegisters(nn.Module):
             selected_local.unsqueeze(-1).expand(-1, -1, patch_tokens.size(-1)),
         )
         selected_scores = score.gather(1, selected_local)
-        pruned_tokens = torch.cat((tokens[:, :prefix_count], selected_tokens), dim=1)
+        pruned_tokens = torch.cat(
+            (tokens[:, :resolved_prefix_count], selected_tokens), dim=1
+        )
         trace = {
             "kept_indices": selected_original,
             "scores": selected_scores,
@@ -7847,6 +7878,11 @@ class VisionTransformerWithRegisters(nn.Module):
         layer_token_fusion_scores: List[Tensor] = []
         layer_token_fusion_indices: List[Tensor] = []
         concurrent_local_traces: List[Dict[str, Tensor]] = []
+        deep_class_prompt_tokens: List[Tensor] = []
+        deep_class_prompt_attention_maps: Dict[int, Tensor] = {}
+        collect_deep_class_prompt_attention = bool(
+            self.deep_class_prompt is not None and (return_attention or return_trace)
+        )
         late_member_seed_tokens: Optional[Tensor] = None
         late_member_patch_indices: Optional[Tensor] = None
         late_member_attention_maps: Dict[int, Tensor] = {}
@@ -7854,82 +7890,118 @@ class VisionTransformerWithRegisters(nn.Module):
             layer_key = str(int(block_index + 1))
             should_prune = pruning_enabled and block_index in self.token_prune_schedule
             should_collect_layer_tokens = block_index in layer_token_fusion_layer_set
+            block_tokens = tokens
+            block_prefix_count = int(self.num_prefix_tokens)
+            if self.deep_class_prompt is not None:
+                block_tokens = self.deep_class_prompt.insert(
+                    block_tokens,
+                    block_index=block_index,
+                    base_prefix_count=self.num_prefix_tokens,
+                )
+                block_prefix_count += int(self.deep_class_prompt.num_classes)
             if (
                 collect_all_attentions
                 or block_index in attention_layer_set
                 or should_prune
                 or should_collect_layer_tokens
+                or collect_deep_class_prompt_attention
             ):
-                tokens, attention = block(
-                    tokens,
+                block_tokens, attention = block(
+                    block_tokens,
                     return_attention=True,
                     grid_size=grid_size,
-                    prefix_count=self.num_prefix_tokens,
+                    prefix_count=block_prefix_count,
                     patch_indices=patch_indices,
                 )
+                if collect_deep_class_prompt_attention:
+                    deep_class_prompt_attention_maps[block_index] = (
+                        self.deep_class_prompt.class_to_patch_attention(
+                            attention,
+                            base_prefix_count=self.num_prefix_tokens,
+                            patch_indices=patch_indices,
+                            original_patch_count=original_patch_count,
+                        )
+                    )
                 if collect_all_attentions or block_index in attention_layer_set:
-                    attention_maps[block_index] = attention
+                    attention_maps[block_index] = (
+                        self.deep_class_prompt.sanitize_native_attention(
+                            attention,
+                            base_prefix_count=self.num_prefix_tokens,
+                        )
+                        if self.deep_class_prompt is not None
+                        else attention
+                    )
                 if should_collect_layer_tokens:
                     (
                         layer_feature,
                         layer_scores,
                         layer_indices,
                     ) = self._select_layer_token_fusion_feature(
-                        tokens=tokens,
+                        tokens=block_tokens,
                         attention=attention,
                         patch_indices=patch_indices,
                         foreground_prior=foreground_prior,
                         bbox_patch_prior=bbox_patch_prior,
+                        prefix_count=block_prefix_count,
                     )
                     layer_token_fusion_features.append(layer_feature)
                     layer_token_fusion_layers.append(int(block_index + 1))
                     layer_token_fusion_scores.append(layer_scores)
                     layer_token_fusion_indices.append(layer_indices)
                 if should_prune:
-                    before_count = int(tokens.size(1) - self.num_prefix_tokens)
-                    tokens, patch_indices, prune_info = self._prune_patch_tokens(
-                        tokens=tokens,
+                    before_count = int(block_tokens.size(1) - block_prefix_count)
+                    block_tokens, patch_indices, prune_info = self._prune_patch_tokens(
+                        tokens=block_tokens,
                         attention=attention,
                         patch_indices=patch_indices,
                         foreground_prior=foreground_prior,
                         original_patch_count=original_patch_count,
                         keep_rate=self.token_prune_schedule[block_index],
+                        prefix_count=block_prefix_count,
                     )
                     prune_info["layer"] = torch.tensor(
                         int(block_index + 1),
-                        device=tokens.device,
+                        device=block_tokens.device,
                         dtype=torch.long,
                     )
                     prune_info["before_count"] = torch.tensor(
                         before_count,
-                        device=tokens.device,
+                        device=block_tokens.device,
                         dtype=torch.long,
                     )
                     prune_info["after_count"] = torch.tensor(
-                        int(tokens.size(1) - self.num_prefix_tokens),
-                        device=tokens.device,
+                        int(block_tokens.size(1) - block_prefix_count),
+                        device=block_tokens.device,
                         dtype=torch.long,
                     )
                     pruning_trace.append(prune_info)
             else:
                 if self.gradient_checkpointing and self.training:
-                    tokens = gradient_checkpoint(
+                    block_tokens = gradient_checkpoint(
                         lambda current_tokens: block(
                             current_tokens,
                             grid_size=grid_size,
-                            prefix_count=self.num_prefix_tokens,
+                            prefix_count=block_prefix_count,
                             patch_indices=patch_indices,
                         ),
-                        tokens,
+                        block_tokens,
                         use_reentrant=False,
                     )
                 else:
-                    tokens = block(
-                        tokens,
+                    block_tokens = block(
+                        block_tokens,
                         grid_size=grid_size,
-                        prefix_count=self.num_prefix_tokens,
+                        prefix_count=block_prefix_count,
                         patch_indices=patch_indices,
                     )
+            if self.deep_class_prompt is not None:
+                tokens, prompt_tokens = self.deep_class_prompt.extract_and_remove(
+                    block_tokens,
+                    base_prefix_count=self.num_prefix_tokens,
+                )
+                deep_class_prompt_tokens.append(prompt_tokens)
+            else:
+                tokens = block_tokens
             coupling = (
                 self.concurrent_local_couplings[layer_key]
                 if layer_key in self.concurrent_local_couplings
@@ -8018,6 +8090,14 @@ class VisionTransformerWithRegisters(nn.Module):
             late_member_tokens = self.late_member_norm(late_member_tokens)
         tokens = self.norm(tokens)
 
+        deep_class_prompt_logits = None
+        if self.deep_class_prompt is not None:
+            if len(deep_class_prompt_tokens) != len(self.blocks):
+                raise RuntimeError("Deep class prompts did not traverse every block.")
+            deep_class_prompt_logits = self.deep_class_prompt.logits(
+                deep_class_prompt_tokens[-1]
+            )
+
         cls_out = tokens[:, 0]
         register_end = 1 + self.num_registers
         branch_end = register_end + self.num_branch_tokens
@@ -8037,6 +8117,13 @@ class VisionTransformerWithRegisters(nn.Module):
             "patch_indices": patch_indices,
             "pooled": self.pool_tokens_for_head(cls_out, reg_out, branch_out),
         }
+        if deep_class_prompt_logits is not None:
+            features["deep_class_prompt_logits"] = deep_class_prompt_logits
+            features["deep_class_prompt_tokens"] = deep_class_prompt_tokens[-1]
+        if deep_class_prompt_attention_maps:
+            features["deep_class_prompt_attentions"] = (
+                deep_class_prompt_attention_maps
+            )
         if gabor_texture_semantic_feature is not None:
             features["gabor_texture_semantic_feature"] = (
                 gabor_texture_semantic_feature
@@ -8264,6 +8351,27 @@ class VisionTransformerWithRegisters(nn.Module):
                 "foreground_prior": foreground_prior,
                 "pruning": pruning_trace,
             }
+            if deep_class_prompt_logits is not None:
+                features["trace"]["deep_class_prompt_layers"] = torch.arange(
+                    1,
+                    len(deep_class_prompt_tokens) + 1,
+                    device=tokens.device,
+                    dtype=torch.long,
+                )
+                features["trace"]["deep_class_prompt_token_norms"] = torch.stack(
+                    [
+                        prompt.detach().float().norm(dim=-1)
+                        for prompt in deep_class_prompt_tokens
+                    ],
+                    dim=0,
+                )
+                features["trace"]["deep_class_prompt_logits"] = (
+                    deep_class_prompt_logits.detach()
+                )
+                features["trace"]["deep_class_prompt_attentions"] = {
+                    int(layer_index): value.detach()
+                    for layer_index, value in deep_class_prompt_attention_maps.items()
+                }
             if bbox_patch_prior is not None:
                 features["trace"]["bbox_patch_prior"] = bbox_patch_prior.detach()
             if gabor_texture_trace is not None:
@@ -10143,6 +10251,9 @@ class DETRVisionTransformerWithRegisters(VisionTransformerWithRegisters):
         dynamic_graph_mixer_layers: str = "2,5",
         dynamic_graph_mixer_bottleneck_dim: int = 64,
         dynamic_graph_mixer_k: int = 9,
+        deep_class_prompt: bool = False,
+        deep_class_prompt_logit_scale: float = 0.10,
+        deep_class_prompt_init_seed: int = 20260715,
         patch_style_recalibration: bool = False,
         patch_style_recalibration_layers: str = "2,5",
         layer_token_fusion: bool = False,
@@ -10460,6 +10571,9 @@ class DETRVisionTransformerWithRegisters(VisionTransformerWithRegisters):
                 dynamic_graph_mixer_bottleneck_dim
             ),
             dynamic_graph_mixer_k=dynamic_graph_mixer_k,
+            deep_class_prompt=deep_class_prompt,
+            deep_class_prompt_logit_scale=deep_class_prompt_logit_scale,
+            deep_class_prompt_init_seed=deep_class_prompt_init_seed,
             patch_style_recalibration=patch_style_recalibration,
             patch_style_recalibration_layers=patch_style_recalibration_layers,
             layer_token_fusion=layer_token_fusion,
@@ -10752,6 +10866,24 @@ def extract_head_input_from_features(model: nn.Module, features: Dict[str, Tenso
 def classification_logits_from_features(model: nn.Module, features: Dict[str, Tensor]) -> Tensor:
     head_input = extract_head_input_from_features(model, features)
     logits = model.head(head_input)
+    deep_class_prompt_logits = features.get("deep_class_prompt_logits")
+    if torch.is_tensor(deep_class_prompt_logits):
+        if tuple(deep_class_prompt_logits.shape) != tuple(logits.shape):
+            raise RuntimeError(
+                "Deep class-prompt logits must match the base classification logits."
+            )
+        deep_class_prompt_scale = float(
+            getattr(model, "deep_class_prompt_logit_scale", 0.0)
+        )
+        deep_class_prompt_adjustment = deep_class_prompt_logits.to(
+            dtype=logits.dtype
+        ) * deep_class_prompt_scale
+        features["deep_class_prompt_adjustment"] = deep_class_prompt_adjustment
+        if isinstance(features.get("trace"), dict):
+            features["trace"]["deep_class_prompt_adjustment"] = (
+                deep_class_prompt_adjustment.detach()
+            )
+        logits = logits + deep_class_prompt_adjustment
     fusion_head = getattr(model, "cnn_fusion_head", None)
     if fusion_head is not None and "cnn_pooled" in features:
         cnn_features = model.cnn_fusion_norm(features["cnn_pooled"])

@@ -2234,6 +2234,24 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         help="Nearest-neighbor count, including self, used by graph mixing.",
     )
     parser.add_argument(
+        "--deep-class-prompt",
+        action="store_true",
+        default=False,
+        help="Insert one removable prompt per class at every Transformer block.",
+    )
+    parser.add_argument(
+        "--deep-class-prompt-logit-scale",
+        type=float,
+        default=0.10,
+        help="Fixed residual scale for shared deep class-prompt logits.",
+    )
+    parser.add_argument(
+        "--deep-class-prompt-init-seed",
+        type=int,
+        default=20260715,
+        help="Isolated initialization seed for deep class-prompt extension tensors.",
+    )
+    parser.add_argument(
         "--patch-style-recalibration",
         action="store_true",
         default=False,
@@ -5076,6 +5094,8 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         raise ValueError(
             "--dynamic-graph-mixer khong the dung cung --cross-covariance-attention."
         )
+    if args.deep_class_prompt_logit_scale < 0.0:
+        raise ValueError("--deep-class-prompt-logit-scale phai >= 0.")
     if bool(args.patch_style_recalibration) and bool(args.locally_enhanced_ffn):
         raise ValueError(
             "--patch-style-recalibration khong the dung cung --locally-enhanced-ffn."
@@ -6395,6 +6415,9 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
             args.dynamic_graph_mixer_bottleneck_dim
         ),
         dynamic_graph_mixer_k=args.dynamic_graph_mixer_k,
+        deep_class_prompt=bool(args.deep_class_prompt),
+        deep_class_prompt_logit_scale=args.deep_class_prompt_logit_scale,
+        deep_class_prompt_init_seed=args.deep_class_prompt_init_seed,
         patch_style_recalibration=bool(args.patch_style_recalibration),
         patch_style_recalibration_layers=args.patch_style_recalibration_layers,
         layer_token_fusion=bool(args.layer_token_fusion),
@@ -8404,6 +8427,7 @@ ALLOWED_RESUME_EXTENSION_PREFIXES = (
     "shifted_patch_token_residual.",
     "gabor_texture_residual.",
     "gabor_texture_semantic_encoder.",
+    "deep_class_prompt.",
 )
 
 
@@ -26814,6 +26838,7 @@ def main() -> None:
             or bool(args.visual_contrast_attention)
             or bool(args.cross_covariance_attention)
             or bool(args.dynamic_graph_mixer)
+            or bool(args.deep_class_prompt)
             or bool(args.patch_style_recalibration)
             or bool(args.late_class_attention_pooling)
             or bool(args.late_member_branch)
@@ -27174,6 +27199,32 @@ def main() -> None:
                     },
                     "reason": (
                         "allow checkpoint-safe patch-only ViG max-relative graph mixing"
+                    ),
+                },
+                flush=True,
+            )
+        if bool(args.deep_class_prompt):
+            model_config.deep_class_prompt = True
+            model_config.deep_class_prompt_logit_scale = float(
+                args.deep_class_prompt_logit_scale
+            )
+            model_config.deep_class_prompt_init_seed = int(
+                args.deep_class_prompt_init_seed
+            )
+            print(
+                {
+                    "resume_cli_model_extension": {
+                        "deep_class_prompt": True,
+                        "deep_class_prompt_logit_scale": (
+                            model_config.deep_class_prompt_logit_scale
+                        ),
+                        "deep_class_prompt_init_seed": (
+                            model_config.deep_class_prompt_init_seed
+                        ),
+                    },
+                    "reason": (
+                        "allow checkpoint-safe deep class prompts while preserving "
+                        "every keeper tensor"
                     ),
                 },
                 flush=True,
@@ -29625,6 +29676,7 @@ def main() -> None:
                 or bool(args.visual_contrast_attention)
                 or bool(args.cross_covariance_attention)
                 or bool(args.dynamic_graph_mixer)
+                or bool(args.deep_class_prompt)
                 or bool(args.patch_style_recalibration)
                 or bool(args.late_class_attention_pooling)
                 or bool(args.late_member_branch)
@@ -29721,6 +29773,7 @@ def main() -> None:
                     or bool(args.visual_contrast_attention)
                     or bool(args.cross_covariance_attention)
                     or bool(args.dynamic_graph_mixer)
+                    or bool(args.deep_class_prompt)
                     or bool(args.patch_style_recalibration)
                     or bool(args.late_class_attention_pooling)
                     or bool(args.late_member_branch)

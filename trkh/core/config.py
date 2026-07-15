@@ -301,6 +301,9 @@ class ModelConfig:
     dynamic_graph_mixer_layers: str = "2,5"
     dynamic_graph_mixer_bottleneck_dim: int = 64
     dynamic_graph_mixer_k: int = 9
+    deep_class_prompt: bool = False
+    deep_class_prompt_logit_scale: float = 0.10
+    deep_class_prompt_init_seed: int = 20260715
     patch_style_recalibration: bool = False
     patch_style_recalibration_layers: str = "2,5"
     layer_token_fusion: bool = False

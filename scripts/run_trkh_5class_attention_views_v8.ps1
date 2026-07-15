@@ -577,6 +577,9 @@ param(
     [string]$DynamicGraphMixerLayers = "2,5",
     [int]$DynamicGraphMixerBottleneckDim = 64,
     [int]$DynamicGraphMixerK = 9,
+    [bool]$DeepClassPrompt = $false,
+    [double]$DeepClassPromptLogitScale = 0.10,
+    [int]$DeepClassPromptInitSeed = 20260715,
     [bool]$PatchStyleRecalibration = $false,
     [string]$PatchStyleRecalibrationLayers = "2,5",
     [bool]$LayerTokenFusion = $false,
@@ -928,6 +931,9 @@ if ($DynamicGraphMixer -and $VisualContrastAttention) {
 }
 if ($DynamicGraphMixer -and $CrossCovarianceAttention) {
     throw "DynamicGraphMixer khong the dung cung CrossCovarianceAttention."
+}
+if ($DeepClassPromptLogitScale -lt 0.0) {
+    throw "DeepClassPromptLogitScale phai >= 0."
 }
 if ($PatchStyleRecalibration -and $LocallyEnhancedFfn) {
     throw "PatchStyleRecalibration khong the dung cung LocallyEnhancedFfn."
@@ -2040,6 +2046,9 @@ if ($PreflightOnly) {
         dynamic_graph_mixer_layers = $DynamicGraphMixerLayers
         dynamic_graph_mixer_bottleneck_dim = $DynamicGraphMixerBottleneckDim
         dynamic_graph_mixer_k = $DynamicGraphMixerK
+        deep_class_prompt = [bool]$DeepClassPrompt
+        deep_class_prompt_logit_scale = $DeepClassPromptLogitScale
+        deep_class_prompt_init_seed = $DeepClassPromptInitSeed
         patch_style_recalibration = [bool]$PatchStyleRecalibration
         patch_style_recalibration_layers = $PatchStyleRecalibrationLayers
         layer_token_fusion = [bool]$LayerTokenFusion
@@ -3287,6 +3296,13 @@ if ($ClassIndependentHead) {
             "--dynamic-graph-mixer-k", "$DynamicGraphMixerK"
         )
     }
+    if ($DeepClassPrompt) {
+        $TrainArgs += @(
+            "--deep-class-prompt",
+            "--deep-class-prompt-logit-scale", "$DeepClassPromptLogitScale",
+            "--deep-class-prompt-init-seed", "$DeepClassPromptInitSeed"
+        )
+    }
     if ($PatchStyleRecalibration) {
         $TrainArgs += @(
             "--patch-style-recalibration",
@@ -4037,6 +4053,9 @@ if ($ClassIndependentHead) {
         dynamic_graph_mixer_layers = $DynamicGraphMixerLayers
         dynamic_graph_mixer_bottleneck_dim = $DynamicGraphMixerBottleneckDim
         dynamic_graph_mixer_k = $DynamicGraphMixerK
+        deep_class_prompt = [bool]$DeepClassPrompt
+        deep_class_prompt_logit_scale = $DeepClassPromptLogitScale
+        deep_class_prompt_init_seed = $DeepClassPromptInitSeed
         patch_style_recalibration = [bool]$PatchStyleRecalibration
         patch_style_recalibration_layers = $PatchStyleRecalibrationLayers
         layer_token_fusion = [bool]$LayerTokenFusion
