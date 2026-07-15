@@ -19,6 +19,7 @@ from trkh.models.learnable_gabor_texture import (
     LearnableGaborTextureResidual,
 )
 from trkh.models.moga_surface_tokenizer import MogaXTTokenizer
+from trkh.models.octave_conv_stem import OctaveConvStem
 from trkh.models.starnet_s2_tokenizer import StarNetS2Tokenizer
 from trkh.models.visual_contrast_attention import VisualContrastAttention
 
@@ -5657,12 +5658,13 @@ class VisionTransformerWithRegisters(nn.Module):
             "coatnet_mbconv",
             "inceptionnext_atto_tokenizer",
             "moganet_xt_tokenizer",
+            "octave_conv",
             "starnet_s2_tokenizer",
         }:
             raise ValueError(
                 "stem_architecture must be one of: conv_pool, coatnet_mbconv, "
                 "inceptionnext_atto_tokenizer, moganet_xt_tokenizer, "
-                "starnet_s2_tokenizer; "
+                "octave_conv, starnet_s2_tokenizer; "
                 f"got {stem_architecture!r}."
             )
         self.stem_pooling_mode = str(stem_pooling_mode).strip().lower()
@@ -6014,6 +6016,23 @@ class VisionTransformerWithRegisters(nn.Module):
                 self.stem = MogaXTTokenizer(in_channels=in_channels)
             elif self.stem_architecture == "starnet_s2_tokenizer":
                 self.stem = StarNetS2Tokenizer(in_channels=in_channels)
+            elif self.stem_architecture == "octave_conv":
+                # Match legacy construction RNG so all downstream scratch
+                # parameters remain paired under the same seed.
+                with torch.random.fork_rng(devices=[]):
+                    self.stem = OctaveConvStem(
+                        in_channels=in_channels,
+                        stem_channels=stem_channels,
+                        embed_dim=embed_dim,
+                    )
+                constructor_rng_proxy = HybridConvStem(
+                    in_channels=in_channels,
+                    stem_channels=stem_channels,
+                    embed_dim=embed_dim,
+                    pooling_mode=self.stem_pooling_mode,
+                    softpool_blend=self.stem_softpool_blend,
+                )
+                del constructor_rng_proxy
             elif self.stem_architecture == "coatnet_mbconv":
                 if int(in_channels) != 3:
                     raise ValueError("coatnet_mbconv stem requires three-channel RGB input.")
@@ -6562,7 +6581,39 @@ class VisionTransformerWithRegisters(nn.Module):
             )
             if module is not None
         ]
-        if not gabor_modules:
+        if isinstance(self.stem, OctaveConvStem):
+            octave_module_ids = {id(child) for child in self.stem.modules()}
+            gabor_module_ids = {
+                id(child)
+                for gabor_module in gabor_modules
+                for child in gabor_module.modules()
+            }
+            excluded_module_ids = octave_module_ids | gabor_module_ids
+            with torch.random.fork_rng(devices=[]):
+                legacy_init_proxy = HybridConvStem(
+                    in_channels=in_channels,
+                    stem_channels=stem_channels,
+                    embed_dim=embed_dim,
+                    pooling_mode=self.stem_pooling_mode,
+                    softpool_blend=self.stem_softpool_blend,
+                )
+            octave_init_rng_state = torch.get_rng_state().clone()
+            legacy_init_proxy.apply(self._init_weights)
+            del legacy_init_proxy
+
+            def init_non_octave_module(module: nn.Module) -> None:
+                if id(module) not in excluded_module_ids:
+                    self._init_weights(module)
+
+            self.apply(init_non_octave_module)
+            with torch.random.fork_rng(devices=[]):
+                torch.set_rng_state(octave_init_rng_state)
+                self.stem.reset_from_virtual_vanilla_kernels()
+            if gabor_modules:
+                with torch.random.fork_rng(devices=[]):
+                    for gabor_module in gabor_modules:
+                        gabor_module.apply(self._init_weights)
+        elif not gabor_modules:
             self.apply(self._init_weights)
         else:
             gabor_module_ids = {

@@ -24,6 +24,34 @@ from trkh.tools.audit_visual_contrast_smoke_pair import (
 
 DEFAULT_METHOD = "inceptionnext_atto_surface_tokenizer"
 DEFAULT_CANDIDATE_STEM = "inceptionnext_atto_tokenizer"
+DEFAULT_GATE_PROFILE = "tokenizer_precision"
+GATE_FLOAT_EPSILON = 1e-12
+GATE_PROFILES = {
+    "tokenizer_precision": {
+        "minimum_macro_f1_delta": -0.003,
+        "minimum_class1_f1_gain": 0.010,
+        "minimum_class1_precision_gain": 0.025,
+        "minimum_class1_recall_delta": -0.020,
+        "minimum_focus_fp_reduction": 5,
+        "maximum_focus_tp_breaks_above_rescues": 3,
+        "maximum_new_3_to_2_harms": 5,
+        "maximum_nonfocus_f1_drop": 0.020,
+        "maximum_runtime_ratio": 1.50,
+        "maximum_stage_a_peak_vram_gib": 7.75,
+    },
+    "octave_conv_precision": {
+        "minimum_macro_f1_delta": 0.003,
+        "minimum_class1_f1_gain": 0.005,
+        "minimum_class1_precision_gain": 0.010,
+        "minimum_class1_recall_delta": -0.010,
+        "minimum_focus_fp_reduction": 4,
+        "maximum_focus_tp_breaks_above_rescues": 0,
+        "maximum_new_3_to_2_harms": 3,
+        "maximum_nonfocus_f1_drop": 0.020,
+        "maximum_runtime_ratio": 1.50,
+        "maximum_stage_a_peak_vram_gib": 3.25,
+    },
+}
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
@@ -41,6 +69,11 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--expected-method", default=DEFAULT_METHOD)
     parser.add_argument("--candidate-stem", default=DEFAULT_CANDIDATE_STEM)
+    parser.add_argument(
+        "--gate-profile",
+        choices=tuple(GATE_PROFILES),
+        default=DEFAULT_GATE_PROFILE,
+    )
     return parser.parse_args(argv)
 
 
@@ -52,7 +85,11 @@ def assess_smoke_pair(
     runtime_ratio: float,
     stage_a_peak_vram_gib: float,
     aligned_rows: int,
+    gate_profile: str = DEFAULT_GATE_PROFILE,
 ) -> Dict[str, object]:
+    if gate_profile not in GATE_PROFILES:
+        raise ValueError(f"Unknown tokenizer smoke gate profile: {gate_profile}")
+    thresholds = GATE_PROFILES[gate_profile]
     control_per_class = control_metrics["per_class"]
     candidate_per_class = candidate_metrics["per_class"]
     class1_precision_gain = float(candidate_per_class[1]["precision"]) - float(
@@ -74,26 +111,40 @@ def assess_smoke_pair(
     }
     checks = {
         "full_validation_support": int(aligned_rows) == EXPECTED_VAL_ROWS,
-        "macro_f1_preserved": macro_f1_delta >= -0.003,
-        "class1_f1_gain": class1_f1_gain >= 0.010,
-        "class1_precision_gain": class1_precision_gain >= 0.025,
-        "class1_recall_preserved": class1_recall_delta >= -0.020,
-        "focus_false_positives_reduced": int(transitions["focus_fp_reduction"]) >= 5,
+        "macro_f1_preserved": macro_f1_delta + GATE_FLOAT_EPSILON
+        >= float(thresholds["minimum_macro_f1_delta"]),
+        "class1_f1_gain": class1_f1_gain + GATE_FLOAT_EPSILON
+        >= float(thresholds["minimum_class1_f1_gain"]),
+        "class1_precision_gain": class1_precision_gain + GATE_FLOAT_EPSILON
+        >= float(thresholds["minimum_class1_precision_gain"]),
+        "class1_recall_preserved": class1_recall_delta + GATE_FLOAT_EPSILON
+        >= float(thresholds["minimum_class1_recall_delta"]),
+        "focus_false_positives_reduced": int(transitions["focus_fp_reduction"])
+        >= int(thresholds["minimum_focus_fp_reduction"]),
         "focus_tp_breaks_bounded": int(transitions["focus_tp_breaks"])
-        <= int(transitions["focus_fn_rescues"]) + 3,
+        <= int(transitions["focus_fn_rescues"])
+        + int(thresholds["maximum_focus_tp_breaks_above_rescues"]),
         "net_corrections_positive": int(transitions["corrections"])
         > int(transitions["harms"]),
-        "new_3_to_2_harms_bounded": int(transitions["new_3_to_2_harms"]) <= 5,
-        "nonfocus_f1_preserved": max(nonfocus_f1_drops.values()) <= 0.020,
-        "runtime_ratio_bounded": math.isfinite(runtime_ratio) and runtime_ratio <= 1.50,
+        "new_3_to_2_harms_bounded": int(transitions["new_3_to_2_harms"])
+        <= int(thresholds["maximum_new_3_to_2_harms"]),
+        "nonfocus_f1_preserved": max(nonfocus_f1_drops.values())
+        <= float(thresholds["maximum_nonfocus_f1_drop"]) + GATE_FLOAT_EPSILON,
+        "runtime_ratio_bounded": math.isfinite(runtime_ratio)
+        and runtime_ratio
+        <= float(thresholds["maximum_runtime_ratio"]) + GATE_FLOAT_EPSILON,
         "stage_a_vram_bounded": math.isfinite(stage_a_peak_vram_gib)
-        and stage_a_peak_vram_gib <= 7.75,
+        and stage_a_peak_vram_gib
+        <= float(thresholds["maximum_stage_a_peak_vram_gib"])
+        + GATE_FLOAT_EPSILON,
     }
     failed = [name for name, passed in checks.items() if not bool(passed)]
     return {
         "metric_gate_passed": not failed,
         "five_epoch_permission": False,
         "full_train_permission": False,
+        "profile": gate_profile,
+        "thresholds": dict(thresholds),
         "checks": checks,
         "failed_checks": failed,
         "observed": {
@@ -125,6 +176,7 @@ def _validate_provenance(
     protocol: Mapping[str, object],
     expected_method: str,
     candidate_stem: str,
+    gate_profile: str = DEFAULT_GATE_PROFILE,
 ) -> None:
     if stage_a.get("method") != expected_method:
         raise ValueError("Stage-A method does not match the locked tokenizer method")
@@ -138,6 +190,11 @@ def _validate_provenance(
         raise ValueError("Stage-A must be train-only")
     if protocol.get("method") != expected_method or bool(protocol.get("test_allowed", True)):
         raise ValueError("Locked protocol method/test boundary mismatch")
+    protocol_profile = str(
+        protocol.get("smoke_gate_profile", DEFAULT_GATE_PROFILE)
+    )
+    if protocol_profile != gate_profile:
+        raise ValueError("Locked protocol smoke gate profile mismatch")
     if control_run.get("test_summary") is not None or candidate_run.get("test_summary") is not None:
         raise ValueError("Matched smoke must not contain final-test results")
 
@@ -236,6 +293,7 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
         protocol=protocol,
         expected_method=str(args.expected_method),
         candidate_stem=str(args.candidate_stem),
+        gate_profile=str(args.gate_profile),
     )
     control_seconds = float(control_run["total_seconds"])
     candidate_seconds = float(candidate_run["total_seconds"])
@@ -248,6 +306,7 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
         runtime_ratio=runtime_ratio,
         stage_a_peak_vram_gib=stage_a_peak,
         aligned_rows=len(control_rows),
+        gate_profile=str(args.gate_profile),
     )
 
     changed_path = output_dir / "changed_cases.csv"

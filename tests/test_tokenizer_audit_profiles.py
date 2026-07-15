@@ -22,6 +22,8 @@ def test_starnet_trace_profile_is_explicit() -> None:
             "starnet_s2_tokenizer",
             "--expected-stem-channels",
             "128",
+            "--expected-stem-spatial-size",
+            "32",
             "--mode",
             "starnet_s2_architecture_trace_audit",
         ]
@@ -30,6 +32,7 @@ def test_starnet_trace_profile_is_explicit() -> None:
     assert args.expected_method == "starnet_s2_local_multiplicative_tokenizer"
     assert args.expected_stem == "starnet_s2_tokenizer"
     assert args.expected_stem_channels == 128
+    assert args.expected_stem_spatial_size == 32
     assert args.mode == "starnet_s2_architecture_trace_audit"
 
 

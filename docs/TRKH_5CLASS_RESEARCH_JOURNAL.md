@@ -15891,3 +15891,110 @@ Date: 2026-07-02
   than executed after intentional checkpoint compaction. Its retained exact
   artifacts match all 16 sample indices, both historical checkpoint paths,
   source/reconciled/paired cohort hashes, and case counts.
+
+## Octave Convolution Stem Lock 2026-07-15 - Parameter-Matched Frequency Paths
+
+- A targeted local no-repeat search found no prior Octave Convolution route.
+  Ordinal/EMD/hierarchical labels, color constancy, fixed scattering/Gabor,
+  whole/interior second-order readouts, part/multi-granularity methods,
+  concurrent local-global coupling, and stock compact hybrids are already
+  closed. Another output gate or catalogue backbone therefore has no evidence
+  basis.
+- Rechecked Chen et al., ICCV 2019, and the official archived Facebook Research
+  source at commit `87c44f79...a463`. The reviewed operator file
+  `utils/gluon/utils/octconv.py` has SHA-256 `06e60037...95675`. Its four
+  learned paths implement within-frequency updates plus bidirectional
+  high/low-frequency exchange using average-pool downsampling and nearest
+  upsampling. The paper's ResNet-50 ablation peaks at low-channel ratio
+  `alpha=0.125`; that is the only permitted value here.
+- OctConv was selected over HorNet and Selective Kernel after primary-source
+  comparison. HorNet's recursive multiplicative high-order interaction is too
+  close to the already failed MogaNet/StarNet family. Selective Kernel primarily
+  adapts receptive field to object scale, whereas normalized object crops and
+  local audits identify surface/color separation, not object scale, as the
+  active bottleneck.
+- The locked candidate is deliberately smaller in experimental scope than the
+  rejected tokenizers. It replaces exactly the current stem's three vanilla
+  `3x3` convolutions with first/persistent/final OctConv while keeping widths
+  `3->32->64->256`, max-pool downsampling factor 8, the `16x16` patch grid,
+  all eight Transformer blocks, and every training setting unchanged. The four
+  path kernels sum to exactly the vanilla convolution parameter count.
+- Protocol
+  `docs/TRKH_5CLASS_OCTAVE_CONV_STEM_READINESS_PROTOCOL_20260715.md` was written
+  before implementation. Stage A is train-only and must prove exact parameter
+  and RNG parity, shapes, all-path gradients, cross-frequency materiality,
+  noncollapse, intended low-frequency total variation, checkpoint/config/CLI
+  round-trip, ONNX parity, runtime no greater than `1.50x`, and peak VRAM no
+  greater than `3.25 GiB` before validation is allowed.
+- If every Stage-A gate passes, exactly one `120b x 2e`, full-validation,
+  no-test scratch pair is allowed. Continuation requires simultaneous macro,
+  class1 F1, class1 precision, recall/TP preservation, focus-FP, correction-harm,
+  nonfocus-transition, resource, and provenance wins. No current-best command
+  is changed by this research lock.
+
+## Octave Convolution Stem Closure 2026-07-15 - Cleaner Maps, Worse Decisions
+
+### Stage A and sole matched smoke
+
+- Train-only Stage A passed every locked functional, parameter, RNG, gradient,
+  cross-frequency, noncollapse, export, runtime, VRAM, and provenance check at
+  summary SHA `b27335e7...e159b`. Candidate/control parameters were exactly
+  `7,245,590`, kernel parameters were exactly `166,752`, ONNX error was
+  `8.94e-7`, candidate peak was `2.8077 GiB`, and runtime was `1.1917x`.
+  Only `yolo_f/train=9215` was available to Stage A.
+- The sole scratch `120b x 2e` pair used full `yolo_f/val=2606` and no test.
+  Comparison summary SHA is `db74f347...34a6347b`. Control/candidate
+  macro/class1 F1 was `0.784059/0.477690 -> 0.775768/0.466844`; class1 P/R
+  fell `0.395652/0.602649 -> 0.389381/0.582781`.
+- OctConv changed `116` decisions with `40/59` corrections/harms, reduced
+  focus FP only `137 -> 135`, rescued/broke class1 FN/TP `2/5`, and created
+  nine new `3->2` harms. It failed eight material gates. Runtime ratio
+  `1.07453x` and resource gates passed, so the rejection is behavioral.
+
+### Robustness and XAI diagnosis
+
+- Post-smoke summary SHA is `4eff9063...f1897a`. Candidate won macro F1 only
+  under bright and low contrast (`2/5`), while losing clean `-0.007486`, center
+  occlusion `-0.003818`, and dim `-0.015049`. Worst class1-recall delta was
+  `-0.013245`.
+- Paired-XAI summary SHA is `11270d54...36c04`. All 16 cases use native
+  block-7 MHSA and eight gradient-bearing rollout layers with zero fallback.
+  Attention foreground rose `0.934277 -> 0.942699`, Grad-CAM foreground rose
+  `0.930686 -> 0.945499`, and Grad-CAM border fell
+  `0.157529 -> 0.128220`, yet changed-case accuracy fell `0.500 -> 0.375`.
+- TP-break attention shifted toward borders, while candidate object
+  desaturation drop `0.058269` remained much larger than background gray/blur
+  `0.001826/0.001949`. The wide-context model already rejects far background;
+  frequency-separated stem localization does not encode reliable surface/color
+  boundaries for class 1.
+- Close OctConv without alpha/path/width/depth/LR/seed/loss/augmentation/run-
+  length sweeps. Five-epoch, probe, full-train, and test permission are false.
+  Full closure is recorded in
+  `docs/TRKH_5CLASS_OCTAVE_CONV_STEM_CLOSURE_20260715.md`.
+
+### Command and next-method decision
+
+- Keeper, scratch complement, and current-command SHA-256 remain
+  `1f49d577...482677`, `f8bd6309...1a549`, and `36b9aa1a...40faf`.
+  The VS Code full-train command packet is intentionally unchanged.
+- Compacted the two rejected smoke roots only after all audit stages completed.
+  `runs/evidence_octave_conv_stem_rejected_20260715` keeps `322` files and
+  `324` verified payloads at file-manifest SHA `d2772bff...f87abd`; four
+  checkpoint binaries totaling `348,783,986` bytes were excluded. Cleanup
+  manifest SHA is `0c6a38a7...0929ab`, and both source roots are absent.
+- Retention audit
+  `runs/artifact_retention_audit_20260715_octave_conv_closure` passed over
+  `665` directories with `blockers=[]` at summary SHA
+  `e66ab1d2...dfcea`. Free space was `75.759 GiB`; protected hashes remained
+  unchanged.
+- Engineering closure passed package compileall, focused tests `24/24`, full
+  pytest `1040/1040`, and nine PowerShell parses. Current-best full pipeline,
+  precision package, TensorRT export, PyTorch video, OctConv Stage A, and the
+  matched-smoke wrapper all passed no-train preflight. The post-smoke wrapper
+  was parser-checked against completed retained evidence after checkpoint
+  compaction.
+- A primary-source screen selected official XCiT Cross-Covariance Attention as
+  the next distinct hypothesis. Unlike OctConv and failed local tokenizers, XCA
+  mixes normalized channel covariance while retaining current spatial MHSA.
+  It needs a new precommitted train-only protocol and direct decision-level TP/
+  FP evidence; it inherits no smoke permission from OctConv.

@@ -368,6 +368,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
             "coatnet_mbconv",
             "inceptionnext_atto_tokenizer",
             "moganet_xt_tokenizer",
+            "octave_conv",
             "starnet_s2_tokenizer",
         ),
         default="conv_pool",
@@ -376,6 +377,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
             "CoAtNet-Nano stem plus its first two MBConv stages; "
             "inceptionnext_atto_tokenizer uses official Atto stages 1-3; "
             "moganet_xt_tokenizer uses MogaNet-XT stages 1-3; "
+            "octave_conv uses parameter-matched high/low-frequency paths; "
             "starnet_s2_tokenizer uses official StarNet-S2 stages 1-3 to the "
             "16x16 token grid."
         ),

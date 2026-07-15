@@ -12,6 +12,7 @@ param(
     [string]$ExpectedMethod = "inceptionnext_atto_surface_tokenizer",
     [string]$ExpectedStem = "inceptionnext_atto_tokenizer",
     [int]$ExpectedStemChannels = 160,
+    [int]$ExpectedStemSpatialSize = 16,
     [string]$TraceMode = "inceptionnext_atto_architecture_trace_audit",
     [string]$CohortMode = "validation_only_inceptionnext_atto_changed_case_cohort",
     [string]$PostsmokeMode = "inceptionnext_atto_postsmoke_closure",
@@ -200,6 +201,7 @@ Invoke-NativePython "audit_candidate_trace" @(
     "--expected-method", $ExpectedMethod,
     "--expected-stem", $ExpectedStem,
     "--expected-stem-channels", ([string]$ExpectedStemChannels),
+    "--expected-stem-spatial-size", ([string]$ExpectedStemSpatialSize),
     "--mode", $TraceMode,
     "--output-dir", $TraceAuditDir
 )

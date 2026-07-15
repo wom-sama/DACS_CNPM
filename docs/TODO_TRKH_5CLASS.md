@@ -2591,8 +2591,58 @@
 - [x] Complete active-route engineering verification: fail-closed cohort/XAI
   resume provenance, compile, focused tests `18/18`, full pytest `1028/1028`,
   six PowerShell parses, and five no-train preflights all passed.
-- [ ] Do not sweep Gabor filters/bands, LHO/FCM size, fusion scale/gate, LR,
+- [x] Do not sweep Gabor filters/bands, LHO/FCM size, fusion scale/gate, LR,
   seed, loss, augmentation, or run length. Select the next genuinely distinct
   train-only representation route only after a local no-repeat and primary-
   literature cross-check; require diversity and class1 TP protection before a
   matched no-test smoke.
+- [x] Complete the local no-repeat and primary-source screen for the next
+  representation route. Reject HorNet as overlapping closed Moga/StarNet
+  multiplicative interactions and Selective Kernel as weakly matched to the
+  normalized-crop failure mode; select parameter-matched Octave Convolution.
+- [x] Lock the sole `alpha=0.125` OctConv-stem experiment before code changes in
+  `docs/TRKH_5CLASS_OCTAVE_CONV_STEM_READINESS_PROTOCOL_20260715.md`. It keeps
+  the current three stem widths, stride-8 output, 16x16 patch grid, all eight
+  Transformer blocks, and exact convolution parameter count.
+- [x] Implement default-off `stem_architecture=octave_conv`, full config/CLI/
+  checkpoint/trace wiring, equation-level path tests, RNG neutrality, and the
+  train-only Stage-A audit. All gates passed at summary SHA
+  `b27335e7...e159b`: exact parameter/RNG parity, live frequency paths,
+  noncollapse, ONNX, `1.1917x` runtime, and `2.8077 GiB`; no validation/test
+  loader was constructed.
+- [x] Run the sole matched `120b x 2e`, full-validation, no-test control/
+  candidate smoke only if every Stage-A functional, noncollapse, ONNX, runtime,
+  VRAM, and provenance gate passes; then complete transition, robustness,
+  OctConv-mechanism, architecture, and exact changed-case XAI audits. Candidate
+  macro/class1 F1 fell `0.784059/0.477690 -> 0.775768/0.466844`; class1 P/R
+  fell `0.395652/0.602649 -> 0.389381/0.582781`, with `40/59`
+  corrections/harms and `2/5` FN-rescues/TP-breaks.
+- [x] Complete all OctConv post-smoke audits. It won only `2/5` robustness
+  conditions; paired native-attention/rollout/Grad-CAM XAI had zero fallback
+  and cleaner foreground maps, but changed-case accuracy fell `0.500 -> 0.375`.
+  Surface/color sensitivity still dominates background sensitivity.
+- [x] Promote or update the best full-train command only if the independently
+  reloaded single-checkpoint candidate materially raises macro/class1 F1 and
+  class1 precision without violating recall/TP preservation. Otherwise close
+  without alpha/path/width/depth/LR/seed/loss/augmentation/run-length sweeps.
+  OctConv failed eight material gates, so no promotion or command edit occurred.
+- [x] Preserve all nonbinary OctConv smoke evidence, exclude rejected
+  checkpoints, verify hashes, delete only the two rejected smoke roots, then
+  rerun artifact retention and protected keeper/scratch/command hash checks.
+  Evidence keeps `324` verified payloads at manifest SHA
+  `d2772bff...f87abd`; four checkpoints (`348,783,986` bytes) were excluded.
+  Retention passed over `665` directories with no blocker, and all three
+  protected hashes remain unchanged.
+- [x] Close OctConv engineering with compileall, focused/full pytest, affected
+  PowerShell parses, current-best/precision/export/video/matched-smoke
+  preflights, and an explicit staging review. Compile passed, focused tests
+  passed `24/24`, full pytest passed `1040/1040`, nine launchers parsed, and
+  six no-train preflights passed.
+- [ ] Commit and push the explicit 21-path OctConv closure batch; confirm
+  `BaoCao/` and both deep-research reports remain untracked and unstaged, then
+  record the commit in the next coherent research update.
+- [ ] Lock the next genuinely distinct channel-interaction protocol from the
+  official XCiT Cross-Covariance Attention source. Preserve the current CNN
+  stem, spatial MHSA, token pruning, and XAI; require deterministic train-only
+  decision-level evidence, class1 TP protection, and focus-FP reduction before
+  one no-test validation smoke.

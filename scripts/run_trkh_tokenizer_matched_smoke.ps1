@@ -10,6 +10,7 @@ param(
     [string]$CandidateStemArchitecture = "inceptionnext_atto_tokenizer",
     [string]$EvaluationFamily = "TRKH-InceptionNeXt-Atto-smoke",
     [string]$CandidatePaperName = "TRKH-InceptionNeXt-Atto-120b-2e",
+    [string]$SmokeGateProfile = "tokenizer_precision",
     [switch]$PreflightOnly
 )
 
@@ -154,6 +155,7 @@ $protocol = [ordered]@{
     data_yaml = $DataYaml
     data_yaml_sha256 = $dataSha256
     test_allowed = $false
+    smoke_gate_profile = $SmokeGateProfile
     seed = 42
     epochs = 2
     max_train_batches = 120
@@ -260,6 +262,7 @@ Invoke-NativePython "compare_smoke_pair" @(
     "--locked-protocol", $protocolPath,
     "--expected-method", $ExpectedMethod,
     "--candidate-stem", $CandidateStemArchitecture,
+    "--gate-profile", $SmokeGateProfile,
     "--output-dir", (Join-Path $PairOutputDir "comparison")
 )
 $status.comparison = "completed"

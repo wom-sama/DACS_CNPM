@@ -10,6 +10,7 @@ from typing import Dict, Mapping, Optional, Sequence
 DEFAULT_METHOD = "inceptionnext_atto_surface_tokenizer"
 DEFAULT_STEM = "inceptionnext_atto_tokenizer"
 DEFAULT_STEM_CHANNELS = 160
+DEFAULT_STEM_SPATIAL_SIZE = 16
 DEFAULT_MODE = "inceptionnext_atto_architecture_trace_audit"
 
 
@@ -37,6 +38,7 @@ def run_audit(
     expected_method: str = DEFAULT_METHOD,
     expected_stem: str = DEFAULT_STEM,
     expected_stem_channels: int = DEFAULT_STEM_CHANNELS,
+    expected_stem_spatial_size: int = DEFAULT_STEM_SPATIAL_SIZE,
     mode: str = DEFAULT_MODE,
 ) -> Dict[str, object]:
     trace_summary = Path(trace_summary).resolve()
@@ -72,7 +74,12 @@ def run_audit(
                 and "val" not in source_parts
                 and "test" not in source_parts,
                 "stem_shape": sample.get("stem_shape")
-                == [1, int(expected_stem_channels), 16, 16],
+                == [
+                    1,
+                    int(expected_stem_channels),
+                    int(expected_stem_spatial_size),
+                    int(expected_stem_spatial_size),
+                ],
                 "patch_embedding_shape": sample.get("patch_embedding_shape")
                 == [1, 256, 256],
                 "grid_size": sample.get("grid_size") == [16, 16],
@@ -135,6 +142,11 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--expected-method", default=DEFAULT_METHOD)
     parser.add_argument("--expected-stem", default=DEFAULT_STEM)
     parser.add_argument("--expected-stem-channels", type=int, default=DEFAULT_STEM_CHANNELS)
+    parser.add_argument(
+        "--expected-stem-spatial-size",
+        type=int,
+        default=DEFAULT_STEM_SPATIAL_SIZE,
+    )
     parser.add_argument("--mode", default=DEFAULT_MODE)
     return parser.parse_args(argv)
 
@@ -149,6 +161,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         expected_method=args.expected_method,
         expected_stem=args.expected_stem,
         expected_stem_channels=args.expected_stem_channels,
+        expected_stem_spatial_size=args.expected_stem_spatial_size,
         mode=args.mode,
     )
     print(json.dumps(summary, indent=2, sort_keys=True))
