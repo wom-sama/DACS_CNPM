@@ -2856,8 +2856,29 @@
   SHA `a77f9788...09608e`; independent replay matched exact subset hashes and
   null q95. Retention passed over `684` directories with `blockers=[]`. Deny
   trainer/validation/test/full train and keep best commands unchanged.
-- [ ] Perform a fresh no-repeat and primary-source screen after IP-DPP. Avoid
+- [x] Perform a fresh no-repeat and primary-source screen after IP-DPP. Avoid
   another global rebalancing or subset-downsampling method: TRKH imbalance is
   only `4.66x`, while the measured problem is a narrow `0/2/4 <-> 1` boundary.
   Prefer a train-only mechanism that keeps every class1 row and applies
   class-selective pressure only to verified restricted head-class negatives.
+- [x] Lock, implement, test, and run the sole class-1-reference A-GEM A0. The
+  `186` hard-negative and `432` class1 gradients conflicted at cosine
+  `-0.556244`; exact projection retained `83.10%` of the direction and
+  improved recall versus unprojected control `0.880734 -> 0.926606`.
+- [x] Close one-reference A-GEM at train-only A0. Versus the raw keeper it
+  removed eight restricted FP and raised precision `+0.034694`, but broke six
+  true class1 predictions, reduced recall `-0.055046`, reduced macro/class1 F1
+  `-0.001452/-0.000467`, and failed low-contrast safety. Independent replay
+  matched all `4 x 1843` rows; no binary model or validation/test artifact was
+  produced. Keep the best command/history unchanged.
+- [x] Complete A-GEM closure engineering: compileall, focused `7/7`, full
+  pytest `1142/1142`, launcher parse/preflight, manifest/hash replay, four
+  protected hashes, and retention over `687` directories all passed. Final
+  closure SHA is `ceca3e91...326bbde`; command tracking remains `3` revisions
+  and `2` updates after the initial revision.
+- [ ] Perform a fresh primary-source and no-repeat screen after A-GEM. Because
+  the one averaged class1 CE constraint hid finite-step harm to vulnerable
+  true positives, consider only a genuinely multi-constraint decision-margin
+  method with raw keeper and one-reference A-GEM comparators. Precommit the
+  strata, QP/equation, normalized step, and TP/support/illumination gates
+  before implementation; do not sweep the closed A-GEM recipe.

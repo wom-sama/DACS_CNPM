@@ -16625,3 +16625,49 @@ Date: 2026-07-02
   needed. Retention passed over `684` directories with `blockers=[]` at
   summary SHA `95557ebf...96ef4`. Final closure SHA is
   `83732dca...f35914f`; best commands remain unchanged.
+
+## Class-1-Reference A-GEM Closure 2026-07-15 - Precision by TP Suppression
+
+- Re-read A-GEM Equation 11 and official commit `4542149...3c089`, then locked
+  a train-only one-macrostep adaptation before implementation. All `186` fit
+  restricted `0/2/4 -> 1` false positives supplied the current gradient; all
+  `432` fit class-1 rows supplied the reference gradient. Source-disjoint
+  fit/holdout was `7372/1843`; validation and test were never constructed.
+- The gradients genuinely conflicted: dot/cosine
+  `-73.433973/-0.556244`. Projection retained `83.10%` of the hard-negative
+  direction and matched the flattened equation within `2.91e-8`. The tiny
+  FP32 projected dot `-6.05e-8` missed an absolute structural tolerance but
+  does not explain or reverse the behavioral failure.
+- Raw/control/candidate clean macro F1 was
+  `0.949323/0.948563/0.947871`; class-1 P/R/F1 was
+  `0.748252/0.981651/0.849206 -> 0.813559/0.880734/0.845815 ->
+  0.782946/0.926606/0.848739`. A-GEM recovered five keeper TP relative to the
+  unprojected control, proving useful gradient protection, but still broke six
+  keeper TP and reduced support `143 -> 129`.
+- Candidate versus raw removed eight restricted FP and raised precision
+  `+0.034694`, but recall fell `-0.055046`, class-1/macro F1 fell
+  `-0.000467/-0.001452`, and corrections/harms were `12/14`. This is not a
+  precision win under the agricultural gate.
+- Illumination was inconsistent: dim improved but created two restricted FP;
+  bright removed 26 FP but broke nine TP; low contrast lost class-1 F1
+  `-0.044479` and created seven FP. Aggregate rescues/breaks were `7/15`.
+- Independent replay matched all `4 x 1843` CSV rows, metrics, transitions,
+  and keeper CIDT predictions. Summary/manifest SHAs are
+  `a74deb9b...fae1732` and `417c3585...feee75`; five nonbinary payloads total
+  `2,962,864` bytes. Full closure is in
+  `docs/TRKH_5CLASS_CLASS1_REFERENCE_AGEM_CLOSURE_20260715.md`.
+- Close the exact one-reference A-GEM route without step/fold/seed/cohort/
+  objective/optimizer/parameter/budget sweeps. Stage B, validation, test,
+  probe, full train, and current-best command revision are denied. The only
+  supported continuation is a separately sourced and precommitted
+  multi-constraint method that protects vulnerable class-1 decision margins,
+  with raw keeper and A-GEM comparators retained.
+- Closure verification passed compileall, focused `7/7`, and full pytest
+  `1142/1142` in `42.84 s`. The launcher parsed and preflight verified all
+  hashes/cohorts without creating an output directory. Retention passed over
+  `687` run directories with `blockers=[]`; retention summary SHA is
+  `9cd03a8a...819857b`.
+- Keeper, scratch complement, current command, and command-history hashes all
+  remain exact. Command tracking remains `3` revisions and `2` updates after
+  the initial revision. Final A-GEM closure document SHA is
+  `ceca3e91...326bbde`.
