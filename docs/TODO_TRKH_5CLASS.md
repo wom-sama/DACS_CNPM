@@ -2876,9 +2876,27 @@
   protected hashes, and retention over `687` directories all passed. Final
   closure SHA is `ceca3e91...326bbde`; command tracking remains `3` revisions
   and `2` updates after the initial revision.
-- [ ] Perform a fresh primary-source and no-repeat screen after A-GEM. Because
+- [x] Perform a fresh primary-source and no-repeat screen after A-GEM. Because
   the one averaged class1 CE constraint hid finite-step harm to vulnerable
   true positives, consider only a genuinely multi-constraint decision-margin
   method with raw keeper and one-reference A-GEM comparators. Precommit the
   strata, QP/equation, normalized step, and TP/support/illumination gates
   before implementation; do not sweep the closed A-GEM recipe.
+- [x] Lock, implement, and independently audit the sole boundary-stratified
+  GEM A0. Exact GEM satisfied every structural/QP gate but improved clean
+  class1 F1 only `+0.003383`, removed one restricted FP, and lost class1 F1
+  `-0.010314` to aggregate-margin A-GEM. Dim and low contrast created net FP;
+  Stage B and all downstream access are denied.
+- [x] Complete GEM closure engineering: run compile/focused/full tests, parse
+  and preflight the launcher, rerun retention and all protected-hash checks,
+  then commit and push only explicit GEM/doc paths. Keep command tracking at
+  three revisions because no locked validation promotion occurred. Compile,
+  focused `8/8`, full pytest `1150/1150`, parse/preflight, diff check, and
+  retention over `689` directories all passed. Final closure SHA is
+  `a94976b6...7b3af985`; all four protected hashes are exact.
+- [ ] Perform a fresh primary-source/no-repeat screen for a robust
+  multi-condition training objective. The clean aggregate-margin signal is
+  worth preserving, but any candidate must predefine clean/dim/bright/
+  low-contrast groups, optimize worst-group risk without raw-data changes,
+  protect class1 TP/support, and remain distinct from closed GEM/A-GEM and
+  prior augmentation or sampling sweeps.

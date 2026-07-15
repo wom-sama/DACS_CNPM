@@ -16671,3 +16671,40 @@ Date: 2026-07-02
   remain exact. Command tracking remains `3` revisions and `2` updates after
   the initial revision. Final A-GEM closure document SHA is
   `ceca3e91...326bbde`.
+
+## Class-1 Boundary-Stratified GEM Closure 2026-07-15 - Exact QP Loses to Its Control
+
+- Re-read original GEM and locked four immutable `108`-row class-1
+  decision-margin strata before implementation. All four hard-gradient dots
+  were negative; exact gamma-zero GEM selected active set `[0,1]`, retained
+  `51.69%` of the direction, matched the flat equation within `2.54e-8`, and
+  matched independent SciPy within relative error `4.04e-15`.
+- GEM versus raw clean improved macro/class1 F1
+  `+0.001426/+0.003383`, precision `+0.005269`, kept recall unchanged, and
+  removed one restricted FP. This missed the locked F1 and FP gates and lost
+  class1 F1 `-0.010314` to the aggregate-margin A-GEM control.
+- The aggregate control produced a real clean signal: class1 F1/precision
+  `+0.013697/+0.021532`, unchanged recall, and four restricted-FP removals.
+  It is not promotable: dim created ten restricted FP, bright broke six
+  class1 TP, and low contrast lost class1 F1 `-0.027608` while creating eight
+  restricted FP.
+- GEM itself failed illumination safety: dim created 15 restricted FP, bright
+  recall fell `-0.018349`, and low-contrast class1 F1 fell `-0.011267`.
+  Eight behavioral gates failed; Stage B, validation, test, probe, full train,
+  and command promotion are denied.
+- Independent replay matched all seven comparison objects over `4 x 1843`
+  rows with zero argmax or CIDT mismatch. Five nonbinary payloads total
+  `4,468,351` bytes; summary/manifest SHAs are
+  `1d2bdd20...994a3e0c` and `960bbc39...e0f4183`.
+- Close exact GEM without strata/loss/gamma/ridge/step/fold/seed/condition/QP
+  sweeps. The only supported lead is a newly sourced and precommitted robust
+  multi-condition objective that can retain the aggregate-margin clean gain
+  under dim/bright/low contrast; it must not reopen GEM post hoc.
+- Closure verification passed compilation, focused `8/8`, full pytest
+  `1150/1150` in `47.62 s`, PowerShell parse/preflight, `git diff --check`,
+  and retention over `689` directories with `blockers=[]`. Retention summary
+  SHA is `e9853a74...a1f48ca`; final closure SHA is
+  `a94976b6...7b3af985`.
+- Keeper, scratch complement, command packet, and command-history hashes are
+  exact. Best-command tracking remains `3` revisions and `2` updates after
+  the initial revision.
