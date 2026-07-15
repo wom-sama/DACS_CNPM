@@ -16833,3 +16833,43 @@ Date: 2026-07-02
   is `143e0c3c...d17a45d`; command tracking remains three revisions/two
   updates after the initial revision. Final closure SHA is
   `adf12c7e...db94ce6`.
+
+## Class-Axis and Multimodal Closure 2026-07-15 - Density Signal Breaks Class-1 TP
+
+- Re-read Goto et al. WACV 2024 and the unreviewed CCAR arXiv preprint, then
+  locked a no-sweep train-only A0 before code. It reused the exact CAGrad
+  source-disjoint `7372/1843` fit/holdout and preserved raw plus
+  aggregate-margin A-GEM comparators. Validation, test, shared trainer, and
+  binary model output were forbidden.
+- Research-integrity note: a preliminary full-train-to-validation calculation
+  had already shown broad family weakness (`0.7640/0.4036` class-axis and
+  `0.8613/0.6258` GMM macro/class1). It selected no parameter. The formal
+  protocol fixed a distinct train holdout and exact recipes, so the formal
+  gate is prospective but the family impression was not blind.
+- The balanced class-axis screen deliberately used labels and Hungarian
+  assignment to give every class 51 unique dimensions. Despite that favorable
+  construction, macro/class1 F1 was `0.807973/0.494279`, class1 precision was
+  `0.329268`, and restricted FP increased `36 -> 206`; direction AUROC was
+  only `0.25`.
+- All five fixed 10-component diagonal GMMs converged. Natural-prior GMM
+  reached macro/class1 F1 `0.929297/0.801688` and direction AUROC `0.652778`,
+  but removed only three restricted FP, broke 13 class1 TP, and reduced recall
+  `0.981651 -> 0.871560`. Corrections/harms were `14/40`.
+- Both candidates failed the agricultural precision/TP gate. Close
+  class-energy blocks and multimodal density/orthonormal-matrix proxies on the
+  current keeper representation without component/prior/assignment/end-to-end
+  sweeps. This is a local closure, not a universal rejection of the papers.
+- Independent replay reconstructed all 1,843 rows, decisions, metrics,
+  transitions, restricted-FP deltas, and artifact hashes. Summary/prediction/
+  manifest SHAs are `780f3a6e...2fe4a`, `53d8ed1a...c56f77`, and
+  `59ba1324...c41e40`; no binary or val/test payload exists.
+- Current-best commands remain unchanged at three revisions/two updates. The
+  next no-repeat decision is GSFL-style shared/discriminative decomposition,
+  but code is not authorized until its pretrained, cross-validated,
+  `150+200e`, test-selected, unlicensed, and shared-label-indexing conflicts
+  are resolved under a prospectively fixed train-only adapter gate.
+- Closure passed compileall, focused `4/4`, full pytest `1165/1165`, launcher
+  parse/preflight, independent replay, and all four protected hashes.
+  Read-only retention passed over `695` directories with `blockers=[]` and
+  `72.274 GiB` free; retention summary SHA is `cae7f1b3...ece7f63` and final
+  closure SHA is `cbafd55b...f414c1`.

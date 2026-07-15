@@ -2954,8 +2954,30 @@
   retention over `693` directories all passed; all protected hashes are exact.
   Current-best command tracking remains three revisions/two updates and is
   unchanged by CAGrad. Final closure SHA is `adf12c7e...db94ce6`.
-- [ ] Perform a fresh primary-source/no-repeat screen for a representation or
-  objective mechanism outside the closed gradient-combination family. It must
-  preserve raw and aggregate-margin comparators, target restricted class1 FP
-  without TP/support loss, and begin with a precommitted train-only information
-  gate before shared-trainer work.
+- [x] Perform a fresh primary-source/no-repeat screen for a representation or
+  objective mechanism outside the closed gradient-combination family. Select
+  one favorable class-axis diagnostic inspired by CCAR and one fixed
+  multimodal-density diagnostic inspired by Goto et al. WACV 2024; retain raw
+  and aggregate-margin comparators and lock a train-only information gate
+  before shared-trainer work.
+- [x] Implement, test, precommit, and run the class-axis/multimodal A0 on the
+  exact source-disjoint `7372/1843` train split. Class-axis energy collapsed to
+  macro/class1 F1 `0.807973/0.494279` and increased restricted FP `36 -> 206`.
+  The 10-mode GMM reached `0.929297/0.801688` with direction AUROC `0.652778`,
+  but broke 13 class1 TP and reduced recall `0.981651 -> 0.871560`. Deny both
+  routes without validation/test/trainer integration or parameter sweeps.
+- [x] Independently replay all `1843` rows, decisions, confusion matrices,
+  transitions, restricted-FP counts, and artifact hashes. Preserve four
+  nonbinary payloads under
+  `runs/audit_class_axis_multimodal_readiness_20260715`; leave current-best
+  command tracking at three revisions/two updates. Compileall, focused `4/4`,
+  full pytest `1165/1165`, launcher parse/preflight, protected hashes, and
+  retention over `695` directories with `blockers=[]` all passed. Final
+  closure SHA is `cbafd55b...f414c1`.
+- [ ] Complete a primary-source/no-repeat decision on GSFL-style
+  shared/discriminative feature decomposition before code. Reconcile its
+  pretrained VGG, cross-validated group count, `150+200` epochs, test-selected
+  official loop, missing repository license, and `labels[0]` shared-center
+  indexing with TRKH's scratch/`<=30e`/train-only rules. Only a prospectively
+  fixed source-grouped frozen-adapter gate with raw/margin comparators and zero
+  class1 TP loss may proceed; otherwise reject the family without a smoke.
