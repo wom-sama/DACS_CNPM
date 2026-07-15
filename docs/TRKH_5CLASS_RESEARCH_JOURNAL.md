@@ -16873,3 +16873,33 @@ Date: 2026-07-02
   Read-only retention passed over `695` directories with `blockers=[]` and
   `72.274 GiB` free; retention summary SHA is `cae7f1b3...ece7f63` and final
   closure SHA is `cbafd55b...f414c1`.
+
+## GSFL Shared-Feature Closure 2026-07-16 - Precision by Unsafe Class-1 Suppression
+
+- Re-read Li and Monga's BMVC 2019 GSFL paper and cloned official commit
+  `8527039...65fe5`. The official recipe depends on pretrained VGG,
+  cross-validated groups, 150+200 epochs, and test selection; its repository
+  has no license and its shared-center loop reuses `labels[0]` for later rows.
+- The prospectively locked paper-only adapter used the exact source-disjoint
+  `7372/1843` `yolo_f/train` split, signed 256D keeper embeddings, paired CE
+  control, fixed center/reconstruction losses, and one 30-epoch seed. All
+  provenance, pairing, gradient, objective, center-update, and finiteness gates
+  passed; no validation, test, binary, or raw-data write occurred.
+- GSFL changed macro/class1 F1 by `-0.003673/+0.004005` versus raw. Precision
+  rose `+0.104959`, but recall fell `-0.128440`: it removed 20 restricted FP
+  while breaking 14 of 107 class1 TP. Corrections/harms were `20/27`, and
+  direction AUROC was only `0.263889`.
+- Visual review found both close-crop and wide-context examples among removed
+  FP and broken TP. The mechanism shifts the subtle surface/ripeness boundary;
+  it does not isolate a stable background nuisance. Deny trainer integration
+  and close width/group/decoder/center/loss/optimizer/epoch/seed/sampling
+  sweeps on this keeper.
+- Independent replay matched all `1843` rows, four confusion matrices,
+  transitions, restricted FP, AUROC, 30 curve rows, and payload hashes.
+  Summary/prediction/manifest SHAs are `e1396669...d801d`,
+  `65e28ddb...a3668`, and `7c5d68a9...099f`.
+- Compile/focused `5/5`, full pytest `1170/1170`, launcher parse/preflight,
+  protected hashes, and retention over `697` directories with `blockers=[]`
+  passed. Retention SHA is `0c545fe6...0756`; current-best commands remain
+  unchanged at three revisions/two updates after the initial revision. Final
+  closure SHA is `49e213c2...c11c4`.

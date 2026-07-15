@@ -2974,10 +2974,30 @@
   full pytest `1165/1165`, launcher parse/preflight, protected hashes, and
   retention over `695` directories with `blockers=[]` all passed. Final
   closure SHA is `cbafd55b...f414c1`.
-- [ ] Complete a primary-source/no-repeat decision on GSFL-style
+- [x] Complete a primary-source/no-repeat decision on GSFL-style
   shared/discriminative feature decomposition before code. Reconcile its
   pretrained VGG, cross-validated group count, `150+200` epochs, test-selected
   official loop, missing repository license, and `labels[0]` shared-center
   indexing with TRKH's scratch/`<=30e`/train-only rules. Only a prospectively
   fixed source-grouped frozen-adapter gate with raw/margin comparators and zero
-  class1 TP loss may proceed; otherwise reject the family without a smoke.
+  class1 TP loss may proceed; otherwise reject the family without a smoke. A
+  paper-only adapter was judged distinct enough for one locked A0; protocol SHA
+  is `1d5dba1...eaafb` and precommit/fix commits are `99b3f58`/`ca6fdb8`.
+- [x] Run and independently replay the sole GSFL train-only adapter A0. Every
+  structural gate passed, but precision `+0.104959` came with recall
+  `-0.128440`: 20 restricted FP were removed while 14 class1 TP were broken,
+  macro F1 fell `-0.003673`, and direction AUROC was `0.263889`. Deny trainer
+  integration and all nearby decomposition/center/loss/width/epoch sweeps.
+- [x] Complete GSFL closure engineering. Compile/focused `5/5`, full pytest
+  `1170/1170`, launcher parse/preflight, independent replay, all protected
+  hashes, and retention over `697` directories passed with `blockers=[]`.
+  Summary/manifest SHAs are `e1396669...d801d`/`7c5d68a9...099f`; current-best
+  command tracking remains three revisions/two updates. Final closure SHA is
+  `49e213c2...c11c4`.
+- [ ] Perform a fresh primary-source/no-repeat screen for a mechanism that
+  creates positive local surface evidence for class 1 while preserving all 107
+  raw class1 TP. Explicitly compare any recent part/prototype or interpretable
+  evidence method against the already closed PDisco, patch-MIL, prototype,
+  Prompt/Finer-CAM, API/PWCA, density, and frozen-head routes before code. Do
+  not authorize a smoke unless the candidate adds a genuinely new signal under
+  scratch, train-only, and `<=30`-epoch constraints.
