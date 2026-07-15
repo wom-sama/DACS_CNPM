@@ -2994,10 +2994,26 @@
   Summary/manifest SHAs are `e1396669...d801d`/`7c5d68a9...099f`; current-best
   command tracking remains three revisions/two updates. Final closure SHA is
   `49e213c2...c11c4`.
-- [ ] Perform a fresh primary-source/no-repeat screen for a mechanism that
-  creates positive local surface evidence for class 1 while preserving all 107
-  raw class1 TP. Explicitly compare any recent part/prototype or interpretable
-  evidence method against the already closed PDisco, patch-MIL, prototype,
-  Prompt/Finer-CAM, API/PWCA, density, and frozen-head routes before code. Do
-  not authorize a smoke unless the candidate adds a genuinely new signal under
-  scratch, train-only, and `<=30`-epoch constraints.
+- [x] Perform a fresh primary-source/no-repeat screen for positive local class1
+  evidence. Reject SIC/foundation-part prototypes/FAREL before code because of
+  pretrained-feature, already-closed prototype/frequency, or `100-1600` epoch
+  conflicts; select only DDHTS cross-layer plus cross-IUWT sign coding for one
+  prospectively locked train-only A0.
+- [x] Run the sole fixed DDHTS gate on exact source-disjoint `7372/1843`
+  `yolo_f/train` rows. Clean changed zero decisions, removed `0/36` restricted
+  FP, and reached direction AUROC `0.548546`; a zero-TP-loss holdout oracle also
+  removed zero FP. Dim lighting broke one TP and removed no FP, so Stage B,
+  validation, test, probe/full train, and command promotion are denied.
+- [x] Complete DDHTS closure: inspect both frequency-view contact sheets,
+  independently replay all `4 x 1843` decisions/confusions, preserve ten
+  payloads, compile, pass focused/full pytest `6/6` and `1176/1176`, parse and
+  preflight the launcher, verify protected hashes, and pass retention over
+  `699` directories with `blockers=[]`. Summary/closure-manifest SHAs are
+  `e65e2b65...d6512b`/`89d14eb3...efb76`; commands remain at three revisions.
+  Final closure-document SHA is `145b6776...2519f`.
+- [ ] Perform a fresh primary-source/no-repeat screen outside fixed texture,
+  part/prototype, frozen-readout, post-hoc threshold, and gradient-combination
+  families. A next candidate must be an end-to-end scratch-compatible
+  representation or objective with a new class1-positive supervision source,
+  a train-only information gate, `<=30` epochs, and explicit clean plus
+  illumination TP protection before any validation access.

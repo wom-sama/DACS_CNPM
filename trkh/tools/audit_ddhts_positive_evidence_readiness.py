@@ -935,7 +935,7 @@ def _write_contact_sheet(
                 .cpu()
                 .numpy()
             )
-            image = Image.fromarray(array, mode="RGB").resize(
+            image = Image.fromarray(array).resize(
                 (tile, tile), Image.Resampling.BILINEAR
             )
             canvas.paste(image, (column * tile, y))

@@ -16903,3 +16903,35 @@ Date: 2026-07-02
   passed. Retention SHA is `0c545fe6...0756`; current-best commands remain
   unchanged at three revisions/two updates after the initial revision. Final
   closure SHA is `49e213c2...c11c4`.
+
+## DDHTS Positive-Evidence Closure 2026-07-16 - Fixed Deep Binary Histograms Do Not Separate Class 1
+
+- Re-read the new Frontiers 2026 DDHTS-Net paper and first rejected its
+  headline accuracy as a direct comparator: it uses AlexNet/VGG plus SVM,
+  random `80/20` image splits repeated 50 times, and tuned `C=250`, with no
+  source-group split, class F1, code, SVM settings, or weight provenance.
+- Its cross-layer plus cross-IUWT sign coding was still distinct enough from
+  prior LBP/wavelet/Deep-TEN/Gabor routes for one prospectively committed
+  train-only A0. The frozen scratch keeper produced a fixed 40D descriptor on
+  exact `7372/1843` source-disjoint rows; a balanced linear SVM used the locked
+  `432` class1 plus `186` hard-negative fit cohort.
+- Clean decisions did not change: restricted FP stayed `36 -> 36`, class1
+  precision/recall/F1 stayed `0.748252/0.981651/0.849206`, and direction AUROC
+  was `0.548546`. Even a holdout-label oracle preserving all 107 TP removed
+  `0/36` FP, proving overlap before threshold selection.
+- Dim lighting broke one TP and removed no FP; class1 F1 fell `-0.007200`.
+  Descriptor effective rank was only `5.346925/40`, and clean-to-condition
+  score correlations were `0.4767-0.5764`. XAI shows frequency views preserve
+  fruit and background contours together and small illumination changes cause
+  large sign-score shifts.
+- Independent replay reproduced every candidate decision/confusion, threshold,
+  rank, AUROC, and payload hash; cross-process score error was at most
+  `1.0371e-6` with exact decisions. Evidence is under
+  `runs/audit_ddhts_positive_evidence_readiness_20260716`; summary/closure
+  manifest SHAs are `e65e2b65...d6512b` and `89d14eb3...efb76`.
+- Close DDHTS and nearby fixed deep binary-pattern sweeps. Compilation,
+  focused `6/6`, full pytest `1176/1176`, parse/preflight, protected hashes,
+  and retention over `699` directories passed; retention SHA is
+  `f89fa7a7...26387`. Current-best commands remain unchanged at three
+  revisions/two updates. Final closure-document SHA is
+  `145b6776...2519f`.
