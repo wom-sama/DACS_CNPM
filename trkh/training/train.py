@@ -2210,6 +2210,30 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         help="Fixed residual multiplier for the patch-only XCA branch.",
     )
     parser.add_argument(
+        "--dynamic-graph-mixer",
+        action="store_true",
+        default=False,
+        help="Add a patch-only ViG max-relative dynamic graph residual.",
+    )
+    parser.add_argument(
+        "--dynamic-graph-mixer-layers",
+        type=str,
+        default="2,5",
+        help="Comma-separated 1-based transformer layers that add graph mixing.",
+    )
+    parser.add_argument(
+        "--dynamic-graph-mixer-bottleneck-dim",
+        type=int,
+        default=64,
+        help="Projected node width used by the dynamic graph mixer.",
+    )
+    parser.add_argument(
+        "--dynamic-graph-mixer-k",
+        type=int,
+        default=9,
+        help="Nearest-neighbor count, including self, used by graph mixing.",
+    )
+    parser.add_argument(
         "--patch-style-recalibration",
         action="store_true",
         default=False,
@@ -5040,6 +5064,18 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
             "--cross-covariance-attention khong the dung cung "
             "--visual-contrast-attention."
         )
+    if args.dynamic_graph_mixer_bottleneck_dim <= 0:
+        raise ValueError("--dynamic-graph-mixer-bottleneck-dim phai > 0.")
+    if args.dynamic_graph_mixer_k <= 0:
+        raise ValueError("--dynamic-graph-mixer-k phai > 0.")
+    if bool(args.dynamic_graph_mixer) and bool(args.visual_contrast_attention):
+        raise ValueError(
+            "--dynamic-graph-mixer khong the dung cung --visual-contrast-attention."
+        )
+    if bool(args.dynamic_graph_mixer) and bool(args.cross_covariance_attention):
+        raise ValueError(
+            "--dynamic-graph-mixer khong the dung cung --cross-covariance-attention."
+        )
     if bool(args.patch_style_recalibration) and bool(args.locally_enhanced_ffn):
         raise ValueError(
             "--patch-style-recalibration khong the dung cung --locally-enhanced-ffn."
@@ -6353,6 +6389,12 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         cross_covariance_attention_residual_scale=(
             args.cross_covariance_attention_residual_scale
         ),
+        dynamic_graph_mixer=bool(args.dynamic_graph_mixer),
+        dynamic_graph_mixer_layers=args.dynamic_graph_mixer_layers,
+        dynamic_graph_mixer_bottleneck_dim=(
+            args.dynamic_graph_mixer_bottleneck_dim
+        ),
+        dynamic_graph_mixer_k=args.dynamic_graph_mixer_k,
         patch_style_recalibration=bool(args.patch_style_recalibration),
         patch_style_recalibration_layers=args.patch_style_recalibration_layers,
         layer_token_fusion=bool(args.layer_token_fusion),
@@ -8373,6 +8415,7 @@ def _is_allowed_resume_extension_key(key: str) -> bool:
         ".local_patch_mixer." in text
         or ".attn.relative_position_attention." in text
         or ".cross_covariance_attention." in text
+        or ".dynamic_graph_mixer." in text
         or ".mlp.style_recalibration." in text
         or any(
             marker in text
@@ -26770,6 +26813,7 @@ def main() -> None:
             or bool(args.gated_relative_position_attention)
             or bool(args.visual_contrast_attention)
             or bool(args.cross_covariance_attention)
+            or bool(args.dynamic_graph_mixer)
             or bool(args.patch_style_recalibration)
             or bool(args.late_class_attention_pooling)
             or bool(args.late_member_branch)
@@ -27093,6 +27137,43 @@ def main() -> None:
                     "reason": (
                         "allow checkpoint-safe patch-only XCA while reusing learned "
                         "spatial qkv/proj parameters"
+                    ),
+                },
+                flush=True,
+            )
+        if bool(args.dynamic_graph_mixer):
+            if bool(model_config.visual_contrast_attention):
+                raise ValueError(
+                    "Dynamic graph mixer resume extension conflicts with "
+                    "Visual-Contrast Attention."
+                )
+            if bool(model_config.cross_covariance_attention):
+                raise ValueError(
+                    "Dynamic graph mixer resume extension conflicts with "
+                    "cross-covariance attention."
+                )
+            model_config.dynamic_graph_mixer = True
+            model_config.dynamic_graph_mixer_layers = str(
+                args.dynamic_graph_mixer_layers
+            )
+            model_config.dynamic_graph_mixer_bottleneck_dim = int(
+                args.dynamic_graph_mixer_bottleneck_dim
+            )
+            model_config.dynamic_graph_mixer_k = int(args.dynamic_graph_mixer_k)
+            print(
+                {
+                    "resume_cli_model_extension": {
+                        "dynamic_graph_mixer": True,
+                        "dynamic_graph_mixer_layers": (
+                            model_config.dynamic_graph_mixer_layers
+                        ),
+                        "dynamic_graph_mixer_bottleneck_dim": (
+                            model_config.dynamic_graph_mixer_bottleneck_dim
+                        ),
+                        "dynamic_graph_mixer_k": model_config.dynamic_graph_mixer_k,
+                    },
+                    "reason": (
+                        "allow checkpoint-safe patch-only ViG max-relative graph mixing"
                     ),
                 },
                 flush=True,
@@ -29543,6 +29624,7 @@ def main() -> None:
                 or float(args.patch_evidence_router_loss_weight) > 0.0
                 or bool(args.visual_contrast_attention)
                 or bool(args.cross_covariance_attention)
+                or bool(args.dynamic_graph_mixer)
                 or bool(args.patch_style_recalibration)
                 or bool(args.late_class_attention_pooling)
                 or bool(args.late_member_branch)
@@ -29638,6 +29720,7 @@ def main() -> None:
                     or float(args.patch_evidence_router_loss_weight) > 0.0
                     or bool(args.visual_contrast_attention)
                     or bool(args.cross_covariance_attention)
+                    or bool(args.dynamic_graph_mixer)
                     or bool(args.patch_style_recalibration)
                     or bool(args.late_class_attention_pooling)
                     or bool(args.late_member_branch)

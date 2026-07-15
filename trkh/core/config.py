@@ -297,6 +297,10 @@ class ModelConfig:
     cross_covariance_attention: bool = False
     cross_covariance_attention_layers: str = "2,5"
     cross_covariance_attention_residual_scale: float = 0.10
+    dynamic_graph_mixer: bool = False
+    dynamic_graph_mixer_layers: str = "2,5"
+    dynamic_graph_mixer_bottleneck_dim: int = 64
+    dynamic_graph_mixer_k: int = 9
     patch_style_recalibration: bool = False
     patch_style_recalibration_layers: str = "2,5"
     layer_token_fusion: bool = False

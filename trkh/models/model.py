@@ -26,6 +26,7 @@ from trkh.models.visual_contrast_attention import VisualContrastAttention
 from trkh.models.cross_covariance_attention import (
     SharedProjectionCrossCovarianceAttention,
 )
+from trkh.models.dynamic_graph_mixer import MaxRelativeDynamicGraphMixer
 
 
 def _adaptive_average_matrix(
@@ -5229,6 +5230,9 @@ class CustomTransformerEncoderLayer(nn.Module):
         visual_contrast_tokens: int = 64,
         cross_covariance_attention: bool = False,
         cross_covariance_attention_residual_scale: float = 0.10,
+        dynamic_graph_mixer: bool = False,
+        dynamic_graph_mixer_bottleneck_dim: int = 64,
+        dynamic_graph_mixer_k: int = 9,
         patch_style_recalibration: bool = False,
         block_depth: int = 0,
     ) -> None:
@@ -5241,6 +5245,18 @@ class CustomTransformerEncoderLayer(nn.Module):
         if bool(cross_covariance_attention) and bool(visual_contrast_attention):
             raise ValueError(
                 "Cross-covariance attention requires the standard spatial MHSA block."
+            )
+        if bool(dynamic_graph_mixer) and bool(visual_contrast_attention):
+            raise ValueError(
+                "Dynamic graph mixing requires the standard spatial MHSA block."
+            )
+        if bool(dynamic_graph_mixer) and bool(cross_covariance_attention):
+            raise ValueError(
+                "Dynamic graph mixing cannot share a block with cross-covariance attention."
+            )
+        if bool(dynamic_graph_mixer) and bool(local_patch_mixer):
+            raise ValueError(
+                "Dynamic graph mixing cannot share a block with the local patch mixer."
             )
         if float(cross_covariance_attention_residual_scale) < 0.0:
             raise ValueError("cross_covariance_attention_residual_scale must be >= 0.")
@@ -5278,6 +5294,15 @@ class CustomTransformerEncoderLayer(nn.Module):
         )
         self.cross_covariance_attention_residual_scale = float(
             cross_covariance_attention_residual_scale
+        )
+        self.dynamic_graph_mixer = (
+            MaxRelativeDynamicGraphMixer(
+                dim=dim,
+                bottleneck_dim=dynamic_graph_mixer_bottleneck_dim,
+                k=dynamic_graph_mixer_k,
+            )
+            if bool(dynamic_graph_mixer)
+            else None
         )
         self.drop_path1 = DropPath(drop_path_rate)
         self.norm2 = nn.LayerNorm(dim)
@@ -5362,6 +5387,44 @@ class CustomTransformerEncoderLayer(nn.Module):
             return updated, channel_attention
         return updated
 
+    def apply_dynamic_graph_mixer(
+        self,
+        x: Tensor,
+        *,
+        prefix_count: int,
+        grid_size: Optional[Tuple[int, int]],
+        patch_indices: Optional[Tensor],
+        return_details: bool = False,
+    ) -> Tensor | Tuple[Tensor, Dict[str, Tensor]]:
+        module = self.dynamic_graph_mixer
+        if module is None:
+            if return_details:
+                raise RuntimeError("Dynamic graph mixing is not enabled in this block.")
+            return x
+        resolved_prefix_count = int(prefix_count)
+        if not 0 <= resolved_prefix_count < int(x.size(1)):
+            raise ValueError("prefix_count must leave at least one patch token.")
+        patch_tokens = x[:, resolved_prefix_count:]
+        result = module(
+            patch_tokens,
+            patch_indices=patch_indices,
+            grid_size=grid_size,
+            return_details=return_details,
+        )
+        if return_details:
+            residual, details = result
+        else:
+            residual = result
+        updated_patches = patch_tokens + residual
+        updated = (
+            torch.cat((x[:, :resolved_prefix_count], updated_patches), dim=1)
+            if resolved_prefix_count
+            else updated_patches
+        )
+        if return_details:
+            return updated, details
+        return updated
+
     def forward(
         self,
         x: Tensor,
@@ -5383,6 +5446,13 @@ class CustomTransformerEncoderLayer(nn.Module):
                 x = self.apply_cross_covariance_attention(
                     x,
                     prefix_count=prefix_count,
+                )
+            if self.dynamic_graph_mixer is not None:
+                x = self.apply_dynamic_graph_mixer(
+                    x,
+                    prefix_count=prefix_count,
+                    grid_size=grid_size,
+                    patch_indices=patch_indices,
                 )
             if self.local_patch_mixer is not None:
                 x = self.local_patch_mixer(
@@ -5412,6 +5482,13 @@ class CustomTransformerEncoderLayer(nn.Module):
             x = self.apply_cross_covariance_attention(
                 x,
                 prefix_count=prefix_count,
+            )
+        if self.dynamic_graph_mixer is not None:
+            x = self.apply_dynamic_graph_mixer(
+                x,
+                prefix_count=prefix_count,
+                grid_size=grid_size,
+                patch_indices=patch_indices,
             )
         if self.local_patch_mixer is not None:
             x = self.local_patch_mixer(
@@ -5641,6 +5718,10 @@ class VisionTransformerWithRegisters(nn.Module):
         cross_covariance_attention: bool = False,
         cross_covariance_attention_layers: str = "2,5",
         cross_covariance_attention_residual_scale: float = 0.10,
+        dynamic_graph_mixer: bool = False,
+        dynamic_graph_mixer_layers: str = "2,5",
+        dynamic_graph_mixer_bottleneck_dim: int = 64,
+        dynamic_graph_mixer_k: int = 9,
         patch_style_recalibration: bool = False,
         patch_style_recalibration_layers: str = "2,5",
         layer_token_fusion: bool = False,
@@ -6019,6 +6100,43 @@ class VisionTransformerWithRegisters(nn.Module):
             raise ValueError(
                 "Cross-covariance attention cannot be combined with Visual-Contrast Attention."
             )
+        self.dynamic_graph_mixer_layer_numbers = (
+            _parse_auxiliary_layer_indices(
+                dynamic_graph_mixer_layers,
+                int(depth),
+            )
+            if bool(dynamic_graph_mixer)
+            else []
+        )
+        self.dynamic_graph_mixer_enabled = bool(
+            self.dynamic_graph_mixer_layer_numbers
+        )
+        self.dynamic_graph_mixer_bottleneck_dim = int(
+            dynamic_graph_mixer_bottleneck_dim
+        )
+        self.dynamic_graph_mixer_k = int(dynamic_graph_mixer_k)
+        if self.dynamic_graph_mixer_enabled:
+            if self.dynamic_graph_mixer_bottleneck_dim <= 0:
+                raise ValueError("dynamic_graph_mixer_bottleneck_dim must be positive.")
+            if int(embed_dim) % self.dynamic_graph_mixer_bottleneck_dim != 0:
+                raise ValueError("dynamic_graph_mixer_bottleneck_dim must divide embed_dim.")
+            if self.dynamic_graph_mixer_k <= 0:
+                raise ValueError("dynamic_graph_mixer_k must be positive.")
+            if self.visual_contrast_attention_enabled:
+                raise ValueError(
+                    "Dynamic graph mixing cannot be combined with Visual-Contrast Attention."
+                )
+            if self.cross_covariance_attention_enabled:
+                raise ValueError(
+                    "Dynamic graph mixing cannot be combined with cross-covariance attention."
+                )
+            if any(
+                layer in self.block_local_patch_mixer_layer_numbers
+                for layer in self.dynamic_graph_mixer_layer_numbers
+            ):
+                raise ValueError(
+                    "Dynamic graph mixing cannot overlap block-local patch mixer layers."
+                )
         self.patch_style_recalibration_layer_numbers = (
             _parse_auxiliary_layer_indices(
                 patch_style_recalibration_layers,
@@ -6342,6 +6460,13 @@ class VisionTransformerWithRegisters(nn.Module):
                     cross_covariance_attention_residual_scale=(
                         self.cross_covariance_attention_residual_scale
                     ),
+                    dynamic_graph_mixer=(
+                        int(index + 1) in self.dynamic_graph_mixer_layer_numbers
+                    ),
+                    dynamic_graph_mixer_bottleneck_dim=(
+                        self.dynamic_graph_mixer_bottleneck_dim
+                    ),
+                    dynamic_graph_mixer_k=self.dynamic_graph_mixer_k,
                     patch_style_recalibration=(
                         int(index + 1)
                         in self.patch_style_recalibration_layer_numbers
@@ -8302,6 +8427,33 @@ class VisionTransformerWithRegisters(nn.Module):
                             [entry[trace_key] for _, entry in patch_style_entries],
                             dim=0,
                         )
+            if self.dynamic_graph_mixer_enabled:
+                graph_entries = []
+                for layer_number in self.dynamic_graph_mixer_layer_numbers:
+                    module = self.blocks[int(layer_number) - 1].dynamic_graph_mixer
+                    module_trace = module.trace() if module is not None else {}
+                    if module_trace:
+                        graph_entries.append((int(layer_number), module_trace))
+                if graph_entries:
+                    features["trace"]["dynamic_graph_mixer_layers"] = torch.tensor(
+                        [layer for layer, _ in graph_entries],
+                        device=tokens.device,
+                        dtype=torch.long,
+                    )
+                    for trace_key in (
+                        "residual_norm_ratio",
+                        "projected_node_norm",
+                        "neighbor_distance_mean",
+                        "nonself_neighbor_count",
+                        "nonlocal_neighbor_fraction",
+                        "neighbor_selection_entropy",
+                        "patch_count",
+                        "neighbor_count",
+                    ):
+                        features["trace"][f"dynamic_graph_{trace_key}"] = torch.stack(
+                            [entry[trace_key] for _, entry in graph_entries],
+                            dim=0,
+                        )
             if layer_token_fusion_feature is not None:
                 features["trace"]["layer_token_fusion_layers"] = torch.tensor(
                     layer_token_fusion_layers,
@@ -9987,6 +10139,10 @@ class DETRVisionTransformerWithRegisters(VisionTransformerWithRegisters):
         cross_covariance_attention: bool = False,
         cross_covariance_attention_layers: str = "2,5",
         cross_covariance_attention_residual_scale: float = 0.10,
+        dynamic_graph_mixer: bool = False,
+        dynamic_graph_mixer_layers: str = "2,5",
+        dynamic_graph_mixer_bottleneck_dim: int = 64,
+        dynamic_graph_mixer_k: int = 9,
         patch_style_recalibration: bool = False,
         patch_style_recalibration_layers: str = "2,5",
         layer_token_fusion: bool = False,
@@ -10298,6 +10454,12 @@ class DETRVisionTransformerWithRegisters(VisionTransformerWithRegisters):
             cross_covariance_attention_residual_scale=(
                 cross_covariance_attention_residual_scale
             ),
+            dynamic_graph_mixer=dynamic_graph_mixer,
+            dynamic_graph_mixer_layers=dynamic_graph_mixer_layers,
+            dynamic_graph_mixer_bottleneck_dim=(
+                dynamic_graph_mixer_bottleneck_dim
+            ),
+            dynamic_graph_mixer_k=dynamic_graph_mixer_k,
             patch_style_recalibration=patch_style_recalibration,
             patch_style_recalibration_layers=patch_style_recalibration_layers,
             layer_token_fusion=layer_token_fusion,

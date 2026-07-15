@@ -573,6 +573,10 @@ param(
     [bool]$CrossCovarianceAttention = $false,
     [string]$CrossCovarianceAttentionLayers = "2,5",
     [double]$CrossCovarianceAttentionResidualScale = 0.10,
+    [bool]$DynamicGraphMixer = $false,
+    [string]$DynamicGraphMixerLayers = "2,5",
+    [int]$DynamicGraphMixerBottleneckDim = 64,
+    [int]$DynamicGraphMixerK = 9,
     [bool]$PatchStyleRecalibration = $false,
     [string]$PatchStyleRecalibrationLayers = "2,5",
     [bool]$LayerTokenFusion = $false,
@@ -912,6 +916,18 @@ if ($CrossCovarianceAttentionResidualScale -lt 0.0) {
 }
 if ($CrossCovarianceAttention -and $VisualContrastAttention) {
     throw "CrossCovarianceAttention khong the dung cung VisualContrastAttention."
+}
+if ($DynamicGraphMixerBottleneckDim -le 0) {
+    throw "DynamicGraphMixerBottleneckDim phai > 0."
+}
+if ($DynamicGraphMixerK -le 0) {
+    throw "DynamicGraphMixerK phai > 0."
+}
+if ($DynamicGraphMixer -and $VisualContrastAttention) {
+    throw "DynamicGraphMixer khong the dung cung VisualContrastAttention."
+}
+if ($DynamicGraphMixer -and $CrossCovarianceAttention) {
+    throw "DynamicGraphMixer khong the dung cung CrossCovarianceAttention."
 }
 if ($PatchStyleRecalibration -and $LocallyEnhancedFfn) {
     throw "PatchStyleRecalibration khong the dung cung LocallyEnhancedFfn."
@@ -2020,6 +2036,10 @@ if ($PreflightOnly) {
         cross_covariance_attention = [bool]$CrossCovarianceAttention
         cross_covariance_attention_layers = $CrossCovarianceAttentionLayers
         cross_covariance_attention_residual_scale = $CrossCovarianceAttentionResidualScale
+        dynamic_graph_mixer = [bool]$DynamicGraphMixer
+        dynamic_graph_mixer_layers = $DynamicGraphMixerLayers
+        dynamic_graph_mixer_bottleneck_dim = $DynamicGraphMixerBottleneckDim
+        dynamic_graph_mixer_k = $DynamicGraphMixerK
         patch_style_recalibration = [bool]$PatchStyleRecalibration
         patch_style_recalibration_layers = $PatchStyleRecalibrationLayers
         layer_token_fusion = [bool]$LayerTokenFusion
@@ -3259,6 +3279,14 @@ if ($ClassIndependentHead) {
             "--cross-covariance-attention-residual-scale", "$CrossCovarianceAttentionResidualScale"
         )
     }
+    if ($DynamicGraphMixer) {
+        $TrainArgs += @(
+            "--dynamic-graph-mixer",
+            "--dynamic-graph-mixer-layers", "$DynamicGraphMixerLayers",
+            "--dynamic-graph-mixer-bottleneck-dim", "$DynamicGraphMixerBottleneckDim",
+            "--dynamic-graph-mixer-k", "$DynamicGraphMixerK"
+        )
+    }
     if ($PatchStyleRecalibration) {
         $TrainArgs += @(
             "--patch-style-recalibration",
@@ -4005,6 +4033,10 @@ if ($ClassIndependentHead) {
         cross_covariance_attention = [bool]$CrossCovarianceAttention
         cross_covariance_attention_layers = $CrossCovarianceAttentionLayers
         cross_covariance_attention_residual_scale = $CrossCovarianceAttentionResidualScale
+        dynamic_graph_mixer = [bool]$DynamicGraphMixer
+        dynamic_graph_mixer_layers = $DynamicGraphMixerLayers
+        dynamic_graph_mixer_bottleneck_dim = $DynamicGraphMixerBottleneckDim
+        dynamic_graph_mixer_k = $DynamicGraphMixerK
         patch_style_recalibration = [bool]$PatchStyleRecalibration
         patch_style_recalibration_layers = $PatchStyleRecalibrationLayers
         layer_token_fusion = [bool]$LayerTokenFusion
