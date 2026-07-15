@@ -15653,3 +15653,125 @@ Date: 2026-07-02
 - Keeper, scratch complement, and current command hashes remain
   `1f49d577...482677`, `f8bd6309...1a549`, and `36b9aa1a...40faf`. StarNet is
   not promoted, so the VS Code full-train command remains unchanged.
+
+## 2026-07-15 - Learnable-Gabor texture residual protocol lock
+
+- Reviewed the ICCV 2023 paper and supplement plus local reports
+  `D:/deep-research-report (14).md` and `(15).md`, with verified SHA-256
+  `561ba5a6...d7f` and `7933984f...d4b0`. No author implementation was found,
+  so the candidate is explicitly an equation-traceable compact adaptation.
+- Locked
+  `docs/TRKH_5CLASS_LEARNABLE_GABOR_TEXTURE_READINESS_PROTOCOL_20260715.md`.
+  The candidate keeps the keeper CNN, wide-context `yolo_f` patch path, and all
+  eight Transformer blocks. A constrained 32-filter low/high Gabor bank,
+  eight-level LHO, and FCM produce one zero-gated residual added to the first
+  existing edge token; there is no texture classifier or decision router.
+- The texture path alone uses a soft bbox/interior mask and mask-weighted
+  grayscale z-score. The semantic path still sees the complete frame. This
+  tests object-surface evidence and illumination stability without editing raw
+  data or repeating the rejected wide-background and high-frequency-logit
+  routes.
+- Stage A is train-only and fail-closed on exact zero-gate keeper equivalence,
+  constrained/diverse filters, live FP32/BF16 gradients, LHO/FCM mechanism
+  ablations, five-class sensitivity, illumination cosine, materialized/export
+  equivalence, at most `100k` added parameters, `1.50x` runtime, and
+  `7.75 GiB` VRAM.
+- A Stage-A pass authorizes exactly one keeper-initialized `120b x 2e`, full-
+  validation, no-test matched smoke at LR `8e-5`. Advancement requires absolute
+  macro/class1 F1 `0.882925/0.683261`, class1 precision/recall
+  `0.613093/0.774834`, at least `117` class1 TP, at least four locked focus-FP
+  removals, corrections above harms, illumination robustness, and complete XAI.
+- Verified data/keeper/scratch/current-command hashes remain
+  `716e33df...84ef`, `1f49d577...2677`, `f8bd6309...a549`, and
+  `36b9aa1a...faf`. No command was promoted and test remains closed.
+
+## Learnable-Gabor Closure 2026-07-15 - RNG-Neutral but Precision-Negative
+
+### Causal repair and Stage A
+
+- Self-review invalidated the original matched smoke: enabling the optional
+  module consumed randomized constructor/init draws, so later dropout and
+  augmentation RNG states differed despite a shared seed. Shared keeper-loaded
+  tensors were identical, but the experiment was not a causal one-variable
+  comparison.
+- `LearnableGaborTextureResidual` randomized layers now initialize in a CPU RNG
+  fork. The parent model also excludes the Gabor subtree from recursive base
+  initialization and initializes it inside the same restored RNG context.
+  Stage A now checks implicit/explicit control and repeated candidate CPU RNG
+  hashes byte for byte.
+- Corrected Stage A at
+  `runs/audit_learnable_gabor_texture_stage_a_rngneutral_20260715` passed all
+  50 checks with zero RNG-state differing bytes. Summary SHA is
+  `e53d8c1a...81e8f`; runtime ratio is `1.056032`, peak is `2.586634 GiB`, and
+  ONNX CPU maximum error is `8.34465e-7`. No validation/test loader was used.
+
+### Sole corrected matched smoke
+
+- The exact keeper-initialized `120b x 2e` control/candidate pair completed at
+  `runs/audit_gabor_lho_fcm_rngneutral_matched_smoke_pair_20260715`; comparison
+  summary SHA is `8adcae23...56bd3`. Independent reload covered all `2606`
+  validation objects and opened no test split.
+- Control macro/class1 F1 was `0.885917/0.689855`, with class1 P/R
+  `0.613402/0.788079` and `119` TP. Candidate was
+  `0.884195/0.689266`, P/R `0.600985/0.807947`, and `122` TP. The candidate
+  gained recall but lost the requested precision by `0.012417` versus control.
+- Candidate versus control changed `59` decisions: `25` corrections, `30`
+  harms, four class1 FN rescues, one TP break, eight focus-FP removals, 15
+  focus-FP additions, and five new `3->2` harms. Six locked gates failed;
+  five-epoch, probe, full-train, and test permission are all false.
+- Training used `deterministic=false`; a prior control replay showed small
+  metric drift. This does not rescue the candidate because its branch was
+  effectively inactive and its precision failure is material, but future
+  paper-grade matched runs must use deterministic execution or replicated
+  seeds before assigning small deltas causally.
+
+### Mechanism, robustness, and XAI
+
+- Gabor post-smoke summary SHA is `a6b26aae...edc2`. Effective gate was only
+  `-2.00668e-6`, residual norm `3.21004e-5`, FCM normalized entropy
+  `0.99999946`, filter-feature maximum absolute pair cosine `0.99999833`, and
+  real/imaginary kernel maxima `0.99999672/0.99518287`. Raw parameters moved,
+  but the branch did not become a material or diverse texture expert.
+- Candidate won macro F1 under only center occlusion and bright, or `2/5`
+  robustness conditions. Clean/dim/low-contrast macro deltas were
+  `-0.002318/-0.008463/-0.000457`; the locked robustness gate failed.
+- The XAI selection cohort came from original AMP full-validation decisions,
+  while XAI intentionally ran FP32. Sample 1266 was a control margin
+  `0.000856` near-tie and changed from class 2 to 3 under FP32. The new
+  fail-closed reconciler retained all 16 selected rows and both backend
+  predictions, reclassifying only that row from `harm` to `fp32_unchanged`.
+  Reconciliation summary SHA is `2593dba2...d0e`.
+- Paired XAI summary SHA is `5c858fcd...bbf2`; all 16 cases used native block-7
+  MHSA and eight gradient-weighted rollout layers with zero fallback. Candidate
+  minus control Grad-CAM foreground/border was `-0.039925/+0.056445`; the four
+  newly added focus FP had border delta `+0.070231`. Native attention changed
+  only `-0.000629` foreground, consistent with the near-zero gate. Object
+  desaturation remained far more causal than background gray/blur.
+- Contact-sheet review confirmed new FP and `3->2` harms frequently shift
+  Grad-CAM toward silhouette, padding, hands, or image borders. Some FP removals
+  make the same shift. With an inactive Gabor residual and nondeterministic base
+  optimization, these are model-pair observations, not proof that learned
+  Gabor filters directly caused each map.
+
+### Operational closure
+
+- `run_trkh_learnable_gabor_post_smoke_audits.ps1` now supports verified
+  `-ResumeCompleted` execution. It skips stages only when their terminal summary
+  exists, explicitly reconciles AMP-selected cohorts to FP32 XAI, and completes
+  architecture trace instead of rerunning expensive prior audits.
+- Compaction root `runs/evidence_gabor_lho_fcm_rejected_20260715` preserves
+  `677` hash-verified payloads. File-manifest SHA is
+  `67a29a3f...0352`; 14 binary files totaling `702287122` bytes were excluded,
+  and nine invalid/rejected sources were deleted. Cleanup manifest SHA is
+  `ffcd0943...9098`.
+- Retention audit
+  `runs/artifact_retention_audit_20260715_gabor_closure` passed over `657`
+  directories with `blockers=[]`; summary SHA is `3e89426b...f5b`. Free space
+  reached `76.037 GiB`. Keeper, scratch complement, and command hashes remain
+  `1f49d577...2677`, `f8bd6309...a549`, and `36b9aa1a...faf`.
+- The current-best command packet is unchanged. This exact zero-gated,
+  keeper-initialized, low-LR edge-token adaptation is closed without a nearby
+  sweep. The ICCV paper instead trains an active texture branch from
+  initialization and adds texture and semantic features directly; that is a
+  separate hypothesis requiring a new protocol and cannot inherit Stage-B
+  permission from this failed adapter.

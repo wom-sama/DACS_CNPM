@@ -197,7 +197,7 @@ def _apply_timm_input_normalization(model_config: ModelConfig) -> Dict[str, obje
         }
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train DETR ViT-Registers cho mango multi-object detection.")
     parser.add_argument("--data", type=Path, default=default_data_yaml())
     parser.add_argument(
@@ -944,6 +944,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--branch-edge-tokens", type=int, default=1)
     parser.add_argument("--branch-cnn-tokens", type=int, default=1)
     parser.add_argument("--branch-token-dropout", type=float, default=0.1)
+    parser.add_argument(
+        "--learnable-gabor-texture-residual",
+        action="store_true",
+        default=False,
+        help=(
+            "Add the locked constrained Gabor/LHO/FCM residual to the first "
+            "existing edge branch token; default-off and zero-gated."
+        ),
+    )
     parser.add_argument(
         "--detail-patch-enhancement",
         action="store_true",
@@ -4173,7 +4182,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--rare-class-repeat-min-ratio", type=float, default=0.35)
     parser.add_argument("--randaugment-num-ops", type=int, default=0)
     parser.add_argument("--randaugment-magnitude", type=int, default=0)
-    args, unknown = parser.parse_known_args()
+    args, unknown = parser.parse_known_args(argv)
 
     ignored_tokens: List[str] = []
     remaining_unknown: List[str] = []
@@ -6321,6 +6330,9 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         branch_edge_tokens=args.branch_edge_tokens,
         branch_cnn_tokens=args.branch_cnn_tokens,
         branch_token_dropout=args.branch_token_dropout,
+        learnable_gabor_texture_residual=bool(
+            args.learnable_gabor_texture_residual
+        ),
         detail_patch_enhancement=bool(args.detail_patch_enhancement),
         detail_patch_dropout=args.detail_patch_dropout,
         token_pruning=bool(args.token_pruning),
@@ -8280,6 +8292,7 @@ ALLOWED_RESUME_EXTENSION_PREFIXES = (
     "patch_memory_adapter.",
     "late_class_attention_pool.",
     "shifted_patch_token_residual.",
+    "gabor_texture_residual.",
 )
 
 
@@ -27601,6 +27614,13 @@ def main() -> None:
         not detection_mode
         and (
             bool(getattr(model_config, "bbox_spatial_fusion", False))
+            or bool(
+                getattr(
+                    model_config,
+                    "learnable_gabor_texture_residual",
+                    False,
+                )
+            )
             or float(train_config.bbox_foreground_dropout_loss_weight) > 0.0
             or float(train_config.bbox_foreground_dropout_consistency_weight) > 0.0
             or float(train_config.bbox_object_erasure_negative_loss_weight) > 0.0
@@ -29388,6 +29408,7 @@ def main() -> None:
                 or bool(args.visual_contrast_attention)
                 or bool(args.late_class_attention_pooling)
                 or bool(args.late_member_branch)
+                or bool(args.learnable_gabor_texture_residual)
             ),
         )
         print({"resume": resume_summary}, flush=True)
@@ -29479,6 +29500,7 @@ def main() -> None:
                     or bool(args.visual_contrast_attention)
                     or bool(args.late_class_attention_pooling)
                     or bool(args.late_member_branch)
+                    or bool(args.learnable_gabor_texture_residual)
                 ),
             )
             if ema_partial_load_summary is not None:

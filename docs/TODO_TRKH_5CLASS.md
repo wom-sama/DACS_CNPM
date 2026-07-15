@@ -2538,8 +2538,36 @@
 - [x] Review the explicit StarNet/generic-tokenizer/audit cache diff and stage
   only the 28 dependency-coherent files. `BaoCao/` and both untracked
   deep-research reports remain unstaged; commit and push this closure batch.
-- [ ] Lock a train-only protocol for a compact learnable-Gabor texture residual
+- [x] Lock a train-only protocol for a compact learnable-Gabor texture residual
   before implementation. It must be an equation-traceable ICCV-2023 LHO/FCM
   adaptation, preserve the keeper semantic/CNN/Transformer path, use constrained
   low/high-frequency experts, remain deployable, and pass precision plus class1-
   TP preservation gates before one no-test matched smoke.
+- [x] Implement the default-off learnable-Gabor residual, checkpoint/config/CLI
+  wiring, trace surface, focused regressions, and train-only Stage-A audit. Do
+  not construct validation/test loaders or run a smoke unless every functional,
+  gradient, illumination, export, runtime, and VRAM gate passes. After fixing
+  optional-module and parent-init RNG drift, the exact rerun passed all 50
+  checks with summary SHA `e53d8c1a...81e8f`, runtime `1.05603x`, peak
+  `2.58663 GiB`, and ONNX error `8.34e-7`.
+- [x] If and only if Stage A passes, run the one locked keeper-initialized
+  `120b x 2e` control/candidate full-validation smoke with no test; then inspect
+  all generic and Gabor-specific XAI before granting any continuation. The
+  RNG-neutral candidate failed six gates: macro/class1 F1 was
+  `0.885917/0.689855 -> 0.884195/0.689266`, class1 precision fell
+  `0.613402 -> 0.600985`, and focus FP removed/created was `8/15`.
+- [x] Complete robustness, confusion, boundary, architecture, Gabor-mechanism,
+  and 16-case paired XAI audits. Reconcile the one AMP-to-FP32 near-tie without
+  weakening prediction validation. The gate remained `2.0e-6`, FCM/filter
+  features collapsed, robustness won `2/5`, and harmful cases shifted Grad-CAM
+  toward borders. No five-epoch/probe/full/test continuation is permitted.
+- [x] Compact nine failed/rejected Gabor roots only after hash verification.
+  Evidence contains `677` verified payloads with manifest SHA
+  `67a29a3f...0352`; 14 binaries totaling `702287122` bytes were excluded.
+  Retention passed over `657` run directories with `blockers=[]`; keeper,
+  scratch complement, and current-command hashes remain unchanged.
+- [ ] Do not sweep the zero gate, gate scale, keeper LR, seed, epoch count,
+  filter count, LHO/FCM width, or edge-token target. Before any direct active
+  Gabor route, lock a separate from-initialization protocol that follows the
+  paper's texture-plus-semantic addition, proves material branch gradients and
+  noncollapsed filters, and uses deterministic or replicated matched controls.

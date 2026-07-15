@@ -14,6 +14,7 @@ from torch.utils.checkpoint import checkpoint as gradient_checkpoint
 from torchvision import models as tv_models
 
 from trkh.models.inceptionnext_atto_tokenizer import InceptionNeXtAttoTokenizer
+from trkh.models.learnable_gabor_texture import LearnableGaborTextureResidual
 from trkh.models.moga_surface_tokenizer import MogaXTTokenizer
 from trkh.models.starnet_s2_tokenizer import StarNetS2Tokenizer
 from trkh.models.visual_contrast_attention import VisualContrastAttention
@@ -5582,6 +5583,7 @@ class VisionTransformerWithRegisters(nn.Module):
         branch_edge_tokens: int = 1,
         branch_cnn_tokens: int = 1,
         branch_token_dropout: float = 0.1,
+        learnable_gabor_texture_residual: bool = False,
         detail_patch_enhancement: bool = False,
         detail_patch_dropout: float = 0.05,
         token_pruning: bool = False,
@@ -6092,6 +6094,21 @@ class VisionTransformerWithRegisters(nn.Module):
             else None
         )
         self.num_branch_tokens = int(getattr(self.branch_token_fusion, "token_count", 0))
+        if bool(learnable_gabor_texture_residual):
+            if self.branch_token_fusion is None or self.branch_token_fusion.edge_tokens <= 0:
+                raise ValueError(
+                    "learnable_gabor_texture_residual requires multi-branch fusion "
+                    "with at least one edge token."
+                )
+            self.gabor_texture_edge_token_index = int(
+                self.branch_token_fusion.color_tokens
+            )
+            self.gabor_texture_residual = LearnableGaborTextureResidual(
+                embed_dim=embed_dim
+            )
+        else:
+            self.gabor_texture_edge_token_index = -1
+            self.gabor_texture_residual = None
         self.num_prefix_tokens = 1 + int(self.num_registers) + int(self.num_branch_tokens)
         self.detail_enhancer = (
             PatchDetailEnhancer(
@@ -6521,7 +6538,22 @@ class VisionTransformerWithRegisters(nn.Module):
         else:
             self.high_frequency_texture_expert = None
 
-        self.apply(self._init_weights)
+        if self.gabor_texture_residual is None:
+            self.apply(self._init_weights)
+        else:
+            gabor_module_ids = {
+                id(module) for module in self.gabor_texture_residual.modules()
+            }
+
+            def init_base_module(module: nn.Module) -> None:
+                if id(module) not in gabor_module_ids:
+                    self._init_weights(module)
+
+            self.apply(init_base_module)
+            # Keep the optional branch on the repository's standard
+            # initialization while preserving the base model's RNG stream.
+            with torch.random.fork_rng(devices=[]):
+                self.gabor_texture_residual.apply(self._init_weights)
         if isinstance(self.stem, (InceptionNeXtAttoTokenizer, StarNetS2Tokenizer)):
             self.stem.reset_parameters()
         self._init_parameter_tensors()
@@ -7314,6 +7346,32 @@ class VisionTransformerWithRegisters(nn.Module):
             if self.branch_token_fusion is not None
             else patch_tokens.new_zeros((batch_size, 0, patch_tokens.shape[-1]))
         )
+        gabor_texture_trace = None
+        if self.gabor_texture_residual is not None:
+            if return_trace:
+                gabor_texture_value, gabor_texture_trace = self.gabor_texture_residual(
+                    input_image,
+                    bbox_token_prior,
+                    return_trace=True,
+                )
+            else:
+                gabor_texture_value = self.gabor_texture_residual(
+                    input_image,
+                    bbox_token_prior,
+                )
+            edge_index = int(self.gabor_texture_edge_token_index)
+            if not 0 <= edge_index < int(branch_tokens.size(1)):
+                raise RuntimeError("Gabor texture edge-token index is outside branch tokens.")
+            gabor_texture_value = gabor_texture_value.to(dtype=branch_tokens.dtype)
+            branch_tokens = torch.cat(
+                (
+                    branch_tokens[:, :edge_index],
+                    branch_tokens[:, edge_index : edge_index + 1]
+                    + gabor_texture_value.unsqueeze(1),
+                    branch_tokens[:, edge_index + 1 :],
+                ),
+                dim=1,
+            )
         pos_embed = self.get_interpolated_pos_embed(grid_size).to(device=patch_tokens.device)
 
         if self.register_positional_embedding:
@@ -7832,6 +7890,9 @@ class VisionTransformerWithRegisters(nn.Module):
             }
             if bbox_patch_prior is not None:
                 features["trace"]["bbox_patch_prior"] = bbox_patch_prior.detach()
+            if gabor_texture_trace is not None:
+                for trace_key, trace_value in gabor_texture_trace.items():
+                    features["trace"][f"gabor_texture_{trace_key}"] = trace_value
             if multi_granularity_logits:
                 features["trace"]["multi_granularity_layers"] = torch.tensor(
                     [int(layer) for layer in multi_granularity_logits.keys()],
@@ -9624,6 +9685,7 @@ class DETRVisionTransformerWithRegisters(VisionTransformerWithRegisters):
         branch_edge_tokens: int = 1,
         branch_cnn_tokens: int = 1,
         branch_token_dropout: float = 0.1,
+        learnable_gabor_texture_residual: bool = False,
         detail_patch_enhancement: bool = False,
         detail_patch_dropout: float = 0.05,
         token_pruning: bool = False,
@@ -9928,6 +9990,7 @@ class DETRVisionTransformerWithRegisters(VisionTransformerWithRegisters):
             branch_edge_tokens=branch_edge_tokens,
             branch_cnn_tokens=branch_cnn_tokens,
             branch_token_dropout=branch_token_dropout,
+            learnable_gabor_texture_residual=learnable_gabor_texture_residual,
             detail_patch_enhancement=detail_patch_enhancement,
             detail_patch_dropout=detail_patch_dropout,
             token_pruning=token_pruning,

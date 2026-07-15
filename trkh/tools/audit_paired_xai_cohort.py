@@ -333,14 +333,15 @@ def _render_contact_sheet(
             font=font,
         )
     missing = 0
+    left_prefix = re.sub(r"[^a-zA-Z0-9_]+", "_", str(left_name)).strip("_") or "left"
+    right_prefix = re.sub(r"[^a-zA-Z0-9_]+", "_", str(right_name)).strip("_") or "right"
     for row_index, key in enumerate(keys):
         y = header_height + row_index * (tile_size[1] + label_height)
         meta = cohort[key]
         label = (
             f"idx={key} y={meta.get('target_index', '')} "
-            f"k={meta.get('keeper_prediction_index', '')} "
-            f"c={meta.get('candidate_prediction_index', '')} "
-            f"locked={meta.get('locked_prediction_index', '')}"
+            f"{left_name}={meta.get(f'{left_prefix}_prediction_index', '')} "
+            f"{right_name}={meta.get(f'{right_prefix}_prediction_index', '')}"
         )
         draw.text((6, y + 8), label, fill=(20, 20, 20), font=font)
         tile_y = y + label_height
