@@ -16708,3 +16708,61 @@ Date: 2026-07-02
 - Keeper, scratch complement, command packet, and command-history hashes are
   exact. Best-command tracking remains `3` revisions and `2` updates after
   the initial revision.
+
+## Class-1 Boundary V-REx Selection 2026-07-15 - Locked Before Code
+
+- A no-repeat screen rejected direct GroupDRO continuation: TRKH already
+  failed quality/cartography GroupDRO twice, and those groups mix label noise
+  with environment shift. Generic photometric/JSD/chroma consistency and
+  direct Gray-Edge color correction are also closed.
+- Selected ICML-2021 V-REx as a distinct train-only information gate. Paper
+  Equation 8 and DomainBed commit `b93c22a...f4139e` use population risk
+  variance; official code fixes penalty weight `1.0` before annealing.
+- The paper's varying-label-noise failure mode is addressed by using identical
+  sample indices and labels in clean/dim/bright/low-contrast environments.
+  No quality group, sample reweighting, QP, consistency target, or raw-data
+  modification is involved.
+- The A0 fixes a `0.5/0.5` hard-negative/class1 CE boundary risk, all
+  `186/432` fit rows, beta `1`, one normalized `1e-4` step, and a matched
+  environment-mean ERM control. Raw keeper and aggregate-margin A-GEM remain
+  hash-locked comparators.
+- Promotion requires simultaneous clean precision/F1, recall/TP, restricted
+  FP, worst-condition F1, risk-variance, matched-control, and provenance gates.
+  No beta/environment/cohort/step sweep is allowed. Immutable protocol SHA is
+  `4a798895...0a48246`.
+- Implemented the fail-closed auditor without touching the shared trainer.
+  Compile, focused `6/6`, PowerShell parse, diff check, and preflight passed.
+  Preflight verified all DomainBed/paper/local hashes, exact `7372/1843`
+  source split, `186/432` fit cohorts, four `1843`-row prior conditions, zero
+  argmax/CIDT mismatch, and no output-directory creation.
+
+## Class-1 Boundary V-REx Closure 2026-07-15 - Variance Penalty Widens False Positives
+
+- The locked beta-1 V-REx calculation was valid and active. Four fit risks had
+  population variance `0.002077080`; the variance-gradient norm was
+  `0.164147`, and V-REx differed from ERM by relative L2 `0.029637`.
+- V-REx and matched ERM produced identical clean decisions. Versus raw, both
+  changed macro/class1 F1 `-0.008390/-0.026129`, class1 precision
+  `-0.039642`, kept recall fixed, and created eight restricted FP
+  (`36 -> 44`). Corrections/harms were `4/14`.
+- V-REx lost class1 F1 `-0.039826` to aggregate-margin A-GEM. Under dim,
+  bright, and low contrast it created `30/19/16` net restricted FP and class1
+  precision fell `-0.070565/-0.059493/-0.052954` versus raw.
+- Holdout risk variance fell only `0.002743026 -> 0.002710094` versus ERM
+  (`0.987995x`, not `<=0.90x`). Mean risk rose `+0.000156`, and V-REx was
+  equal or worse than ERM in decision metrics.
+- Independent replay matched all `7372` CSV rows, comparisons, transitions,
+  boundary risks, argmax values, CIDT predictions, and manifest hashes.
+  Summary/prediction/gradient SHAs are `0b78da68...0babb`,
+  `7ca25f7f...c8de9`, and `6e799fcc...56f32`.
+- The update-norm mismatch `1.06805e-7` narrowly missed the immutable `1e-7`
+  structural tolerance, but the behavioral rejection is independent of this
+  numerical miss. Close without beta/environment/weight/step/fold/seed/
+  cohort/parameter/optimizer/macrostep sweeps. Validation, test, probe, full
+  train, and current-best command promotion remain denied.
+- Closure verification passed compilation, focused `6/6`, full pytest
+  `1156/1156` in `39.09 s`, launcher parse/preflight, independent replay,
+  protected hashes, and retention over `691` directories with `blockers=[]`.
+  Retention/final closure SHAs are `8ffca9fe...a829ac` and
+  `b481e9a5...877920`; best-command tracking remains three revisions/two
+  updates after the initial revision.

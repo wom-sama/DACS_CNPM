@@ -2894,9 +2894,37 @@
   focused `8/8`, full pytest `1150/1150`, parse/preflight, diff check, and
   retention over `689` directories all passed. Final closure SHA is
   `a94976b6...7b3af985`; all four protected hashes are exact.
-- [ ] Perform a fresh primary-source/no-repeat screen for a robust
+- [x] Perform a fresh primary-source/no-repeat screen for a robust
   multi-condition training objective. The clean aggregate-margin signal is
   worth preserving, but any candidate must predefine clean/dim/bright/
   low-contrast groups, optimize worst-group risk without raw-data changes,
   protect class1 TP/support, and remain distinct from closed GEM/A-GEM and
-  prior augmentation or sampling sweeps.
+  prior augmentation or sampling sweeps. Select V-REx from the ICML-2021 paper
+  and DomainBed commit `b93c22a...f4139e`; direct GroupDRO and generic
+  consistency/canonicalization are already closed.
+- [x] Lock the boundary-balanced V-REx A0 before code. Use identical rows and
+  labels in clean/dim/bright/low-contrast environments, equal hard-negative/
+  class1 CE risk, official pre-anneal beta `1`, matched ERM, one normalized
+  `1e-4` step, and raw/aggregate-margin comparators. Deny all downstream work
+  unless every clean, TP/recall, FP, worst-condition, and risk-variance gate
+  passes. Protocol SHA is `4a798895...0a48246`.
+- [x] Implement the locked V-REx auditor and focused equation/gate tests.
+  Require exact DomainBed/paper/local hashes, source-disjoint cohorts, matched
+  environment rows, independent flat-gradient equations, risk telemetry,
+  no validation/test/binary artifact, and a preflight that creates no run.
+  Compile, focused `6/6`, PowerShell parse, diff check, and preflight passed;
+  prior argmax/CIDT mismatch is zero.
+- [x] Run the sole locked V-REx A0 and independently replay every metric,
+  transition, risk, and artifact hash. Authorize Stage B only if all structural,
+  clean precision/recall/FP, matched-ERM, worst-condition, and risk-variance
+  gates pass; otherwise close without beta/environment/step sweeps. V-REx and
+  ERM made identical clean decisions, reduced class1 F1/precision
+  `-0.026129/-0.039642`, and created eight restricted FP; all `7372` replay
+  rows matched exactly, so Stage B is denied.
+- [x] Complete V-REx closure engineering: finalize closure/manifest hashes,
+  compile, run focused and full pytest, parse and preflight the launcher, run
+  read-only retention, verify all protected hashes and command revision count,
+  then commit/push only the explicit V-REx batch. Compile/focused/full tests
+  passed (`6/6`, `1156/1156`), parse/preflight and independent replay passed,
+  and retention passed over `691` directories with `blockers=[]`. Final
+  closure SHA is `b481e9a5...877920`; command tracking remains three revisions.
