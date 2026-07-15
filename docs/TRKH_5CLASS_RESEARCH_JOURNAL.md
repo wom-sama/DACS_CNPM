@@ -16106,3 +16106,42 @@ Date: 2026-07-02
   new large artifact is the 31 MB hash-locked failed-export ONNX evidence.
 - Closure document SHA-256 is `76d5e048...296e`. The user-owned `BaoCao/` and
   both untracked deep-research reports remain untouched and unstaged.
+
+## Patch-Style SRM FFN Lock 2026-07-15 - Learned Hidden-Style Suppression
+
+- Completed a local no-repeat screen across large-kernel/LKA, FasterNet,
+  EfficientViT-style attention, MetaFormer, deformable convolution, classic
+  channel gates, GRN, and style recalibration. Large/local spatial mixers
+  overlap closed InceptionNeXt/Moga/StarNet/OctConv/LeFF routes; deformable
+  operators add deployment risk; simple SE/CBAM-style gates lack a direct
+  illumination-statistic hypothesis.
+- Re-read the ConvNeXt-V2 CVPR 2023 paper and official code before rejecting
+  GRN for this round. GRN improves channel competition, but its paper reports
+  a relatively small supervised-only effect and a large degradation when GRN
+  is newly introduced only at fine-tuning. Its strongest evidence depends on
+  the FCMAE co-design, while MIM/SSL routes are already closed locally.
+- Selected Lee et al.'s ICCV-2019 Style-based Recalibration Module after
+  reviewing the paper and author repository. Locked official commit
+  `f6221c77...6bd1`; `models/recalibration_modules.py` SHA-256 is
+  `5232416f...2d13`. SRM learns a per-channel sigmoid gate from hidden mean and
+  standard deviation, directly matching the current glare/maturity/color-style
+  error while remaining distinct from failed MixStyle and input color
+  normalization.
+- The TRKH adaptation is not a stock SRM CNN. It inserts the paper equations
+  after GELU in standard FFNs only at layers `2,5`, computes style over patch
+  hidden activations, gates only patches, and leaves CLS/register/branch hidden
+  activations unchanged. The parent FFN residual, all spatial MHSA, pruning,
+  wide-context stem, classifier, and XAI path remain intact. Exact added
+  trainable parameters are `8,192`.
+- Locked
+  `docs/TRKH_5CLASS_PATCH_STYLE_SRM_FFN_READINESS_PROTOCOL_20260715.md`
+  at SHA-256 `e71918dc...6779` before runtime code. Stage A uses only
+  `yolo_f/train`, source-disjoint fold 0, deterministic clean inputs, and
+  compares identical head adaptation against head+SRM for `30 x 32` rows.
+  This avoids the shared all-parameter class1 collapse seen in XCA.
+- Stage A also requires equation/RNG/gradient/noncollapse evidence, static-
+  batch-1 three-input ONNX parity, `<=1.15x` runtime, `<=3.25 GiB`, class1
+  precision/F1 gains, at least two restricted FP removals, no net TP break,
+  positive correction balance, and dim/bright/low-contrast safety. Only a
+  complete pass permits one keeper-initialized `120b x 2e` full-validation,
+  no-test smoke. No current-best command changed.

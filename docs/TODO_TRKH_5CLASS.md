@@ -2661,11 +2661,28 @@
   decisions (`1/1` correction/harm), removed zero focus FP, and failed six
   gates. Stage B, validation, probe, full train, test, and nearby sweeps are
   denied. Summary SHA is `5429a64f...f7b0`.
-- [ ] Complete XCA closure verification: update journal/skill, run compileall,
-  focused and full pytest, parse affected launchers, audit retention and the
-  keeper/scratch/command hashes, then commit and push only the explicit
-  dependency-coherent paths.
-- [ ] Screen local no-repeat evidence plus official primary sources for the
+- [x] Complete XCA closure verification: fixed the self-reviewed VCA/gated-
+  relative conflict regression, passed compileall, focused `12/12`, full
+  pytest `1051/1051`, launcher parse/preflight, and retention over `667`
+  directories with `194` compacted originals absent and `blockers=[]`. Pushed
+  the explicit 13-path closure as commit `9354cbc`; all user-owned untracked
+  paths remained untouched.
+- [x] Screen local no-repeat evidence plus official primary sources for the
   next genuinely distinct precision-oriented TRKH representation mechanism.
-  Lock train-only class1 FP/TP and deployment gates before implementation; do
-  not update the current-best full-train command without a real keeper win.
+  Reject GRN for this round because its primary evidence is strongest with
+  FCMAE and newly adding it at fine-tuning is weak; select patch-style SRM
+  because learned hidden mean/std gating directly targets the observed
+  illumination/style false positives without repeating MixStyle or XCA.
+- [x] Lock the exact Patch-Style SRM FFN protocol before implementation:
+  equation-traceable patch-only SRM after GELU in layers `2,5`, unchanged
+  prefix/spatial-MHSA/pruning/XAI paths, `8,192` new trainable parameters, and
+  a source-disjoint head-only versus head+SRM train-only gate. Protocol SHA is
+  `e71918dc...6779`; validation/test remain closed.
+- [ ] Implement default-off `patch_style_recalibration`, config/CLI/checkpoint/
+  trace wiring, equation/RNG/gradient/export regressions, and a fail-closed
+  Stage-A auditor. Do not add a second style method, auxiliary loss, spatial
+  gate, or alter raw data.
+- [ ] Run the locked fold-0 `30b x 32` train-only adaptation plus clean and
+  three-condition illumination gates. Authorize one `120b x 2e` full-val,
+  no-test smoke only if class1 precision/F1 rises, restricted FP falls, TP is
+  preserved, and every functional/export/resource gate passes.
