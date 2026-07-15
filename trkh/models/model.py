@@ -22,6 +22,9 @@ from trkh.models.moga_surface_tokenizer import MogaXTTokenizer
 from trkh.models.octave_conv_stem import OctaveConvStem
 from trkh.models.starnet_s2_tokenizer import StarNetS2Tokenizer
 from trkh.models.visual_contrast_attention import VisualContrastAttention
+from trkh.models.cross_covariance_attention import (
+    SharedProjectionCrossCovarianceAttention,
+)
 
 
 def _adaptive_average_matrix(
@@ -5202,6 +5205,8 @@ class CustomTransformerEncoderLayer(nn.Module):
         relative_position_locality_strength: float = 1.0,
         visual_contrast_attention: bool = False,
         visual_contrast_tokens: int = 64,
+        cross_covariance_attention: bool = False,
+        cross_covariance_attention_residual_scale: float = 0.10,
         block_depth: int = 0,
     ) -> None:
         super().__init__()
@@ -5210,6 +5215,12 @@ class CustomTransformerEncoderLayer(nn.Module):
                 "Visual-Contrast Attention cannot share a block with gated relative "
                 "position attention."
             )
+        if bool(cross_covariance_attention) and bool(visual_contrast_attention):
+            raise ValueError(
+                "Cross-covariance attention requires the standard spatial MHSA block."
+            )
+        if float(cross_covariance_attention_residual_scale) < 0.0:
+            raise ValueError("cross_covariance_attention_residual_scale must be >= 0.")
         hidden_dim = int(dim * mlp_ratio)
         self.norm1 = nn.LayerNorm(dim)
         self.attn = (
@@ -5233,6 +5244,14 @@ class CustomTransformerEncoderLayer(nn.Module):
             )
         )
         self.visual_contrast_attention_enabled = bool(visual_contrast_attention)
+        self.cross_covariance_attention = (
+            SharedProjectionCrossCovarianceAttention(dim=dim, num_heads=num_heads)
+            if bool(cross_covariance_attention)
+            else None
+        )
+        self.cross_covariance_attention_residual_scale = float(
+            cross_covariance_attention_residual_scale
+        )
         self.drop_path1 = DropPath(drop_path_rate)
         self.norm2 = nn.LayerNorm(dim)
         self.mlp = (
@@ -5276,6 +5295,40 @@ class CustomTransformerEncoderLayer(nn.Module):
             )
         return self.mlp(normalized)
 
+    def apply_cross_covariance_attention(
+        self,
+        x: Tensor,
+        *,
+        prefix_count: int,
+        return_attention: bool = False,
+    ) -> Tensor | Tuple[Tensor, Tensor]:
+        module = self.cross_covariance_attention
+        if module is None:
+            if return_attention:
+                raise RuntimeError("Cross-covariance attention is not enabled in this block.")
+            return x
+        resolved_prefix_count = int(prefix_count)
+        if not 0 <= resolved_prefix_count < int(x.size(1)):
+            raise ValueError("prefix_count must leave at least one patch token.")
+        patch_tokens = x[:, resolved_prefix_count:]
+        residual, channel_attention = module(
+            patch_tokens,
+            qkv_projection=self.attn.qkv,
+            output_projection=self.attn.proj,
+            return_attention=True,
+        )
+        residual = residual * self.cross_covariance_attention_residual_scale
+        denominator = patch_tokens.detach().float().norm().clamp_min(1e-12)
+        module.record_residual_norm_ratio(residual.detach().float().norm() / denominator)
+        updated_patches = patch_tokens + residual
+        if resolved_prefix_count:
+            updated = torch.cat((x[:, :resolved_prefix_count], updated_patches), dim=1)
+        else:
+            updated = updated_patches
+        if return_attention:
+            return updated, channel_attention
+        return updated
+
     def forward(
         self,
         x: Tensor,
@@ -5293,6 +5346,11 @@ class CustomTransformerEncoderLayer(nn.Module):
                 patch_indices=patch_indices,
             )
             x = x + self.drop_path1(attn_out)
+            if self.cross_covariance_attention is not None:
+                x = self.apply_cross_covariance_attention(
+                    x,
+                    prefix_count=prefix_count,
+                )
             if self.local_patch_mixer is not None:
                 x = self.local_patch_mixer(
                     x,
@@ -5317,6 +5375,11 @@ class CustomTransformerEncoderLayer(nn.Module):
                 patch_indices=patch_indices,
             )
         )
+        if self.cross_covariance_attention is not None:
+            x = self.apply_cross_covariance_attention(
+                x,
+                prefix_count=prefix_count,
+            )
         if self.local_patch_mixer is not None:
             x = self.local_patch_mixer(
                 x,
@@ -5542,6 +5605,9 @@ class VisionTransformerWithRegisters(nn.Module):
         visual_contrast_attention: bool = False,
         visual_contrast_attention_layers: str = "1,2,3,4,5,6,7,8",
         visual_contrast_tokens: int = 64,
+        cross_covariance_attention: bool = False,
+        cross_covariance_attention_layers: str = "2,5",
+        cross_covariance_attention_residual_scale: float = 0.10,
         layer_token_fusion: bool = False,
         layer_token_fusion_layers: str = "2,4,6",
         layer_token_fusion_top_k: int = 4,
@@ -5895,6 +5961,29 @@ class VisionTransformerWithRegisters(nn.Module):
                     "Visual-Contrast Attention and gated relative position attention "
                     "cannot be enabled in the same model."
                 )
+        self.cross_covariance_attention_layer_numbers = (
+            _parse_auxiliary_layer_indices(
+                cross_covariance_attention_layers,
+                int(depth),
+            )
+            if bool(cross_covariance_attention)
+            else []
+        )
+        self.cross_covariance_attention_enabled = bool(
+            self.cross_covariance_attention_layer_numbers
+        )
+        self.cross_covariance_attention_residual_scale = float(
+            cross_covariance_attention_residual_scale
+        )
+        if self.cross_covariance_attention_residual_scale < 0.0:
+            raise ValueError("cross_covariance_attention_residual_scale must be >= 0.")
+        if (
+            self.cross_covariance_attention_enabled
+            and self.visual_contrast_attention_enabled
+        ):
+            raise ValueError(
+                "Cross-covariance attention cannot be combined with Visual-Contrast Attention."
+            )
         self.layer_token_fusion_enabled = bool(layer_token_fusion)
         self.layer_token_fusion_layer_numbers = (
             _parse_auxiliary_layer_indices(layer_token_fusion_layers, int(depth))
@@ -6196,6 +6285,13 @@ class VisionTransformerWithRegisters(nn.Module):
                         in self.visual_contrast_attention_layer_numbers
                     ),
                     visual_contrast_tokens=self.visual_contrast_tokens,
+                    cross_covariance_attention=(
+                        int(index + 1)
+                        in self.cross_covariance_attention_layer_numbers
+                    ),
+                    cross_covariance_attention_residual_scale=(
+                        self.cross_covariance_attention_residual_scale
+                    ),
                     block_depth=index,
                 )
                 for index in range(depth)
@@ -8095,6 +8191,34 @@ class VisionTransformerWithRegisters(nn.Module):
                             [entry[trace_key] for _, entry in visual_contrast_entries],
                             dim=0,
                         )
+            if self.cross_covariance_attention_enabled:
+                cross_covariance_entries = []
+                for layer_number in self.cross_covariance_attention_layer_numbers:
+                    module = self.blocks[int(layer_number) - 1].cross_covariance_attention
+                    module_trace = module.trace() if module is not None else {}
+                    if module_trace:
+                        cross_covariance_entries.append((int(layer_number), module_trace))
+                if cross_covariance_entries:
+                    features["trace"]["cross_covariance_attention_layers"] = torch.tensor(
+                        [layer for layer, _ in cross_covariance_entries],
+                        device=tokens.device,
+                        dtype=torch.long,
+                    )
+                    for trace_key in (
+                        "temperature_min",
+                        "temperature_mean",
+                        "temperature_max",
+                        "normalized_entropy",
+                        "diagonal_mass",
+                        "query_norm_max_error",
+                        "key_norm_max_error",
+                        "residual_norm_ratio",
+                        "patch_count",
+                    ):
+                        features["trace"][f"cross_covariance_{trace_key}"] = torch.stack(
+                            [entry[trace_key] for _, entry in cross_covariance_entries],
+                            dim=0,
+                        )
             if layer_token_fusion_feature is not None:
                 features["trace"]["layer_token_fusion_layers"] = torch.tensor(
                     layer_token_fusion_layers,
@@ -9777,6 +9901,9 @@ class DETRVisionTransformerWithRegisters(VisionTransformerWithRegisters):
         visual_contrast_attention: bool = False,
         visual_contrast_attention_layers: str = "1,2,3,4,5,6,7,8",
         visual_contrast_tokens: int = 64,
+        cross_covariance_attention: bool = False,
+        cross_covariance_attention_layers: str = "2,5",
+        cross_covariance_attention_residual_scale: float = 0.10,
         layer_token_fusion: bool = False,
         layer_token_fusion_layers: str = "2,4,6",
         layer_token_fusion_top_k: int = 4,
@@ -10081,6 +10208,11 @@ class DETRVisionTransformerWithRegisters(VisionTransformerWithRegisters):
             visual_contrast_attention=visual_contrast_attention,
             visual_contrast_attention_layers=visual_contrast_attention_layers,
             visual_contrast_tokens=visual_contrast_tokens,
+            cross_covariance_attention=cross_covariance_attention,
+            cross_covariance_attention_layers=cross_covariance_attention_layers,
+            cross_covariance_attention_residual_scale=(
+                cross_covariance_attention_residual_scale
+            ),
             layer_token_fusion=layer_token_fusion,
             layer_token_fusion_layers=layer_token_fusion_layers,
             layer_token_fusion_top_k=layer_token_fusion_top_k,

@@ -2638,11 +2638,34 @@
   preflights, and an explicit staging review. Compile passed, focused tests
   passed `24/24`, full pytest passed `1040/1040`, nine launchers parsed, and
   six no-train preflights passed.
-- [ ] Commit and push the explicit 21-path OctConv closure batch; confirm
+- [x] Commit and push the explicit 21-path OctConv closure batch; confirm
   `BaoCao/` and both deep-research reports remain untracked and unstaged, then
-  record the commit in the next coherent research update.
-- [ ] Lock the next genuinely distinct channel-interaction protocol from the
+  record the commit in the next coherent research update. Pushed commit
+  `706c7f5`; the three user-owned paths remain the only untracked content.
+- [x] Lock the next genuinely distinct channel-interaction protocol from the
   official XCiT Cross-Covariance Attention source. Preserve the current CNN
   stem, spatial MHSA, token pruning, and XAI; require deterministic train-only
   decision-level evidence, class1 TP protection, and focus-FP reduction before
-  one no-test validation smoke.
+  one no-test validation smoke. Protocol:
+  `docs/TRKH_5CLASS_XCA_DUAL_AXIS_READINESS_PROTOCOL_20260715.md`; official
+  commit `82f5291...9cdca`, source SHA `3e2d4be8...8b3e9e`.
+- [x] Implement default-off shared-projection patch-only XCA in layers `2,5`,
+  full config/CLI/checkpoint/trace wiring, source-equation tests, resume
+  extension policy, and a train-only Stage-A auditor. The candidate adds
+  exactly `1,040` parameters, preserves all eight spatial-MHSA/XAI layers and
+  pruning, and passed RNG, checkpoint, FP32/BF16 gradient, equation, ablation,
+  runtime, and VRAM checks without constructing validation/test loaders.
+- [x] Run the locked deterministic fold-0 `20b x 32` paired adaptation and all
+  functional/export/resource gates. Candidate-minus-control class1 F1,
+  precision, and recall deltas were all exactly zero; it changed only two
+  decisions (`1/1` correction/harm), removed zero focus FP, and failed six
+  gates. Stage B, validation, probe, full train, test, and nearby sweeps are
+  denied. Summary SHA is `5429a64f...f7b0`.
+- [ ] Complete XCA closure verification: update journal/skill, run compileall,
+  focused and full pytest, parse affected launchers, audit retention and the
+  keeper/scratch/command hashes, then commit and push only the explicit
+  dependency-coherent paths.
+- [ ] Screen local no-repeat evidence plus official primary sources for the
+  next genuinely distinct precision-oriented TRKH representation mechanism.
+  Lock train-only class1 FP/TP and deployment gates before implementation; do
+  not update the current-best full-train command without a real keeper win.

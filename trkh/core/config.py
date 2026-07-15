@@ -294,6 +294,9 @@ class ModelConfig:
     visual_contrast_attention: bool = False
     visual_contrast_attention_layers: str = "1,2,3,4,5,6,7,8"
     visual_contrast_tokens: int = 64
+    cross_covariance_attention: bool = False
+    cross_covariance_attention_layers: str = "2,5"
+    cross_covariance_attention_residual_scale: float = 0.10
     layer_token_fusion: bool = False
     layer_token_fusion_layers: str = "2,4,6"
     layer_token_fusion_top_k: int = 4

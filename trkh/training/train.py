@@ -2189,6 +2189,27 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         help="Positive/negative regional token count per VCA stream; must be square.",
     )
     parser.add_argument(
+        "--cross-covariance-attention",
+        action="store_true",
+        default=False,
+        help=(
+            "Add patch-only channel XCA after spatial MHSA while reusing each "
+            "selected block's qkv/proj layers."
+        ),
+    )
+    parser.add_argument(
+        "--cross-covariance-attention-layers",
+        type=str,
+        default="2,5",
+        help="Comma-separated 1-based transformer layers that add XCA.",
+    )
+    parser.add_argument(
+        "--cross-covariance-attention-residual-scale",
+        type=float,
+        default=0.10,
+        help="Fixed residual multiplier for the patch-only XCA branch.",
+    )
+    parser.add_argument(
         "--focus-class-aux-loss-weight",
         type=float,
         default=0.0,
@@ -4997,6 +5018,13 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
             "Visual-Contrast Attention khong the dung dong thoi voi gated relative "
             "position attention."
         )
+    if args.cross_covariance_attention_residual_scale < 0.0:
+        raise ValueError("--cross-covariance-attention-residual-scale phai >= 0.")
+    if bool(args.cross_covariance_attention) and bool(args.visual_contrast_attention):
+        raise ValueError(
+            "--cross-covariance-attention khong the dung cung "
+            "--visual-contrast-attention."
+        )
     if args.shifted_patch_shift <= 0:
         raise ValueError("--shifted-patch-shift phai > 0.")
     if args.shifted_patch_residual_scale < 0.0:
@@ -6301,6 +6329,11 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         visual_contrast_attention=bool(args.visual_contrast_attention),
         visual_contrast_attention_layers=args.visual_contrast_attention_layers,
         visual_contrast_tokens=args.visual_contrast_tokens,
+        cross_covariance_attention=bool(args.cross_covariance_attention),
+        cross_covariance_attention_layers=args.cross_covariance_attention_layers,
+        cross_covariance_attention_residual_scale=(
+            args.cross_covariance_attention_residual_scale
+        ),
         layer_token_fusion=bool(args.layer_token_fusion),
         layer_token_fusion_layers=args.layer_token_fusion_layers,
         layer_token_fusion_top_k=args.layer_token_fusion_top_k,
@@ -8318,6 +8351,7 @@ def _is_allowed_resume_extension_key(key: str) -> bool:
     return (
         ".local_patch_mixer." in text
         or ".attn.relative_position_attention." in text
+        or ".cross_covariance_attention." in text
         or any(
             marker in text
             for marker in (
@@ -26713,6 +26747,7 @@ def main() -> None:
             or bool(args.shifted_patch_tokenization)
             or bool(args.gated_relative_position_attention)
             or bool(args.visual_contrast_attention)
+            or bool(args.cross_covariance_attention)
             or bool(args.late_class_attention_pooling)
             or bool(args.late_member_branch)
             or bool(args.complementary_patch_suppression_head)
@@ -27004,6 +27039,37 @@ def main() -> None:
                     "reason": (
                         "allow dense-grid visual-contrast attention while preserving "
                         "compatible qkv/proj checkpoint parameters"
+                    ),
+                },
+                flush=True,
+            )
+        if bool(args.cross_covariance_attention):
+            if bool(model_config.visual_contrast_attention):
+                raise ValueError(
+                    "Cross-covariance attention resume extension conflicts with "
+                    "Visual-Contrast Attention."
+                )
+            model_config.cross_covariance_attention = True
+            model_config.cross_covariance_attention_layers = str(
+                args.cross_covariance_attention_layers
+            )
+            model_config.cross_covariance_attention_residual_scale = float(
+                args.cross_covariance_attention_residual_scale
+            )
+            print(
+                {
+                    "resume_cli_model_extension": {
+                        "cross_covariance_attention": True,
+                        "cross_covariance_attention_layers": (
+                            model_config.cross_covariance_attention_layers
+                        ),
+                        "cross_covariance_attention_residual_scale": (
+                            model_config.cross_covariance_attention_residual_scale
+                        ),
+                    },
+                    "reason": (
+                        "allow checkpoint-safe patch-only XCA while reusing learned "
+                        "spatial qkv/proj parameters"
                     ),
                 },
                 flush=True,
@@ -29428,6 +29494,7 @@ def main() -> None:
                 or bool(args.patch_evidence_router_head)
                 or float(args.patch_evidence_router_loss_weight) > 0.0
                 or bool(args.visual_contrast_attention)
+                or bool(args.cross_covariance_attention)
                 or bool(args.late_class_attention_pooling)
                 or bool(args.late_member_branch)
                 or bool(args.learnable_gabor_texture_residual)
@@ -29521,6 +29588,7 @@ def main() -> None:
                     or bool(args.patch_evidence_router_head)
                     or float(args.patch_evidence_router_loss_weight) > 0.0
                     or bool(args.visual_contrast_attention)
+                    or bool(args.cross_covariance_attention)
                     or bool(args.late_class_attention_pooling)
                     or bool(args.late_member_branch)
                     or bool(args.learnable_gabor_texture_residual)

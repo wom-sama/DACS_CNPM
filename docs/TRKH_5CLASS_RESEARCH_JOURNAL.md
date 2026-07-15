@@ -15998,3 +15998,111 @@ Date: 2026-07-02
   mixes normalized channel covariance while retaining current spatial MHSA.
   It needs a new precommitted train-only protocol and direct decision-level TP/
   FP evidence; it inherits no smoke permission from OctConv.
+
+## Shared-Projection XCA Lock 2026-07-15 - Channel Axis Without Losing MHSA
+
+- Re-read the NeurIPS 2021 XCiT paper and official repository at commit
+  `82f5291f...9cdca`; reviewed `xcit.py` SHA is
+  `3e2d4be8...8b3e9e`. XCA L2-normalizes Q/K over tokens, forms a per-head
+  channel covariance, scales it with learned temperature, and mixes V. It is a
+  dynamic channel mixer, not a spatial attention map.
+- Locked
+  `docs/TRKH_5CLASS_XCA_DUAL_AXIS_READINESS_PROTOCOL_20260715.md` before code.
+  The TRKH adaptation keeps the CNN stem and all eight spatial-MHSA blocks,
+  adds patch-only XCA after MHSA only in layers `2,5`, reuses each block's qkv/
+  projection, adds no LPI or dropout, and uses fixed residual scale `0.10`.
+- Sharing projections avoids a randomly initialized duplicate branch and keeps
+  spatial pruning/XAI intact. New learnable state is limited to deterministic
+  LayerNorm parameters and eight temperatures per selected layer. Spatial
+  attention remains the sole image-space attention source; XCA gets separate
+  entropy/diagonal/residual telemetry.
+- Stage A is fail-closed and train-only. It uses the locked source-group fold 0
+  (`1843` holdout rows), exact keeper, two matched 20-batch clean adaptations,
+  and hard-decision gates requiring class1 precision/F1 gains, two focus-FP
+  removals, no net TP break, positive correction balance, and macro/nonfocus
+  preservation. It also requires exact RNG, gradients, noncollapse, ONNX,
+  runtime, and VRAM checks.
+- Only a complete Stage-A pass permits one deterministic keeper-initialized
+  `120b x 2e`, full-validation, no-test smoke. No layer/scale/head/LPI/dropout/
+  LR/seed/budget sweep is allowed after failure, and current-best commands are
+  unchanged.
+
+## Shared-Projection XCA Closure 2026-07-15 - Live Mixer, No Class-1 Action
+
+### Train-only readiness result
+
+- Implemented the locked default-off shared-qkv/shared-projection XCA residual
+  in Transformer layers `2,5`. It adds exactly `1,040` parameters and preserves
+  the CNN stem, every spatial-MHSA block, pruning, and the existing spatial XAI
+  path. Keeper loading has the exact six expected new keys, no unexpected keys,
+  and all existing tensors remain bit-identical.
+- Stage A used only `yolo_f/train=9215`. Source-disjoint fold 0 contains
+  `7372` fit and `1843` holdout rows with zero source overlap. Control and
+  candidate consumed the same `20 x 32 = 640` rows in order SHA
+  `38a893d6...47f65`; constructor and forward RNG checkpoints matched.
+- All FP32/BF16 XCA, shared-qkv/projection, and input-gradient checks passed.
+  Both XCA layer ablations changed logits (`0.001883/0.000901`), every new
+  parameter tensor moved, channel maps were finite and normalized, entropy was
+  `0.967196/0.971133`, and diagonal mass was `0.027247/0.028291`.
+- The branch remained weak relative to the parent representation: per-layer
+  residual ratios were `0.002686/0.002146`, and combined `0.00239789` failed
+  the locked `0.005` floor. Runtime `0.969343x` and peak `2.602996 GiB` passed.
+
+### Decision-level failure
+
+- Before adaptation, control and candidate made zero different decisions on
+  the 1843-row train-only holdout. Both had macro/class1 F1
+  `0.948369/0.845850` and class1 P/R `0.743056/0.981651`; probability movement
+  therefore did not encode a useful new decision boundary.
+- After matched 20-batch adaptation, control/candidate macro F1 was
+  `0.827659/0.827641`. Both had exactly the same class1 F1/P/R
+  `0.452055/0.891892/0.302752`, giving zero candidate delta for every class1
+  metric. The two changed decisions were one correction and one harm; class1
+  FN rescue/TP break was `0/0`, and restricted focus-FP reduction was zero.
+- The shared class1 recall collapse after short all-parameter adaptation is not
+  evidence against XCA by itself; the causal matched result is the zero
+  candidate-control class1 delta. It also gives no basis to increase scale or
+  search nearby layers, LR, seed, fold, or budget.
+- Six precommitted gates failed: combined residual magnitude, ONNX parity,
+  class1 F1 gain, class1 precision gain, two focus-FP removals, and positive
+  correction-harm balance. `stage_b_smoke_authorized=false`; no validation or
+  test loader was constructed.
+
+### Export, evidence, and command decision
+
+- Static-batch-2 full-graph ONNX export completed but ONNX Runtime max-logit
+  error was `0.496950`. An earlier dynamic export exposed an old keeper reshape
+  limitation, and no matched control export was measured, so the mismatch is
+  retained as an unresolved deployment blocker rather than causally assigned
+  only to XCA. Independent behavior gates already reject the route.
+- Stage-A summary/prediction/manifest/report/ONNX SHA-256 values are
+  `5429a64f...f7b0`, `7f2a5a71...3e71`, `0a9f6b0f...0d63c`,
+  `6445256c...5b33`, and `582681c1...59186`. Full closure is in
+  `docs/TRKH_5CLASS_XCA_DUAL_AXIS_CLOSURE_20260715.md`.
+- Close shared-projection XCA without Stage B, five epochs, probe, full train,
+  test, or layer/scale/temperature/head/LPI/dropout/LR/seed/budget sweeps.
+  Keeper, scratch complement, and current-command hashes remain
+  `1f49d577...482677`, `f8bd6309...1a549`, and `36b9aa1a...40faf`.
+  The VS Code full-train command packet is intentionally unchanged.
+
+### Self-review, verification, and retention
+
+- Diff review found that the model-level Visual-Contrast Attention plus gated-
+  relative-position conflict check had become unreachable when the XCA setup
+  block was inserted. Restored it to the active VCA validation branch and ran
+  the existing regression explicitly. This was a code-path regression only;
+  the locked XCA run used neither VCA nor gated relative position, so its
+  metrics and gate decision are unchanged.
+- Package compileall passed. XCA plus the explicit VCA conflict regression
+  passed `12/12`; full pytest passed `1051/1051` in `90.70 s`. Both affected
+  PowerShell launchers parsed with zero errors, and the XCA readiness preflight
+  resolved direct native Python invocation with `validation_used=false` and
+  `test_used=false`.
+- Read-only retention audit
+  `runs/artifact_retention_audit_20260715_xca_closure` passed over `667`
+  directories, verified `194` compacted originals absent, and returned
+  `blockers=[]` with `75.726 GiB` free. Summary SHA-256 is
+  `e11f96a5...7f98`. No cleanup was performed in this closure because the only
+  new large artifact is the 31 MB hash-locked failed-export ONNX evidence.
+- Closure document SHA-256 is `76d5e048...296e`. The user-owned `BaoCao/` and
+  both untracked deep-research reports remain untouched and unstaged.

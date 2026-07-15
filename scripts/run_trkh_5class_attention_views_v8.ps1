@@ -570,6 +570,9 @@ param(
     [bool]$VisualContrastAttention = $false,
     [string]$VisualContrastAttentionLayers = "1,2,3,4,5,6,7,8",
     [int]$VisualContrastTokens = 64,
+    [bool]$CrossCovarianceAttention = $false,
+    [string]$CrossCovarianceAttentionLayers = "2,5",
+    [double]$CrossCovarianceAttentionResidualScale = 0.10,
     [bool]$LayerTokenFusion = $false,
     [string]$LayerTokenFusionLayers = "2,4,6",
     [int]$LayerTokenFusionTopK = 4,
@@ -901,6 +904,12 @@ if ($VisualContrastAttention -and $EarlyTokenMaskKeepRate -lt 1.0) {
 }
 if ($VisualContrastAttention -and $GatedRelativePositionAttention) {
     throw "VisualContrastAttention khong the dung cung GatedRelativePositionAttention."
+}
+if ($CrossCovarianceAttentionResidualScale -lt 0.0) {
+    throw "CrossCovarianceAttentionResidualScale phai >= 0."
+}
+if ($CrossCovarianceAttention -and $VisualContrastAttention) {
+    throw "CrossCovarianceAttention khong the dung cung VisualContrastAttention."
 }
 if ($BoundaryCenterTeacherMinConfidence -lt 0.0) {
     throw "BoundaryCenterTeacherMinConfidence phai >= 0."
@@ -2003,6 +2012,9 @@ if ($PreflightOnly) {
         visual_contrast_attention = [bool]$VisualContrastAttention
         visual_contrast_attention_layers = $VisualContrastAttentionLayers
         visual_contrast_tokens = $VisualContrastTokens
+        cross_covariance_attention = [bool]$CrossCovarianceAttention
+        cross_covariance_attention_layers = $CrossCovarianceAttentionLayers
+        cross_covariance_attention_residual_scale = $CrossCovarianceAttentionResidualScale
         layer_token_fusion = [bool]$LayerTokenFusion
         layer_token_fusion_layers = $LayerTokenFusionLayers
         layer_token_fusion_top_k = $LayerTokenFusionTopK
@@ -3233,6 +3245,13 @@ if ($ClassIndependentHead) {
             "--visual-contrast-tokens", "$VisualContrastTokens"
         )
     }
+    if ($CrossCovarianceAttention) {
+        $TrainArgs += @(
+            "--cross-covariance-attention",
+            "--cross-covariance-attention-layers", "$CrossCovarianceAttentionLayers",
+            "--cross-covariance-attention-residual-scale", "$CrossCovarianceAttentionResidualScale"
+        )
+    }
     if ($ShiftedPatchTokenization) {
         $TrainArgs += @("--shifted-patch-tokenization")
     }
@@ -3970,6 +3989,9 @@ if ($ClassIndependentHead) {
         visual_contrast_attention = [bool]$VisualContrastAttention
         visual_contrast_attention_layers = $VisualContrastAttentionLayers
         visual_contrast_tokens = $VisualContrastTokens
+        cross_covariance_attention = [bool]$CrossCovarianceAttention
+        cross_covariance_attention_layers = $CrossCovarianceAttentionLayers
+        cross_covariance_attention_residual_scale = $CrossCovarianceAttentionResidualScale
         layer_token_fusion = [bool]$LayerTokenFusion
         layer_token_fusion_layers = $LayerTokenFusionLayers
         layer_token_fusion_top_k = $LayerTokenFusionTopK
