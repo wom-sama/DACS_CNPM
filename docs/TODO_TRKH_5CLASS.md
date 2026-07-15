@@ -2787,11 +2787,27 @@
   class-1 fold-0 rows, and 36 matched correct negatives. Eligible rows masked
   exactly `86/256` channels; class-1 rows had zero masked channels and zero
   prediction changes. Protocol SHA is `9227f5e5...59366`.
-- [ ] Implement the source-equation RSC helper and fail-closed Stage-A auditor,
+- [x] Implement the source-equation RSC helper and fail-closed Stage-A auditor,
   including exact class-1 protection, signed-gradient top-k, positive-drop
   batch selection, control/candidate RNG parity, full-model movement, clean
-  and illumination decisions, ONNX, runtime, and VRAM checks.
-- [ ] Run the sole locked source-disjoint `60b x 32` Stage A. Authorize one
+  and illumination decisions, ONNX, runtime, and VRAM checks. Native-grid
+  positional interpolation is now skipped bit-exactly to permit deterministic
+  CUDA backward; focused equation and gate tests cover the implementation.
+- [x] Run the sole locked source-disjoint `60b x 32` Stage A. Authorize one
   no-test `120b x 2e` validation smoke only if class-1 precision and F1 rise,
   restricted FP fall, TP/recall are protected, and every engineering gate
-  passes. Otherwise close RSC without a nearby sweep or command revision.
+  passes. Five gates failed: precision rose only `+0.002005`, restricted FP
+  stayed `15 -> 15`, bright class-1 F1 fell `-0.012579` with one net new FP,
+  and peak allocation was `3.907542 GiB`. Stage B is denied; no command
+  revision occurred.
+- [x] Complete RSC closure engineering: retain the four hash-verified
+  nonbinary payloads, run compile/focused/full tests, parse and preflight all
+  affected launchers, rerun artifact retention and protected-hash checks, then
+  commit and push only the explicit RSC paths. Compile passed, focused/full
+  pytest passed `12/12` and `1115/1115`, five launchers parsed, four
+  operational preflights passed, and retention passed over `678` directories
+  with `blockers=[]`. Protected hashes and three command revisions are exact.
+- [ ] Perform a fresh no-repeat and primary-source screen for the next
+  genuinely distinct foreground surface/boundary mechanism. Lock its equation,
+  adverse transfer evidence, class-1 precision/TP gates, illumination safety,
+  resources, and train-only scope before implementation.

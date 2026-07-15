@@ -16458,3 +16458,45 @@ Date: 2026-07-02
   precision/F1 gain, restricted-FP reduction, TP/recall protection, clean and
   illumination safety, export, runtime, and VRAM gates. Current-best commands
   and their three-revision history remain unchanged.
+
+## Class-1-Protected RSC Closure 2026-07-15 - Small Recall Gain, No FP Reduction
+
+- Implemented the exact pooled-channel intervention and a fail-closed
+  train-only auditor. The formal run used source-disjoint `yolo_f/train`
+  fit/holdout `7372/1843`, matched keeper initialization and order, and
+  deterministic `60 x 32` full-model AdamW updates. Validation and test were
+  never constructed.
+- Class-1 protection and mechanism checks were exact: `622/1804` rows were
+  selected/eligible, each selected row masked `86/256` signed-gradient
+  channels, and all `116` true class-1 fit rows had zero masked channels.
+  Every required parameter family received finite nonzero gradients and moved.
+- Control/candidate macro F1 was `0.910629/0.912176`; class-1 F1/P/R was
+  `0.728205/0.825581/0.651376 -> 0.734694/0.827586/0.660550`.
+  Candidate-minus-control deltas were `+0.006489/+0.002005/+0.009174`.
+  Five decisions changed with `3/2` corrections/harms and `1/0` class-1
+  FN-rescues/TP-breaks, but one restricted FP removal was offset by one new FP,
+  leaving `15 -> 15`.
+- Bright lighting failed safety: class-1 F1/precision changed
+  `-0.012579/-0.020000`, restricted FP changed `12 -> 13`, and total
+  corrections/harms were `2/11`. Dim and low contrast improved, but all gates
+  were conjunctive and corruption-only wins cannot promote the method.
+- Runtime and ONNX passed at `1.063282x` and `5.96e-7`; peak candidate
+  allocation was `3.907542 GiB`, above the locked `3.25 GiB`. Structural,
+  clean, and illumination checks passed `28/29`, `7/9`, and `3/5`.
+- The raw keeper on the same holdout had class-1 recall `0.981651`, while the
+  ordinary-CE control fell to `0.651376`. RSC recovered only one TP over that
+  matched control. Short full-model adaptation itself is therefore a strong
+  class-1 suppression risk, and this objective did not overcome it.
+- Formal summary SHA is `049dfad6...dce3dc`; independent CSV recomputation
+  matched all clean confusion matrices and deltas. Full closure is in
+  `docs/TRKH_5CLASS_CLASS1_PROTECTED_RSC_CLOSURE_20260715.md`.
+- Do not sweep RSC ratios/class sets/feature location/LR/seed/fold/budget/loss/
+  augmentation/run length or build a post-hoc challenged-drop filter. Stage B,
+  validation, test, probe, and full train are denied. Keeper, scratch,
+  current-command, and its three-revision history remain unchanged.
+- Closure verification passed targeted compileall, focused `12/12`, full
+  pytest `1115/1115`, five launcher parses, and four operational preflights.
+  Retention passed over `678` directories with `blockers=[]`; summary SHA is
+  `b22337fa...3f6f4`. The four RSC evidence payloads are nonbinary, so no
+  rejected checkpoint or ONNX compaction was needed.
+- Final RSC closure document SHA is `f0c15714...a5907f4`.

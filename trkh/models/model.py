@@ -7355,12 +7355,15 @@ class VisionTransformerWithRegisters(nn.Module):
             self.patch_embed.base_grid_size[1],
             -1,
         ).permute(0, 3, 1, 2)
-        patch_pos = F.interpolate(
-            patch_pos,
-            size=grid_size,
-            mode="bicubic",
-            align_corners=False,
-        )
+        if tuple(int(value) for value in grid_size) != tuple(
+            int(value) for value in self.patch_embed.base_grid_size
+        ):
+            patch_pos = F.interpolate(
+                patch_pos,
+                size=grid_size,
+                mode="bicubic",
+                align_corners=False,
+            )
         patch_pos = patch_pos.permute(0, 2, 3, 1).reshape(
             1,
             grid_size[0] * grid_size[1],

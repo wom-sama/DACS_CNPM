@@ -1,0 +1,1594 @@
+{
+  "mode": "artifact_retention_audit_current_trkh_rerun",
+  "created_at": "2026-07-15T00:00:00+07:00",
+  "guardrail": "Artifact-retention audit only. No deletion, raw-data edits, test tuning, training launch, relabeling, sample weights, soft targets, or trainable manifest.",
+  "runs_root": "D:\\DataAI\\AIEx\\TRKH\\runs",
+  "repo_root": "D:\\DataAI\\AIEx\\TRKH",
+  "output_dir": "D:\\DataAI\\AIEx\\TRKH\\runs\\artifact_retention_audit_rsc_closure_20260715",
+  "raw_dataset_touched": false,
+  "test_split_used_for_new_diagnostics": false,
+  "trainable_manifest_written": false,
+  "deleted_anything": false,
+  "directory_count": 678,
+  "free_gb": 72.439,
+  "top_directory_count": 120,
+  "decision_counts": [
+    {
+      "decision": "REVIEW_REQUIRED",
+      "count": 277,
+      "size_mb": 2347.84
+    },
+    {
+      "decision": "KEEP_XAI_REVIEW",
+      "count": 140,
+      "size_mb": 330.538
+    },
+    {
+      "decision": "KEEP_RECENT_DIAGNOSTIC_OR_REVIEW",
+      "count": 93,
+      "size_mb": 388.087
+    },
+    {
+      "decision": "KEEP_CURRENT_INVENTORY",
+      "count": 70,
+      "size_mb": 6.419
+    },
+    {
+      "decision": "KEEP_COMPACT_EVIDENCE",
+      "count": 49,
+      "size_mb": 995.497
+    },
+    {
+      "decision": "KEEP_TEACHER_DIAGNOSTIC",
+      "count": 33,
+      "size_mb": 325.988
+    },
+    {
+      "decision": "FUTURE_CLEANUP_REVIEW",
+      "count": 7,
+      "size_mb": 31.602
+    },
+    {
+      "decision": "KEEP_LIVE",
+      "count": 2,
+      "size_mb": 2894.812
+    },
+    {
+      "decision": "KEEP_CURRENT_DIAGNOSTIC",
+      "count": 2,
+      "size_mb": 2.893
+    },
+    {
+      "decision": "KEEP_CURRENT_REVIEW",
+      "count": 2,
+      "size_mb": 0.629
+    },
+    {
+      "decision": "KEEP_FINAL_DIAGNOSTIC",
+      "count": 1,
+      "size_mb": 4.009
+    },
+    {
+      "decision": "KEEP_FINAL",
+      "count": 1,
+      "size_mb": 1.954
+    },
+    {
+      "decision": "KEEP_CURRENT_GATE",
+      "count": 1,
+      "size_mb": 0.01
+    }
+  ],
+  "protected_checks": [
+    {
+      "path": "runs\\yolof_oof_folds_train5_20260704\\summary.json",
+      "exists": true,
+      "is_dir": false,
+      "is_file": true
+    },
+    {
+      "path": "runs\\probe_v8_yolof_pairroute_teacherfocusbinary015_boundarydrop_bboxprior_120b_2e_20260701\\checkpoints\\best.pt",
+      "exists": true,
+      "is_dir": false,
+      "is_file": true
+    },
+    {
+      "path": "runs\\eval_patch_linear_verifier_softboost001_full_val_20260705\\metrics_detailed.json",
+      "exists": true,
+      "is_dir": false,
+      "is_file": true
+    },
+    {
+      "path": "runs\\eval_yolof_teacherfocusbinary015_best_test_final_20260702\\metrics_detailed.json",
+      "exists": true,
+      "is_dir": false,
+      "is_file": true
+    },
+    {
+      "path": "runs\\audit_trkh_smoke_gate_current_rerun_20260706\\summary.json",
+      "exists": true,
+      "is_dir": false,
+      "is_file": true
+    },
+    {
+      "path": "runs\\diagnostic_trkh_signal_gap_readiness_current_20260706\\summary.json",
+      "exists": true,
+      "is_dir": false,
+      "is_file": true
+    },
+    {
+      "path": "runs\\review_worklist_readiness_matrix_20260706\\summary.json",
+      "exists": true,
+      "is_dir": false,
+      "is_file": true
+    },
+    {
+      "path": "runs\\review_minimum_fill_plan_current_20260706\\summary.json",
+      "exists": true,
+      "is_dir": false,
+      "is_file": true
+    },
+    {
+      "path": "runs\\review_minimum_fill_plan_current_20260706\\priority_fill_plan_review.html",
+      "exists": true,
+      "is_dir": false,
+      "is_file": true
+    },
+    {
+      "path": "runs\\evidence_embedding_retrieval_legacy_20260706",
+      "exists": true,
+      "is_dir": true,
+      "is_file": false
+    },
+    {
+      "path": "runs\\evidence_legacy_quality_boundary_reviews_20260706",
+      "exists": true,
+      "is_dir": true,
+      "is_file": false
+    },
+    {
+      "path": "runs\\evidence_legacy_selectors_posthoc_20260706",
+      "exists": true,
+      "is_dir": true,
+      "is_file": false
+    },
+    {
+      "path": "..\\newdataset\\class_f\\data.yaml",
+      "exists": true,
+      "is_dir": false,
+      "is_file": true
+    },
+    {
+      "path": "..\\newdataset\\yolo_f\\data.yaml",
+      "exists": true,
+      "is_dir": false,
+      "is_file": true
+    }
+  ],
+  "absent_prefix_checks": [
+    {
+      "prefix": "eval_smoke_",
+      "remaining_count": 0,
+      "remaining_names": []
+    },
+    {
+      "prefix": "oof_mobilenetv3_fold",
+      "remaining_count": 0,
+      "remaining_names": []
+    }
+  ],
+  "compacted_original_checks": {
+    "expected_absent_count": 34,
+    "remaining_original_count": 0,
+    "remaining_by_manifest": {},
+    "remaining_originals": []
+  },
+  "future_cleanup_review_candidate_count": 7,
+  "future_cleanup_review_candidate_size_mb": 31.602,
+  "largest_directories_csv": "D:\\DataAI\\AIEx\\TRKH\\runs\\artifact_retention_audit_rsc_closure_20260715\\largest_directories.csv",
+  "future_cleanup_review_candidates_csv": "D:\\DataAI\\AIEx\\TRKH\\runs\\artifact_retention_audit_rsc_closure_20260715\\future_cleanup_review_candidates.csv",
+  "largest_directories": [
+    {
+      "name": "yolof_oof_folds_train5_20260704",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\yolof_oof_folds_train5_20260704",
+      "repo_relative_path": "runs\\yolof_oof_folds_train5_20260704",
+      "size_bytes": 2671565824,
+      "size_mb": 2547.804,
+      "file_count": 96774,
+      "last_write_time": "2026-07-04T18:50:54",
+      "retention_decision": "KEEP_LIVE",
+      "retention_reason": "current grouped yolo_f OOF materialization for fold-safe diagnostics"
+    },
+    {
+      "name": "probe_v8_yolof_pairroute_teacherfocusbinary015_boundarydrop_bboxprior_120b_2e_20260701",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\probe_v8_yolof_pairroute_teacherfocusbinary015_boundarydrop_bboxprior_120b_2e_20260701",
+      "repo_relative_path": "runs\\probe_v8_yolof_pairroute_teacherfocusbinary015_boundarydrop_bboxprior_120b_2e_20260701",
+      "size_bytes": 363864736,
+      "size_mb": 347.008,
+      "file_count": 460,
+      "last_write_time": "2026-07-01T23:18:37",
+      "retention_decision": "KEEP_LIVE",
+      "retention_reason": "best no-pretrain TRKH validation anchor and checkpoint"
+    },
+    {
+      "name": "full_v8_yolof_current_best_30e_20260714_103052",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\full_v8_yolof_current_best_30e_20260714_103052",
+      "repo_relative_path": "runs\\full_v8_yolof_current_best_30e_20260714_103052",
+      "size_bytes": 309707851,
+      "size_mb": 295.36,
+      "file_count": 167,
+      "last_write_time": "2026-07-14T10:42:17",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "full_v8_yolof_randominit_30e_20260714_105524",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\full_v8_yolof_randominit_30e_20260714_105524",
+      "repo_relative_path": "runs\\full_v8_yolof_randominit_30e_20260714_105524",
+      "size_bytes": 306449952,
+      "size_mb": 292.253,
+      "file_count": 1860,
+      "last_write_time": "2026-07-14T12:28:17",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "audit_vca_matched_smoke_pair_20260714",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\audit_vca_matched_smoke_pair_20260714",
+      "repo_relative_path": "runs\\audit_vca_matched_smoke_pair_20260714",
+      "size_bytes": 262308714,
+      "size_mb": 250.157,
+      "file_count": 1130,
+      "last_write_time": "2026-07-15T01:09:51",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "evidence_late_member_and_stitch_rejected_20260714",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\evidence_late_member_and_stitch_rejected_20260714",
+      "repo_relative_path": "runs\\evidence_late_member_and_stitch_rejected_20260714",
+      "size_bytes": 173459390,
+      "size_mb": 165.424,
+      "file_count": 1304,
+      "last_write_time": "2026-07-14T17:43:57",
+      "retention_decision": "KEEP_COMPACT_EVIDENCE",
+      "retention_reason": "compacted evidence root"
+    },
+    {
+      "name": "aidt_features_classf_train_20260702",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\aidt_features_classf_train_20260702",
+      "repo_relative_path": "runs\\aidt_features_classf_train_20260702",
+      "size_bytes": 124423354,
+      "size_mb": 118.659,
+      "file_count": 8,
+      "last_write_time": "2026-07-02T18:41:56",
+      "retention_decision": "KEEP_TEACHER_DIAGNOSTIC",
+      "retention_reason": "external/teacher diagnostic or comparison artifact"
+    },
+    {
+      "name": "audit_octave_conv_matched_smoke_pair_20260715",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\audit_octave_conv_matched_smoke_pair_20260715",
+      "repo_relative_path": "runs\\audit_octave_conv_matched_smoke_pair_20260715",
+      "size_bytes": 114687164,
+      "size_mb": 109.374,
+      "file_count": 649,
+      "last_write_time": "2026-07-15T10:34:18",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "audit_starnet_s2_matched_smoke_pair_20260715",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\audit_starnet_s2_matched_smoke_pair_20260715",
+      "repo_relative_path": "runs\\audit_starnet_s2_matched_smoke_pair_20260715",
+      "size_bytes": 112590602,
+      "size_mb": 107.375,
+      "file_count": 649,
+      "last_write_time": "2026-07-15T04:37:07",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "audit_inceptionnext_atto_matched_smoke_pair_20260715",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\audit_inceptionnext_atto_matched_smoke_pair_20260715",
+      "repo_relative_path": "runs\\audit_inceptionnext_atto_matched_smoke_pair_20260715",
+      "size_bytes": 112247632,
+      "size_mb": 107.048,
+      "file_count": 649,
+      "last_write_time": "2026-07-15T03:08:39",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "diagnostic_interior_secondorder_rank24_erode020_full_train_val_20260711",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\diagnostic_interior_secondorder_rank24_erode020_full_train_val_20260711",
+      "repo_relative_path": "runs\\diagnostic_interior_secondorder_rank24_erode020_full_train_val_20260711",
+      "size_bytes": 104045851,
+      "size_mb": 99.226,
+      "file_count": 8,
+      "last_write_time": "2026-07-11T11:06:39",
+      "retention_decision": "KEEP_RECENT_DIAGNOSTIC_OR_REVIEW",
+      "retention_reason": "diagnostic/review artifact; keep unless a later audit supersedes it"
+    },
+    {
+      "name": "soup_v8_yolof_top2_teacherfocus_distill_20260701",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\soup_v8_yolof_top2_teacherfocus_distill_20260701",
+      "repo_relative_path": "runs\\soup_v8_yolof_top2_teacherfocus_distill_20260701",
+      "size_bytes": 89866518,
+      "size_mb": 85.703,
+      "file_count": 11,
+      "last_write_time": "2026-07-01T22:59:02",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "evidence_gabor_lho_fcm_rejected_20260715",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\evidence_gabor_lho_fcm_rejected_20260715",
+      "repo_relative_path": "runs\\evidence_gabor_lho_fcm_rejected_20260715",
+      "size_bytes": 85131252,
+      "size_mb": 81.187,
+      "file_count": 679,
+      "last_write_time": "2026-07-15T07:00:10",
+      "retention_decision": "KEEP_COMPACT_EVIDENCE",
+      "retention_reason": "compacted evidence root"
+    },
+    {
+      "name": "router_exports_no_pretrain_20260701",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\router_exports_no_pretrain_20260701",
+      "repo_relative_path": "runs\\router_exports_no_pretrain_20260701",
+      "size_bytes": 77236689,
+      "size_mb": 73.659,
+      "file_count": 156,
+      "last_write_time": "2026-07-01T16:27:22",
+      "retention_decision": "KEEP_TEACHER_DIAGNOSTIC",
+      "retention_reason": "external/teacher diagnostic or comparison artifact"
+    },
+    {
+      "name": "audit_active_gabor_semantic_fusion_matched_smoke_pair_20260715",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\audit_active_gabor_semantic_fusion_matched_smoke_pair_20260715",
+      "repo_relative_path": "runs\\audit_active_gabor_semantic_fusion_matched_smoke_pair_20260715",
+      "size_bytes": 75045565,
+      "size_mb": 71.569,
+      "file_count": 875,
+      "last_write_time": "2026-07-15T08:46:46",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "evidence_classcondaug_c1s05_rejected_20260712",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\evidence_classcondaug_c1s05_rejected_20260712",
+      "repo_relative_path": "runs\\evidence_classcondaug_c1s05_rejected_20260712",
+      "size_bytes": 72954236,
+      "size_mb": 69.575,
+      "file_count": 640,
+      "last_write_time": "2026-07-12T15:26:25",
+      "retention_decision": "KEEP_COMPACT_EVIDENCE",
+      "retention_reason": "compacted evidence root"
+    },
+    {
+      "name": "xai_patch_evidence_mil_yolof_keeper_01only_test_changed11_20260703",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\xai_patch_evidence_mil_yolof_keeper_01only_test_changed11_20260703",
+      "repo_relative_path": "runs\\xai_patch_evidence_mil_yolof_keeper_01only_test_changed11_20260703",
+      "size_bytes": 70700025,
+      "size_mb": 67.425,
+      "file_count": 119,
+      "last_write_time": "2026-07-03T15:16:03",
+      "retention_decision": "KEEP_XAI_REVIEW",
+      "retention_reason": "XAI or visual review evidence"
+    },
+    {
+      "name": "evidence_trkh_leff1234_scratch_5e_reject_20260711",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\evidence_trkh_leff1234_scratch_5e_reject_20260711",
+      "repo_relative_path": "runs\\evidence_trkh_leff1234_scratch_5e_reject_20260711",
+      "size_bytes": 63794829,
+      "size_mb": 60.839,
+      "file_count": 591,
+      "last_write_time": "2026-07-11T16:47:48",
+      "retention_decision": "KEEP_COMPACT_EVIDENCE",
+      "retention_reason": "compacted evidence root"
+    },
+    {
+      "name": "deploy_precision_ensemble_trt_fp32_auditoutputs_o0_preflight_20260714",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\deploy_precision_ensemble_trt_fp32_auditoutputs_o0_preflight_20260714",
+      "repo_relative_path": "runs\\deploy_precision_ensemble_trt_fp32_auditoutputs_o0_preflight_20260714",
+      "size_bytes": 62940848,
+      "size_mb": 60.025,
+      "file_count": 3,
+      "last_write_time": "2026-07-14T19:38:29",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "evidence_trkh_concurrent_localglobal_scratch_5e_reject_20260711",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\evidence_trkh_concurrent_localglobal_scratch_5e_reject_20260711",
+      "repo_relative_path": "runs\\evidence_trkh_concurrent_localglobal_scratch_5e_reject_20260711",
+      "size_bytes": 61812381,
+      "size_mb": 58.949,
+      "file_count": 601,
+      "last_write_time": "2026-07-11T17:27:05",
+      "retention_decision": "KEEP_COMPACT_EVIDENCE",
+      "retention_reason": "compacted evidence root"
+    },
+    {
+      "name": "deploy_precision_ensemble_onnx_auditoutputs_preflight_20260714",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\deploy_precision_ensemble_onnx_auditoutputs_preflight_20260714",
+      "repo_relative_path": "runs\\deploy_precision_ensemble_onnx_auditoutputs_preflight_20260714",
+      "size_bytes": 61036259,
+      "size_mb": 58.209,
+      "file_count": 2,
+      "last_write_time": "2026-07-14T19:35:28",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "precision_ensemble_checkpoint_preflight_20260714",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\precision_ensemble_checkpoint_preflight_20260714",
+      "repo_relative_path": "runs\\precision_ensemble_checkpoint_preflight_20260714",
+      "size_bytes": 58147055,
+      "size_mb": 55.453,
+      "file_count": 2,
+      "last_write_time": "2026-07-14T18:10:14",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "evidence_mambavision_nano_yolof_scratch_5e_reject_20260712",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\evidence_mambavision_nano_yolof_scratch_5e_reject_20260712",
+      "repo_relative_path": "runs\\evidence_mambavision_nano_yolof_scratch_5e_reject_20260712",
+      "size_bytes": 48474489,
+      "size_mb": 46.229,
+      "file_count": 316,
+      "last_write_time": "2026-07-12T12:00:39",
+      "retention_decision": "KEEP_COMPACT_EVIDENCE",
+      "retention_reason": "compacted evidence root"
+    },
+    {
+      "name": "evidence_friendly_foreground_adversarial_w005_smoke_reject_20260712",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\evidence_friendly_foreground_adversarial_w005_smoke_reject_20260712",
+      "repo_relative_path": "runs\\evidence_friendly_foreground_adversarial_w005_smoke_reject_20260712",
+      "size_bytes": 47069118,
+      "size_mb": 44.889,
+      "file_count": 348,
+      "last_write_time": "2026-07-12T13:30:31",
+      "retention_decision": "KEEP_COMPACT_EVIDENCE",
+      "retention_reason": "compacted evidence root"
+    },
+    {
+      "name": "evidence_deep_abstention_w015_a130_reject_20260711",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\evidence_deep_abstention_w015_a130_reject_20260711",
+      "repo_relative_path": "runs\\evidence_deep_abstention_w015_a130_reject_20260711",
+      "size_bytes": 42992278,
+      "size_mb": 41.001,
+      "file_count": 425,
+      "last_write_time": "2026-07-11T16:12:25",
+      "retention_decision": "KEEP_COMPACT_EVIDENCE",
+      "retention_reason": "compacted evidence root"
+    },
+    {
+      "name": "worktree_hygiene_baseline_20260711",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\worktree_hygiene_baseline_20260711",
+      "repo_relative_path": "runs\\worktree_hygiene_baseline_20260711",
+      "size_bytes": 42968972,
+      "size_mb": 40.978,
+      "file_count": 44,
+      "last_write_time": "2026-07-11T20:00:36",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "audit_gabor_lho_fcm_rngneutral_matched_smoke_pair_20260715",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\audit_gabor_lho_fcm_rngneutral_matched_smoke_pair_20260715",
+      "repo_relative_path": "runs\\audit_gabor_lho_fcm_rngneutral_matched_smoke_pair_20260715",
+      "size_bytes": 42373712,
+      "size_mb": 40.411,
+      "file_count": 515,
+      "last_write_time": "2026-07-15T06:39:39",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "evidence_active_gabor_semantic_fusion_rejected_20260715",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\evidence_active_gabor_semantic_fusion_rejected_20260715",
+      "repo_relative_path": "runs\\evidence_active_gabor_semantic_fusion_rejected_20260715",
+      "size_bytes": 41481345,
+      "size_mb": 39.56,
+      "file_count": 326,
+      "last_write_time": "2026-07-15T08:54:48",
+      "retention_decision": "KEEP_COMPACT_EVIDENCE",
+      "retention_reason": "compacted evidence root"
+    },
+    {
+      "name": "smoke_joint_spatial_pcgrad_normalized_macrostep_s12_20260712",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\smoke_joint_spatial_pcgrad_normalized_macrostep_s12_20260712",
+      "repo_relative_path": "runs\\smoke_joint_spatial_pcgrad_normalized_macrostep_s12_20260712",
+      "size_bytes": 40753314,
+      "size_mb": 38.865,
+      "file_count": 493,
+      "last_write_time": "2026-07-12T02:53:46",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "evidence_octave_conv_stem_rejected_20260715",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\evidence_octave_conv_stem_rejected_20260715",
+      "repo_relative_path": "runs\\evidence_octave_conv_stem_rejected_20260715",
+      "size_bytes": 39555318,
+      "size_mb": 37.723,
+      "file_count": 326,
+      "last_write_time": "2026-07-15T10:37:25",
+      "retention_decision": "KEEP_COMPACT_EVIDENCE",
+      "retention_reason": "compacted evidence root"
+    },
+    {
+      "name": "evidence_starnet_s2_matched_smoke_rejected_20260715",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\evidence_starnet_s2_matched_smoke_rejected_20260715",
+      "repo_relative_path": "runs\\evidence_starnet_s2_matched_smoke_rejected_20260715",
+      "size_bytes": 39526630,
+      "size_mb": 37.696,
+      "file_count": 326,
+      "last_write_time": "2026-07-15T04:41:11",
+      "retention_decision": "KEEP_COMPACT_EVIDENCE",
+      "retention_reason": "compacted evidence root"
+    },
+    {
+      "name": "evidence_inceptionnext_atto_matched_smoke_rejected_20260715",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\evidence_inceptionnext_atto_matched_smoke_rejected_20260715",
+      "repo_relative_path": "runs\\evidence_inceptionnext_atto_matched_smoke_rejected_20260715",
+      "size_bytes": 39358002,
+      "size_mb": 37.535,
+      "file_count": 326,
+      "last_write_time": "2026-07-15T03:12:05",
+      "retention_decision": "KEEP_COMPACT_EVIDENCE",
+      "retention_reason": "compacted evidence root"
+    },
+    {
+      "name": "evidence_legacy_selectors_posthoc_20260706",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\evidence_legacy_selectors_posthoc_20260706",
+      "repo_relative_path": "runs\\evidence_legacy_selectors_posthoc_20260706",
+      "size_bytes": 36516842,
+      "size_mb": 34.825,
+      "file_count": 79,
+      "last_write_time": "2026-07-06T21:38:19",
+      "retention_decision": "KEEP_COMPACT_EVIDENCE",
+      "retention_reason": "compacted legacy selector/posthoc evidence root"
+    },
+    {
+      "name": "efficientnetv2_s_features_yolof_train_20260704",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\efficientnetv2_s_features_yolof_train_20260704",
+      "repo_relative_path": "runs\\efficientnetv2_s_features_yolof_train_20260704",
+      "size_bytes": 34922727,
+      "size_mb": 33.305,
+      "file_count": 4,
+      "last_write_time": "2026-07-04T00:15:06",
+      "retention_decision": "KEEP_TEACHER_DIAGNOSTIC",
+      "retention_reason": "external/teacher diagnostic or comparison artifact"
+    },
+    {
+      "name": "evidence_stagewise_mbconv_stem_scratch_5e_reject_20260711",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\evidence_stagewise_mbconv_stem_scratch_5e_reject_20260711",
+      "repo_relative_path": "runs\\evidence_stagewise_mbconv_stem_scratch_5e_reject_20260711",
+      "size_bytes": 34485184,
+      "size_mb": 32.888,
+      "file_count": 437,
+      "last_write_time": "2026-07-11T15:10:35",
+      "retention_decision": "KEEP_COMPACT_EVIDENCE",
+      "retention_reason": "compacted evidence root"
+    },
+    {
+      "name": "audit_patch_style_srm_readiness_20260715_stage_a_retry1",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\audit_patch_style_srm_readiness_20260715_stage_a_retry1",
+      "repo_relative_path": "runs\\audit_patch_style_srm_readiness_20260715_stage_a_retry1",
+      "size_bytes": 33222800,
+      "size_mb": 31.684,
+      "file_count": 7,
+      "last_write_time": "2026-07-15T12:57:14",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "audit_xca_dual_axis_readiness_20260715_stage_a",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\audit_xca_dual_axis_readiness_20260715_stage_a",
+      "repo_relative_path": "runs\\audit_xca_dual_axis_readiness_20260715_stage_a",
+      "size_bytes": 32082720,
+      "size_mb": 30.596,
+      "file_count": 5,
+      "last_write_time": "2026-07-15T11:21:14",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "xai_tta_entropy_yolof_keeper_layernorm_headbias_lr1e5_conf30_frac50_val_selected12_20260704",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\xai_tta_entropy_yolof_keeper_layernorm_headbias_lr1e5_conf30_frac50_val_selected12_20260704",
+      "repo_relative_path": "runs\\xai_tta_entropy_yolof_keeper_layernorm_headbias_lr1e5_conf30_frac50_val_selected12_20260704",
+      "size_bytes": 30819586,
+      "size_mb": 29.392,
+      "file_count": 11,
+      "last_write_time": "2026-07-05T10:32:28",
+      "retention_decision": "KEEP_XAI_REVIEW",
+      "retention_reason": "XAI or visual review evidence"
+    },
+    {
+      "name": "pretrained_expert_predictions_5class",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\pretrained_expert_predictions_5class",
+      "repo_relative_path": "runs\\pretrained_expert_predictions_5class",
+      "size_bytes": 30130802,
+      "size_mb": 28.735,
+      "file_count": 60,
+      "last_write_time": "2026-06-11T19:32:22",
+      "retention_decision": "KEEP_TEACHER_DIAGNOSTIC",
+      "retention_reason": "external/teacher diagnostic or comparison artifact"
+    },
+    {
+      "name": "boundary_review_cartography_v8_train_20260627",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\boundary_review_cartography_v8_train_20260627",
+      "repo_relative_path": "runs\\boundary_review_cartography_v8_train_20260627",
+      "size_bytes": 27984043,
+      "size_mb": 26.688,
+      "file_count": 286,
+      "last_write_time": "2026-06-27T20:57:20",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "evidence_compacthybrid_coatnet_nano_yolof_scratch_15e_reject_20260711",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\evidence_compacthybrid_coatnet_nano_yolof_scratch_15e_reject_20260711",
+      "repo_relative_path": "runs\\evidence_compacthybrid_coatnet_nano_yolof_scratch_15e_reject_20260711",
+      "size_bytes": 27147590,
+      "size_mb": 25.89,
+      "file_count": 320,
+      "last_write_time": "2026-07-11T14:19:06",
+      "retention_decision": "KEEP_COMPACT_EVIDENCE",
+      "retention_reason": "compacted evidence root"
+    },
+    {
+      "name": "audit_feature_basis_stitching_full_5fold_20260714",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\audit_feature_basis_stitching_full_5fold_20260714",
+      "repo_relative_path": "runs\\audit_feature_basis_stitching_full_5fold_20260714",
+      "size_bytes": 27137480,
+      "size_mb": 25.88,
+      "file_count": 8,
+      "last_write_time": "2026-07-14T17:40:28",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "neighbor_teacher_refine_proto_20260627",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\neighbor_teacher_refine_proto_20260627",
+      "repo_relative_path": "runs\\neighbor_teacher_refine_proto_20260627",
+      "size_bytes": 26908183,
+      "size_mb": 25.662,
+      "file_count": 12,
+      "last_write_time": "2026-06-27T13:47:41",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "imported_timm_mobilenetv3_classf_20260627",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\imported_timm_mobilenetv3_classf_20260627",
+      "repo_relative_path": "runs\\imported_timm_mobilenetv3_classf_20260627",
+      "size_bytes": 24298155,
+      "size_mb": 23.173,
+      "file_count": 24,
+      "last_write_time": "2026-06-27T11:41:56",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "evidence_legacy_quality_boundary_reviews_20260706",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\evidence_legacy_quality_boundary_reviews_20260706",
+      "repo_relative_path": "runs\\evidence_legacy_quality_boundary_reviews_20260706",
+      "size_bytes": 21353307,
+      "size_mb": 20.364,
+      "file_count": 57,
+      "last_write_time": "2026-07-06T21:35:52",
+      "retention_decision": "KEEP_COMPACT_EVIDENCE",
+      "retention_reason": "compacted legacy quality/boundary review evidence root"
+    },
+    {
+      "name": "evidence_bbox_token_label_rejected_20260705",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\evidence_bbox_token_label_rejected_20260705",
+      "repo_relative_path": "runs\\evidence_bbox_token_label_rejected_20260705",
+      "size_bytes": 20944683,
+      "size_mb": 19.974,
+      "file_count": 315,
+      "last_write_time": "2026-07-05T04:18:37",
+      "retention_decision": "KEEP_COMPACT_EVIDENCE",
+      "retention_reason": "compacted evidence root"
+    },
+    {
+      "name": "yolo_source_context_oof_class1_boundary_review_20260628",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\yolo_source_context_oof_class1_boundary_review_20260628",
+      "repo_relative_path": "runs\\yolo_source_context_oof_class1_boundary_review_20260628",
+      "size_bytes": 20574793,
+      "size_mb": 19.622,
+      "file_count": 163,
+      "last_write_time": "2026-06-28T00:36:57",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "evidence_compacthybrid_mobilevit_s_yolof_scratch_10e_reject_20260711",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\evidence_compacthybrid_mobilevit_s_yolof_scratch_10e_reject_20260711",
+      "repo_relative_path": "runs\\evidence_compacthybrid_mobilevit_s_yolof_scratch_10e_reject_20260711",
+      "size_bytes": 19950652,
+      "size_mb": 19.026,
+      "file_count": 229,
+      "last_write_time": "2026-07-11T12:13:21",
+      "retention_decision": "KEEP_COMPACT_EVIDENCE",
+      "retention_reason": "compacted evidence root"
+    },
+    {
+      "name": "diagnostic_context_grayedge_p6_s2_full_train_val_20260711",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\diagnostic_context_grayedge_p6_s2_full_train_val_20260711",
+      "repo_relative_path": "runs\\diagnostic_context_grayedge_p6_s2_full_train_val_20260711",
+      "size_bytes": 19872983,
+      "size_mb": 18.952,
+      "file_count": 10,
+      "last_write_time": "2026-07-11T10:48:40",
+      "retention_decision": "KEEP_RECENT_DIAGNOSTIC_OR_REVIEW",
+      "retention_reason": "diagnostic/review artifact; keep unless a later audit supersedes it"
+    },
+    {
+      "name": "cleanlab_top5_teacher_train_audit_20260627",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\cleanlab_top5_teacher_train_audit_20260627",
+      "repo_relative_path": "runs\\cleanlab_top5_teacher_train_audit_20260627",
+      "size_bytes": 19471996,
+      "size_mb": 18.57,
+      "file_count": 241,
+      "last_write_time": "2026-06-27T13:19:30",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "class1_reroute_train_to_val_cartography_v8_20260627",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\class1_reroute_train_to_val_cartography_v8_20260627",
+      "repo_relative_path": "runs\\class1_reroute_train_to_val_cartography_v8_20260627",
+      "size_bytes": 17963989,
+      "size_mb": 17.132,
+      "file_count": 12,
+      "last_write_time": "2026-06-27T21:42:19",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "audit_cidt_readiness_full_train_20260714",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\audit_cidt_readiness_full_train_20260714",
+      "repo_relative_path": "runs\\audit_cidt_readiness_full_train_20260714",
+      "size_bytes": 17663549,
+      "size_mb": 16.845,
+      "file_count": 5,
+      "last_write_time": "2026-07-14T20:53:27",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "local_neighbor_feature_cache_yolof_keeper_cmsf_head_20260704",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\local_neighbor_feature_cache_yolof_keeper_cmsf_head_20260704",
+      "repo_relative_path": "runs\\local_neighbor_feature_cache_yolof_keeper_cmsf_head_20260704",
+      "size_bytes": 17623552,
+      "size_mb": 16.807,
+      "file_count": 2,
+      "last_write_time": "2026-07-04T04:50:17",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "probe_v8_yolof_cropbbox_tokenprior_120b_1e_20260706",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\probe_v8_yolof_cropbbox_tokenprior_120b_1e_20260706",
+      "repo_relative_path": "runs\\probe_v8_yolof_cropbbox_tokenprior_120b_1e_20260706",
+      "size_bytes": 17604617,
+      "size_mb": 16.789,
+      "file_count": 158,
+      "last_write_time": "2026-07-06T22:28:24",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "xai_softboost_val_rival24_cases16_20260706",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\xai_softboost_val_rival24_cases16_20260706",
+      "repo_relative_path": "runs\\xai_softboost_val_rival24_cases16_20260706",
+      "size_bytes": 17550073,
+      "size_mb": 16.737,
+      "file_count": 172,
+      "last_write_time": "2026-07-06T20:53:14",
+      "retention_decision": "KEEP_XAI_REVIEW",
+      "retention_reason": "XAI or visual review evidence"
+    },
+    {
+      "name": "xai_smoke_v8_yolof_selfboostcam_w006_t040_val_selected12_20260704",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\xai_smoke_v8_yolof_selfboostcam_w006_t040_val_selected12_20260704",
+      "repo_relative_path": "runs\\xai_smoke_v8_yolof_selfboostcam_w006_t040_val_selected12_20260704",
+      "size_bytes": 17420793,
+      "size_mb": 16.614,
+      "file_count": 166,
+      "last_write_time": "2026-07-05T09:01:21",
+      "retention_decision": "KEEP_XAI_REVIEW",
+      "retention_reason": "XAI or visual review evidence"
+    },
+    {
+      "name": "embedding_retrieval_dinov2_small_yolof_direct_full_20260704",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\embedding_retrieval_dinov2_small_yolof_direct_full_20260704",
+      "repo_relative_path": "runs\\embedding_retrieval_dinov2_small_yolof_direct_full_20260704",
+      "size_bytes": 17385957,
+      "size_mb": 16.581,
+      "file_count": 5,
+      "last_write_time": "2026-07-04T21:05:05",
+      "retention_decision": "FUTURE_CLEANUP_REVIEW",
+      "retention_reason": "historical candidate; compact separately after preserving summaries and checking docs"
+    },
+    {
+      "name": "oof_cleanlab_class1_boundary_review_20260627",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\oof_cleanlab_class1_boundary_review_20260627",
+      "repo_relative_path": "runs\\oof_cleanlab_class1_boundary_review_20260627",
+      "size_bytes": 17381747,
+      "size_mb": 16.577,
+      "file_count": 207,
+      "last_write_time": "2026-06-27T23:18:50",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "diagnostic_same_class_fourier_amplitude_mix_full_20260712",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\diagnostic_same_class_fourier_amplitude_mix_full_20260712",
+      "repo_relative_path": "runs\\diagnostic_same_class_fourier_amplitude_mix_full_20260712",
+      "size_bytes": 17196651,
+      "size_mb": 16.4,
+      "file_count": 9,
+      "last_write_time": "2026-07-12T14:21:51",
+      "retention_decision": "KEEP_RECENT_DIAGNOSTIC_OR_REVIEW",
+      "retention_reason": "diagnostic/review artifact; keep unless a later audit supersedes it"
+    },
+    {
+      "name": "trainonly_router_base_color_fgbg_objectkey_imgfeat_20260701",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\trainonly_router_base_color_fgbg_objectkey_imgfeat_20260701",
+      "repo_relative_path": "runs\\trainonly_router_base_color_fgbg_objectkey_imgfeat_20260701",
+      "size_bytes": 17134008,
+      "size_mb": 16.34,
+      "file_count": 6,
+      "last_write_time": "2026-07-01T23:44:20",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "dinov2_small_features_yolof_remap_20260704",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\dinov2_small_features_yolof_remap_20260704",
+      "repo_relative_path": "runs\\dinov2_small_features_yolof_remap_20260704",
+      "size_bytes": 16975010,
+      "size_mb": 16.189,
+      "file_count": 4,
+      "last_write_time": "2026-07-04T18:34:11",
+      "retention_decision": "KEEP_TEACHER_DIAGNOSTIC",
+      "retention_reason": "external/teacher diagnostic or comparison artifact"
+    },
+    {
+      "name": "diagnostic_ciconv_w_complementarity_full_train_val_20260711",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\diagnostic_ciconv_w_complementarity_full_train_val_20260711",
+      "repo_relative_path": "runs\\diagnostic_ciconv_w_complementarity_full_train_val_20260711",
+      "size_bytes": 16317520,
+      "size_mb": 15.562,
+      "file_count": 8,
+      "last_write_time": "2026-07-11T10:12:36",
+      "retention_decision": "KEEP_RECENT_DIAGNOSTIC_OR_REVIEW",
+      "retention_reason": "diagnostic/review artifact; keep unless a later audit supersedes it"
+    },
+    {
+      "name": "evidence_patchlinear_softtrain_rejected_20260705",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\evidence_patchlinear_softtrain_rejected_20260705",
+      "repo_relative_path": "runs\\evidence_patchlinear_softtrain_rejected_20260705",
+      "size_bytes": 15808097,
+      "size_mb": 15.076,
+      "file_count": 155,
+      "last_write_time": "2026-07-05T03:53:14",
+      "retention_decision": "KEEP_COMPACT_EVIDENCE",
+      "retention_reason": "compacted evidence root"
+    },
+    {
+      "name": "cleanlab_oof_mobilenetv3_5fold_2e120b_20260627",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\cleanlab_oof_mobilenetv3_5fold_2e120b_20260627",
+      "repo_relative_path": "runs\\cleanlab_oof_mobilenetv3_5fold_2e120b_20260627",
+      "size_bytes": 14300994,
+      "size_mb": 13.638,
+      "file_count": 163,
+      "last_write_time": "2026-06-27T22:36:32",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "xai_softboost_verifier_remaining_errors16_20260705",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\xai_softboost_verifier_remaining_errors16_20260705",
+      "repo_relative_path": "runs\\xai_softboost_verifier_remaining_errors16_20260705",
+      "size_bytes": 13889108,
+      "size_mb": 13.246,
+      "file_count": 165,
+      "last_write_time": "2026-07-05T02:42:25",
+      "retention_decision": "KEEP_XAI_REVIEW",
+      "retention_reason": "XAI or visual review evidence"
+    },
+    {
+      "name": "evidence_detcls_fullframe_curriculum_rejected_20260711",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\evidence_detcls_fullframe_curriculum_rejected_20260711",
+      "repo_relative_path": "runs\\evidence_detcls_fullframe_curriculum_rejected_20260711",
+      "size_bytes": 13836987,
+      "size_mb": 13.196,
+      "file_count": 90,
+      "last_write_time": "2026-07-11T22:07:39",
+      "retention_decision": "KEEP_COMPACT_EVIDENCE",
+      "retention_reason": "compacted evidence root"
+    },
+    {
+      "name": "xai_boundary_review_yolof_keeper_val_current_cases16_datasetcrop_20260704",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\xai_boundary_review_yolof_keeper_val_current_cases16_datasetcrop_20260704",
+      "repo_relative_path": "runs\\xai_boundary_review_yolof_keeper_val_current_cases16_datasetcrop_20260704",
+      "size_bytes": 12650612,
+      "size_mb": 12.065,
+      "file_count": 165,
+      "last_write_time": "2026-07-04T04:26:44",
+      "retention_decision": "KEEP_XAI_REVIEW",
+      "retention_reason": "XAI or visual review evidence"
+    },
+    {
+      "name": "diagnostic_keeper_knn_transfer_k15_30_50_cache_20260710",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\diagnostic_keeper_knn_transfer_k15_30_50_cache_20260710",
+      "repo_relative_path": "runs\\diagnostic_keeper_knn_transfer_k15_30_50_cache_20260710",
+      "size_bytes": 12583922,
+      "size_mb": 12.001,
+      "file_count": 5,
+      "last_write_time": "2026-07-11T00:00:26",
+      "retention_decision": "KEEP_RECENT_DIAGNOSTIC_OR_REVIEW",
+      "retention_reason": "diagnostic/review artifact; keep unless a later audit supersedes it"
+    },
+    {
+      "name": "diagnostic_reslt_embedding_cache_keeper_yolof_20260712",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\diagnostic_reslt_embedding_cache_keeper_yolof_20260712",
+      "repo_relative_path": "runs\\diagnostic_reslt_embedding_cache_keeper_yolof_20260712",
+      "size_bytes": 12498806,
+      "size_mb": 11.92,
+      "file_count": 6,
+      "last_write_time": "2026-07-12T03:27:51",
+      "retention_decision": "KEEP_RECENT_DIAGNOSTIC_OR_REVIEW",
+      "retention_reason": "diagnostic/review artifact; keep unless a later audit supersedes it"
+    },
+    {
+      "name": "evidence_complementary_patch_suppression_rejected_20260705",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\evidence_complementary_patch_suppression_rejected_20260705",
+      "repo_relative_path": "runs\\evidence_complementary_patch_suppression_rejected_20260705",
+      "size_bytes": 12316931,
+      "size_mb": 11.746,
+      "file_count": 142,
+      "last_write_time": "2026-07-05T03:28:01",
+      "retention_decision": "KEEP_COMPACT_EVIDENCE",
+      "retention_reason": "compacted evidence root"
+    },
+    {
+      "name": "pretrained_expert_predictions_tta_5class_train_20260703",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\pretrained_expert_predictions_tta_5class_train_20260703",
+      "repo_relative_path": "runs\\pretrained_expert_predictions_tta_5class_train_20260703",
+      "size_bytes": 12200493,
+      "size_mb": 11.635,
+      "file_count": 10,
+      "last_write_time": "2026-07-03T16:40:09",
+      "retention_decision": "KEEP_TEACHER_DIAGNOSTIC",
+      "retention_reason": "external/teacher diagnostic or comparison artifact"
+    },
+    {
+      "name": "xai_smoke_v8_yolof_consensus_policyv1_val_cases12_robust_20260704",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\xai_smoke_v8_yolof_consensus_policyv1_val_cases12_robust_20260704",
+      "repo_relative_path": "runs\\xai_smoke_v8_yolof_consensus_policyv1_val_cases12_robust_20260704",
+      "size_bytes": 11913892,
+      "size_mb": 11.362,
+      "file_count": 163,
+      "last_write_time": "2026-07-05T09:01:20",
+      "retention_decision": "KEEP_XAI_REVIEW",
+      "retention_reason": "XAI or visual review evidence"
+    },
+    {
+      "name": "xai_smoke_v8_yolof_manualreview_policyv1_val_cases12_robust_20260704",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\xai_smoke_v8_yolof_manualreview_policyv1_val_cases12_robust_20260704",
+      "repo_relative_path": "runs\\xai_smoke_v8_yolof_manualreview_policyv1_val_cases12_robust_20260704",
+      "size_bytes": 11894244,
+      "size_mb": 11.343,
+      "file_count": 163,
+      "last_write_time": "2026-07-05T09:01:21",
+      "retention_decision": "KEEP_XAI_REVIEW",
+      "retention_reason": "XAI or visual review evidence"
+    },
+    {
+      "name": "posthoc_scratch_q34_best_recall_sweep_val",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\posthoc_scratch_q34_best_recall_sweep_val",
+      "repo_relative_path": "runs\\posthoc_scratch_q34_best_recall_sweep_val",
+      "size_bytes": 11172444,
+      "size_mb": 10.655,
+      "file_count": 71,
+      "last_write_time": "2026-05-25T19:12:21",
+      "retention_decision": "FUTURE_CLEANUP_REVIEW",
+      "retention_reason": "historical candidate; compact separately after preserving summaries and checking docs"
+    },
+    {
+      "name": "xai_softboost_train_focus_fpfn12_20260705",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\xai_softboost_train_focus_fpfn12_20260705",
+      "repo_relative_path": "runs\\xai_softboost_train_focus_fpfn12_20260705",
+      "size_bytes": 10460357,
+      "size_mb": 9.976,
+      "file_count": 125,
+      "last_write_time": "2026-07-05T10:55:47",
+      "retention_decision": "KEEP_XAI_REVIEW",
+      "retention_reason": "XAI or visual review evidence"
+    },
+    {
+      "name": "forensics_val_groupclean_c1loss065_20260625",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\forensics_val_groupclean_c1loss065_20260625",
+      "repo_relative_path": "runs\\forensics_val_groupclean_c1loss065_20260625",
+      "size_bytes": 10393508,
+      "size_mb": 9.912,
+      "file_count": 109,
+      "last_write_time": "2026-06-25T20:28:15",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "audit_bicar_smoke_v3_20260714",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\audit_bicar_smoke_v3_20260714",
+      "repo_relative_path": "runs\\audit_bicar_smoke_v3_20260714",
+      "size_bytes": 10333816,
+      "size_mb": 9.855,
+      "file_count": 87,
+      "last_write_time": "2026-07-14T22:08:53",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "xai_eval_patch_linear_verifier_full_val_changed12_20260705",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\xai_eval_patch_linear_verifier_full_val_changed12_20260705",
+      "repo_relative_path": "runs\\xai_eval_patch_linear_verifier_full_val_changed12_20260705",
+      "size_bytes": 10265257,
+      "size_mb": 9.79,
+      "file_count": 125,
+      "last_write_time": "2026-07-05T02:15:36",
+      "retention_decision": "KEEP_XAI_REVIEW",
+      "retention_reason": "XAI or visual review evidence"
+    },
+    {
+      "name": "hsv_lab_texture_diagnostic_20260702",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\hsv_lab_texture_diagnostic_20260702",
+      "repo_relative_path": "runs\\hsv_lab_texture_diagnostic_20260702",
+      "size_bytes": 9971557,
+      "size_mb": 9.51,
+      "file_count": 15,
+      "last_write_time": "2026-07-02T22:31:23",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "classf_predictions_teacherfocusbinary015_20260701",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\classf_predictions_teacherfocusbinary015_20260701",
+      "repo_relative_path": "runs\\classf_predictions_teacherfocusbinary015_20260701",
+      "size_bytes": 9954228,
+      "size_mb": 9.493,
+      "file_count": 18,
+      "last_write_time": "2026-07-01T19:53:50",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "diagnostic_surface_blob_morphology_full_20260712",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\diagnostic_surface_blob_morphology_full_20260712",
+      "repo_relative_path": "runs\\diagnostic_surface_blob_morphology_full_20260712",
+      "size_bytes": 9570146,
+      "size_mb": 9.127,
+      "file_count": 10,
+      "last_write_time": "2026-07-12T08:01:10",
+      "retention_decision": "KEEP_RECENT_DIAGNOSTIC_OR_REVIEW",
+      "retention_reason": "diagnostic/review artifact; keep unless a later audit supersedes it"
+    },
+    {
+      "name": "evidence_compacthybrid_edgenext_xsmall_yolof_scratch_5e_reject_20260711",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\evidence_compacthybrid_edgenext_xsmall_yolof_scratch_5e_reject_20260711",
+      "repo_relative_path": "runs\\evidence_compacthybrid_edgenext_xsmall_yolof_scratch_5e_reject_20260711",
+      "size_bytes": 9539562,
+      "size_mb": 9.098,
+      "file_count": 104,
+      "last_write_time": "2026-07-11T12:37:31",
+      "retention_decision": "KEEP_COMPACT_EVIDENCE",
+      "retention_reason": "compacted evidence root"
+    },
+    {
+      "name": "aidt_classf_pretrained_train_20260702",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\aidt_classf_pretrained_train_20260702",
+      "repo_relative_path": "runs\\aidt_classf_pretrained_train_20260702",
+      "size_bytes": 9516777,
+      "size_mb": 9.076,
+      "file_count": 6,
+      "last_write_time": "2026-07-02T16:31:05",
+      "retention_decision": "KEEP_TEACHER_DIAGNOSTIC",
+      "retention_reason": "external/teacher diagnostic or comparison artifact"
+    },
+    {
+      "name": "expert_router_valselect_top5_notta_imgfeat_20260627",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\expert_router_valselect_top5_notta_imgfeat_20260627",
+      "repo_relative_path": "runs\\expert_router_valselect_top5_notta_imgfeat_20260627",
+      "size_bytes": 9405118,
+      "size_mb": 8.969,
+      "file_count": 6,
+      "last_write_time": "2026-06-27T12:07:48",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "boundary_review_yolof_keeper_val_current_20260704",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\boundary_review_yolof_keeper_val_current_20260704",
+      "repo_relative_path": "runs\\boundary_review_yolof_keeper_val_current_20260704",
+      "size_bytes": 9380362,
+      "size_mb": 8.946,
+      "file_count": 167,
+      "last_write_time": "2026-07-04T04:21:15",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "ensemble_top5_tta_teacher_cache_5class_v1",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\ensemble_top5_tta_teacher_cache_5class_v1",
+      "repo_relative_path": "runs\\ensemble_top5_tta_teacher_cache_5class_v1",
+      "size_bytes": 9297083,
+      "size_mb": 8.866,
+      "file_count": 101,
+      "last_write_time": "2026-06-11T20:05:36",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "evidence_compacthybrid_edgenext_small_yolof_scratch_5e_reject_20260711",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\evidence_compacthybrid_edgenext_small_yolof_scratch_5e_reject_20260711",
+      "repo_relative_path": "runs\\evidence_compacthybrid_edgenext_small_yolof_scratch_5e_reject_20260711",
+      "size_bytes": 9228032,
+      "size_mb": 8.801,
+      "file_count": 104,
+      "last_write_time": "2026-07-11T12:58:31",
+      "retention_decision": "KEEP_COMPACT_EVIDENCE",
+      "retention_reason": "compacted evidence root"
+    },
+    {
+      "name": "data_centric_weights_v27_train_only_20260625",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\data_centric_weights_v27_train_only_20260625",
+      "repo_relative_path": "runs\\data_centric_weights_v27_train_only_20260625",
+      "size_bytes": 8963822,
+      "size_mb": 8.549,
+      "file_count": 108,
+      "last_write_time": "2026-06-25T14:13:32",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "diagnostic_finer_cam_class1_full_20260712",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\diagnostic_finer_cam_class1_full_20260712",
+      "repo_relative_path": "runs\\diagnostic_finer_cam_class1_full_20260712",
+      "size_bytes": 8772364,
+      "size_mb": 8.366,
+      "file_count": 9,
+      "last_write_time": "2026-07-12T07:09:32",
+      "retention_decision": "KEEP_RECENT_DIAGNOSTIC_OR_REVIEW",
+      "retention_reason": "diagnostic/review artifact; keep unless a later audit supersedes it"
+    },
+    {
+      "name": "patch_verifier_acceptance_meta_gate_yolof_keeper01_20260705",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\patch_verifier_acceptance_meta_gate_yolof_keeper01_20260705",
+      "repo_relative_path": "runs\\patch_verifier_acceptance_meta_gate_yolof_keeper01_20260705",
+      "size_bytes": 8637344,
+      "size_mb": 8.237,
+      "file_count": 8,
+      "last_write_time": "2026-07-05T02:34:33",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "boundary_sample_weights_v11_train_only_20260612",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\boundary_sample_weights_v11_train_only_20260612",
+      "repo_relative_path": "runs\\boundary_sample_weights_v11_train_only_20260612",
+      "size_bytes": 8596186,
+      "size_mb": 8.198,
+      "file_count": 101,
+      "last_write_time": "2026-06-12T11:50:03",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "diagnostic_highres_surface_tiles_full_20260712",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\diagnostic_highres_surface_tiles_full_20260712",
+      "repo_relative_path": "runs\\diagnostic_highres_surface_tiles_full_20260712",
+      "size_bytes": 8464612,
+      "size_mb": 8.072,
+      "file_count": 9,
+      "last_write_time": "2026-07-12T06:38:43",
+      "retention_decision": "KEEP_RECENT_DIAGNOSTIC_OR_REVIEW",
+      "retention_reason": "diagnostic/review artifact; keep unless a later audit supersedes it"
+    },
+    {
+      "name": "diagnostic_dinov3_dense_patch_matched_readiness_20260712",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\diagnostic_dinov3_dense_patch_matched_readiness_20260712",
+      "repo_relative_path": "runs\\diagnostic_dinov3_dense_patch_matched_readiness_20260712",
+      "size_bytes": 8171132,
+      "size_mb": 7.793,
+      "file_count": 12,
+      "last_write_time": "2026-07-12T10:46:20",
+      "retention_decision": "KEEP_RECENT_DIAGNOSTIC_OR_REVIEW",
+      "retention_reason": "diagnostic/review artifact; keep unless a later audit supersedes it"
+    },
+    {
+      "name": "eval_patch_linear_verifier_softboost001_train_20260705",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\eval_patch_linear_verifier_softboost001_train_20260705",
+      "repo_relative_path": "runs\\eval_patch_linear_verifier_softboost001_train_20260705",
+      "size_bytes": 7656227,
+      "size_mb": 7.302,
+      "file_count": 11,
+      "last_write_time": "2026-07-05T10:46:14",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "eval_yolof_teacherfocusbinary015_best_train_20260702",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\eval_yolof_teacherfocusbinary015_best_train_20260702",
+      "repo_relative_path": "runs\\eval_yolof_teacherfocusbinary015_best_train_20260702",
+      "size_bytes": 7646320,
+      "size_mb": 7.292,
+      "file_count": 9,
+      "last_write_time": "2026-07-02T21:30:33",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "evidence_gpsa_relative_position_rejected_20260711",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\evidence_gpsa_relative_position_rejected_20260711",
+      "repo_relative_path": "runs\\evidence_gpsa_relative_position_rejected_20260711",
+      "size_bytes": 7591601,
+      "size_mb": 7.24,
+      "file_count": 80,
+      "last_write_time": "2026-07-11T08:10:40",
+      "retention_decision": "KEEP_COMPACT_EVIDENCE",
+      "retention_reason": "compacted evidence root"
+    },
+    {
+      "name": "yolof_foreground_surface_stats_diagnostic_20260702",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\yolof_foreground_surface_stats_diagnostic_20260702",
+      "repo_relative_path": "runs\\yolof_foreground_surface_stats_diagnostic_20260702",
+      "size_bytes": 7589967,
+      "size_mb": 7.238,
+      "file_count": 7,
+      "last_write_time": "2026-07-03T01:24:27",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "forensics_val_groupclean_v35_20260626",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\forensics_val_groupclean_v35_20260626",
+      "repo_relative_path": "runs\\forensics_val_groupclean_v35_20260626",
+      "size_bytes": 7551315,
+      "size_mb": 7.201,
+      "file_count": 77,
+      "last_write_time": "2026-06-26T03:42:00",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "oof_cleanlab_sample_weights_boundary_20260627",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\oof_cleanlab_sample_weights_boundary_20260627",
+      "repo_relative_path": "runs\\oof_cleanlab_sample_weights_boundary_20260627",
+      "size_bytes": 7542647,
+      "size_mb": 7.193,
+      "file_count": 92,
+      "last_write_time": "2026-06-27T22:55:58",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "boundary_review_softboost_train_current_20260705",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\boundary_review_softboost_train_current_20260705",
+      "repo_relative_path": "runs\\boundary_review_softboost_train_current_20260705",
+      "size_bytes": 7324322,
+      "size_mb": 6.985,
+      "file_count": 132,
+      "last_write_time": "2026-07-05T10:50:46",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "diagnostic_pdisco_semantic_parts_k2_full_20260712",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\diagnostic_pdisco_semantic_parts_k2_full_20260712",
+      "repo_relative_path": "runs\\diagnostic_pdisco_semantic_parts_k2_full_20260712",
+      "size_bytes": 7287239,
+      "size_mb": 6.95,
+      "file_count": 14,
+      "last_write_time": "2026-07-12T16:24:28",
+      "retention_decision": "KEEP_RECENT_DIAGNOSTIC_OR_REVIEW",
+      "retention_reason": "diagnostic/review artifact; keep unless a later audit supersedes it"
+    },
+    {
+      "name": "diagnostic_border_interior_tta_yolof_softboost_fullval_20260705",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\diagnostic_border_interior_tta_yolof_softboost_fullval_20260705",
+      "repo_relative_path": "runs\\diagnostic_border_interior_tta_yolof_softboost_fullval_20260705",
+      "size_bytes": 7153254,
+      "size_mb": 6.822,
+      "file_count": 4,
+      "last_write_time": "2026-07-05T08:30:22",
+      "retention_decision": "KEEP_RECENT_DIAGNOSTIC_OR_REVIEW",
+      "retention_reason": "diagnostic/review artifact; keep unless a later audit supersedes it"
+    },
+    {
+      "name": "foreground_surface_stats_groupclean_v60diag_20260626",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\foreground_surface_stats_groupclean_v60diag_20260626",
+      "repo_relative_path": "runs\\foreground_surface_stats_groupclean_v60diag_20260626",
+      "size_bytes": 6968416,
+      "size_mb": 6.646,
+      "file_count": 5,
+      "last_write_time": "2026-06-26T08:07:54",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "foreground_surface_stats_groupclean_v67diag_20260626",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\foreground_surface_stats_groupclean_v67diag_20260626",
+      "repo_relative_path": "runs\\foreground_surface_stats_groupclean_v67diag_20260626",
+      "size_bytes": 6968416,
+      "size_mb": 6.646,
+      "file_count": 5,
+      "last_write_time": "2026-06-26T11:00:02",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "foreground_surface_stats_probe_v46_20260626",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\foreground_surface_stats_probe_v46_20260626",
+      "repo_relative_path": "runs\\foreground_surface_stats_probe_v46_20260626",
+      "size_bytes": 6968415,
+      "size_mb": 6.646,
+      "file_count": 5,
+      "last_write_time": "2026-06-26T02:50:04",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "xai_smoke_v8_yolof_fixres320_headpos_bboxfusion_val_selected12_20260703",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\xai_smoke_v8_yolof_fixres320_headpos_bboxfusion_val_selected12_20260703",
+      "repo_relative_path": "runs\\xai_smoke_v8_yolof_fixres320_headpos_bboxfusion_val_selected12_20260703",
+      "size_bytes": 6906476,
+      "size_mb": 6.587,
+      "file_count": 139,
+      "last_write_time": "2026-07-05T09:01:21",
+      "retention_decision": "KEEP_XAI_REVIEW",
+      "retention_reason": "XAI or visual review evidence"
+    },
+    {
+      "name": "audit_bicar_gradient_readiness_full_train_20260714",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\audit_bicar_gradient_readiness_full_train_20260714",
+      "repo_relative_path": "runs\\audit_bicar_gradient_readiness_full_train_20260714",
+      "size_bytes": 6847743,
+      "size_mb": 6.531,
+      "file_count": 4,
+      "last_write_time": "2026-07-14T21:10:33",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "audit_bicar_gradient_readiness_full_train_v2_20260714",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\audit_bicar_gradient_readiness_full_train_v2_20260714",
+      "repo_relative_path": "runs\\audit_bicar_gradient_readiness_full_train_v2_20260714",
+      "size_bytes": 6847682,
+      "size_mb": 6.53,
+      "file_count": 4,
+      "last_write_time": "2026-07-14T21:14:09",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "xai_smoke_timm_convnexttiny_fb22k_yolof_headonly_val_cases8_20260704",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\xai_smoke_timm_convnexttiny_fb22k_yolof_headonly_val_cases8_20260704",
+      "repo_relative_path": "runs\\xai_smoke_timm_convnexttiny_fb22k_yolof_headonly_val_cases8_20260704",
+      "size_bytes": 6762097,
+      "size_mb": 6.449,
+      "file_count": 31,
+      "last_write_time": "2026-07-06T20:09:24",
+      "retention_decision": "KEEP_XAI_REVIEW",
+      "retention_reason": "XAI or visual review evidence"
+    },
+    {
+      "name": "train_predictions_colordefect_teacherfocusbinary015_20260701",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\train_predictions_colordefect_teacherfocusbinary015_20260701",
+      "repo_relative_path": "runs\\train_predictions_colordefect_teacherfocusbinary015_20260701",
+      "size_bytes": 6618442,
+      "size_mb": 6.312,
+      "file_count": 9,
+      "last_write_time": "2026-07-01T23:32:17",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "train_predictions_teacherfocusbinary015_20260701",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\train_predictions_teacherfocusbinary015_20260701",
+      "repo_relative_path": "runs\\train_predictions_teacherfocusbinary015_20260701",
+      "size_bytes": 6617587,
+      "size_mb": 6.311,
+      "file_count": 9,
+      "last_write_time": "2026-07-01T18:43:41",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "train_predictions_fgbg015_20260701",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\train_predictions_fgbg015_20260701",
+      "repo_relative_path": "runs\\train_predictions_fgbg015_20260701",
+      "size_bytes": 6615916,
+      "size_mb": 6.309,
+      "file_count": 9,
+      "last_write_time": "2026-07-01T23:39:24",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "evidence_blocklocal_head_layers5to8_rejected_20260705",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\evidence_blocklocal_head_layers5to8_rejected_20260705",
+      "repo_relative_path": "runs\\evidence_blocklocal_head_layers5to8_rejected_20260705",
+      "size_bytes": 6597462,
+      "size_mb": 6.292,
+      "file_count": 153,
+      "last_write_time": "2026-07-05T04:57:21",
+      "retention_decision": "KEEP_COMPACT_EVIDENCE",
+      "retention_reason": "compacted evidence root"
+    },
+    {
+      "name": "xai_smoke_v8_yolof_surfaceamp_bboxcompat_val_cases12_robust_20260705",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\xai_smoke_v8_yolof_surfaceamp_bboxcompat_val_cases12_robust_20260705",
+      "repo_relative_path": "runs\\xai_smoke_v8_yolof_surfaceamp_bboxcompat_val_cases12_robust_20260705",
+      "size_bytes": 6564479,
+      "size_mb": 6.26,
+      "file_count": 148,
+      "last_write_time": "2026-07-06T20:09:23",
+      "retention_decision": "KEEP_XAI_REVIEW",
+      "retention_reason": "XAI or visual review evidence"
+    },
+    {
+      "name": "diagnostic_lbp_surface_texture_full_20260712",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\diagnostic_lbp_surface_texture_full_20260712",
+      "repo_relative_path": "runs\\diagnostic_lbp_surface_texture_full_20260712",
+      "size_bytes": 6500719,
+      "size_mb": 6.2,
+      "file_count": 21,
+      "last_write_time": "2026-07-12T04:02:44",
+      "retention_decision": "KEEP_RECENT_DIAGNOSTIC_OR_REVIEW",
+      "retention_reason": "diagnostic/review artifact; keep unless a later audit supersedes it"
+    },
+    {
+      "name": "diagnostic_lsa_patchonly_full_val_matrix_20260711",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\diagnostic_lsa_patchonly_full_val_matrix_20260711",
+      "repo_relative_path": "runs\\diagnostic_lsa_patchonly_full_val_matrix_20260711",
+      "size_bytes": 6453094,
+      "size_mb": 6.154,
+      "file_count": 6,
+      "last_write_time": "2026-07-11T08:26:50",
+      "retention_decision": "KEEP_RECENT_DIAGNOSTIC_OR_REVIEW",
+      "retention_reason": "diagnostic/review artifact; keep unless a later audit supersedes it"
+    },
+    {
+      "name": "boundary_review_teacherfocusbinary015_train_20260703",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\boundary_review_teacherfocusbinary015_train_20260703",
+      "repo_relative_path": "runs\\boundary_review_teacherfocusbinary015_train_20260703",
+      "size_bytes": 6317524,
+      "size_mb": 6.025,
+      "file_count": 88,
+      "last_write_time": "2026-07-03T11:34:36",
+      "retention_decision": "REVIEW_REQUIRED",
+      "retention_reason": "not automatically classified; keep until manually audited"
+    },
+    {
+      "name": "diagnostic_gradient_feature_readout_yolof_keeper_20260705",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\diagnostic_gradient_feature_readout_yolof_keeper_20260705",
+      "repo_relative_path": "runs\\diagnostic_gradient_feature_readout_yolof_keeper_20260705",
+      "size_bytes": 6275570,
+      "size_mb": 5.985,
+      "file_count": 9,
+      "last_write_time": "2026-07-05T07:43:29",
+      "retention_decision": "KEEP_RECENT_DIAGNOSTIC_OR_REVIEW",
+      "retention_reason": "diagnostic/review artifact; keep unless a later audit supersedes it"
+    },
+    {
+      "name": "diagnostic_yolof_tokenprune_sensitivity_keeper_full_20260704",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\diagnostic_yolof_tokenprune_sensitivity_keeper_full_20260704",
+      "repo_relative_path": "runs\\diagnostic_yolof_tokenprune_sensitivity_keeper_full_20260704",
+      "size_bytes": 6234307,
+      "size_mb": 5.945,
+      "file_count": 10,
+      "last_write_time": "2026-07-04T04:13:14",
+      "retention_decision": "KEEP_RECENT_DIAGNOSTIC_OR_REVIEW",
+      "retention_reason": "diagnostic/review artifact; keep unless a later audit supersedes it"
+    },
+    {
+      "name": "diagnostic_bbn_bilateral_classifier_readiness_sourceguarded_20260712",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\diagnostic_bbn_bilateral_classifier_readiness_sourceguarded_20260712",
+      "repo_relative_path": "runs\\diagnostic_bbn_bilateral_classifier_readiness_sourceguarded_20260712",
+      "size_bytes": 6201296,
+      "size_mb": 5.914,
+      "file_count": 9,
+      "last_write_time": "2026-07-12T03:31:29",
+      "retention_decision": "KEEP_RECENT_DIAGNOSTIC_OR_REVIEW",
+      "retention_reason": "diagnostic/review artifact; keep unless a later audit supersedes it"
+    }
+  ],
+  "future_cleanup_review_candidates": [
+    {
+      "name": "embedding_retrieval_dinov2_small_yolof_direct_full_20260704",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\embedding_retrieval_dinov2_small_yolof_direct_full_20260704",
+      "repo_relative_path": "runs\\embedding_retrieval_dinov2_small_yolof_direct_full_20260704",
+      "size_bytes": 17385957,
+      "size_mb": 16.581,
+      "file_count": 5,
+      "last_write_time": "2026-07-04T21:05:05",
+      "retention_decision": "FUTURE_CLEANUP_REVIEW",
+      "retention_reason": "historical candidate; compact separately after preserving summaries and checking docs"
+    },
+    {
+      "name": "posthoc_scratch_q34_best_recall_sweep_val",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\posthoc_scratch_q34_best_recall_sweep_val",
+      "repo_relative_path": "runs\\posthoc_scratch_q34_best_recall_sweep_val",
+      "size_bytes": 11172444,
+      "size_mb": 10.655,
+      "file_count": 71,
+      "last_write_time": "2026-05-25T19:12:21",
+      "retention_decision": "FUTURE_CLEANUP_REVIEW",
+      "retention_reason": "historical candidate; compact separately after preserving summaries and checking docs"
+    },
+    {
+      "name": "quality_group_yolof_anchor_classcart_train_20260702",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\quality_group_yolof_anchor_classcart_train_20260702",
+      "repo_relative_path": "runs\\quality_group_yolof_anchor_classcart_train_20260702",
+      "size_bytes": 2464051,
+      "size_mb": 2.35,
+      "file_count": 2,
+      "last_write_time": "2026-07-02T22:58:27",
+      "retention_decision": "FUTURE_CLEANUP_REVIEW",
+      "retention_reason": "historical quality/boundary review candidate; compact separately after evidence preservation"
+    },
+    {
+      "name": "selector_top5_pretrained_plus_trkh_v4_valfit_unweighted_5class",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\selector_top5_pretrained_plus_trkh_v4_valfit_unweighted_5class",
+      "repo_relative_path": "runs\\selector_top5_pretrained_plus_trkh_v4_valfit_unweighted_5class",
+      "size_bytes": 545841,
+      "size_mb": 0.521,
+      "file_count": 2,
+      "last_write_time": "2026-06-08T19:37:09",
+      "retention_decision": "FUTURE_CLEANUP_REVIEW",
+      "retention_reason": "historical candidate; compact separately after preserving summaries and checking docs"
+    },
+    {
+      "name": "selector_top5_pretrained_plus_trkh_v4_valfit_5class",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\selector_top5_pretrained_plus_trkh_v4_valfit_5class",
+      "repo_relative_path": "runs\\selector_top5_pretrained_plus_trkh_v4_valfit_5class",
+      "size_bytes": 545827,
+      "size_mb": 0.521,
+      "file_count": 2,
+      "last_write_time": "2026-06-08T19:36:46",
+      "retention_decision": "FUTURE_CLEANUP_REVIEW",
+      "retention_reason": "historical candidate; compact separately after preserving summaries and checking docs"
+    },
+    {
+      "name": "selector_top5_pretrained_valfit_unweighted_5class",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\selector_top5_pretrained_valfit_unweighted_5class",
+      "repo_relative_path": "runs\\selector_top5_pretrained_valfit_unweighted_5class",
+      "size_bytes": 511768,
+      "size_mb": 0.488,
+      "file_count": 2,
+      "last_write_time": "2026-06-08T19:37:08",
+      "retention_decision": "FUTURE_CLEANUP_REVIEW",
+      "retention_reason": "historical candidate; compact separately after preserving summaries and checking docs"
+    },
+    {
+      "name": "selector_top5_pretrained_valfit_5class",
+      "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\selector_top5_pretrained_valfit_5class",
+      "repo_relative_path": "runs\\selector_top5_pretrained_valfit_5class",
+      "size_bytes": 511096,
+      "size_mb": 0.487,
+      "file_count": 2,
+      "last_write_time": "2026-06-08T19:36:46",
+      "retention_decision": "FUTURE_CLEANUP_REVIEW",
+      "retention_reason": "historical candidate; compact separately after preserving summaries and checking docs"
+    }
+  ],
+  "blockers": [],
+  "retention_audit_passed": true,
+  "decision": "No deletion performed. Current TRKH keeper/gate/review artifacts are protected; compact original directories are expected to be absent before further cleanup."
+}
