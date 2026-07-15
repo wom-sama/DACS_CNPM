@@ -16334,3 +16334,82 @@ Date: 2026-07-02
   current-command, and command-history hashes remain unchanged; no best-command
   revision was added.
 - Final closure document SHA is `d819facc...102f2`.
+
+## Soft-MoE Patch Adapter Selection 2026-07-15 - Locked Before Code
+
+### Fresh no-repeat and primary-source review
+
+- The remaining error evidence still points to foreground maturity/surface
+  ambiguity and a broad, multimodal class 1, not missing far-background
+  localization. Raw gradients, handcrafted texture/frequency transforms,
+  parts/prompts, graph/channel mixers, classifier heads, and post-hoc routers
+  are already closed and are not being reopened.
+- Reviewed *From Sparse to Soft Mixtures of Experts* and official V-MoE commit
+  `1030c713...c63b7b401`. The exact source uses L2-normalized token/slot
+  routing, token-axis dispatch softmax, expert/slot-axis combine softmax, and
+  one slot per expert without hard token dropping.
+- Also reviewed the train-from-scratch study *Mixture of Experts for Image
+  Classification: What's the Sweet Spot?*. It warns that vision-MoE gains are
+  data/capacity sensitive, favors a simple linear router, and reports limited
+  benefit at smaller scale. This is adverse evidence, so the route receives
+  one bounded train-only experiment rather than a smoke or parameter sweep.
+- Hard V-MoE is rejected for this round because top-k routing, balancing, token
+  capacity, and published 300-epoch/large-data recipes conflict with the local
+  fast-convergence constraint. Granularity-specific expert classifiers are
+  rejected because they overlap closed multi-head/part/expert ensembles.
+
+### Locked hypothesis
+
+- Add a default-off patch-only Soft-MoE residual in Transformer layers `2,5`:
+  four experts, one slot each, `256->64->256`, normalized linear router,
+  trainable scale initialized at `10`, fixed residual `0.10`, and zero output
+  projections for exact keeper identity. Prefixes, dense FFN, native MHSA,
+  pruning, and classifier remain unchanged.
+- Expected extension is exactly `266,754` parameters. A fixed-router control
+  learns only expert output projections; the candidate learns all router and
+  expert tensors. Both must start from bit-exact keeper logits and leave every
+  original tensor frozen.
+- Stage A uses only source-disjoint `yolo_f/train` fold 0, `60 x 32` rows,
+  and compares candidate against both raw keeper and control. It requires
+  class1 F1 and precision `+0.005`, recall at least `-0.005`, FN rescues at
+  least TP breaks, net corrections, restricted-FP removals, routing diversity,
+  bbox-residual XAI, illumination preservation, ONNX parity, runtime, and VRAM.
+- Immutable protocol:
+  `docs/TRKH_5CLASS_SOFT_MOE_PATCH_ADAPTER_READINESS_PROTOCOL_20260715.md`.
+  The current-best command/history remain unchanged at this selection stage.
+
+## Soft-MoE Patch Adapter Closure 2026-07-15 - Active Routing, Zero Clean Decisions
+
+- Implemented the exact default-off two-layer Soft-MoE extension with 36 state
+  tensors and `266,754` parameters. Checkpoint/RNG identity, all eight native
+  MHSA maps, pruning, FP32/BF16 gradients, state movement, routing
+  normalization/noncollapse, bbox-residual XAI, ablation, ONNX, runtime, and
+  VRAM checks passed after two audit-only infrastructure repairs.
+- Stage A used only source-disjoint `yolo_f/train`: matched control/candidate
+  adaptation consumed `60 x 32` rows and clean holdout contained `1843` rows.
+  Validation and test were never constructed.
+- Raw/control/candidate macro and class1 F1 were all
+  `0.948369/0.845850`; class1 P/R was `0.743056/0.981651`. Candidate changed
+  zero clean decisions, corrected zero cases, harmed zero cases, and removed
+  zero of 37 restricted focus FP. Eight behavioral gates failed.
+- The mechanism was live but weak. Candidate-versus-raw probability L1 mean/
+  max was `0.000508/0.018801`; routing TP-versus-restricted-FP signature L1
+  reached `0.02585`, while candidate-minus-control residual bbox mass stayed
+  within `3.6e-5`. It learned a routing distinction without a clean boundary.
+- Dim and bright each gained one FP correction; low contrast created one
+  `3->2` harm. Corruption-only changes cannot override the clean fail-closed
+  decision gate.
+- Formal summary SHA is `1a2fe890...bd64ec`. Same-precision BF16 equation
+  correction SHA is `a478b96c...855aa`; Stage B remains forbidden. Full
+  closure is in
+  `docs/TRKH_5CLASS_SOFT_MOE_PATCH_ADAPTER_CLOSURE_20260715.md`.
+- Compaction retained eight verified payloads at manifest SHA
+  `75de0592...b0cd`, excluded `33,805,837` reproducible binary bytes, and
+  retention passed over `676` directories with `blockers=[]`. Compileall,
+  focused `33/33`, full pytest `1103/1103`, five launcher parses, and five
+  no-train operational preflights passed.
+- Do not sweep Soft-MoE experts/slots/layers/hidden width/router scale/residual/
+  LR/seed/fold/budget/loss/augmentation/run length or make a post-hoc routing
+  filter. Keeper, scratch, current-command, and command-history hashes remain
+  unchanged; no best-command revision was added.
+- Final closure document SHA is `dc29f890...fdb25`.

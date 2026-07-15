@@ -301,6 +301,13 @@ class ModelConfig:
     dynamic_graph_mixer_layers: str = "2,5"
     dynamic_graph_mixer_bottleneck_dim: int = 64
     dynamic_graph_mixer_k: int = 9
+    soft_moe_patch_adapter: bool = False
+    soft_moe_patch_adapter_layers: str = "2,5"
+    soft_moe_hidden_dim: int = 64
+    soft_moe_num_experts: int = 4
+    soft_moe_residual_scale: float = 0.10
+    soft_moe_router_scale_init: float = 10.0
+    soft_moe_init_seed: int = 20260715
     deep_class_prompt: bool = False
     deep_class_prompt_logit_scale: float = 0.10
     deep_class_prompt_init_seed: int = 20260715

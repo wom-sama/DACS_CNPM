@@ -577,6 +577,13 @@ param(
     [string]$DynamicGraphMixerLayers = "2,5",
     [int]$DynamicGraphMixerBottleneckDim = 64,
     [int]$DynamicGraphMixerK = 9,
+    [bool]$SoftMoePatchAdapter = $false,
+    [string]$SoftMoePatchAdapterLayers = "2,5",
+    [int]$SoftMoeHiddenDim = 64,
+    [int]$SoftMoeNumExperts = 4,
+    [double]$SoftMoeResidualScale = 0.10,
+    [double]$SoftMoeRouterScaleInit = 10.0,
+    [int]$SoftMoeInitSeed = 20260715,
     [bool]$DeepClassPrompt = $false,
     [double]$DeepClassPromptLogitScale = 0.10,
     [int]$DeepClassPromptInitSeed = 20260715,
@@ -931,6 +938,18 @@ if ($DynamicGraphMixer -and $VisualContrastAttention) {
 }
 if ($DynamicGraphMixer -and $CrossCovarianceAttention) {
     throw "DynamicGraphMixer khong the dung cung CrossCovarianceAttention."
+}
+if ($SoftMoeHiddenDim -le 0) {
+    throw "SoftMoeHiddenDim phai > 0."
+}
+if ($SoftMoeNumExperts -le 1) {
+    throw "SoftMoeNumExperts phai >= 2."
+}
+if ($SoftMoeResidualScale -lt 0.0) {
+    throw "SoftMoeResidualScale phai >= 0."
+}
+if ($SoftMoeRouterScaleInit -le 0.0) {
+    throw "SoftMoeRouterScaleInit phai > 0."
 }
 if ($DeepClassPromptLogitScale -lt 0.0) {
     throw "DeepClassPromptLogitScale phai >= 0."
@@ -2046,6 +2065,13 @@ if ($PreflightOnly) {
         dynamic_graph_mixer_layers = $DynamicGraphMixerLayers
         dynamic_graph_mixer_bottleneck_dim = $DynamicGraphMixerBottleneckDim
         dynamic_graph_mixer_k = $DynamicGraphMixerK
+        soft_moe_patch_adapter = [bool]$SoftMoePatchAdapter
+        soft_moe_patch_adapter_layers = $SoftMoePatchAdapterLayers
+        soft_moe_hidden_dim = $SoftMoeHiddenDim
+        soft_moe_num_experts = $SoftMoeNumExperts
+        soft_moe_residual_scale = $SoftMoeResidualScale
+        soft_moe_router_scale_init = $SoftMoeRouterScaleInit
+        soft_moe_init_seed = $SoftMoeInitSeed
         deep_class_prompt = [bool]$DeepClassPrompt
         deep_class_prompt_logit_scale = $DeepClassPromptLogitScale
         deep_class_prompt_init_seed = $DeepClassPromptInitSeed
@@ -3296,6 +3322,17 @@ if ($ClassIndependentHead) {
             "--dynamic-graph-mixer-k", "$DynamicGraphMixerK"
         )
     }
+    if ($SoftMoePatchAdapter) {
+        $TrainArgs += @(
+            "--soft-moe-patch-adapter",
+            "--soft-moe-patch-adapter-layers", "$SoftMoePatchAdapterLayers",
+            "--soft-moe-hidden-dim", "$SoftMoeHiddenDim",
+            "--soft-moe-num-experts", "$SoftMoeNumExperts",
+            "--soft-moe-residual-scale", "$SoftMoeResidualScale",
+            "--soft-moe-router-scale-init", "$SoftMoeRouterScaleInit",
+            "--soft-moe-init-seed", "$SoftMoeInitSeed"
+        )
+    }
     if ($DeepClassPrompt) {
         $TrainArgs += @(
             "--deep-class-prompt",
@@ -4053,6 +4090,13 @@ if ($ClassIndependentHead) {
         dynamic_graph_mixer_layers = $DynamicGraphMixerLayers
         dynamic_graph_mixer_bottleneck_dim = $DynamicGraphMixerBottleneckDim
         dynamic_graph_mixer_k = $DynamicGraphMixerK
+        soft_moe_patch_adapter = [bool]$SoftMoePatchAdapter
+        soft_moe_patch_adapter_layers = $SoftMoePatchAdapterLayers
+        soft_moe_hidden_dim = $SoftMoeHiddenDim
+        soft_moe_num_experts = $SoftMoeNumExperts
+        soft_moe_residual_scale = $SoftMoeResidualScale
+        soft_moe_router_scale_init = $SoftMoeRouterScaleInit
+        soft_moe_init_seed = $SoftMoeInitSeed
         deep_class_prompt = [bool]$DeepClassPrompt
         deep_class_prompt_logit_scale = $DeepClassPromptLogitScale
         deep_class_prompt_init_seed = $DeepClassPromptInitSeed

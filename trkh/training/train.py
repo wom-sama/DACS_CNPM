@@ -2234,6 +2234,48 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         help="Nearest-neighbor count, including self, used by graph mixing.",
     )
     parser.add_argument(
+        "--soft-moe-patch-adapter",
+        action="store_true",
+        default=False,
+        help="Add a fully differentiable Soft-MoE residual over patch tokens.",
+    )
+    parser.add_argument(
+        "--soft-moe-patch-adapter-layers",
+        type=str,
+        default="2,5",
+        help="Comma-separated 1-based Transformer layers that add Soft MoE.",
+    )
+    parser.add_argument(
+        "--soft-moe-hidden-dim",
+        type=int,
+        default=64,
+        help="Hidden width of each Soft-MoE expert MLP.",
+    )
+    parser.add_argument(
+        "--soft-moe-num-experts",
+        type=int,
+        default=4,
+        help="Number of one-slot Soft-MoE experts per selected layer.",
+    )
+    parser.add_argument(
+        "--soft-moe-residual-scale",
+        type=float,
+        default=0.10,
+        help="Fixed residual multiplier for Soft-MoE patch updates.",
+    )
+    parser.add_argument(
+        "--soft-moe-router-scale-init",
+        type=float,
+        default=10.0,
+        help="Initial trainable scale for normalized Soft-MoE router logits.",
+    )
+    parser.add_argument(
+        "--soft-moe-init-seed",
+        type=int,
+        default=20260715,
+        help="Isolated initialization seed for Soft-MoE extension tensors.",
+    )
+    parser.add_argument(
         "--deep-class-prompt",
         action="store_true",
         default=False,
@@ -5094,6 +5136,14 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         raise ValueError(
             "--dynamic-graph-mixer khong the dung cung --cross-covariance-attention."
         )
+    if args.soft_moe_hidden_dim <= 0:
+        raise ValueError("--soft-moe-hidden-dim phai > 0.")
+    if args.soft_moe_num_experts <= 1:
+        raise ValueError("--soft-moe-num-experts phai >= 2.")
+    if args.soft_moe_residual_scale < 0.0:
+        raise ValueError("--soft-moe-residual-scale phai >= 0.")
+    if args.soft_moe_router_scale_init <= 0.0:
+        raise ValueError("--soft-moe-router-scale-init phai > 0.")
     if args.deep_class_prompt_logit_scale < 0.0:
         raise ValueError("--deep-class-prompt-logit-scale phai >= 0.")
     if bool(args.patch_style_recalibration) and bool(args.locally_enhanced_ffn):
@@ -6415,6 +6465,13 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
             args.dynamic_graph_mixer_bottleneck_dim
         ),
         dynamic_graph_mixer_k=args.dynamic_graph_mixer_k,
+        soft_moe_patch_adapter=bool(args.soft_moe_patch_adapter),
+        soft_moe_patch_adapter_layers=args.soft_moe_patch_adapter_layers,
+        soft_moe_hidden_dim=args.soft_moe_hidden_dim,
+        soft_moe_num_experts=args.soft_moe_num_experts,
+        soft_moe_residual_scale=args.soft_moe_residual_scale,
+        soft_moe_router_scale_init=args.soft_moe_router_scale_init,
+        soft_moe_init_seed=args.soft_moe_init_seed,
         deep_class_prompt=bool(args.deep_class_prompt),
         deep_class_prompt_logit_scale=args.deep_class_prompt_logit_scale,
         deep_class_prompt_init_seed=args.deep_class_prompt_init_seed,
@@ -8440,6 +8497,7 @@ def _is_allowed_resume_extension_key(key: str) -> bool:
         or ".attn.relative_position_attention." in text
         or ".cross_covariance_attention." in text
         or ".dynamic_graph_mixer." in text
+        or ".soft_moe_patch_adapter." in text
         or ".mlp.style_recalibration." in text
         or any(
             marker in text
@@ -26838,6 +26896,7 @@ def main() -> None:
             or bool(args.visual_contrast_attention)
             or bool(args.cross_covariance_attention)
             or bool(args.dynamic_graph_mixer)
+            or bool(args.soft_moe_patch_adapter)
             or bool(args.deep_class_prompt)
             or bool(args.patch_style_recalibration)
             or bool(args.late_class_attention_pooling)
@@ -27199,6 +27258,44 @@ def main() -> None:
                     },
                     "reason": (
                         "allow checkpoint-safe patch-only ViG max-relative graph mixing"
+                    ),
+                },
+                flush=True,
+            )
+        if bool(args.soft_moe_patch_adapter):
+            model_config.soft_moe_patch_adapter = True
+            model_config.soft_moe_patch_adapter_layers = str(
+                args.soft_moe_patch_adapter_layers
+            )
+            model_config.soft_moe_hidden_dim = int(args.soft_moe_hidden_dim)
+            model_config.soft_moe_num_experts = int(args.soft_moe_num_experts)
+            model_config.soft_moe_residual_scale = float(
+                args.soft_moe_residual_scale
+            )
+            model_config.soft_moe_router_scale_init = float(
+                args.soft_moe_router_scale_init
+            )
+            model_config.soft_moe_init_seed = int(args.soft_moe_init_seed)
+            print(
+                {
+                    "resume_cli_model_extension": {
+                        "soft_moe_patch_adapter": True,
+                        "soft_moe_patch_adapter_layers": (
+                            model_config.soft_moe_patch_adapter_layers
+                        ),
+                        "soft_moe_hidden_dim": model_config.soft_moe_hidden_dim,
+                        "soft_moe_num_experts": model_config.soft_moe_num_experts,
+                        "soft_moe_residual_scale": (
+                            model_config.soft_moe_residual_scale
+                        ),
+                        "soft_moe_router_scale_init": (
+                            model_config.soft_moe_router_scale_init
+                        ),
+                        "soft_moe_init_seed": model_config.soft_moe_init_seed,
+                    },
+                    "reason": (
+                        "allow checkpoint-safe patch-only Soft MoE while preserving "
+                        "every keeper tensor"
                     ),
                 },
                 flush=True,
@@ -29676,6 +29773,7 @@ def main() -> None:
                 or bool(args.visual_contrast_attention)
                 or bool(args.cross_covariance_attention)
                 or bool(args.dynamic_graph_mixer)
+                or bool(args.soft_moe_patch_adapter)
                 or bool(args.deep_class_prompt)
                 or bool(args.patch_style_recalibration)
                 or bool(args.late_class_attention_pooling)
@@ -29773,6 +29871,7 @@ def main() -> None:
                     or bool(args.visual_contrast_attention)
                     or bool(args.cross_covariance_attention)
                     or bool(args.dynamic_graph_mixer)
+                    or bool(args.soft_moe_patch_adapter)
                     or bool(args.deep_class_prompt)
                     or bool(args.patch_style_recalibration)
                     or bool(args.late_class_attention_pooling)

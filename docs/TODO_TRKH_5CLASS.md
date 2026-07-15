@@ -2746,8 +2746,36 @@
   `674` directories with `blockers=[]`. Compileall, focused `10/10`, full
   pytest `1088/1088`, five launcher parses, and current-best/TensorRT/video
   preflights passed. Keep best commands unchanged.
+- [x] Perform a fresh no-repeat and primary-source screen for the next distinct
+  foreground surface/boundary mechanism. Reject hard V-MoE and another
+  granularity-specific classifier because they require long schedules or
+  overlap closed routers/heads. Select a small patch-token Soft MoE grounded
+  in the official V-MoE implementation, with moderate-scale vision-MoE risk
+  explicitly treated as a fail-closed hypothesis rather than assumed gain.
+- [x] Lock the exact default-off Soft-MoE patch-adapter protocol before code:
+  four experts with one slot each, `256->64->256`, layers `2,5`, normalized
+  linear routing, zero-init `0.10` residual, exact `266,754` added parameters,
+  matched fixed-router control, raw-keeper comparison, TP/precision/XAI/
+  illumination/export/resource gates, and no validation/test access.
+- [x] Implement the Soft-MoE module, model/config/CLI/resume/trace wiring,
+  launcher, equation/RNG/checkpoint/gradient/export tests, and train-only
+  Stage-A auditor without changing any raw data or best-command artifact.
+- [x] Run the sole locked source-disjoint `60b x 32` Stage A. Inspect every
+  decision, illumination, routing-collapse, bbox-residual XAI, expert-ablation,
+  ONNX, runtime, and VRAM gate before deciding whether one no-test validation
+  smoke is authorized. Candidate changed zero clean decisions and removed zero
+  of 37 restricted focus FP; eight behavioral gates failed, so Stage B is
+  denied.
+- [x] Repair the audit-only FP32 metadata slicing mismatch and same-precision
+  BF16 equation reference, add regressions, and preserve the immutable formal
+  summary plus hash-locked correction without changing the failed outcome.
+- [x] Close Soft MoE without expert/slot/layer/width/router/residual/LR/seed/
+  fold/budget/loss/augmentation/run-length sweeps. Retain eight verified
+  payloads at manifest SHA `75de0592...b0cd`, exclude `33,805,837` binary
+  bytes, pass retention over `676` directories, compileall, focused `33/33`,
+  full pytest `1103/1103`, five parses, and five operational preflights. Keep
+  the best command/history unchanged.
 - [ ] Perform a fresh no-repeat and primary-source screen for the next distinct
-  foreground surface/boundary mechanism. It must not reuse deep prompts,
-  non-local feature graphs, prototype/margin geometry, another stem, or a
-  class1-support suppression policy. Precommit precision, recall/TP, XAI,
-  robustness, export, and resource gates before any validation access.
+  foreground surface/boundary representation mechanism. Require a train-only
+  clean decision gate with direct restricted-FP correction and class1 TP
+  protection before any validation smoke.

@@ -28,6 +28,7 @@ from trkh.models.cross_covariance_attention import (
 )
 from trkh.models.dynamic_graph_mixer import MaxRelativeDynamicGraphMixer
 from trkh.models.deep_class_prompt import DeepClassPrompt
+from trkh.models.soft_moe_patch_adapter import SoftMoEPatchAdapter
 
 
 def _adaptive_average_matrix(
@@ -5234,6 +5235,12 @@ class CustomTransformerEncoderLayer(nn.Module):
         dynamic_graph_mixer: bool = False,
         dynamic_graph_mixer_bottleneck_dim: int = 64,
         dynamic_graph_mixer_k: int = 9,
+        soft_moe_patch_adapter: bool = False,
+        soft_moe_hidden_dim: int = 64,
+        soft_moe_num_experts: int = 4,
+        soft_moe_residual_scale: float = 0.10,
+        soft_moe_router_scale_init: float = 10.0,
+        soft_moe_init_seed: int = 20260715,
         patch_style_recalibration: bool = False,
         block_depth: int = 0,
     ) -> None:
@@ -5303,6 +5310,18 @@ class CustomTransformerEncoderLayer(nn.Module):
                 k=dynamic_graph_mixer_k,
             )
             if bool(dynamic_graph_mixer)
+            else None
+        )
+        self.soft_moe_patch_adapter = (
+            SoftMoEPatchAdapter(
+                dim=dim,
+                hidden_dim=soft_moe_hidden_dim,
+                num_experts=soft_moe_num_experts,
+                residual_scale=soft_moe_residual_scale,
+                router_scale_init=soft_moe_router_scale_init,
+                init_seed=int(soft_moe_init_seed) + int(block_depth),
+            )
+            if bool(soft_moe_patch_adapter)
             else None
         )
         self.drop_path1 = DropPath(drop_path_rate)
@@ -5426,6 +5445,26 @@ class CustomTransformerEncoderLayer(nn.Module):
             return updated, details
         return updated
 
+    def apply_soft_moe_patch_adapter(
+        self,
+        x: Tensor,
+        *,
+        prefix_count: int,
+        patch_indices: Optional[Tensor] = None,
+        return_details: bool = False,
+    ) -> Tensor | Tuple[Tensor, Dict[str, Tensor]]:
+        module = self.soft_moe_patch_adapter
+        if module is None:
+            if return_details:
+                raise RuntimeError("Soft-MoE patch adapter is not enabled in this block.")
+            return x
+        return module(
+            x,
+            prefix_count=prefix_count,
+            patch_indices=patch_indices,
+            return_details=return_details,
+        )
+
     def forward(
         self,
         x: Tensor,
@@ -5462,6 +5501,12 @@ class CustomTransformerEncoderLayer(nn.Module):
                     prefix_count=prefix_count,
                     patch_indices=patch_indices,
                 )
+            if self.soft_moe_patch_adapter is not None:
+                x = self.apply_soft_moe_patch_adapter(
+                    x,
+                    prefix_count=prefix_count,
+                    patch_indices=patch_indices,
+                )
             x = x + self.drop_path2(
                 self._forward_mlp(
                     x,
@@ -5495,6 +5540,12 @@ class CustomTransformerEncoderLayer(nn.Module):
             x = self.local_patch_mixer(
                 x,
                 grid_size=grid_size,
+                prefix_count=prefix_count,
+                patch_indices=patch_indices,
+            )
+        if self.soft_moe_patch_adapter is not None:
+            x = self.apply_soft_moe_patch_adapter(
+                x,
                 prefix_count=prefix_count,
                 patch_indices=patch_indices,
             )
@@ -5723,6 +5774,13 @@ class VisionTransformerWithRegisters(nn.Module):
         dynamic_graph_mixer_layers: str = "2,5",
         dynamic_graph_mixer_bottleneck_dim: int = 64,
         dynamic_graph_mixer_k: int = 9,
+        soft_moe_patch_adapter: bool = False,
+        soft_moe_patch_adapter_layers: str = "2,5",
+        soft_moe_hidden_dim: int = 64,
+        soft_moe_num_experts: int = 4,
+        soft_moe_residual_scale: float = 0.10,
+        soft_moe_router_scale_init: float = 10.0,
+        soft_moe_init_seed: int = 20260715,
         deep_class_prompt: bool = False,
         deep_class_prompt_logit_scale: float = 0.10,
         deep_class_prompt_init_seed: int = 20260715,
@@ -6146,6 +6204,31 @@ class VisionTransformerWithRegisters(nn.Module):
                 raise ValueError(
                     "Dynamic graph mixing cannot overlap block-local patch mixer layers."
                 )
+        self.soft_moe_patch_adapter_layer_numbers = (
+            _parse_auxiliary_layer_indices(
+                soft_moe_patch_adapter_layers,
+                int(depth),
+            )
+            if bool(soft_moe_patch_adapter)
+            else []
+        )
+        self.soft_moe_patch_adapter_enabled = bool(
+            self.soft_moe_patch_adapter_layer_numbers
+        )
+        self.soft_moe_hidden_dim = int(soft_moe_hidden_dim)
+        self.soft_moe_num_experts = int(soft_moe_num_experts)
+        self.soft_moe_residual_scale = float(soft_moe_residual_scale)
+        self.soft_moe_router_scale_init = float(soft_moe_router_scale_init)
+        self.soft_moe_init_seed = int(soft_moe_init_seed)
+        if self.soft_moe_patch_adapter_enabled:
+            if self.soft_moe_hidden_dim <= 0:
+                raise ValueError("soft_moe_hidden_dim must be positive.")
+            if self.soft_moe_num_experts <= 1:
+                raise ValueError("soft_moe_num_experts must be at least two.")
+            if self.soft_moe_residual_scale < 0.0:
+                raise ValueError("soft_moe_residual_scale must be >= 0.")
+            if self.soft_moe_router_scale_init <= 0.0:
+                raise ValueError("soft_moe_router_scale_init must be positive.")
         self.patch_style_recalibration_layer_numbers = (
             _parse_auxiliary_layer_indices(
                 patch_style_recalibration_layers,
@@ -6476,6 +6559,15 @@ class VisionTransformerWithRegisters(nn.Module):
                         self.dynamic_graph_mixer_bottleneck_dim
                     ),
                     dynamic_graph_mixer_k=self.dynamic_graph_mixer_k,
+                    soft_moe_patch_adapter=(
+                        int(index + 1)
+                        in self.soft_moe_patch_adapter_layer_numbers
+                    ),
+                    soft_moe_hidden_dim=self.soft_moe_hidden_dim,
+                    soft_moe_num_experts=self.soft_moe_num_experts,
+                    soft_moe_residual_scale=self.soft_moe_residual_scale,
+                    soft_moe_router_scale_init=self.soft_moe_router_scale_init,
+                    soft_moe_init_seed=self.soft_moe_init_seed,
                     patch_style_recalibration=(
                         int(index + 1)
                         in self.patch_style_recalibration_layer_numbers
@@ -6865,6 +6957,11 @@ class VisionTransformerWithRegisters(nn.Module):
             )
             if module is not None
         ]
+        soft_moe_modules = [
+            block.soft_moe_patch_adapter
+            for block in self.blocks
+            if block.soft_moe_patch_adapter is not None
+        ]
         if isinstance(self.stem, OctaveConvStem):
             octave_module_ids = {id(child) for child in self.stem.modules()}
             gabor_module_ids = {
@@ -6872,7 +6969,14 @@ class VisionTransformerWithRegisters(nn.Module):
                 for gabor_module in gabor_modules
                 for child in gabor_module.modules()
             }
-            excluded_module_ids = octave_module_ids | gabor_module_ids
+            soft_moe_module_ids = {
+                id(child)
+                for soft_moe_module in soft_moe_modules
+                for child in soft_moe_module.modules()
+            }
+            excluded_module_ids = (
+                octave_module_ids | gabor_module_ids | soft_moe_module_ids
+            )
             with torch.random.fork_rng(devices=[]):
                 legacy_init_proxy = HybridConvStem(
                     in_channels=in_channels,
@@ -6897,25 +7001,26 @@ class VisionTransformerWithRegisters(nn.Module):
                 with torch.random.fork_rng(devices=[]):
                     for gabor_module in gabor_modules:
                         gabor_module.apply(self._init_weights)
-        elif not gabor_modules:
+        elif not gabor_modules and not soft_moe_modules:
             self.apply(self._init_weights)
         else:
-            gabor_module_ids = {
+            isolated_module_ids = {
                 id(child)
-                for gabor_module in gabor_modules
-                for child in gabor_module.modules()
+                for isolated_module in (*gabor_modules, *soft_moe_modules)
+                for child in isolated_module.modules()
             }
 
             def init_base_module(module: nn.Module) -> None:
-                if id(module) not in gabor_module_ids:
+                if id(module) not in isolated_module_ids:
                     self._init_weights(module)
 
             self.apply(init_base_module)
             # Keep the optional branch on the repository's standard
             # initialization while preserving the base model's RNG stream.
-            with torch.random.fork_rng(devices=[]):
-                for gabor_module in gabor_modules:
-                    gabor_module.apply(self._init_weights)
+            if gabor_modules:
+                with torch.random.fork_rng(devices=[]):
+                    for gabor_module in gabor_modules:
+                        gabor_module.apply(self._init_weights)
         if isinstance(self.stem, (InceptionNeXtAttoTokenizer, StarNetS2Tokenizer)):
             self.stem.reset_parameters()
         self._init_parameter_tensors()
@@ -7079,6 +7184,8 @@ class VisionTransformerWithRegisters(nn.Module):
         )
         if self.layer_token_fusion_enabled:
             unsupported_enabled.append("layer_token_fusion")
+        if self.soft_moe_patch_adapter_enabled:
+            unsupported_enabled.append("soft_moe_patch_adapter")
         if unsupported_enabled:
             raise ValueError(
                 "Late-member branch does not yet duplicate these active readouts: "
@@ -8504,6 +8611,49 @@ class VisionTransformerWithRegisters(nn.Module):
                     ):
                         features["trace"][f"cross_covariance_{trace_key}"] = torch.stack(
                             [entry[trace_key] for _, entry in cross_covariance_entries],
+                            dim=0,
+                        )
+            if self.soft_moe_patch_adapter_enabled:
+                soft_moe_entries = []
+                for layer_number in self.soft_moe_patch_adapter_layer_numbers:
+                    module = self.blocks[int(layer_number) - 1].soft_moe_patch_adapter
+                    module_trace = module.trace() if module is not None else {}
+                    if module_trace:
+                        soft_moe_entries.append((int(layer_number), module_trace))
+                if soft_moe_entries:
+                    features["trace"]["soft_moe_patch_adapter_layers"] = torch.tensor(
+                        [layer for layer, _ in soft_moe_entries],
+                        device=tokens.device,
+                        dtype=torch.long,
+                    )
+                    features["trace"]["soft_moe_router_logits"] = {
+                        layer: entry["router_logits"]
+                        for layer, entry in soft_moe_entries
+                    }
+                    features["trace"]["soft_moe_dispatch_weights"] = {
+                        layer: entry["dispatch_weights"]
+                        for layer, entry in soft_moe_entries
+                    }
+                    features["trace"]["soft_moe_combine_weights"] = {
+                        layer: entry["combine_weights"]
+                        for layer, entry in soft_moe_entries
+                    }
+                    features["trace"]["soft_moe_residual_norm"] = {
+                        layer: entry["residual_norm"]
+                        for layer, entry in soft_moe_entries
+                    }
+                    features["trace"]["soft_moe_patch_indices"] = {
+                        layer: entry["patch_indices"]
+                        for layer, entry in soft_moe_entries
+                    }
+                    for trace_key in (
+                        "residual_norm_ratio",
+                        "combine_mass",
+                        "combine_entropy",
+                        "dispatch_similarity_off_diagonal",
+                    ):
+                        features["trace"][f"soft_moe_{trace_key}"] = torch.stack(
+                            [entry[trace_key] for _, entry in soft_moe_entries],
                             dim=0,
                         )
             if self.patch_style_recalibration_enabled:
@@ -10251,6 +10401,13 @@ class DETRVisionTransformerWithRegisters(VisionTransformerWithRegisters):
         dynamic_graph_mixer_layers: str = "2,5",
         dynamic_graph_mixer_bottleneck_dim: int = 64,
         dynamic_graph_mixer_k: int = 9,
+        soft_moe_patch_adapter: bool = False,
+        soft_moe_patch_adapter_layers: str = "2,5",
+        soft_moe_hidden_dim: int = 64,
+        soft_moe_num_experts: int = 4,
+        soft_moe_residual_scale: float = 0.10,
+        soft_moe_router_scale_init: float = 10.0,
+        soft_moe_init_seed: int = 20260715,
         deep_class_prompt: bool = False,
         deep_class_prompt_logit_scale: float = 0.10,
         deep_class_prompt_init_seed: int = 20260715,
@@ -10571,6 +10728,13 @@ class DETRVisionTransformerWithRegisters(VisionTransformerWithRegisters):
                 dynamic_graph_mixer_bottleneck_dim
             ),
             dynamic_graph_mixer_k=dynamic_graph_mixer_k,
+            soft_moe_patch_adapter=soft_moe_patch_adapter,
+            soft_moe_patch_adapter_layers=soft_moe_patch_adapter_layers,
+            soft_moe_hidden_dim=soft_moe_hidden_dim,
+            soft_moe_num_experts=soft_moe_num_experts,
+            soft_moe_residual_scale=soft_moe_residual_scale,
+            soft_moe_router_scale_init=soft_moe_router_scale_init,
+            soft_moe_init_seed=soft_moe_init_seed,
             deep_class_prompt=deep_class_prompt,
             deep_class_prompt_logit_scale=deep_class_prompt_logit_scale,
             deep_class_prompt_init_seed=deep_class_prompt_init_seed,
