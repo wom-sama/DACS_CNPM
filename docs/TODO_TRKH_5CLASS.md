@@ -2678,11 +2678,24 @@
   prefix/spatial-MHSA/pruning/XAI paths, `8,192` new trainable parameters, and
   a source-disjoint head-only versus head+SRM train-only gate. Protocol SHA is
   `e71918dc...6779`; validation/test remain closed.
-- [ ] Implement default-off `patch_style_recalibration`, config/CLI/checkpoint/
+- [x] Implement default-off `patch_style_recalibration`, config/CLI/checkpoint/
   trace wiring, equation/RNG/gradient/export regressions, and a fail-closed
-  Stage-A auditor. Do not add a second style method, auxiliary loss, spatial
-  gate, or alter raw data.
-- [ ] Run the locked fold-0 `30b x 32` train-only adaptation plus clean and
+  Stage-A auditor. Exact state/RNG/equation/gradient/gate/ablation/static-ONNX
+  checks passed; the candidate added exactly `8,192` parameters and no raw
+  data, validation, or test path was touched.
+- [x] Run the locked fold-0 `30b x 32` train-only adaptation plus clean and
   three-condition illumination gates. Authorize one `120b x 2e` full-val,
   no-test smoke only if class1 precision/F1 rises, restricted FP falls, TP is
-  preserved, and every functional/export/resource gate passes.
+  preserved, and every functional/export/resource gate passes. Nine gates
+  failed: adapted class1 F1/P/R fell `-0.005739/-0.001206/-0.009174`, no
+  restricted FP was removed, TP breaks exceeded rescues, low-contrast
+  precision fell `-0.031674`, and runtime was `1.616455x`. Stage B is denied.
+- [x] Close Patch-Style SRM without layer/CFC/BN/gate/LR/seed/fold/budget/loss/
+  augmentation/run-length sweeps. Preserve the completed Stage-A evidence,
+  compact only two superseded infrastructure roots, rerun retention, and keep
+  the keeper/scratch/current-command hashes unchanged. Retention passed over
+  `670` directories with `blockers=[]`; no best-command revision was added.
+- [ ] Select and precommit the next genuinely distinct representation method
+  only after a fresh local no-repeat screen and primary-source review. Require
+  a train-only hard-decision gate that predicts class1 FP suppression while
+  protecting class1 TP before any full-validation smoke.

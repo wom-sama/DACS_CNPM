@@ -41,5 +41,5 @@ new command/audit/deployment capability, verification result, and new command
 SHA-256. Rejected smoke/probe results do not increment this history unless they
 materially change the published command packet.
 
-The in-progress Patch-Style SRM Stage A is not counted. It has not passed a
-promotion gate and has not changed the full-train command.
+The rejected Patch-Style SRM Stage A is not counted. It did not pass its
+train-only promotion gate and did not change the full-train command.

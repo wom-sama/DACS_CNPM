@@ -16145,3 +16145,62 @@ Date: 2026-07-02
   positive correction balance, and dim/bright/low-contrast safety. Only a
   complete pass permits one keeper-initialized `120b x 2e` full-validation,
   no-test smoke. No current-best command changed.
+
+## Patch-Style SRM FFN Closure 2026-07-15 - Live Style Gates, Wrong FP Direction
+
+### Train-only readiness result
+
+- Implemented the locked default-off patch-only SRM after GELU in FFN layers
+  `2,5`. Exact checkpoint additions, `8,192` parameters, existing-state bit
+  equality, constructor/forward RNG, FP32/BF16 equation and gradient families,
+  frozen-state equality, state movement, gate noncollapse, layer ablation,
+  illumination response, and static-batch-1 ONNX parity all passed.
+- Stage A used only `yolo_f/train=9215`: source-disjoint fold 0 had `7372`
+  fit and `1843` holdout rows with zero source overlap. Control and candidate
+  consumed the identical `30 x 32 = 960` rows in order SHA
+  `e94fe9bd...10b7a4a8`; validation and test loaders were never constructed.
+- Adapted gate deviations from `0.5` were `0.010157/0.007955`, layer ablations
+  changed logits by `0.059570/0.022461`, and every locked lighting shift moved
+  both gates. The mechanism is live, not a dead initialization artifact.
+- Isolated/full ONNX errors were `5.96e-8/2.68e-7` with matching argmax; peak
+  VRAM passed at `0.764486 GiB`. Runtime failed at `1.616455x`, but independent
+  decision failures already close the route.
+
+### Decision-level failure
+
+- The initial `0.5` candidate gate slightly worsened macro/class1 F1 by
+  `-0.001434/-0.003330` and class1 precision by `-0.005125`, with `1/3`
+  corrections/harms and one net added restricted focus FP.
+- After matched adaptation, control/candidate macro F1 was
+  `0.940928/0.940045`; class1 F1 was `0.829268/0.823529`. Candidate deltas
+  were class1 F1/P/R `-0.005739/-0.001206/-0.009174`, with `3/3`
+  corrections/harms, zero restricted FP reduction, and `1/2` FN rescues/TP
+  breaks.
+- Dim and bright shifts kept class1 metrics unchanged but reduced macro F1.
+  Low contrast reduced macro/class1 F1 by `-0.002973/-0.014984`, reduced
+  class1 precision by `-0.031674`, and created one focus FP while removing
+  none. The learned style response is not class-selective precision control.
+- Nine precommitted gates failed. `stage_b_smoke_authorized=false`; no
+  validation, test, probe, full train, or nearby sweep was run. Close SRM
+  layers/CFC/BN/gate/LR/seed/fold/budget/loss/augmentation/run-length variants.
+
+### Evidence, cleanup, and command decision
+
+- Final summary SHA is `80af1fd4...8b196`; holdout/illumination prediction
+  hashes are `aba1a021...f05d54c` and `d9d93fbd...3134e7`; final isolated/
+  full ONNX hashes are `e8ba3a41...2097de` and `e5b1ce3e...9a4ba`.
+- Compacted the failed-export root and temporary export preflight only after
+  recording every binary hash. Evidence manifest SHA is
+  `c55a9967...cee64d`; cleanup manifest SHA is `f57be6ae...5fdac8`;
+  `30,614,685` binary bytes were excluded and `30,621,696` bytes were freed.
+- Retention passed over `670` directories with `blockers=[]`, summary SHA
+  `e91bff5d...4339f5`. Keeper, scratch complement, and command hashes remain
+  `1f49d577...482677`, `f8bd6309...1a549`, and `36b9aa1a...40faf`.
+- Closure engineering passed compileall, focused SRM tests `14/14`, full pytest
+  `1065/1065` in `76.93 s`, three launcher parses, the no-validation/no-test
+  SRM preflight, and the current-best full-pipeline preflight with its raw-
+  keeper promotion gate intact.
+- Full closure is recorded in
+  `docs/TRKH_5CLASS_PATCH_STYLE_SRM_FFN_CLOSURE_20260715.md`. The current-best
+  command and its update-history counter remain unchanged because SRM never
+  reached validation and did not win the train-only gate.
