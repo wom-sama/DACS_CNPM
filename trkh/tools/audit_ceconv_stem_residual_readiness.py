@@ -67,7 +67,6 @@ from trkh.tools.audit_xca_dual_axis_readiness import (
     _git_commit,
     _make_loader,
     _metadata_to_device,
-    _predict,
     _prepare_output_dir,
     _rng_snapshot,
     _rng_summary,
@@ -1044,66 +1043,92 @@ def _initial_exactness(
     }
 
 
-def _predict_conditions(
+def _predict_paired_conditions(
     *,
-    name: str,
-    prototype: nn.Module,
+    control_prototype: nn.Module,
+    candidate_prototype: nn.Module,
     base_dataset: MangoYOLOCropDataset,
     transform,
     holdout_indices: Sequence[int],
     args: argparse.Namespace,
     device: torch.device,
     amp_dtype: torch.dtype,
-) -> tuple[Dict[str, list[Dict[str, object]]], Dict[str, object]]:
-    model = copy.deepcopy(prototype).to(device).eval()
-    output: Dict[str, list[Dict[str, object]]] = {}
+) -> tuple[
+    Dict[str, list[Dict[str, object]]],
+    Dict[str, list[Dict[str, object]]],
+    Dict[str, object],
+]:
+    control = copy.deepcopy(control_prototype).to(device).eval()
+    candidate = copy.deepcopy(candidate_prototype).to(device).eval()
+    control_output: Dict[str, list[Dict[str, object]]] = {}
+    candidate_output: Dict[str, list[Dict[str, object]]] = {}
     loader_summaries: Dict[str, object] = {}
-    clean_loader, clean_summary = _make_loader(
-        base_dataset=base_dataset,
-        transform=transform,
-        indices=holdout_indices,
-        batch_size=int(args.batch_size),
-        num_workers=int(args.num_workers),
-        context=f"ceconv_{name}_clean_holdout",
-        seed=int(args.seed) + 500,
-    )
-    output["clean"] = _predict(
-        model=model,
-        loader=clean_loader,
-        device=device,
-        amp_dtype=amp_dtype,
-    )
-    loader_summaries["clean"] = clean_summary
-    for condition_index, (condition, brightness, contrast) in enumerate(
-        LIGHTING_CONDITIONS
-    ):
-        loader, summary = _make_lighting_loader(
-            base_dataset=base_dataset,
-            transform=transform,
-            indices=holdout_indices,
-            brightness=float(brightness),
-            contrast=float(contrast),
-            batch_size=int(args.batch_size),
-            num_workers=int(args.num_workers),
-            context=f"ceconv_{name}_{condition}_holdout",
-            seed=int(args.seed) + 510 + condition_index,
-        )
-        output[str(condition)] = _predict(
-            model=model,
-            loader=loader,
-            device=device,
-            amp_dtype=amp_dtype,
-        )
+    condition_specs = [("clean", None, None), *LIGHTING_CONDITIONS]
+    for condition_index, (condition, brightness, contrast) in enumerate(condition_specs):
+        if condition == "clean":
+            loader, summary = _make_loader(
+                base_dataset=base_dataset,
+                transform=transform,
+                indices=holdout_indices,
+                batch_size=int(args.batch_size),
+                num_workers=int(args.num_workers),
+                context="ceconv_paired_clean_holdout",
+                seed=int(args.seed) + 500,
+            )
+        else:
+            loader, summary = _make_lighting_loader(
+                base_dataset=base_dataset,
+                transform=transform,
+                indices=holdout_indices,
+                brightness=float(brightness),
+                contrast=float(contrast),
+                batch_size=int(args.batch_size),
+                num_workers=int(args.num_workers),
+                context=f"ceconv_paired_{condition}_holdout",
+                seed=int(args.seed) + 510 + condition_index,
+            )
+        control_rows: list[Dict[str, object]] = []
+        candidate_rows: list[Dict[str, object]] = []
+        with torch.inference_mode():
+            for images, targets, metadata in loader:
+                images = images.to(device=device, non_blocking=True)
+                targets = targets.to(device=device, dtype=torch.long, non_blocking=True)
+                sample_indices = metadata.get("sample_index")
+                if not torch.is_tensor(sample_indices):
+                    raise ValueError("Paired prediction metadata is missing sample_index.")
+                probabilities = []
+                for model in (control, candidate):
+                    with torch.autocast(device_type="cuda", dtype=amp_dtype):
+                        logits = _forward_logits(model, images, metadata, device=device)
+                    probabilities.append(logits.float().softmax(dim=1))
+                for position, sample_index in enumerate(sample_indices.tolist()):
+                    for destination, values in (
+                        (control_rows, probabilities[0]),
+                        (candidate_rows, probabilities[1]),
+                    ):
+                        row: Dict[str, object] = {
+                            "sample_index": int(sample_index),
+                            "target": int(targets[position].item()),
+                            "prediction": int(values[position].argmax().item()),
+                        }
+                        for class_index in range(5):
+                            row[f"prob_{class_index}"] = float(
+                                values[position, class_index].item()
+                            )
+                        destination.append(row)
+        control_output[str(condition)] = control_rows
+        candidate_output[str(condition)] = candidate_rows
         loader_summaries[str(condition)] = summary
-    del model
+    del control, candidate
     gc.collect()
     torch.cuda.empty_cache()
     expected = list(holdout_indices)
-    for condition, values in output.items():
-        observed = [int(row["sample_index"]) for row in values]
-        if observed != expected:
-            raise ValueError(f"{name}/{condition} prediction order differs.")
-    return output, loader_summaries
+    for name, result in (("control", control_output), ("candidate", candidate_output)):
+        for condition, values in result.items():
+            observed = [int(row["sample_index"]) for row in values]
+            if observed != expected:
+                raise ValueError(f"{name}/{condition} paired prediction order differs.")
+    return control_output, candidate_output, loader_summaries
 
 
 def _benchmark(
@@ -1123,6 +1148,15 @@ def _benchmark(
         parameter.requires_grad_(False)
     if candidate:
         _configure_trainability(model)
+    named_parameters = dict(model.named_parameters())
+    for name in ("head.weight", "head.bias"):
+        parameter = named_parameters.get(name)
+        if parameter is None:
+            raise ValueError(f"Benchmark classifier parameter is missing: {name}")
+        parameter.requires_grad_(True)
+    benchmark_trainable = [
+        name for name, parameter in model.named_parameters() if parameter.requires_grad
+    ]
     metadata = _metadata_to_device(
         metadata_cpu,
         device=device,
@@ -1132,7 +1166,7 @@ def _benchmark(
 
     def iteration() -> tuple[Tensor, Tensor]:
         model.zero_grad(set_to_none=True)
-        images = images_cpu.detach().clone().to(device).requires_grad_(True)
+        images = images_cpu.detach().to(device)
         with torch.autocast(device_type="cuda", dtype=amp_dtype):
             logits = _forward_logits(model, images, metadata, device=device)
             loss = F.cross_entropy(logits.float(), targets)
@@ -1154,6 +1188,7 @@ def _benchmark(
         "median_seconds": float(statistics.median(elapsed)),
         "peak_vram_gib": float(torch.cuda.max_memory_allocated(device) / (1024**3)),
         "logits_loss_finite": bool(torch.isfinite(logits).all() and torch.isfinite(loss)),
+        "trainable_parameters": benchmark_trainable,
     }
     del model
     gc.collect()
@@ -2149,19 +2184,9 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
         amp_dtype=amp_dtype,
     )
 
-    control_conditions, control_loaders = _predict_conditions(
-        name="identity_control",
-        prototype=control_model,
-        base_dataset=dataset,
-        transform=transform,
-        holdout_indices=cohorts["holdout_indices"],
-        args=args,
-        device=device,
-        amp_dtype=amp_dtype,
-    )
-    candidate_conditions, candidate_loaders = _predict_conditions(
-        name="ceconv_candidate",
-        prototype=candidate_model,
+    control_conditions, candidate_conditions, paired_loaders = _predict_paired_conditions(
+        control_prototype=control_model,
+        candidate_prototype=candidate_model,
         base_dataset=dataset,
         transform=transform,
         holdout_indices=cohorts["holdout_indices"],
@@ -2440,8 +2465,7 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
         },
         "loaders": {
             "resource": resource_loader_summary,
-            "control_conditions": control_loaders,
-            "candidate_conditions": candidate_loaders,
+            "paired_conditions": paired_loaders,
         },
         "validation_predictions_used": False,
         "test_data_used": False,
