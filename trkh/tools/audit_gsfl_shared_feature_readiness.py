@@ -6,10 +6,14 @@ import csv
 import hashlib
 import json
 import math
+import os
 import subprocess
 import time
 from pathlib import Path
 from typing import Dict, Mapping, Optional, Sequence
+
+# CuBLAS needs this before its first CUDA handle is created for deterministic GEMM.
+os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 
 import numpy as np
 import torch

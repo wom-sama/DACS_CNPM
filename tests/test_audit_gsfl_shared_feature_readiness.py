@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import os
 
 import numpy as np
 import torch
@@ -25,6 +26,7 @@ from trkh.tools.audit_gsfl_shared_feature_readiness import (
 
 def test_protocol_defaults_match_locked_recipe() -> None:
     args = parse_args([])
+    assert os.environ["CUBLAS_WORKSPACE_CONFIG"] == ":4096:8"
     assert args.device == "cuda"
     assert args.preflight_only is False
     assert EPOCHS == 30
