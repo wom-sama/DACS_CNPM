@@ -16204,3 +16204,76 @@ Date: 2026-07-02
   `docs/TRKH_5CLASS_PATCH_STYLE_SRM_FFN_CLOSURE_20260715.md`. The current-best
   command and its update-history counter remain unchanged because SRM never
   reached validation and did not win the train-only gate.
+
+## ViG Max-Relative Graph Closure 2026-07-15 - Active Non-Local Mixing Broke Class-1 TP
+
+### Research and readiness scope
+
+- A train-only attention diagnostic first rejected DeepViT Re-Attention as a
+  mechanism mismatch. Across 80 balanced fold-0 rows, adjacent keeper
+  full-map cosines were only `0.398-0.645`, late inter-head map cosines were
+  `0.113-0.185`, and late effective ranks were `7.52-7.74/8`; the current
+  eight-block Transformer does not exhibit the deep attention collapse that
+  Re-Attention targets.
+- Re-read official ODConv commit `0901cc1...` and retained its prior no-repeat
+  exclusion: multiplicative dynamic convolution overlaps failed stem routes
+  and official recipes require long schedules. No ODConv implementation or
+  smoke was opened.
+- Selected official Vision GNN commit `f90e129b...71f7` as a genuinely new
+  patch-interaction mechanism. Locked protocol SHA is `9a0ad9f9...82dd76`.
+  The exact TRKH adaptation used patch-only `k=9` normalized kNN and the
+  official max-relative message after spatial MHSA in layers `2,5`, with a
+  deterministic `256->64` projection and zero-init `128->256` residual.
+
+### Stage-A result
+
+- Stage A used only `yolo_f/train=9215`, with `7372` source-disjoint fit rows,
+  `1843` fold-0 holdout rows, and matched `30 x 32` head-only versus
+  head-plus-graph adaptation. Validation/test loaders were never constructed.
+- Exact ten-key checkpoint extension, `99,840` added parameters, existing-state
+  bit equality, constructor/forward RNG equality, zero-init logit equality,
+  FP32/BF16 equations and gradients, state movement, pruning, and all eight
+  spatial-MHSA layers passed.
+- The graph was strongly live: residual ratios `0.096046/0.095173`, non-local
+  fractions `0.681464/0.669135`, neighbor entropy `0.968467/0.972371`, and
+  layer-ablation logit deltas `0.261719/0.148438`. It did not fail from branch
+  starvation or graph collapse.
+- Adapted control/candidate macro F1 was `0.940928/0.906509`; class1 F1 was
+  `0.829268/0.681818`. Class1 precision rose `+0.010106`, but recall fell
+  `-0.229358`. The graph changed `38` decisions with `8/29`
+  corrections/harms, removed four restricted focus FP, rescued zero FN, and
+  broke `25` class1 TP. Precision rose by suppressing class1 predictions, not
+  by learning a safe boundary.
+- Dim/bright/low-contrast macro deltas were all negative, class1 F1 deltas were
+  `-0.109557/-0.048884/-0.120833`, and rescue/TP-break counts were
+  `0/9`, `1/6`, and `0/12`. The same unsafe TP suppression persisted under
+  illumination shifts.
+- Full static ONNX passed at `3.58e-7`; isolated graph ONNX error was
+  `3.492e-4`, likely from near-tied TopK ordering. Runtime was `1.514575x` and
+  peak VRAM `0.786735 GiB`. Behavior independently rejects the route.
+
+### Decision and provenance
+
+- Summary SHA is `8bcacda2...bde77`; full closure is in
+  `docs/TRKH_5CLASS_VIG_MAX_RELATIVE_GRAPH_CLOSURE_20260715.md`.
+  `stage_b_smoke_authorized=false`; no validation, test, Stage-B XAI, probe,
+  full train, or nearby sweep was run.
+- Do not sweep graph k/layer/width/type/self-neighbor/residual/LR/seed/fold/
+  budget/loss/augmentation/run length or convert it into a post-hoc class1
+  filter. Non-local feature similarity is not a reliability signal for this
+  broad, multimodal class 1.
+- Keeper, scratch complement, and current command remain unchanged. The best-
+  command history receives no revision because this method never reached or
+  won validation.
+- Rejected-run compaction retained seven verified payloads at manifest SHA
+  `7452c05a...e7671`, excluded two ONNX files totaling `31,168,862` bytes,
+  verified source deletion, and observed `33,783,808` bytes freed. Cleanup
+  manifest SHA is `996841bf...07cbc8`.
+- Read-only retention passed over `672` directories with zero compacted
+  originals remaining and `blockers=[]`; summary SHA is
+  `4c684244...7f69d9`. Protected keeper/scratch/command hashes remained exact.
+- Closure verification passed compileall, focused `37/37`, full pytest
+  `1078/1078` in `90.60 s`, five PowerShell parses, and current-best/TensorRT/
+  video operational preflights. The protected user-owned untracked paths were
+  untouched and unstaged.
+- Final closure document SHA is `2a35de81...5aabab`.

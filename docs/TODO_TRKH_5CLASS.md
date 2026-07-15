@@ -2695,7 +2695,33 @@
   compact only two superseded infrastructure roots, rerun retention, and keep
   the keeper/scratch/current-command hashes unchanged. Retention passed over
   `670` directories with `blockers=[]`; no best-command revision was added.
-- [ ] Select and precommit the next genuinely distinct representation method
-  only after a fresh local no-repeat screen and primary-source review. Require
-  a train-only hard-decision gate that predicts class1 FP suppression while
-  protecting class1 TP before any full-validation smoke.
+- [x] Complete the fresh no-repeat and primary-source screen. Reject DeepViT
+  Re-Attention because the keeper has diverse, evolving heads/layers rather
+  than attention collapse; retain ODConv exclusion; select official ViG
+  max-relative dynamic patch graphs as a genuinely untried mechanism.
+- [x] Precommit the exact ViG protocol at SHA `9a0ad9f9...82dd76`, then
+  implement default-off graph layers `2,5`, deterministic `256->64` projection,
+  `k=9` normalized kNN, max-relative message, zero-init residual, complete
+  config/CLI/resume/trace wiring, tests, and a no-validation/no-test Stage-A
+  auditor.
+- [x] Run the locked source-disjoint `30b x 32` train-only paired adaptation.
+  The graph was structurally live but reduced macro/class1 F1 by
+  `-0.034419/-0.147450`; class1 precision rose `+0.010106` only while recall
+  fell `-0.229358`, with `0/25` FN-rescues/TP-breaks and `8/29`
+  corrections/harms. All three lighting class1 F1 deltas were negative.
+  Stage B is denied; summary SHA is `8bcacda2...bde77`.
+- [x] Close ViG without k/layer/width/type/self-neighbor/residual/LR/seed/fold/
+  budget/loss/augmentation/run-length sweeps and without validation/test/XAI
+  Stage B. Preserve nonbinary evidence, compact rejected ONNX binaries, rerun
+  full engineering verification/retention, and leave the current-best command
+  unchanged. Compaction retained seven verified payloads at manifest SHA
+  `7452c05a...e7671`, excluded `31,168,862` ONNX bytes, and retention passed
+  over `672` directories with zero originals remaining and `blockers=[]`.
+  Compileall, focused `37/37`, full pytest `1078/1078`, five launcher parses,
+  and current-best/TensorRT/video preflights passed.
+- [ ] Select the next method only after a fresh no-repeat and primary-source
+  review. It must encode class-specific foreground boundary evidence without
+  relying on far-background localization, non-local feature similarity,
+  current-embedding prototype/margin geometry, or another local/dynamic stem.
+  Precommit direct class1 TP protection and focus-FP suppression before any
+  validation smoke.
