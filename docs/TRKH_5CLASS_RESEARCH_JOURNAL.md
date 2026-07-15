@@ -16766,3 +16766,70 @@ Date: 2026-07-02
   Retention/final closure SHAs are `8ffca9fe...a829ac` and
   `b481e9a5...877920`; best-command tracking remains three revisions/two
   updates after the initial revision.
+
+## Class-1 Boundary CAGrad Selection 2026-07-15 - Last Condition-Gradient Screen
+
+- Re-read the NeurIPS-2021 CAGrad paper and cloned official commit
+  `dc3d481...3b095`. CAGrad maximizes worst local task improvement inside a
+  radius around the average gradient; unlike MGDA/PCGrad, `c<1` retains the
+  paper's average-objective convergence target.
+- This does not reopen the failed joint spatial PCGrad route: the four tasks
+  are identical-row clean/dim/bright/low-contrast boundary risks, with no
+  localization/objectness auxiliary loss. A-GEM/GEM memories, GroupDRO, and
+  V-REx are retained only as closed comparators.
+- The paper selected `c` by search and reported `0.4` for NYU-v2. The sole A0
+  transfers exactly `c=0.4`, equal hard/class1 CE, all `186/432` fit rows, and
+  one normalized `1e-4` step. No `c`, task-weight, solver, step, or macrostep
+  sweep is allowed.
+- Algorithm 1's `g_w/K` differs from official supervised code's `g_w`; the
+  scale cancels analytically. The auditor must verify paper/code direction
+  invariance, official epsilon/rescale replay, simplex/KKT/multistart geometry,
+  and worst-task first-order improvement before behavior is considered.
+- Raw, aggregate-margin A-GEM, environment-mean ERM, and beta-1 V-REx are
+  hash-locked comparators. Promotion requires simultaneous clean precision/F1,
+  TP/support, restricted FP, illumination, worst-risk, solver, provenance, and
+  independent-replay gates. Immutable protocol SHA is
+  `79047d2b...48c9419`.
+- If the A0 fails, close condition-level CAGrad/MGDA/PCGrad/Agr/GradNorm and
+  nearby gradient-combination variants on this keeper; continue only with a
+  different representation or objective mechanism.
+- Implemented the CAGrad auditor as an isolated train-only tool. It reuses the
+  locked V-REx cohort/loaders, computes a four-task FP64 Gram matrix, solves
+  the official simplex dual from nine deterministic starts, verifies KKT,
+  paper/code scale invariance and official epsilon/rescale direction, then
+  evaluates only one matched normalized candidate step.
+- Compile, focused `5/5`, PowerShell parse, diff check, and preflight passed.
+  Preflight verified all paper/repository/local hashes, clean official commit,
+  exact `7372/1843` split and `186/432` cohorts, four `1843`-row prior
+  conditions, zero argmax/CIDT mismatch, and no output-directory creation.
+
+## Class-1 Boundary CAGrad Closure 2026-07-16 - Worst-Direction Gain Still Widens Class 1
+
+- All nine solver starts converged. The locked `c=0.4` direction used weights
+  `[0.459441, 0, 0.540559, 0]`, sat exactly at relative radius `0.4`, and
+  improved the minimum first-order task dot by `+13.414594` versus ERM.
+- The maximum KKT residual `1.054798e-7` and FP32 paper-scale replay error
+  `4.455624e-9` narrowly missed their immutable numerical gates. Independent
+  FP64 replay confirmed exact paper/code coefficient equivalence, so neither
+  miss explains the behavioral rejection.
+- Versus raw, CAGrad changed macro/class1 F1 `-0.008905/-0.026129`, lowered
+  class1 precision `-0.039642`, kept recall fixed, and increased restricted FP
+  `36 -> 44`. Corrections/harms were `4/15`.
+- CAGrad tied ERM/V-REx on class1 decisions, lost another `0.000515` macro F1,
+  and lost class1 F1 `-0.039826` to aggregate-margin A-GEM. Dim/bright/low
+  contrast created `29/20/17` net restricted FP and lowered precision in all
+  three conditions.
+- Worst boundary risk rose `1.410716 -> 1.414515` versus ERM. Independent
+  replay matched all `7372` rows, prior probabilities, metrics, transitions,
+  risks, solver values, argmax values, and artifact hashes. Summary/manifest
+  SHAs are `dab24c6d...a37750` and `7f1f2a18...d1ced`.
+- Close condition-level CAGrad/MGDA/PCGrad/Agr/GradNorm and nearby gradient
+  combiners on this keeper. No parameter or macrostep sweep, validation/test,
+  probe/full train, post-hoc router, or current-best command revision is
+  allowed. Continue only with a distinct representation/objective mechanism.
+- Closure verification passed compilation, focused `5/5`, full pytest
+  `1161/1161`, launcher parse/preflight, protected hashes, and read-only
+  retention over `693` directories with `blockers=[]`. Retention summary SHA
+  is `143e0c3c...d17a45d`; command tracking remains three revisions/two
+  updates after the initial revision. Final closure SHA is
+  `adf12c7e...db94ce6`.

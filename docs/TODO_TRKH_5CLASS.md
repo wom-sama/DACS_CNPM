@@ -2928,3 +2928,34 @@
   passed (`6/6`, `1156/1156`), parse/preflight and independent replay passed,
   and retention passed over `691` directories with `blockers=[]`. Final
   closure SHA is `b481e9a5...877920`; command tracking remains three revisions.
+- [x] Perform a fresh primary-source/no-repeat screen after V-REx. Select one
+  final condition-gradient A0 using NeurIPS-2021 CAGrad, because it optimizes
+  worst local task improvement while retaining the average objective for
+  `c<1`; keep the failed spatial PCGrad, GEM/A-GEM, GroupDRO, and V-REx routes
+  closed.
+- [x] Lock boundary-balanced CAGrad before code: `c=0.4` from the paper's
+  NYU-v2 vision result, four identical-row condition risks, equal hard/class1
+  CE, one normalized `1e-4` step, raw/margin/ERM/V-REx comparators, exact
+  simplex/KKT/source-replay and precision/TP/FP/illumination gates. Protocol
+  SHA is `79047d2b...48c9419`; no neighboring sweep is allowed.
+- [x] Implement the fail-closed CAGrad auditor, official-source/paper-scale
+  equation checks, deterministic multistart solver replay, focused tests, and
+  PowerShell preflight. Do not touch the shared trainer or any raw dataset.
+  Compile/focused `5/5`, launcher parse, diff check, and preflight passed with
+  exact source/cohort/prior hashes and no output directory.
+- [x] Run the sole locked train-only CAGrad A0 and independently replay every
+  solver/CSV/risk/hash artifact. The valid conflict-averse direction still
+  reduced clean macro/class1 F1 `-0.008905/-0.026129`, lowered precision
+  `-0.039642`, and increased restricted FP `36 -> 44`; all shifted conditions
+  also created FP. Stage B is denied and the condition-gradient family is
+  closed without sweeps.
+- [x] Complete CAGrad closure engineering: compilation/focused `5/5`, full
+  pytest `1161/1161`, launcher parse/preflight, independent replay, and
+  retention over `693` directories all passed; all protected hashes are exact.
+  Current-best command tracking remains three revisions/two updates and is
+  unchanged by CAGrad. Final closure SHA is `adf12c7e...db94ce6`.
+- [ ] Perform a fresh primary-source/no-repeat screen for a representation or
+  objective mechanism outside the closed gradient-combination family. It must
+  preserve raw and aggregate-margin comparators, target restricted class1 FP
+  without TP/support loss, and begin with a precommitted train-only information
+  gate before shared-trainer work.
