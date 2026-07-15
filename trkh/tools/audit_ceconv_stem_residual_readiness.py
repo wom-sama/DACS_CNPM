@@ -1405,14 +1405,16 @@ def _collect_xai_maps(
         sample_indices = metadata.get("sample_index")
         if not torch.is_tensor(sample_indices):
             raise ValueError("XAI metadata is missing sample_index.")
-        images = images_cpu.to(device).requires_grad_(True)
+        images = images_cpu.to(device)
         captured: Dict[str, Tensor] = {}
 
         def hook(_module, _inputs, output):
             if not torch.is_tensor(output):
                 raise TypeError("Stem hook output must be a tensor.")
-            output.retain_grad()
-            captured["activation"] = output
+            activation = output.detach().requires_grad_(True)
+            activation.retain_grad()
+            captured["activation"] = activation
+            return activation
 
         handle = model.stem.register_forward_hook(hook)
         model.zero_grad(set_to_none=True)
@@ -1453,7 +1455,8 @@ def _collect_xai_maps(
             records[int(sample_index)] = row
     del model
     gc.collect()
-    torch.cuda.empty_cache()
+    if device.type == "cuda":
+        torch.cuda.empty_cache()
     observed = list(records)
     if observed != list(selected_indices):
         raise ValueError(f"{name} XAI order differs from selected indices.")
@@ -1664,7 +1667,6 @@ def _xai_audit(
     candidate_conditions: Mapping[str, Sequence[Mapping[str, object]]],
     candidate_training: Mapping[str, object],
     args: argparse.Namespace,
-    device: torch.device,
 ) -> Dict[str, object]:
     selected, categories = _required_xai_indices(
         raw_conditions["clean"],
@@ -1672,6 +1674,7 @@ def _xai_audit(
         candidate_conditions["clean"],
     )
     mean, std = checkpoint_input_normalization(checkpoint)
+    xai_device = torch.device("cpu")
     raw_result = _collect_xai_maps(
         name="raw",
         prototype=raw,
@@ -1679,7 +1682,7 @@ def _xai_audit(
         transform=transform,
         selected_indices=selected,
         args=args,
-        device=device,
+        device=xai_device,
         mean=mean,
         std=std,
         collect_groups=False,
@@ -1691,7 +1694,7 @@ def _xai_audit(
         transform=transform,
         selected_indices=selected,
         args=args,
-        device=device,
+        device=xai_device,
         mean=mean,
         std=std,
         collect_groups=True,
@@ -1703,7 +1706,7 @@ def _xai_audit(
         transform=transform,
         selected_indices=selected,
         args=args,
-        device=device,
+        device=xai_device,
         mean=mean,
         std=std,
         collect_groups=True,
@@ -1745,6 +1748,7 @@ def _xai_audit(
         "target_class": FOCUS_CLASS,
         "gradcam_source": "stem_output",
         "group_energy_source": "candidate_first_block_pre_coset_abs_channel_mean",
+        "device": "cpu_fp32_deterministic",
     }
     manifest_path = output_dir / "ceconv_xai_manifest.json"
     manifest_path.write_text(
@@ -2245,7 +2249,6 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
         candidate_conditions=candidate_conditions,
         candidate_training=candidate_training,
         args=args,
-        device=device,
     )
 
     candidate_movement = candidate_training["state_movement"]
