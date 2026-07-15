@@ -2775,7 +2775,23 @@
   bytes, pass retention over `676` directories, compileall, focused `33/33`,
   full pytest `1103/1103`, five parses, and five operational preflights. Keep
   the best command/history unchanged.
-- [ ] Perform a fresh no-repeat and primary-source screen for the next distinct
-  foreground surface/boundary representation mechanism. Require a train-only
-  clean decision gate with direct restricted-FP correction and class1 TP
-  protection before any validation smoke.
+- [x] Perform a fresh no-repeat and primary-source screen for the next distinct
+  foreground surface/boundary representation mechanism. Differential
+  Attention is a poor match because the keeper already has foreground-clean,
+  diverse attention and negligible background sensitivity. Select an exact
+  class-1-protected RSC training intervention from official ECCV-2020 source
+  commit `bf6d280...59666`, while treating pretrained/long-schedule evidence
+  as an explicit transfer risk.
+- [x] Lock the class-1-protected pooled-channel RSC protocol before code or
+  adaptation. A train-only FP32 A0 cohort used 36 restricted FP, all 109
+  class-1 fold-0 rows, and 36 matched correct negatives. Eligible rows masked
+  exactly `86/256` channels; class-1 rows had zero masked channels and zero
+  prediction changes. Protocol SHA is `9227f5e5...59366`.
+- [ ] Implement the source-equation RSC helper and fail-closed Stage-A auditor,
+  including exact class-1 protection, signed-gradient top-k, positive-drop
+  batch selection, control/candidate RNG parity, full-model movement, clean
+  and illumination decisions, ONNX, runtime, and VRAM checks.
+- [ ] Run the sole locked source-disjoint `60b x 32` Stage A. Authorize one
+  no-test `120b x 2e` validation smoke only if class-1 precision and F1 rise,
+  restricted FP fall, TP/recall are protected, and every engineering gate
+  passes. Otherwise close RSC without a nearby sweep or command revision.

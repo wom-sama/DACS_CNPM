@@ -16413,3 +16413,48 @@ Date: 2026-07-02
   filter. Keeper, scratch, current-command, and command-history hashes remain
   unchanged; no best-command revision was added.
 - Final closure document SHA is `dc29f890...fdb25`.
+
+## Class-1-Protected RSC Selection 2026-07-15 - Locked Before Code
+
+### Primary-source and no-repeat screen
+
+- Reviewed the ECCV-2020 RSC paper and official DeLightCMU source at commit
+  `bf6d280c5d74910f009ea8963c59167252659666`. Paper SHA is
+  `fa76aec1...0ea48e`; official DG/ImageNet implementation SHAs are
+  `c2837b19...f9bf8` and `bc898ca8...75bb7`.
+- RSC uses the true-class-logit gradient to mute dominant representation
+  elements, then learns from the challenged feature. This is distinct from
+  closed random/input attention drop, obstacle, MixStyle, FriendlyAdv, token
+  pruning, and post-hoc class-1 filtering.
+- Main DG evidence uses pretrained ResNets, the best drop ratio is
+  data-specific, and the repository warns about environment sensitivity. This
+  conflicts with no-pretrain, <=30-epoch TRKH, so the method receives one
+  fail-closed train-only experiment rather than a full train or sweep.
+- Differential Attention was not selected: it targets irrelevant-context
+  noise, while repeated TRKH audits show negligible far-background causal
+  effect and already diverse, foreground-clean spatial attention.
+
+### Locked adaptation and A0 evidence
+
+- The exact adaptation challenges the 256-dimensional pooled prefix feature
+  before fine-grained patch pooling. It masks the 86 largest signed
+  true-logit-gradient channels. True class-1 rows receive all-one masks and
+  can never enter the challenged top third of non-class-1 rows.
+- A no-training FP32 screen used only `yolo_f/train` source-disjoint fold 0:
+  36 restricted `0/2/4->1` FP, all 109 class-1 rows, and 36 matched correct
+  negatives. CIDT prediction mismatches and non-finite values were zero.
+- Class-1 protection was exact: zero masked channels and zero changes on all
+  109 rows. Eligible rows masked exactly `86/256` channels. One restricted FP
+  corrected immediately; restricted-FP class-1 probability changed by
+  `-0.009685` on average, while matched correct negatives exposed positive
+  class-1 pressure (`+0.025805`) without changing decisions.
+- These observations prove activity and TP protection, not improvement. The
+  immutable Stage-A protocol is
+  `docs/TRKH_5CLASS_CLASS1_PROTECTED_RSC_READINESS_PROTOCOL_20260715.md`, SHA
+  `9227f5e5122184b89b6b2ee4239f62fc31671343f346e5a9e0b4efc8b9959366`.
+- Stage A is locked to matched keeper-initialized full-model AdamW adaptation,
+  source-disjoint fit/holdout `7372/1843`, deterministic `60 x 32`, FP32,
+  LR `1e-5`, and no validation/test. Promotion requires simultaneous class-1
+  precision/F1 gain, restricted-FP reduction, TP/recall protection, clean and
+  illumination safety, export, runtime, and VRAM gates. Current-best commands
+  and their three-revision history remain unchanged.
