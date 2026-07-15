@@ -16935,3 +16935,46 @@ Date: 2026-07-02
   `f89fa7a7...26387`. Current-best commands remain unchanged at three
   revisions/two updates. Final closure-document SHA is
   `145b6776...2519f`.
+
+## CEConv Stem Residual Closure 2026-07-16 - Color Equivariance Widens Class 1
+
+- A fresh primary-source screen rejected AdvRF before code because its
+  pretrained backbone, large reconstruction U-Net, `200`-epoch schedule, and
+  four-A100 recipe conflict with scratch TRKH and the `<=30`-epoch/resource
+  constraints. NeurIPS-2023 CEConv was distinct enough for one first-block
+  residual A0; the immutable protocol SHA is `9c5af4e9...da57082`.
+- The candidate and identity control reused exact source-disjoint
+  `7372/1843` `yolo_f/train` rows and the balanced `432` class1 plus `186`
+  restricted-hard-negative fit cohort. They had 960 bit-exact trainable adapter
+  parameters, zero-gate raw-logit equivalence, identical 60-step ordering, and
+  no augmentation. Validation and test were forbidden.
+- Official CEConv equation replay was exact and hue-cycle equivariance error
+  was `1.788e-7` versus identity-control error `0.559132`. All gradients were
+  finite, adapter state moved, and the frozen keeper remained bit-exact.
+- CEConv reduced clean macro/class1 F1 `-0.002254/-0.009991`, reduced class1
+  precision `-0.015375`, kept recall unchanged, and increased restricted FP
+  `36 -> 39`. The 11 changes contained `4` corrections, `6` harms, and one
+  neutral; three correct class2 rows and one correct class4 row became class1.
+- It also lost class1 F1/precision `-0.003304/-0.005054` to the matched
+  identity control. Dim/bright/low-contrast precision fell
+  `-0.039627/-0.040201/-0.042278` versus raw while restricted FP increased by
+  `12/10/11`. Small recall gains came from unsafe support expansion.
+- XAI showed nearly identical raw/control/candidate stem Grad-CAM. Hue-group
+  winners followed fruit together with nearby background/borders, consistent
+  with the new `2/4 -> 1` errors. Runtime was `3.73645x` raw and peak VRAM was
+  `3.38082 GiB`, failing both resource gates; isolated/full ONNX replay still
+  passed.
+- Independent replay reproduced all `7372` condition rows exactly. Nine
+  payloads total `35,273,011` bytes; summary/prediction/manifest SHAs are
+  `8177f976...3bca7a`, `0bf22a64...18c967`, and
+  `96fc5719...1f5972`. No checkpoint, validation/test output, or raw-data write
+  exists.
+- Close the exact first-block CEConv residual and nearby rotation/gate/pooling/
+  insertion/training sweeps on this keeper. This is not a universal rejection
+  of full CEConv backbones, which would require a new protocol resolving long
+  training, resource cost, and precision/TP safety.
+- Closure passed compile, focused `6/6`, full pytest `1182/1182`, launcher
+  parse/preflight, manifest/hash replay, protected hashes, and read-only
+  retention over `701` directories with `blockers=[]`. Retention SHA is
+  `ae5266f5...3f426`; current-best commands remain three revisions/two
+  updates. Final closure SHA is `047e3ba6...83cfe0`.

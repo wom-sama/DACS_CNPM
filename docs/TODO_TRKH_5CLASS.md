@@ -3011,9 +3011,31 @@
   `699` directories with `blockers=[]`. Summary/closure-manifest SHAs are
   `e65e2b65...d6512b`/`89d14eb3...efb76`; commands remain at three revisions.
   Final closure-document SHA is `145b6776...2519f`.
-- [ ] Perform a fresh primary-source/no-repeat screen outside fixed texture,
+- [x] Perform a fresh primary-source/no-repeat screen outside fixed texture,
   part/prototype, frozen-readout, post-hoc threshold, and gradient-combination
-  families. A next candidate must be an end-to-end scratch-compatible
-  representation or objective with a new class1-positive supervision source,
-  a train-only information gate, `<=30` epochs, and explicit clean plus
-  illumination TP protection before any validation access.
+  families. Reject AdvRF before code because its pretrained, reconstruction-
+  heavy, `200`-epoch/four-A100 recipe violates the current constraints. Select
+  one NeurIPS-2023 CEConv first-block residual A0 and lock exact official
+  equations, a matched identity control, zero-gate equivalence, source-
+  disjoint train cohorts, precision/TP/illumination/resource/export/XAI gates,
+  and no sweep. Protocol SHA is `9c5af4e9...da57082`.
+- [x] Implement, precommit, and run the sole CEConv train-only A0. Official
+  equation/equivariance, pairing, gradient, frozen-state, deterministic, and
+  ONNX checks passed, but clean macro/class1 F1 fell
+  `-0.002254/-0.009991`, class1 precision fell `-0.015375`, and restricted FP
+  increased `36 -> 39`. Dim/bright/low-contrast precision also fell about
+  `0.040-0.042`; Stage B, validation, test, trainer integration, probe/full
+  train, and command promotion are denied.
+- [x] Complete CEConv closure engineering. Inspect all required XAI changes,
+  replay all `4 x 1843` predictions, recompute nine payload hashes/sizes,
+  compile, pass focused/full pytest `6/6` and `1182/1182`, parse/preflight the
+  launcher, verify protected hashes, and pass read-only retention over `701`
+  directories with `blockers=[]`. Summary/manifest SHAs are
+  `8177f976...3bca7a`/`96fc5719...1f5972`; commands remain three revisions/two
+  updates. Final closure SHA is `047e3ba6...83cfe0`.
+- [ ] Perform the next primary-source/no-repeat screen outside color-
+  invariance/equivariance residuals and every family already closed in the
+  journal. Prefer a scratch-compatible objective that preserves augmentation
+  information or creates a new class1-positive supervision signal, with a
+  source-disjoint train-only information gate, explicit precision/TP/
+  illumination protection, and `<=30`-epoch feasibility before code.
