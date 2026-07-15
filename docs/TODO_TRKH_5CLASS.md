@@ -2807,7 +2807,24 @@
   pytest passed `12/12` and `1115/1115`, five launchers parsed, four
   operational preflights passed, and retention passed over `678` directories
   with `blockers=[]`. Protected hashes and three command revisions are exact.
+- [x] Perform a fresh no-repeat and primary-source screen after RSC. Re-read
+  official Swin and convolutional-stem sources, separate native stride-8 local
+  attention from rejected image resizing/tiles/SPT/tokenizers, and precommit a
+  train-only source-group-held-out information gate before architecture code.
+- [x] Implement and run the exact high-resolution bridge A0 on all `9215`
+  train rows. The `9215x288` aligned Haar detail had effective rank `72.27`
+  but lost to the matched control in all five folds: macro/class1 F1
+  `-0.032002/-0.061779`, class1 precision `-0.159006`, restricted FP
+  `130 -> 249`, and `204/464` corrections/harms. Architecture implementation,
+  validation, test, probe, and full train are denied.
+- [x] Self-review the A0 comparator and artifacts. Independent CSV
+  recomputation matched the summary; the collapsed control and all 15 LBFGS
+  fits reaching the iteration cap add rejection evidence. Tighten the future
+  optimizer-convergence gate, preserve six nonbinary payloads, pass retention
+  over `680` directories with `blockers=[]`, compile/focused/full pytest
+  `7/7` and `1122/1122`, parse/preflight the launcher, and leave the
+  current-best command/history unchanged.
 - [ ] Perform a fresh no-repeat and primary-source screen for the next
-  genuinely distinct foreground surface/boundary mechanism. Lock its equation,
-  adverse transfer evidence, class-1 precision/TP gates, illumination safety,
-  resources, and train-only scope before implementation.
+  genuinely distinct optimization or representation mechanism. Prefer a
+  train-only diagnostic that preserves the frozen keeper comparator and tests
+  class1 precision without suppressing true class1 recall.

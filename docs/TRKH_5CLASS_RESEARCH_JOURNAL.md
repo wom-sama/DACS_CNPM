@@ -16500,3 +16500,43 @@ Date: 2026-07-02
   `b22337fa...3f6f4`. The four RSC evidence payloads are nonbinary, so no
   rejected checkpoint or ONNX compaction was needed.
 - Final RSC closure document SHA is `f0c15714...a5907f4`.
+
+## High-Resolution Shifted-Window Bridge A0 Closure 2026-07-15 - Aligned Detail Is Unsafe
+
+- Re-read the Swin paper and official commit `f82860b...df874d`, plus the
+  convolutional-stem optimization paper. Swin's official 300-epoch recipe is
+  adverse transfer evidence for the local no-pretrain `<=30`-epoch constraint,
+  so architecture code was gated behind a train-only information test.
+- The precommitted A0 compared the exact current `16x16` patch-merge output
+  against three signed Haar bands from each stride-8 stem `2x2` cell. All roles
+  used the same `485`-dimensional residual readout and parameter count. A
+  source-deranged detail placebo was built separately inside every fit and
+  holdout partition, with no cross-fold or same-source assignment.
+- Full `yolo_f/train` coverage was `9215` rows and `8064` source groups on the
+  immutable CIDT folds. Dataset indices, labels, paths, source groups, and
+  keeper argmax aligned exactly; validation/test were never constructed.
+- Detail was noncollapsed with effective rank `72.269949`, but candidate minus
+  control macro/class1 F1 was `-0.032002/-0.061779`; class1 precision fell
+  `-0.159006`, recall was unchanged, and restricted FP increased `130 -> 249`.
+  It changed `752` decisions with `204/464` corrections/harms and `71/71`
+  FN-rescues/TP-breaks. Every fold had negative macro/class1/precision deltas.
+- Candidate beat the permuted placebo, but the control itself fell
+  `-0.084901/-0.287514` macro/class1 versus the frozen keeper. This forbids a
+  positive conclusion from comparator collapse. All 15 LBFGS fits hit the
+  200-iteration cap; self-review tightened the future optimizer gate. The
+  immutable summary's optimizer-pass flag is conservatively wrong but cannot
+  reverse the rejected decision.
+- Formal summary SHA is `44de7fab...36436b`; independent CSV recomputation
+  matched every metric and transition. Six verified nonbinary payloads total
+  `4,815,340` bytes, with no model/checkpoint/ONNX/test artifact. Full closure
+  is in
+  `docs/TRKH_5CLASS_HIGHRES_SHIFTED_WINDOW_BRIDGE_A0_CLOSURE_20260715.md`.
+- Read-only retention passed over `680` directories with `blockers=[]`; summary
+  SHA is `fc565106...a5b7b`. Protected keeper, scratch complement, current
+  command, and command-history artifacts remain present.
+- Do not implement or sweep this Haar-supported shifted-window bridge. No
+  validation, Stage A, probe, full train, or best-command revision is allowed.
+- Closure verification passed compileall, focused `7/7`, full pytest
+  `1122/1122` in `77.69 s`, launcher parse/preflight without a fake run root,
+  `git diff --check`, retention, and all four protected hash checks.
+- Final closure document SHA is `d5b10dae...8b79e2`.
