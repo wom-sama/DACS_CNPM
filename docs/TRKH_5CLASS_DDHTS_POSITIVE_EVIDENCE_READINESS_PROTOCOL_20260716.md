@@ -31,8 +31,11 @@ the shared TRKH model, read validation/test, or create a deployable checkpoint.
 
 ## Immutable data and model contract
 
-- Dataset: `D:\DataAI\AIEx\newdataset\yolo_f\canbang.yaml`, split `train`
-  only, all `9215` object rows in canonical order and `8064` source groups.
+- Data spec: `D:\DataAI\AIEx\newdataset\yolo_f\data.yaml`, which references
+  `canbang.yaml` for balance statistics. Use split `train` only, all `9215`
+  object rows in canonical order and `8064` source groups.
+- Data-spec SHA-256:
+  `716e33df24c63a9e9920f97b685199707fb84ab4c7154544f5dd9a3e00d884ef`.
 - Keeper:
   `runs\probe_v8_yolof_pairroute_teacherfocusbinary015_boundarydrop_bboxprior_120b_2e_20260701\checkpoints\best.pt`.
 - Keeper SHA-256:
