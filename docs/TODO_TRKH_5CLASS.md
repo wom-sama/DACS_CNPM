@@ -2824,7 +2824,40 @@
   over `680` directories with `blockers=[]`, compile/focused/full pytest
   `7/7` and `1122/1122`, parse/preflight the launcher, and leave the
   current-best command/history unchanged.
-- [ ] Perform a fresh no-repeat and primary-source screen for the next
-  genuinely distinct optimization or representation mechanism. Prefer a
-  train-only diagnostic that preserves the frozen keeper comparator and tests
-  class1 precision without suppressing true class1 recall.
+- [x] Perform a fresh no-repeat and primary-source screen after the
+  high-resolution bridge. Select one matched natural-prior continuation to
+  test whether scratch class1 overprediction came from `3.41x` strict-balanced
+  exposure, while locking recall/TP protection before validation.
+- [x] Run and fully audit the exact `2 x 60`-batch strict-versus-natural
+  continuation. Natural sampling removed five restricted FP but broke six
+  class1 TP, reduced class1 F1 `-0.012714` versus control, and failed 13 gates.
+  XAI/robustness identify broad class suppression, so probe/full train/test and
+  nearby sampler/LR/budget sweeps are denied.
+- [x] Compact all natural-prior evidence after post-smoke robustness/XAI.
+  Retain `420` verified payloads at manifest SHA `8c223f60...613ea9`, exclude
+  `576,989,850` reproducible bytes, delete three verified sources, and pass
+  retention over `682` directories with `blockers=[]`. Keep best commands and
+  their three-revision history unchanged.
+- [x] Complete the next primary-source screen. Select IP-DPP only for a
+  no-training information gate; record that official schedules are
+  `1000+100+100` epochs and paper Eq. 16 uses `/N` while official code uses
+  `/N^2`, which may make the implemented kernel effectively random-balanced.
+- [x] Lock, implement, and run a train-only IP-DPP A0 on the existing CIDT
+  `9215`-row cache. Compare paper-`N`, code-`N^2`, and deterministic random
+  balanced subsets with exact unique/source-fold checks, class1 TP retention,
+  hard head-negative enrichment, spectral validity, and fold stability. Do
+  not integrate a trainer, access validation/test, or sweep k/seed unless A0
+  proves informative selection beyond random. A0 failed six mechanism gates:
+  official default is identity, official extraction is uniform random,
+  paper/code scales disagree, paper DPPy cannot initialize, code odds are only
+  `1.000610/1.000721`, and no condition exceeds random hardness q95.
+- [x] Close direct IP-DPP without k/seed/chain/kernel/probability-source/
+  resampling/continuation sweeps. Preserve seven nonbinary payloads at manifest
+  SHA `a77f9788...09608e`; independent replay matched exact subset hashes and
+  null q95. Retention passed over `684` directories with `blockers=[]`. Deny
+  trainer/validation/test/full train and keep best commands unchanged.
+- [ ] Perform a fresh no-repeat and primary-source screen after IP-DPP. Avoid
+  another global rebalancing or subset-downsampling method: TRKH imbalance is
+  only `4.66x`, while the measured problem is a narrow `0/2/4 <-> 1` boundary.
+  Prefer a train-only mechanism that keeps every class1 row and applies
+  class-selective pressure only to verified restricted head-class negatives.

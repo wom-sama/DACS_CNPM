@@ -16540,3 +16540,88 @@ Date: 2026-07-02
   `1122/1122` in `77.69 s`, launcher parse/preflight without a fake run root,
   `git diff --check`, retention, and all four protected hash checks.
 - Final closure document SHA is `d5b10dae...8b79e2`.
+
+## Natural-Prior Continuation Closure 2026-07-15 - Class-1 Suppression, Not Precision
+
+- The scratch full run exposed class 1 about `3.41x` per epoch under strict
+  balanced sampling. A locked matched continuation tested exactly one change:
+  retain strict balancing versus disable it for a natural random sampler.
+  Both roles reset optimizer/scheduler/scaler/epoch state from scratch epoch
+  20, ran deterministic `2 x 60` batches, used full validation `2606`, and
+  never constructed test.
+- Independent FP32 control/candidate macro F1 was `0.875714/0.873448`;
+  class1 P/R/F1 was `0.538136/0.841060/0.656331 ->
+  0.537778/0.801325/0.643617`. The candidate removed five restricted class1
+  FP but rescued zero FN and broke six TP. Corrections/harms were tied `7/7`.
+- Thirteen locked behavior checks failed. The candidate was below control,
+  scratch, and keeper class1/macro gates; precision did not improve and recall
+  fell `-0.039735` versus scratch. Probe, full train, and test are denied.
+- Robustness confirmed support suppression. Candidate class1 recall changed
+  clean `0.841 -> 0.801`, occlusion `0.768 -> 0.742`, bright
+  `0.722 -> 0.662`, and low contrast `0.728 -> 0.695`. Small FP reductions did
+  not produce a clean precision gain.
+- Exact 16-case FP32 XAI had zero backend drift. Native attention/rollout were
+  nearly unchanged; Grad-CAM moved toward the fruit in both five FP removals
+  and six TP breaks. This is a broad boundary/prior shift rather than a
+  selective foreground mechanism.
+- Compaction retained `420` verified payloads (`54,309,197` bytes) at manifest
+  SHA `8c223f60...613ea9`, excluded `576,989,850` reproducible bytes, and
+  deleted three verified source roots. Retention passed over `682` directories
+  with `blockers=[]`. Full closure SHA is `f633152c...31aa22`.
+- Do not sweep sampler power/LR/seed/budget/loss/augmentation/run length or
+  reopen natural-prior continuation. Keeper, scratch, current command, and
+  three-revision command history remain unchanged.
+
+## IP-DPP Information Gate 2026-07-15 - Selected Before Trainer Integration
+
+- Reviewed the NeurIPS-2025 IP-DPP paper and official repository commit
+  `20d69a676215e854d34fbdefa4ba4b3e165c41c0`. The official sampler source SHA
+  is `2754011d...3f57` and uses DPPy MCMC k-DPP with RNG `42`.
+- This is adverse-transfer evidence, not an implementation recipe: official
+  BNS pretraining uses `1000` epochs, linear probing `100`, and IP-DPP
+  fine-tuning `100` with five warmup epochs and resampling every 20 epochs.
+- A material paper/code discrepancy must be resolved first. Paper Eq. 16
+  divides off-diagonal probability products by `N`; official code divides by
+  `N^2`. The code kernel is therefore much closer to identity and may produce
+  selection little better than random balancing.
+- The next stage is a no-training, train-only A0 over the existing `9215`-row
+  CIDT cache. Compare paper-`N`, code-`N^2`, and deterministic random-balanced
+  selection under exact source-fold integrity. Require unique/source coverage,
+  class1 TP retention, hard head-negative enrichment, paper/code spectral
+  validity, and fold stability before any sampler enters the trainer.
+
+## IP-DPP Information Gate Closure 2026-07-15 - Official Path Is Random
+
+- Locked protocol SHA is `652c1fa4...9cd77f`. Preflight verified the exact
+  `9215 x 4` train-only cache, `8064` source groups, five source-disjoint folds,
+  official commit/source hash, and pinned DPPy/Numpy/Scipy versions. No
+  validation/test path was present.
+- The direct paper default `k=10*N_min=5410` retains all 9215 TRKH rows. The
+  explanatory A0 used exactly `k=N_min=541`, preserving all class1 rows and
+  selecting 541 unique rows per class.
+- Official source calls a ten-state DPPy exchange chain but extracts
+  `list_of_samples[0][0]`, the uniform initialization. Independent replay
+  reproduced every selection; first, uniform, and replay-first share SHA
+  `3c55ff6f...718eb27` for both scratch and keeper probabilities.
+- Code-`N^2` q95/q05 determinant odds were only `1.000610/1.000721` for
+  scratch/keeper. Both probability sources even produced the same final-state
+  SHA `941c9bd3...c30128`; nine exchange opportunities did not create a
+  model-specific informative subset.
+- Official scratch/keeper selections retained restricted FP `59/56`, below
+  random q95 `88/73.25`; self-information `1.160899/1.154993` was also below
+  random q95 `1.166647/1.159714`. Clean/dim/bright/low-contrast hardness never
+  exceeded both random q95 gates, and no fold enriched restricted FP above
+  q95.
+- Paper-`N` proposal-bank odds were nontrivial (`3.9238x/5.1570x`), but every
+  majority-class size-541 determinant upper bound was below DPPy's `1e-9`
+  initialization tolerance (log-det upper bounds `-44.39..-52.49`). The
+  official paper-equation runtime is mathematically unavailable at this
+  cardinality.
+- Six mechanism checks failed. Trainer, validation, probe, test, and full
+  train are denied; do not tune k/seed/chain/kernel/probability source or use a
+  post-hoc maximum from the 256 random proposal bank.
+- Seven nonbinary payloads total `6,812,456` bytes at manifest SHA
+  `a77f9788...09608e`; summary SHA is `5c59baaa...77366b`. No compaction is
+  needed. Retention passed over `684` directories with `blockers=[]` at
+  summary SHA `95557ebf...96ef4`. Final closure SHA is
+  `83732dca...f35914f`; best commands remain unchanged.
