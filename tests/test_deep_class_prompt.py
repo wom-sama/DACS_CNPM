@@ -67,11 +67,29 @@ def test_constructor_preserves_legacy_rng_and_base_state_bit_exact() -> None:
         model_config=_tiny_config(deep_class_prompt=False),
     )
     control_rng = torch.get_rng_state().clone()
+    control_cuda_rng = (
+        [state.clone() for state in torch.cuda.get_rng_state_all()]
+        if torch.cuda.is_available()
+        else []
+    )
     torch.manual_seed(seed)
     candidate = create_model(num_classes=5, model_config=_tiny_config())
     candidate_rng = torch.get_rng_state().clone()
+    candidate_cuda_rng = (
+        [state.clone() for state in torch.cuda.get_rng_state_all()]
+        if torch.cuda.is_available()
+        else []
+    )
 
     assert torch.equal(control_rng, candidate_rng)
+    assert len(control_cuda_rng) == len(candidate_cuda_rng)
+    assert all(
+        torch.equal(control_state, candidate_state)
+        for control_state, candidate_state in zip(
+            control_cuda_rng,
+            candidate_cuda_rng,
+        )
+    )
     control_state = control.state_dict()
     candidate_state = candidate.state_dict()
     for key, value in control_state.items():

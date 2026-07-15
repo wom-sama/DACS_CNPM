@@ -2719,9 +2719,35 @@
   over `672` directories with zero originals remaining and `blockers=[]`.
   Compileall, focused `37/37`, full pytest `1078/1078`, five launcher parses,
   and current-best/TensorRT/video preflights passed.
-- [ ] Select the next method only after a fresh no-repeat and primary-source
-  review. It must encode class-specific foreground boundary evidence without
-  relying on far-background localization, non-local feature similarity,
-  current-embedding prototype/margin geometry, or another local/dynamic stem.
-  Precommit direct class1 TP protection and focus-FP suppression before any
-  validation smoke.
+- [x] Complete the post-ViG no-repeat and primary-source review. Reject CAL as
+  overlapping closed bilinear attention crop/drop; select an exact deep
+  class-prompt adaptation grounded in official Prompt-CAM and MCTformer code.
+  Lock direct class1 TP protection, focus-FP suppression, spatial separation,
+  illumination, export, runtime, and VRAM gates before implementation.
+- [x] Implement default-off deep class prompts at all eight Transformer blocks,
+  preserving legacy prefix/pruning/native-attention schemas while exporting
+  separate reconstructed class-to-patch maps. Add exactly `11,009` parameters,
+  complete config/CLI/resume/trace wiring, focused tests, and a train-only
+  fail-closed Stage-A launcher/auditor.
+- [x] Run the locked source-disjoint `60b x 32` head-only versus head+prompt
+  adaptation without validation/test. Candidate macro/class1 F1 fell
+  `-0.029655/-0.081406`; precision rose `+0.100952` only while recall fell
+  `-0.229358`, with `27/62` corrections/harms and `0/25` class1 FN-rescues/
+  TP-breaks. Every lighting class1 F1 delta was below `-0.11`; Stage B is
+  denied.
+- [x] Complete prompt XAI and resource/export review. Prompt maps were diverse
+  and ONNX/runtime/VRAM passed, but target-versus-confuser separation fell
+  `-0.034383`. Fix the independently found CUDA constructor-RNG restoration
+  bug and verify it without rerunning or reinterpreting the rejected method.
+- [x] Close deep class prompts without prompt-count/layer/init/fusion/head/LR/
+  seed/fold/budget/loss/augmentation/run-length sweeps. Preserve seven verified
+  nonbinary payloads at manifest SHA `d7b6b64b...e137d2`, exclude `30,699,520`
+  reproducible binary bytes, verify source deletion, and pass retention over
+  `674` directories with `blockers=[]`. Compileall, focused `10/10`, full
+  pytest `1088/1088`, five launcher parses, and current-best/TensorRT/video
+  preflights passed. Keep best commands unchanged.
+- [ ] Perform a fresh no-repeat and primary-source screen for the next distinct
+  foreground surface/boundary mechanism. It must not reuse deep prompts,
+  non-local feature graphs, prototype/margin geometry, another stem, or a
+  class1-support suppression policy. Precommit precision, recall/TP, XAI,
+  robustness, export, and resource gates before any validation access.

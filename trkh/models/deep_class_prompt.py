@@ -29,8 +29,11 @@ class DeepClassPrompt(nn.Module):
         if self.embed_dim <= 0:
             raise ValueError("DeepClassPrompt embed_dim must be positive.")
 
-        # The optional extension must not alter the legacy model constructor RNG.
-        with torch.random.fork_rng(devices=[]):
+        # torch.manual_seed also seeds CUDA, so fork every visible CUDA device.
+        cuda_devices = (
+            list(range(torch.cuda.device_count())) if torch.cuda.is_available() else []
+        )
+        with torch.random.fork_rng(devices=cuda_devices):
             torch.manual_seed(self.init_seed)
             self.prompt_embeddings = nn.Parameter(
                 torch.empty(self.depth, self.num_classes, self.embed_dim)

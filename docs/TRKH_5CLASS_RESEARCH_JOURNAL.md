@@ -16277,3 +16277,60 @@ Date: 2026-07-02
   video operational preflights. The protected user-owned untracked paths were
   untouched and unstaged.
 - Final closure document SHA is `2a35de81...5aabab`.
+
+## Deep Class-Prompt Closure 2026-07-15 - Diverse Prompts, Unsafe Class Suppression
+
+### Source and implementation
+
+- Reviewed official Prompt-CAM commit `4d35f3f...f4879f3` and MCTformer commit
+  `0acc27a...4168aa`; locked protocol SHA is `15703848...65f9d`.
+- Implemented one prompt per class in every one of the eight Transformer blocks,
+  immediate prompt removal between blocks, one shared LayerNorm/scalar head,
+  fixed `0.10` logit fusion, and separate class-to-patch maps reconstructed to
+  the original patch grid. The default-off extension adds exactly `11,009`
+  parameters while preserving legacy pruning and native-attention schemas.
+- Stage A used only `yolo_f/train`: source-disjoint fit/holdout rows were
+  `7372/1843`; control and candidate consumed the same `60 x 32` rows. No raw
+  data, validation loader, test loader, or test metric was used.
+
+### Decision and XAI
+
+- Adapted control/candidate macro F1 was `0.928091/0.898436`; class1 F1 was
+  `0.826087/0.744681`. Class1 precision increased
+  `0.785124 -> 0.886076`, but recall collapsed `0.871560 -> 0.642202`.
+- The candidate changed 90 decisions with `27/62` corrections/harms, correctly
+  removed 17 restricted focus FP, rescued zero class1 FN, and broke 25 class1
+  TP. Predicted class1 support fell `121 -> 79`; this is suppression, not a
+  safe agricultural precision gain.
+- Dim/bright/low-contrast class1 F1 deltas were
+  `-0.115617/-0.155844/-0.112972`, with recall deltas all at most `-0.155963`.
+- Prompt maps were active and more diverse: off-diagonal cosine fell
+  `0.891699 -> 0.672559` and effective rank rose `2.811462 -> 3.531364`.
+  However, strongest-confuser bbox mass rose `+0.042853` versus only
+  `+0.008471` target mass, so target-versus-confuser separation fell
+  `-0.034383`. Diversity alone did not encode the needed boundary.
+- Full ONNX error `2.98e-7`, runtime `1.041970x`, and peak VRAM `1.081265 GiB`
+  passed. Nine independent behavior/XAI gates failed, so no Stage B,
+  validation, probe, full train, test, or nearby sweep is allowed.
+
+### Infrastructure repair, evidence, and command decision
+
+- Formal Stage A exposed that `fork_rng(devices=[])` restored CPU but not CUDA
+  RNG around `torch.manual_seed()`. The module now forks every visible CUDA
+  device; focused tests and a keeper-shape post-fix check confirm CPU/CUDA RNG
+  equality, exact keeper state, and exact parameter count. The immutable
+  formal result is not rerun because behavior already rejects the route.
+- Formal summary SHA is `c4e45841...bc0d4c`; full closure is in
+  `docs/TRKH_5CLASS_DEEP_CLASS_PROMPT_CLOSURE_20260715.md`.
+- Compaction retained seven verified nonbinary payloads at manifest SHA
+  `d7b6b64b...e137d2`, excluded prompt-state/ONNX binaries totaling
+  `30,699,520` bytes, verified source deletion, and observed `33,320,960`
+  bytes freed. Retention passed over `674` directories with `blockers=[]`.
+- Compileall, focused tests `10/10`, full pytest `1088/1088` in `43.29 s`,
+  five launcher parses, deep-prompt/current-best/TensorRT/video preflights, and
+  protected user-path checks all passed.
+- Do not sweep prompt count/layers/init/fusion/head/LR/seed/fold/budget/loss/
+  augmentation/run length or create a post-hoc prompt router. Keeper, scratch,
+  current-command, and command-history hashes remain unchanged; no best-command
+  revision was added.
+- Final closure document SHA is `d819facc...102f2`.
