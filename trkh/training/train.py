@@ -2210,6 +2210,21 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         help="Fixed residual multiplier for the patch-only XCA branch.",
     )
     parser.add_argument(
+        "--patch-style-recalibration",
+        action="store_true",
+        default=False,
+        help=(
+            "Apply SRM-style mean/std channel gates to patch hidden activations "
+            "inside selected standard FFN layers."
+        ),
+    )
+    parser.add_argument(
+        "--patch-style-recalibration-layers",
+        type=str,
+        default="2,5",
+        help="Comma-separated 1-based standard FFN layers that use patch-style SRM.",
+    )
+    parser.add_argument(
         "--focus-class-aux-loss-weight",
         type=float,
         default=0.0,
@@ -5025,6 +5040,10 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
             "--cross-covariance-attention khong the dung cung "
             "--visual-contrast-attention."
         )
+    if bool(args.patch_style_recalibration) and bool(args.locally_enhanced_ffn):
+        raise ValueError(
+            "--patch-style-recalibration khong the dung cung --locally-enhanced-ffn."
+        )
     if args.shifted_patch_shift <= 0:
         raise ValueError("--shifted-patch-shift phai > 0.")
     if args.shifted_patch_residual_scale < 0.0:
@@ -6334,6 +6353,8 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         cross_covariance_attention_residual_scale=(
             args.cross_covariance_attention_residual_scale
         ),
+        patch_style_recalibration=bool(args.patch_style_recalibration),
+        patch_style_recalibration_layers=args.patch_style_recalibration_layers,
         layer_token_fusion=bool(args.layer_token_fusion),
         layer_token_fusion_layers=args.layer_token_fusion_layers,
         layer_token_fusion_top_k=args.layer_token_fusion_top_k,
@@ -8352,6 +8373,7 @@ def _is_allowed_resume_extension_key(key: str) -> bool:
         ".local_patch_mixer." in text
         or ".attn.relative_position_attention." in text
         or ".cross_covariance_attention." in text
+        or ".mlp.style_recalibration." in text
         or any(
             marker in text
             for marker in (
@@ -26748,6 +26770,7 @@ def main() -> None:
             or bool(args.gated_relative_position_attention)
             or bool(args.visual_contrast_attention)
             or bool(args.cross_covariance_attention)
+            or bool(args.patch_style_recalibration)
             or bool(args.late_class_attention_pooling)
             or bool(args.late_member_branch)
             or bool(args.complementary_patch_suppression_head)
@@ -27070,6 +27093,31 @@ def main() -> None:
                     "reason": (
                         "allow checkpoint-safe patch-only XCA while reusing learned "
                         "spatial qkv/proj parameters"
+                    ),
+                },
+                flush=True,
+            )
+        if bool(args.patch_style_recalibration):
+            if bool(model_config.locally_enhanced_ffn):
+                raise ValueError(
+                    "Patch-style recalibration resume extension conflicts with "
+                    "locally enhanced FFN."
+                )
+            model_config.patch_style_recalibration = True
+            model_config.patch_style_recalibration_layers = str(
+                args.patch_style_recalibration_layers
+            )
+            print(
+                {
+                    "resume_cli_model_extension": {
+                        "patch_style_recalibration": True,
+                        "patch_style_recalibration_layers": (
+                            model_config.patch_style_recalibration_layers
+                        ),
+                    },
+                    "reason": (
+                        "allow checkpoint-safe patch-hidden SRM while reusing learned "
+                        "FFN and classifier parameters"
                     ),
                 },
                 flush=True,
@@ -29495,6 +29543,7 @@ def main() -> None:
                 or float(args.patch_evidence_router_loss_weight) > 0.0
                 or bool(args.visual_contrast_attention)
                 or bool(args.cross_covariance_attention)
+                or bool(args.patch_style_recalibration)
                 or bool(args.late_class_attention_pooling)
                 or bool(args.late_member_branch)
                 or bool(args.learnable_gabor_texture_residual)
@@ -29589,6 +29638,7 @@ def main() -> None:
                     or float(args.patch_evidence_router_loss_weight) > 0.0
                     or bool(args.visual_contrast_attention)
                     or bool(args.cross_covariance_attention)
+                    or bool(args.patch_style_recalibration)
                     or bool(args.late_class_attention_pooling)
                     or bool(args.late_member_branch)
                     or bool(args.learnable_gabor_texture_residual)

@@ -20,6 +20,7 @@ from trkh.models.learnable_gabor_texture import (
 )
 from trkh.models.moga_surface_tokenizer import MogaXTTokenizer
 from trkh.models.octave_conv_stem import OctaveConvStem
+from trkh.models.patch_style_recalibration import PatchStyleRecalibration
 from trkh.models.starnet_s2_tokenizer import StarNetS2Tokenizer
 from trkh.models.visual_contrast_attention import VisualContrastAttention
 from trkh.models.cross_covariance_attention import (
@@ -4696,7 +4697,13 @@ class MultiHeadSelfAttention(nn.Module):
 
 
 class FeedForward(nn.Module):
-    def __init__(self, dim: int, hidden_dim: int, dropout: float = 0.1) -> None:
+    def __init__(
+        self,
+        dim: int,
+        hidden_dim: int,
+        dropout: float = 0.1,
+        patch_style_recalibration: bool = False,
+    ) -> None:
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(dim, hidden_dim),
@@ -4705,9 +4712,24 @@ class FeedForward(nn.Module):
             nn.Linear(hidden_dim, dim),
             nn.Dropout(dropout),
         )
+        self.style_recalibration = (
+            PatchStyleRecalibration(hidden_dim)
+            if bool(patch_style_recalibration)
+            else None
+        )
 
-    def forward(self, x: Tensor) -> Tensor:
-        return self.net(x)
+    def forward(self, x: Tensor, *, prefix_count: int = 0) -> Tensor:
+        if self.style_recalibration is None:
+            return self.net(x)
+        hidden = self.net[0](x)
+        hidden = self.net[1](hidden)
+        hidden = self.style_recalibration(
+            hidden,
+            prefix_count=prefix_count,
+        )
+        hidden = self.net[2](hidden)
+        hidden = self.net[3](hidden)
+        return self.net[4](hidden)
 
 
 class LocallyEnhancedFeedForward(nn.Module):
@@ -5207,6 +5229,7 @@ class CustomTransformerEncoderLayer(nn.Module):
         visual_contrast_tokens: int = 64,
         cross_covariance_attention: bool = False,
         cross_covariance_attention_residual_scale: float = 0.10,
+        patch_style_recalibration: bool = False,
         block_depth: int = 0,
     ) -> None:
         super().__init__()
@@ -5221,6 +5244,10 @@ class CustomTransformerEncoderLayer(nn.Module):
             )
         if float(cross_covariance_attention_residual_scale) < 0.0:
             raise ValueError("cross_covariance_attention_residual_scale must be >= 0.")
+        if bool(patch_style_recalibration) and bool(locally_enhanced_ffn):
+            raise ValueError(
+                "Patch-style recalibration requires the standard FeedForward path."
+            )
         hidden_dim = int(dim * mlp_ratio)
         self.norm1 = nn.LayerNorm(dim)
         self.attn = (
@@ -5262,9 +5289,15 @@ class CustomTransformerEncoderLayer(nn.Module):
                 kernel_size=locally_enhanced_ffn_kernel_size,
             )
             if bool(locally_enhanced_ffn)
-            else FeedForward(dim=dim, hidden_dim=hidden_dim, dropout=dropout)
+            else FeedForward(
+                dim=dim,
+                hidden_dim=hidden_dim,
+                dropout=dropout,
+                patch_style_recalibration=patch_style_recalibration,
+            )
         )
         self.locally_enhanced_ffn_enabled = bool(locally_enhanced_ffn)
+        self.patch_style_recalibration_enabled = bool(patch_style_recalibration)
         self.drop_path2 = DropPath(drop_path_rate)
         self.local_patch_mixer = (
             BlockLocalPatchMixer(
@@ -5293,7 +5326,7 @@ class CustomTransformerEncoderLayer(nn.Module):
                 prefix_count=prefix_count,
                 patch_indices=patch_indices,
             )
-        return self.mlp(normalized)
+        return self.mlp(normalized, prefix_count=prefix_count)
 
     def apply_cross_covariance_attention(
         self,
@@ -5608,6 +5641,8 @@ class VisionTransformerWithRegisters(nn.Module):
         cross_covariance_attention: bool = False,
         cross_covariance_attention_layers: str = "2,5",
         cross_covariance_attention_residual_scale: float = 0.10,
+        patch_style_recalibration: bool = False,
+        patch_style_recalibration_layers: str = "2,5",
         layer_token_fusion: bool = False,
         layer_token_fusion_layers: str = "2,4,6",
         layer_token_fusion_top_k: int = 4,
@@ -5984,6 +6019,21 @@ class VisionTransformerWithRegisters(nn.Module):
             raise ValueError(
                 "Cross-covariance attention cannot be combined with Visual-Contrast Attention."
             )
+        self.patch_style_recalibration_layer_numbers = (
+            _parse_auxiliary_layer_indices(
+                patch_style_recalibration_layers,
+                int(depth),
+            )
+            if bool(patch_style_recalibration)
+            else []
+        )
+        self.patch_style_recalibration_enabled = bool(
+            self.patch_style_recalibration_layer_numbers
+        )
+        if self.patch_style_recalibration_enabled and bool(locally_enhanced_ffn):
+            raise ValueError(
+                "Patch-style recalibration cannot be combined with locally enhanced FFN."
+            )
         self.layer_token_fusion_enabled = bool(layer_token_fusion)
         self.layer_token_fusion_layer_numbers = (
             _parse_auxiliary_layer_indices(layer_token_fusion_layers, int(depth))
@@ -6291,6 +6341,10 @@ class VisionTransformerWithRegisters(nn.Module):
                     ),
                     cross_covariance_attention_residual_scale=(
                         self.cross_covariance_attention_residual_scale
+                    ),
+                    patch_style_recalibration=(
+                        int(index + 1)
+                        in self.patch_style_recalibration_layer_numbers
                     ),
                     block_depth=index,
                 )
@@ -8219,6 +8273,35 @@ class VisionTransformerWithRegisters(nn.Module):
                             [entry[trace_key] for _, entry in cross_covariance_entries],
                             dim=0,
                         )
+            if self.patch_style_recalibration_enabled:
+                patch_style_entries = []
+                for layer_number in self.patch_style_recalibration_layer_numbers:
+                    module = self.blocks[int(layer_number) - 1].mlp.style_recalibration
+                    module_trace = module.trace() if module is not None else {}
+                    if module_trace:
+                        patch_style_entries.append((int(layer_number), module_trace))
+                if patch_style_entries:
+                    features["trace"]["patch_style_recalibration_layers"] = torch.tensor(
+                        [layer for layer, _ in patch_style_entries],
+                        device=tokens.device,
+                        dtype=torch.long,
+                    )
+                    for trace_key in (
+                        "gate_min",
+                        "gate_mean",
+                        "gate_max",
+                        "gate_channel_std",
+                        "gate_sample_std",
+                        "style_mean_abs",
+                        "style_std_mean",
+                        "cfc_l2_norm",
+                        "patch_hidden_norm_ratio",
+                        "patch_count",
+                    ):
+                        features["trace"][f"patch_style_{trace_key}"] = torch.stack(
+                            [entry[trace_key] for _, entry in patch_style_entries],
+                            dim=0,
+                        )
             if layer_token_fusion_feature is not None:
                 features["trace"]["layer_token_fusion_layers"] = torch.tensor(
                     layer_token_fusion_layers,
@@ -9904,6 +9987,8 @@ class DETRVisionTransformerWithRegisters(VisionTransformerWithRegisters):
         cross_covariance_attention: bool = False,
         cross_covariance_attention_layers: str = "2,5",
         cross_covariance_attention_residual_scale: float = 0.10,
+        patch_style_recalibration: bool = False,
+        patch_style_recalibration_layers: str = "2,5",
         layer_token_fusion: bool = False,
         layer_token_fusion_layers: str = "2,4,6",
         layer_token_fusion_top_k: int = 4,
@@ -10213,6 +10298,8 @@ class DETRVisionTransformerWithRegisters(VisionTransformerWithRegisters):
             cross_covariance_attention_residual_scale=(
                 cross_covariance_attention_residual_scale
             ),
+            patch_style_recalibration=patch_style_recalibration,
+            patch_style_recalibration_layers=patch_style_recalibration_layers,
             layer_token_fusion=layer_token_fusion,
             layer_token_fusion_layers=layer_token_fusion_layers,
             layer_token_fusion_top_k=layer_token_fusion_top_k,

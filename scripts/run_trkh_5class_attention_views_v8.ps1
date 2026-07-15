@@ -573,6 +573,8 @@ param(
     [bool]$CrossCovarianceAttention = $false,
     [string]$CrossCovarianceAttentionLayers = "2,5",
     [double]$CrossCovarianceAttentionResidualScale = 0.10,
+    [bool]$PatchStyleRecalibration = $false,
+    [string]$PatchStyleRecalibrationLayers = "2,5",
     [bool]$LayerTokenFusion = $false,
     [string]$LayerTokenFusionLayers = "2,4,6",
     [int]$LayerTokenFusionTopK = 4,
@@ -910,6 +912,9 @@ if ($CrossCovarianceAttentionResidualScale -lt 0.0) {
 }
 if ($CrossCovarianceAttention -and $VisualContrastAttention) {
     throw "CrossCovarianceAttention khong the dung cung VisualContrastAttention."
+}
+if ($PatchStyleRecalibration -and $LocallyEnhancedFfn) {
+    throw "PatchStyleRecalibration khong the dung cung LocallyEnhancedFfn."
 }
 if ($BoundaryCenterTeacherMinConfidence -lt 0.0) {
     throw "BoundaryCenterTeacherMinConfidence phai >= 0."
@@ -2015,6 +2020,8 @@ if ($PreflightOnly) {
         cross_covariance_attention = [bool]$CrossCovarianceAttention
         cross_covariance_attention_layers = $CrossCovarianceAttentionLayers
         cross_covariance_attention_residual_scale = $CrossCovarianceAttentionResidualScale
+        patch_style_recalibration = [bool]$PatchStyleRecalibration
+        patch_style_recalibration_layers = $PatchStyleRecalibrationLayers
         layer_token_fusion = [bool]$LayerTokenFusion
         layer_token_fusion_layers = $LayerTokenFusionLayers
         layer_token_fusion_top_k = $LayerTokenFusionTopK
@@ -3252,6 +3259,12 @@ if ($ClassIndependentHead) {
             "--cross-covariance-attention-residual-scale", "$CrossCovarianceAttentionResidualScale"
         )
     }
+    if ($PatchStyleRecalibration) {
+        $TrainArgs += @(
+            "--patch-style-recalibration",
+            "--patch-style-recalibration-layers", "$PatchStyleRecalibrationLayers"
+        )
+    }
     if ($ShiftedPatchTokenization) {
         $TrainArgs += @("--shifted-patch-tokenization")
     }
@@ -3992,6 +4005,8 @@ if ($ClassIndependentHead) {
         cross_covariance_attention = [bool]$CrossCovarianceAttention
         cross_covariance_attention_layers = $CrossCovarianceAttentionLayers
         cross_covariance_attention_residual_scale = $CrossCovarianceAttentionResidualScale
+        patch_style_recalibration = [bool]$PatchStyleRecalibration
+        patch_style_recalibration_layers = $PatchStyleRecalibrationLayers
         layer_token_fusion = [bool]$LayerTokenFusion
         layer_token_fusion_layers = $LayerTokenFusionLayers
         layer_token_fusion_top_k = $LayerTokenFusionTopK
