@@ -954,6 +954,15 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--learnable-gabor-texture-semantic-fusion",
+        action="store_true",
+        default=False,
+        help=(
+            "Actively add the constrained Gabor/LHO/FCM texture feature to "
+            "the final pooled semantic feature before the main classifier."
+        ),
+    )
+    parser.add_argument(
         "--detail-patch-enhancement",
         action="store_true",
         default=False,
@@ -6333,6 +6342,9 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         learnable_gabor_texture_residual=bool(
             args.learnable_gabor_texture_residual
         ),
+        learnable_gabor_texture_semantic_fusion=bool(
+            args.learnable_gabor_texture_semantic_fusion
+        ),
         detail_patch_enhancement=bool(args.detail_patch_enhancement),
         detail_patch_dropout=args.detail_patch_dropout,
         token_pruning=bool(args.token_pruning),
@@ -8293,6 +8305,7 @@ ALLOWED_RESUME_EXTENSION_PREFIXES = (
     "late_class_attention_pool.",
     "shifted_patch_token_residual.",
     "gabor_texture_residual.",
+    "gabor_texture_semantic_encoder.",
 )
 
 
@@ -27621,6 +27634,13 @@ def main() -> None:
                     False,
                 )
             )
+            or bool(
+                getattr(
+                    model_config,
+                    "learnable_gabor_texture_semantic_fusion",
+                    False,
+                )
+            )
             or float(train_config.bbox_foreground_dropout_loss_weight) > 0.0
             or float(train_config.bbox_foreground_dropout_consistency_weight) > 0.0
             or float(train_config.bbox_object_erasure_negative_loss_weight) > 0.0
@@ -29409,6 +29429,7 @@ def main() -> None:
                 or bool(args.late_class_attention_pooling)
                 or bool(args.late_member_branch)
                 or bool(args.learnable_gabor_texture_residual)
+                or bool(args.learnable_gabor_texture_semantic_fusion)
             ),
         )
         print({"resume": resume_summary}, flush=True)
@@ -29501,6 +29522,7 @@ def main() -> None:
                     or bool(args.late_class_attention_pooling)
                     or bool(args.late_member_branch)
                     or bool(args.learnable_gabor_texture_residual)
+                    or bool(args.learnable_gabor_texture_semantic_fusion)
                 ),
             )
             if ema_partial_load_summary is not None:

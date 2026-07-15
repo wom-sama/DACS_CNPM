@@ -47,8 +47,8 @@ class CompactSelfAttention(nn.Module):
         return self.proj(output), attention
 
 
-class LearnableGaborTextureResidual(nn.Module):
-    """Constrained Gabor + LHO/FCM texture descriptor for one TRKH edge token."""
+class LearnableGaborTextureEncoder(nn.Module):
+    """Constrained Gabor + LHO/FCM texture feature encoder."""
 
     filter_count = 32
     low_filter_count = 16
@@ -59,8 +59,6 @@ class LearnableGaborTextureResidual(nn.Module):
     hidden_dim = 64
     attention_heads = 4
     interior_margin_ratio = 0.06
-    gate_scale = 0.10
-
     def __init__(self, embed_dim: int) -> None:
         super().__init__()
         if int(embed_dim) <= 0:
@@ -159,7 +157,6 @@ class LearnableGaborTextureResidual(nn.Module):
                 bias=True,
             )
             self.token_norm = nn.LayerNorm(self.embed_dim)
-        self.raw_gate = nn.Parameter(torch.zeros((), dtype=torch.float32))
 
     @property
     def high_filter_count(self) -> int:
@@ -168,9 +165,6 @@ class LearnableGaborTextureResidual(nn.Module):
     @property
     def maximum_frequency(self) -> float:
         return float(self.frequency_upper[-1].item())
-
-    def effective_gate(self) -> Tensor:
-        return torch.tanh(self.raw_gate) * float(self.gate_scale)
 
     def constrained_parameters(self) -> Dict[str, Tensor]:
         theta = math.pi * torch.sigmoid(self.raw_theta)
@@ -461,6 +455,79 @@ class LearnableGaborTextureResidual(nn.Module):
         real_kernel, imaginary_kernel, _ = self.build_kernels()
         return real_kernel.detach().clone(), imaginary_kernel.detach().clone()
 
+    def _trace_from_components(self, components: Dict[str, Tensor]) -> Dict[str, Tensor]:
+        magnitude = components["magnitude"]
+        unmasked_magnitude = components["unmasked_magnitude"]
+        response_mask = components["response_mask"]
+        foreground_mass = (unmasked_magnitude * response_mask).sum(
+            dim=(-2, -1)
+        ) / unmasked_magnitude.sum(dim=(-2, -1)).clamp_min(1e-6)
+        counts = components["counts"]
+        entropy = -(counts * counts.clamp_min(1e-8).log()).sum(dim=-1)
+        return {
+            "mask": components["mask"].detach(),
+            "bbox_fallback": components["bbox_fallback"].detach(),
+            "theta": components["theta"].detach(),
+            "sigma_x": components["sigma_x"].detach(),
+            "sigma_y": components["sigma_y"].detach(),
+            "frequency": components["frequency"].detach(),
+            "low_response_map": magnitude[:, : self.low_filter_count].mean(
+                dim=1,
+                keepdim=True,
+            ).detach(),
+            "high_response_map": magnitude[:, self.low_filter_count :].mean(
+                dim=1,
+                keepdim=True,
+            ).detach(),
+            "response_foreground_mass": foreground_mass.detach(),
+            "mask_area_fraction": response_mask.mean(dim=(-2, -1)).detach(),
+            "counts": counts.detach(),
+            "entropy": entropy.detach(),
+            "filter_features": components["filter_features"].detach(),
+            "fcm_attention": components["fcm_attention"].detach(),
+            "texture_descriptor": components["texture_descriptor"].detach(),
+            "texture_token": components["texture_token"].detach(),
+        }
+
+    def forward(
+        self,
+        image: Tensor,
+        bbox: Optional[Tensor] = None,
+        *,
+        return_trace: bool = False,
+        kernel_override: Optional[Tuple[Tensor, Tensor]] = None,
+        use_low: bool = True,
+        use_high: bool = True,
+        use_lho_position: bool = True,
+        use_filter_parameter_encoding: bool = True,
+    ):
+        components = self.forward_components(
+            image,
+            bbox,
+            kernel_override=kernel_override,
+            use_low=use_low,
+            use_high=use_high,
+            use_lho_position=use_lho_position,
+            use_filter_parameter_encoding=use_filter_parameter_encoding,
+        )
+        texture_token = components["texture_token"].to(dtype=image.dtype)
+        if not return_trace:
+            return texture_token
+        return texture_token, self._trace_from_components(components)
+
+
+class LearnableGaborTextureResidual(LearnableGaborTextureEncoder):
+    """Zero-gated texture residual retained for historical checkpoint replay."""
+
+    gate_scale = 0.10
+
+    def __init__(self, embed_dim: int) -> None:
+        super().__init__(embed_dim=embed_dim)
+        self.raw_gate = nn.Parameter(torch.zeros((), dtype=torch.float32))
+
+    def effective_gate(self) -> Tensor:
+        return torch.tanh(self.raw_gate) * float(self.gate_scale)
+
     def forward(
         self,
         image: Tensor,
@@ -489,38 +556,7 @@ class LearnableGaborTextureResidual(nn.Module):
         )
         if not return_trace:
             return residual
-
-        magnitude = components["magnitude"]
-        unmasked_magnitude = components["unmasked_magnitude"]
-        response_mask = components["response_mask"]
-        foreground_mass = (unmasked_magnitude * response_mask).sum(
-            dim=(-2, -1)
-        ) / unmasked_magnitude.sum(dim=(-2, -1)).clamp_min(1e-6)
-        counts = components["counts"]
-        entropy = -(counts * counts.clamp_min(1e-8).log()).sum(dim=-1)
-        trace = {
-            "mask": components["mask"].detach(),
-            "bbox_fallback": components["bbox_fallback"].detach(),
-            "theta": components["theta"].detach(),
-            "sigma_x": components["sigma_x"].detach(),
-            "sigma_y": components["sigma_y"].detach(),
-            "frequency": components["frequency"].detach(),
-            "low_response_map": magnitude[:, : self.low_filter_count].mean(
-                dim=1,
-                keepdim=True,
-            ).detach(),
-            "high_response_map": magnitude[:, self.low_filter_count :].mean(
-                dim=1,
-                keepdim=True,
-            ).detach(),
-            "response_foreground_mass": foreground_mass.detach(),
-            "mask_area_fraction": response_mask.mean(dim=(-2, -1)).detach(),
-            "counts": counts.detach(),
-            "entropy": entropy.detach(),
-            "filter_features": components["filter_features"].detach(),
-            "texture_descriptor": components["texture_descriptor"].detach(),
-            "texture_token": components["texture_token"].detach(),
-            "gate": gate.detach(),
-            "residual": residual.detach(),
-        }
+        trace = self._trace_from_components(components)
+        trace["gate"] = gate.detach()
+        trace["residual"] = residual.detach()
         return residual, trace

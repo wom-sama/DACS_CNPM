@@ -15775,3 +15775,119 @@ Date: 2026-07-02
   initialization and adds texture and semantic features directly; that is a
   separate hypothesis requiring a new protocol and cannot inherit Stage-B
   permission from this failed adapter.
+
+## Active Gabor Semantic-Sum Closure 2026-07-15 - Material but Collapsed
+
+### Locked active route and deterministic smoke
+
+- Locked
+  `docs/TRKH_5CLASS_ACTIVE_GABOR_SEMANTIC_FUSION_PROTOCOL_20260715.md`
+  as the one distinct test of the ICCV-style active texture-plus-semantic
+  hypothesis. It trains from initialization, applies the compact constrained
+  low/high Gabor, LHO, and FCM path to the bbox object view, and adds the
+  texture vector directly to the unchanged TRKH semantic vector. There is no
+  learned gate, scale, classifier, router, or post-hoc threshold.
+- Train-only Stage A at
+  `runs/audit_active_gabor_semantic_fusion_stage_a_20260715` passed all locked
+  functional, gradient, export, runtime, and VRAM checks. Summary SHA is
+  `0917424934b9299c6efb5b04b592376be0f1e196fd7fd62beb9bdfe4e1fefea3`;
+  runtime was `1.10627x`, peak VRAM was `2.57851 GiB`, and ONNX maximum error
+  was `9.54e-7`. No validation or test loader was constructed.
+- The sole deterministic scratch comparison used the same seed, recipe,
+  post-constructor RNG state, `120` train batches, five epochs, full `2606`
+  validation objects, and no test split. Exact comparison summary SHA is
+  `5c540d6035fc53089bfed61d419157b4fb1dc9bdd6d4a19f305518ebb9524da7`.
+- Control/candidate macro F1 was `0.788949 -> 0.784714`; class1 P/R/F1 was
+  `0.378378/0.649007/0.478049 -> 0.377119/0.589404/0.459948`. Candidate versus
+  control made `40` corrections and `41` harms, removed/created `30/15` focus
+  false positives, rescued only one class1 FN while breaking ten class1 TP,
+  and created six new `3->2` harms. All nine continuation gates failed, so
+  10-epoch, probe, full-train, and test permission are false.
+- Candidate runtime was `1366.31 s` versus `1520.08 s` control (`0.89884x`).
+  The rejection is therefore behavioral, not a compute-budget failure.
+
+### Mechanism and robustness diagnosis
+
+- Full-validation mechanism/robustness summary SHA is
+  `d59d9eb3a61485f8edb7a855fde61b7c551712305c20381af776bda9ae001d58`.
+  Every Gabor, LHO, FCM, and output-projection parameter family moved, and the
+  direct sum was exact, but the learned representation collapsed: texture to
+  semantic norm was `2.11654`, texture sample cosine was `0.998529`, maximum
+  filter-feature cosine was `0.99999791`, and normalized FCM entropy was
+  `0.99999237`. The active branch is material but behaves like a large common
+  vector rather than a discriminative texture expert.
+- Candidate won macro F1 in `0/5` conditions. Candidate-minus-control macro F1
+  was clean `-0.004235`, center occlusion `-0.004826`, dim `-0.019486`, bright
+  `-0.014007`, and low contrast `-0.014395`; class1 TP deltas were
+  `-9/-10/-3/-3/-5`. This closes the route independently of the clean metric.
+
+### Exact changed-case XAI repair
+
+- Self-review found that the first `changed_cases.csv` was a union of
+  keeper-candidate and control-candidate changes: `428` rows instead of the
+  exact `90` control-candidate decisions. Metrics, transitions, source-group
+  forensics, and gates were unaffected, but one of 16 selected XAI rows had no
+  control-candidate hard-decision change and that first XAI cohort was invalid.
+- The comparator now writes only exact control-candidate changes and asserts
+  its row count against transition telemetry. The generic cohort builder also
+  filters defensively, and the post-smoke wrapper fail-closes on source count,
+  excluded rows, selected count, and prediction inequality. The replacement
+  comparison was deeply equal to the original after removing the new row-count
+  field, while its CSV has exactly `90/90` changed decisions.
+- Exact cohort summary SHA is `bc72f7bc...59dc5`. FP32 attribution caused two
+  control near-ties and zero candidate decisions to drift; reconciliation kept
+  all 16 original samples/ranks and relabeled only those two as
+  `fp32_unchanged`, at summary SHA `0b6bc860...25bc5`.
+- Paired XAI summary SHA is `df8cc253...e8908b`; all cases use native block-7
+  MHSA and all eight gradient-bearing rollout layers with zero fallback.
+  Candidate accuracy on this reconciled cohort was `0.4375` versus `0.6875`
+  control. Candidate-minus-control foreground mass was attention `+0.01741`,
+  grad-rollout `+0.02758`, Grad-CAM `-0.02420`, but ordinary rollout shifted
+  `-0.10465` foreground and `+0.11615` border. Attribution families therefore
+  disagree on localization while agreeing that a cleaner heatmap is not a
+  precision win.
+- Object-desaturation original-prediction drop increased by `0.02850`, while
+  background gray/blur changes remained near zero. Harmful focus-FP additions,
+  class1 TP breaks, and new `3->2` errors often gained confidence or margin.
+  The failure is an over-strong collapsed object-texture signal, not insufficient
+  use of wide background context.
+
+### Evidence retention and command decision
+
+- Compaction root
+  `runs/evidence_active_gabor_semantic_fusion_rejected_20260715` preserves
+  `324` verified payloads at manifest SHA
+  `285bf2d4ed02f97d673ab2cfe05711338f9280f93f7455d58bad93d8fb02a195`.
+  Four checkpoint binaries totaling `350099623` bytes were excluded; cleanup
+  manifest SHA is `51cf9623...92755`, and both rejected smoke roots are absent.
+- Retention audit
+  `runs/artifact_retention_audit_20260715_active_gabor_semantic_closure`
+  passed over `661` directories and `192` compacted originals with
+  `blockers=[]`; summary SHA is `0ae40cb7...25272` and free space was
+  `75.919 GiB`.
+- Keeper, scratch complement, and current-command hashes remain
+  `1f49d577...482677`, `f8bd6309...a549`, and `36b9aa1a...40faf`.
+  The candidate is worse on macro F1, class1 precision/recall/F1, TP retention,
+  correction-harm balance, and all robustness conditions. The VS Code
+  full-train command packet is intentionally unchanged.
+- Do not sweep Gabor filter count, frequency bands, LHO bins, FCM dimensions,
+  fusion scale/gate, LR, seed, loss, augmentation, or epoch count. A future
+  texture route must introduce a genuinely different representation mechanism
+  that proves between-sample/filter diversity and class1 TP protection before
+  any matched smoke.
+
+### Engineering verification
+
+- Self-review additionally made changed-case prediction parsing fail closed on
+  missing/non-integer fields. Resume validation now checks both XAI sample sets
+  and checkpoint provenance, the source/reconciled cohort hashes, paired cohort
+  hash, and all case counts before reusing completed JSON.
+- Final verification passed package/test compile, focused tests `18/18`, and
+  full pytest `1028/1028`. Six affected/current PowerShell launchers parsed
+  with zero errors. Current-best full pipeline, frozen precision package,
+  single-checkpoint TensorRT export, PyTorch video, and active-Gabor smoke
+  preflights all returned success without training or opening test data.
+- The post-smoke launcher was parser- and artifact-integrity-checked rather
+  than executed after intentional checkpoint compaction. Its retained exact
+  artifacts match all 16 sample indices, both historical checkpoint paths,
+  source/reconciled/paired cohort hashes, and case counts.

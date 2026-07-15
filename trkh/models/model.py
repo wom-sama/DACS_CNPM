@@ -14,7 +14,10 @@ from torch.utils.checkpoint import checkpoint as gradient_checkpoint
 from torchvision import models as tv_models
 
 from trkh.models.inceptionnext_atto_tokenizer import InceptionNeXtAttoTokenizer
-from trkh.models.learnable_gabor_texture import LearnableGaborTextureResidual
+from trkh.models.learnable_gabor_texture import (
+    LearnableGaborTextureEncoder,
+    LearnableGaborTextureResidual,
+)
 from trkh.models.moga_surface_tokenizer import MogaXTTokenizer
 from trkh.models.starnet_s2_tokenizer import StarNetS2Tokenizer
 from trkh.models.visual_contrast_attention import VisualContrastAttention
@@ -5584,6 +5587,7 @@ class VisionTransformerWithRegisters(nn.Module):
         branch_cnn_tokens: int = 1,
         branch_token_dropout: float = 0.1,
         learnable_gabor_texture_residual: bool = False,
+        learnable_gabor_texture_semantic_fusion: bool = False,
         detail_patch_enhancement: bool = False,
         detail_patch_dropout: float = 0.05,
         token_pruning: bool = False,
@@ -6094,6 +6098,13 @@ class VisionTransformerWithRegisters(nn.Module):
             else None
         )
         self.num_branch_tokens = int(getattr(self.branch_token_fusion, "token_count", 0))
+        if bool(learnable_gabor_texture_residual) and bool(
+            learnable_gabor_texture_semantic_fusion
+        ):
+            raise ValueError(
+                "learnable Gabor edge-token residual and semantic fusion are "
+                "mutually exclusive."
+            )
         if bool(learnable_gabor_texture_residual):
             if self.branch_token_fusion is None or self.branch_token_fusion.edge_tokens <= 0:
                 raise ValueError(
@@ -6109,6 +6120,11 @@ class VisionTransformerWithRegisters(nn.Module):
         else:
             self.gabor_texture_edge_token_index = -1
             self.gabor_texture_residual = None
+        self.gabor_texture_semantic_encoder = (
+            LearnableGaborTextureEncoder(embed_dim=embed_dim)
+            if bool(learnable_gabor_texture_semantic_fusion)
+            else None
+        )
         self.num_prefix_tokens = 1 + int(self.num_registers) + int(self.num_branch_tokens)
         self.detail_enhancer = (
             PatchDetailEnhancer(
@@ -6538,11 +6554,21 @@ class VisionTransformerWithRegisters(nn.Module):
         else:
             self.high_frequency_texture_expert = None
 
-        if self.gabor_texture_residual is None:
+        gabor_modules = [
+            module
+            for module in (
+                self.gabor_texture_residual,
+                self.gabor_texture_semantic_encoder,
+            )
+            if module is not None
+        ]
+        if not gabor_modules:
             self.apply(self._init_weights)
         else:
             gabor_module_ids = {
-                id(module) for module in self.gabor_texture_residual.modules()
+                id(child)
+                for gabor_module in gabor_modules
+                for child in gabor_module.modules()
             }
 
             def init_base_module(module: nn.Module) -> None:
@@ -6553,7 +6579,8 @@ class VisionTransformerWithRegisters(nn.Module):
             # Keep the optional branch on the repository's standard
             # initialization while preserving the base model's RNG stream.
             with torch.random.fork_rng(devices=[]):
-                self.gabor_texture_residual.apply(self._init_weights)
+                for gabor_module in gabor_modules:
+                    gabor_module.apply(self._init_weights)
         if isinstance(self.stem, (InceptionNeXtAttoTokenizer, StarNetS2Tokenizer)):
             self.stem.reset_parameters()
         self._init_parameter_tensors()
@@ -7347,6 +7374,8 @@ class VisionTransformerWithRegisters(nn.Module):
             else patch_tokens.new_zeros((batch_size, 0, patch_tokens.shape[-1]))
         )
         gabor_texture_trace = None
+        gabor_texture_semantic_feature = None
+        gabor_texture_semantic_trace = None
         if self.gabor_texture_residual is not None:
             if return_trace:
                 gabor_texture_value, gabor_texture_trace = self.gabor_texture_residual(
@@ -7372,6 +7401,23 @@ class VisionTransformerWithRegisters(nn.Module):
                 ),
                 dim=1,
             )
+        if self.gabor_texture_semantic_encoder is not None:
+            if return_trace:
+                (
+                    gabor_texture_semantic_feature,
+                    gabor_texture_semantic_trace,
+                ) = self.gabor_texture_semantic_encoder(
+                    input_image,
+                    bbox_token_prior,
+                    return_trace=True,
+                )
+            else:
+                gabor_texture_semantic_feature = (
+                    self.gabor_texture_semantic_encoder(
+                        input_image,
+                        bbox_token_prior,
+                    )
+                )
         pos_embed = self.get_interpolated_pos_embed(grid_size).to(device=patch_tokens.device)
 
         if self.register_positional_embedding:
@@ -7665,6 +7711,10 @@ class VisionTransformerWithRegisters(nn.Module):
             "patch_indices": patch_indices,
             "pooled": self.pool_tokens_for_head(cls_out, reg_out, branch_out),
         }
+        if gabor_texture_semantic_feature is not None:
+            features["gabor_texture_semantic_feature"] = (
+                gabor_texture_semantic_feature
+            )
         if attention_maps:
             attention_representations = {
                 int(layer_index): (
@@ -7893,6 +7943,11 @@ class VisionTransformerWithRegisters(nn.Module):
             if gabor_texture_trace is not None:
                 for trace_key, trace_value in gabor_texture_trace.items():
                     features["trace"][f"gabor_texture_{trace_key}"] = trace_value
+            if gabor_texture_semantic_trace is not None:
+                for trace_key, trace_value in gabor_texture_semantic_trace.items():
+                    features["trace"][
+                        f"gabor_texture_semantic_{trace_key}"
+                    ] = trace_value
             if multi_granularity_logits:
                 features["trace"]["multi_granularity_layers"] = torch.tensor(
                     [int(layer) for layer in multi_granularity_logits.keys()],
@@ -8198,6 +8253,37 @@ class VisionTransformerWithRegisters(nn.Module):
             else:
                 pooled = late_output
             features["late_class_attention_feature"] = pooled
+        texture_feature = features.get("gabor_texture_semantic_feature")
+        if torch.is_tensor(texture_feature):
+            texture_feature = texture_feature.to(
+                device=pooled.device,
+                dtype=pooled.dtype,
+            )
+            semantic_feature = pooled
+            pooled = semantic_feature + texture_feature
+            features["gabor_texture_semantic_head_input"] = pooled
+            if isinstance(features.get("trace"), dict):
+                semantic_float = semantic_feature.detach().float()
+                texture_float = texture_feature.detach().float()
+                fused_float = pooled.detach().float()
+                features["trace"]["gabor_texture_semantic_semantic_feature"] = (
+                    semantic_float
+                )
+                features["trace"]["gabor_texture_semantic_fused_feature"] = (
+                    fused_float
+                )
+                features["trace"]["gabor_texture_semantic_semantic_norm"] = (
+                    semantic_float.norm(dim=-1)
+                )
+                features["trace"]["gabor_texture_semantic_texture_norm"] = (
+                    texture_float.norm(dim=-1)
+                )
+                features["trace"]["gabor_texture_semantic_fused_norm"] = (
+                    fused_float.norm(dim=-1)
+                )
+                features["trace"]["gabor_texture_semantic_cosine"] = (
+                    F.cosine_similarity(semantic_float, texture_float, dim=-1)
+                )
         return pooled
 
     def late_member_logits_from_features(self, features: Dict[str, Tensor]) -> Tensor:
@@ -9686,6 +9772,7 @@ class DETRVisionTransformerWithRegisters(VisionTransformerWithRegisters):
         branch_cnn_tokens: int = 1,
         branch_token_dropout: float = 0.1,
         learnable_gabor_texture_residual: bool = False,
+        learnable_gabor_texture_semantic_fusion: bool = False,
         detail_patch_enhancement: bool = False,
         detail_patch_dropout: float = 0.05,
         token_pruning: bool = False,
@@ -9991,6 +10078,9 @@ class DETRVisionTransformerWithRegisters(VisionTransformerWithRegisters):
             branch_cnn_tokens=branch_cnn_tokens,
             branch_token_dropout=branch_token_dropout,
             learnable_gabor_texture_residual=learnable_gabor_texture_residual,
+            learnable_gabor_texture_semantic_fusion=(
+                learnable_gabor_texture_semantic_fusion
+            ),
             detail_patch_enhancement=detail_patch_enhancement,
             detail_patch_dropout=detail_patch_dropout,
             token_pruning=token_pruning,

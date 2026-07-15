@@ -2566,8 +2566,33 @@
   `67a29a3f...0352`; 14 binaries totaling `702287122` bytes were excluded.
   Retention passed over `657` run directories with `blockers=[]`; keeper,
   scratch complement, and current-command hashes remain unchanged.
-- [ ] Do not sweep the zero gate, gate scale, keeper LR, seed, epoch count,
-  filter count, LHO/FCM width, or edge-token target. Before any direct active
-  Gabor route, lock a separate from-initialization protocol that follows the
-  paper's texture-plus-semantic addition, proves material branch gradients and
-  noncollapsed filters, and uses deterministic or replicated matched controls.
+- [x] Do not sweep the zero-gated keeper adapter. Lock and implement a separate
+  deterministic from-initialization active Gabor protocol with direct
+  texture-plus-semantic addition and no learned gate/scale/router. Train-only
+  Stage A passed at summary SHA `09174249...efea3` with material fusion,
+  `1.10627x` runtime, `2.57851 GiB` peak, and no validation/test loader.
+- [x] Run the sole `120b x 5e` deterministic scratch control/candidate smoke
+  and full validation. Candidate macro/class1 F1 fell
+  `0.788949/0.478049 -> 0.784714/0.459948`; class1 precision/recall fell
+  `0.378378/0.649007 -> 0.377119/0.589404`, with one FN rescue versus ten TP
+  breaks. All continuation gates and all `5/5` robustness comparisons failed.
+- [x] Repair the changed-case evidence after self-review found a 428-row
+  keeper/control union. Comparator, cohort builder, and wrapper now enforce the
+  exact 90 control-candidate decisions. Rebuilt 16-case FP32 paired XAI has no
+  attention or grad-rollout fallback; summary SHA is `df8cc253...e8908b`.
+- [x] Close the mechanism as material but collapsed: texture/semantic norm
+  `2.11654`, sample cosine `0.998529`, filter-feature cosine `0.99999791`, and
+  FCM entropy `0.99999237`. Object desaturation remains causal while background
+  perturbations are near zero; do not interpret focus maps as a precision win.
+- [x] Compact the two rejected active-Gabor smoke roots. Evidence retains `324`
+  verified payloads at manifest SHA `285bf2d4...a195`; four checkpoints
+  (`350099623` bytes) were excluded. Retention passed over `661` directories
+  and `192` compacted originals with `blockers=[]`.
+- [x] Complete active-route engineering verification: fail-closed cohort/XAI
+  resume provenance, compile, focused tests `18/18`, full pytest `1028/1028`,
+  six PowerShell parses, and five no-train preflights all passed.
+- [ ] Do not sweep Gabor filters/bands, LHO/FCM size, fusion scale/gate, LR,
+  seed, loss, augmentation, or run length. Select the next genuinely distinct
+  train-only representation route only after a local no-repeat and primary-
+  literature cross-check; require diversity and class1 TP protection before a
+  matched no-test smoke.

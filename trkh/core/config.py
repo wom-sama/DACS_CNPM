@@ -330,6 +330,7 @@ class ModelConfig:
     branch_cnn_tokens: int = 1
     branch_token_dropout: float = 0.1
     learnable_gabor_texture_residual: bool = False
+    learnable_gabor_texture_semantic_fusion: bool = False
     detail_patch_enhancement: bool = False
     detail_patch_dropout: float = 0.05
     token_pruning: bool = False

@@ -6,12 +6,19 @@ import math
 import torch
 
 from trkh.core.config import ModelConfig
-from trkh.models.learnable_gabor_texture import LearnableGaborTextureResidual
+from trkh.models.learnable_gabor_texture import (
+    LearnableGaborTextureEncoder,
+    LearnableGaborTextureResidual,
+)
 from trkh.models.model import build_model_from_checkpoint, create_model, load_model_state
 from trkh.training.train import parse_args
 
 
-def _model_config(*, enabled: bool = False) -> ModelConfig:
+def _model_config(
+    *,
+    enabled: bool = False,
+    semantic_fusion: bool = False,
+) -> ModelConfig:
     return ModelConfig(
         model_type="vit_registers",
         image_size=64,
@@ -30,6 +37,7 @@ def _model_config(*, enabled: bool = False) -> ModelConfig:
         branch_token_dropout=0.0,
         token_pruning=False,
         learnable_gabor_texture_residual=enabled,
+        learnable_gabor_texture_semantic_fusion=semantic_fusion,
     )
 
 
@@ -206,7 +214,100 @@ def test_gabor_requires_edge_token_and_cli_flag_is_default_off() -> None:
         raise AssertionError("Expected missing edge-token rejection")
 
     assert parse_args([]).learnable_gabor_texture_residual is False
+    assert parse_args([]).learnable_gabor_texture_semantic_fusion is False
     assert (
         parse_args(["--learnable-gabor-texture-residual"]).learnable_gabor_texture_residual
         is True
     )
+
+
+def test_active_gabor_encoder_has_no_residual_gate_and_emits_trace() -> None:
+    torch.manual_seed(42)
+    encoder = LearnableGaborTextureEncoder(embed_dim=64).eval()
+    image, bbox = _inputs()
+
+    with torch.no_grad():
+        texture, trace = encoder(image, bbox, return_trace=True)
+
+    assert not hasattr(encoder, "raw_gate")
+    assert texture.shape == (2, 64)
+    assert torch.equal(texture, trace["texture_token"])
+    assert trace["fcm_attention"].shape == (2, 4, 32, 32)
+    assert torch.isfinite(texture).all()
+
+
+def test_active_gabor_semantic_fusion_is_rng_neutral_and_direct() -> None:
+    control_config = _model_config()
+    candidate_config = _model_config(semantic_fusion=True)
+
+    torch.manual_seed(42)
+    control = create_model(num_classes=5, model_config=control_config)
+    control_rng = torch.get_rng_state().clone()
+    torch.manual_seed(42)
+    candidate = create_model(num_classes=5, model_config=candidate_config)
+    candidate_rng = torch.get_rng_state().clone()
+
+    assert torch.equal(control_rng, candidate_rng)
+    control_state = control.state_dict()
+    candidate_state = candidate.state_dict()
+    shared_names = [name for name in candidate_state if name in control_state]
+    assert shared_names
+    assert all(torch.equal(candidate_state[name], control_state[name]) for name in shared_names)
+    extra_names = [name for name in candidate_state if name not in control_state]
+    assert extra_names
+    assert all(name.startswith("gabor_texture_semantic_encoder.") for name in extra_names)
+
+    control.eval()
+    candidate.eval()
+    image, bbox = _inputs()
+    with torch.no_grad():
+        control_features = control.forward_features(image, bbox_token_prior=bbox)
+        candidate_features = candidate.forward_features(
+            image,
+            bbox_token_prior=bbox,
+            return_trace=True,
+        )
+        control_logits = control(image)
+        candidate_head_input = candidate.head_input_from_features(candidate_features)
+        candidate_logits = candidate.head(candidate_head_input)
+
+    expected = (
+        candidate_features["pooled"]
+        + candidate_features["gabor_texture_semantic_feature"].to(
+            dtype=candidate_features["pooled"].dtype
+        )
+    )
+    assert torch.equal(candidate_head_input, expected)
+    assert not torch.equal(control_logits, candidate_logits)
+    assert candidate.gabor_texture_residual is None
+    assert isinstance(
+        candidate.gabor_texture_semantic_encoder,
+        LearnableGaborTextureEncoder,
+    )
+    assert "gabor_texture_semantic_fused_norm" in candidate_features["trace"]
+
+    restored = build_model_from_checkpoint(
+        {
+            "class_names": [f"class_{index}" for index in range(5)],
+            "model_config": vars(candidate_config),
+            "model_state": candidate.state_dict(),
+        }
+    )
+    assert isinstance(
+        restored.gabor_texture_semantic_encoder,
+        LearnableGaborTextureEncoder,
+    )
+    assert set(restored.state_dict()) == set(candidate.state_dict())
+
+
+def test_active_and_residual_gabor_modes_are_mutually_exclusive() -> None:
+    config = _model_config(enabled=True, semantic_fusion=True)
+    try:
+        create_model(num_classes=5, model_config=config)
+    except ValueError as error:
+        assert "mutually exclusive" in str(error)
+    else:
+        raise AssertionError("Expected mutually exclusive Gabor modes to fail")
+
+    parsed = parse_args(["--learnable-gabor-texture-semantic-fusion"])
+    assert parsed.learnable_gabor_texture_semantic_fusion is True

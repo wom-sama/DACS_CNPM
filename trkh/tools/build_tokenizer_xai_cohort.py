@@ -14,6 +14,18 @@ from trkh.tools.build_visual_contrast_xai_cohort import (
 )
 
 
+def _prediction_index(row: Dict[str, str], field: str) -> int:
+    if field not in row:
+        raise ValueError(f"Changed-case CSV is missing required column: {field}")
+    value = str(row[field]).strip()
+    try:
+        return int(value)
+    except ValueError as error:
+        raise ValueError(
+            f"Changed-case CSV has an invalid {field}: {value!r}"
+        ) from error
+
+
 def build_cohort(
     *,
     changed_cases: Path,
@@ -27,7 +39,13 @@ def build_cohort(
         raise FileExistsError(f"Cohort output already exists and is nonempty: {output_dir}")
     output_dir.mkdir(parents=True, exist_ok=True)
     with changed_cases.open("r", encoding="utf-8-sig", newline="") as handle:
-        rows = list(csv.DictReader(handle))
+        source_rows = list(csv.DictReader(handle))
+    rows = [
+        row
+        for row in source_rows
+        if _prediction_index(row, "control_prediction")
+        != _prediction_index(row, "candidate_prediction")
+    ]
     selected = select_cohort_rows(rows, max_cases=max_cases)
     if not selected:
         raise ValueError("At least one changed validation decision is required for paired XAI")
@@ -42,7 +60,9 @@ def build_cohort(
         "mode": str(mode),
         "source": str(changed_cases),
         "source_sha256": _sha256(changed_cases),
+        "source_row_count": len(source_rows),
         "changed_case_count": len(rows),
+        "excluded_unchanged_decisions": len(source_rows) - len(rows),
         "selected_case_count": len(selected),
         "category_counts": dict(sorted(category_counts.items())),
         "selection": {

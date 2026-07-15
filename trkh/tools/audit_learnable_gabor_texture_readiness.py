@@ -24,7 +24,10 @@ from trkh.core.utils import (
     set_seed,
 )
 from trkh.inference.inference import load_checkpoint
-from trkh.models.learnable_gabor_texture import LearnableGaborTextureResidual
+from trkh.models.learnable_gabor_texture import (
+    LearnableGaborTextureEncoder,
+    LearnableGaborTextureResidual,
+)
 from trkh.models.model import (
     build_model_from_checkpoint,
     classification_logits_from_features,
@@ -313,7 +316,7 @@ def _benchmark(
 
 
 def _module_diagnostics(
-    module: LearnableGaborTextureResidual,
+    module: LearnableGaborTextureEncoder,
     images: Tensor,
     bbox: Tensor,
 ) -> Dict[str, object]:
@@ -390,8 +393,16 @@ def _module_diagnostics(
         "kernel_size": int(module.kernel_size),
         "hidden_dim": int(module.hidden_dim),
         "attention_heads": int(module.attention_heads),
-        "gate_scale": float(module.gate_scale),
-        "effective_gate": float(module.effective_gate().detach().item()),
+        "gate_scale": (
+            float(module.gate_scale)
+            if hasattr(module, "gate_scale")
+            else None
+        ),
+        "effective_gate": (
+            float(module.effective_gate().detach().item())
+            if hasattr(module, "effective_gate")
+            else None
+        ),
         "parameters": {
             "theta": _tensor_summary(full["theta"]),
             "sigma_x": _tensor_summary(full["sigma_x"]),
@@ -444,7 +455,7 @@ def _module_diagnostics(
 
 
 def _illumination_diagnostics(
-    module: LearnableGaborTextureResidual,
+    module: LearnableGaborTextureEncoder,
     images: Tensor,
     bbox: Tensor,
     labels: Tensor,
@@ -496,7 +507,7 @@ def _illumination_diagnostics(
 def _balanced_sensitivity(
     *,
     model: nn.Module,
-    module: LearnableGaborTextureResidual,
+    module: LearnableGaborTextureEncoder,
     images: Tensor,
     labels: Tensor,
     metadata: Mapping[str, Tensor],
@@ -552,7 +563,7 @@ def _balanced_sensitivity(
 
 
 class _MaterializedGaborExport(nn.Module):
-    def __init__(self, module: LearnableGaborTextureResidual) -> None:
+    def __init__(self, module: LearnableGaborTextureEncoder) -> None:
         super().__init__()
         # Materialize on the deployment backend. CPU/GPU trigonometric kernels
         # can differ by a few ulps, which the triangular LHO bins may amplify.
@@ -606,7 +617,7 @@ class _MaterializedGaborIntermediateExport(nn.Module):
 
 def _export_diagnostics(
     *,
-    module: LearnableGaborTextureResidual,
+    module: LearnableGaborTextureEncoder,
     images: Tensor,
     bbox: Tensor,
     output_dir: Path,
