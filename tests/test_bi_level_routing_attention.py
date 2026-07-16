@@ -314,6 +314,10 @@ def test_bra_model_trace_and_pruning_after_block_two() -> None:
     with torch.inference_mode():
         pruned = model.forward_features(images, return_trace=True)
     assert pruned["patches"].shape[1] == 8
+    with torch.inference_mode():
+        standard = model.forward_features(images)
+    torch.testing.assert_close(pruned["tokens"], standard["tokens"], atol=0.0, rtol=0.0)
+    torch.testing.assert_close(pruned["pooled"], standard["pooled"], atol=0.0, rtol=0.0)
 
 
 def test_bra_rejects_sparse_grid_and_locked_route_conflicts() -> None:

@@ -11,6 +11,7 @@ from trkh.tools.audit_bi_level_routing_attention_preflight import (
     _bbox_masks,
     _bra_config,
     _dense_mhsa_parity,
+    _condition_summary,
     _independent_sparse_scatter,
     _official_equation_replay,
     _route_set_comparison,
@@ -83,6 +84,41 @@ def test_route_set_comparison_is_order_invariant() -> None:
     assert summary["exact_fraction"] == pytest.approx(0.5)
     assert summary["mean_jaccard"] == pytest.approx((1.0 + 1.0 / 3.0) / 2.0)
     assert summary["disagreement_count"] == 1
+
+
+def test_condition_summary_reports_valid_geometry_without_hiding_invalid_rows() -> None:
+    base = {
+        "valid_object_query": True,
+        "foreground_gain": 0.04,
+        "far_background_reduction": 0.03,
+        "routed_foreground_fraction": 0.30,
+        "all_region_foreground_fraction": 0.26,
+        "routed_far_background_fraction": 0.55,
+        "all_region_far_background_fraction": 0.58,
+        "distinct_route_sets": 6,
+        "pairwise_route_jaccard": 0.5,
+        "nonlocal_route_fraction": 0.4,
+        "probability_mae": 0.003,
+        "clean_route_jaccard": "",
+        "selected_affinity_margin": 1.0,
+    }
+    invalid = dict(base)
+    invalid.update(
+        {
+            "valid_object_query": False,
+            "foreground_gain": float("nan"),
+            "far_background_reduction": float("nan"),
+            "routed_foreground_fraction": float("nan"),
+            "routed_far_background_fraction": float("nan"),
+        }
+    )
+    summary = _condition_summary([base, invalid])
+    assert summary["rows"] == 2
+    assert summary["valid_object_query_rows"] == 1
+    assert summary["finite_rows"] == 1
+    assert summary["foreground_gain_mean"] == pytest.approx(0.04)
+    assert summary["far_background_reduction_mean"] == pytest.approx(0.03)
+    assert summary["positive_foreground_gain_fraction"] == 1.0
 
 
 def test_independent_sparse_scatter_reconstructs_module_dense_attention() -> None:

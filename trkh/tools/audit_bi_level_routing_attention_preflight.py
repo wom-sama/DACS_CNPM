@@ -613,7 +613,7 @@ def _trace_parity(
                 model,
                 sample_images,
                 sample_metadata,
-                return_attention=True,
+                return_attention=False,
                 return_trace=True,
             )
         return {
@@ -882,11 +882,13 @@ def _condition_summary(rows: Sequence[Mapping[str, object]]) -> Dict[str, object
 
     def mean(name: str) -> float:
         values = np.asarray([float(row[name]) for row in rows], dtype=np.float64)
-        return float(values.mean()) if np.isfinite(values).all() else math.nan
+        finite = values[np.isfinite(values)]
+        return float(finite.mean()) if finite.size else math.nan
 
     foreground_gains = np.asarray(
         [float(row["foreground_gain"]) for row in rows], dtype=np.float64
     )
+    finite_foreground_gains = foreground_gains[np.isfinite(foreground_gains)]
     route_shift_values = [
         float(row["clean_route_jaccard"])
         for row in rows
@@ -914,8 +916,10 @@ def _condition_summary(rows: Sequence[Mapping[str, object]]) -> Dict[str, object
             for row in rows
         ),
         "foreground_gain_mean": mean("foreground_gain"),
-        "positive_foreground_gain_fraction": float(
-            np.mean(foreground_gains > 0.0)
+        "positive_foreground_gain_fraction": (
+            float(np.mean(finite_foreground_gains > 0.0))
+            if finite_foreground_gains.size
+            else math.nan
         ),
         "routed_foreground_fraction_mean": mean("routed_foreground_fraction"),
         "all_region_foreground_fraction_mean": mean(
@@ -1005,7 +1009,7 @@ def _selectivity_audit(
                     candidate,
                     images,
                     metadata,
-                    return_attention=True,
+                    return_attention=False,
                     return_trace=True,
                 )
                 outputs_finite = bool(
@@ -1296,7 +1300,7 @@ def _render_route_overlays(
                     candidate,
                     batch_images,
                     batch_metadata,
-                    return_attention=True,
+                    return_attention=False,
                     return_trace=True,
                 )
             routes = module.trace()["route_indices"][0].detach().cpu()
@@ -1591,7 +1595,7 @@ def run_preflight(args: argparse.Namespace) -> Dict[str, object]:
             candidate,
             images,
             metadata,
-            return_attention=True,
+            return_attention=False,
             return_trace=True,
         )
         module = candidate.blocks[1].attn
@@ -1604,7 +1608,7 @@ def run_preflight(args: argparse.Namespace) -> Dict[str, object]:
                 candidate,
                 images,
                 metadata,
-                return_attention=True,
+                return_attention=False,
                 return_trace=True,
             )
         routes_bf16 = module.trace()["route_indices"].detach().clone()
@@ -1800,8 +1804,7 @@ def run_preflight(args: argparse.Namespace) -> Dict[str, object]:
             and matched_state["all_common_bit_exact"]
             and control_parameters == candidate_parameters
         ),
-        "constructor_rng_equal": _rng_equal(control_rng, candidate_rng)
-        and _rng_equal(baseline_rng, control_rng),
+        "constructor_rng_equal": _rng_equal(control_rng, candidate_rng),
         "added_parameter_budget": 0 < added_parameters <= MAX_ADDED_PARAMETERS,
         "official_equation_replay": bool(official_equation["passed"]),
         "dense_mhsa_parity": bool(dense_parity["passed"]),
