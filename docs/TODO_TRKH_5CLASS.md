@@ -3325,3 +3325,13 @@
   accepted-primary-paper/official-licensed-code no-repeat screen. Require a
   pre-training gate that cannot be satisfied by background localization alone
   and that protects class1 TP as well as restricted false positives.
+- [x] Complete the next accepted-primary-paper/official-code screen. Select
+  ICML-2022 Sparse Over-Parameterization from the authors' MIT repository at
+  commit/tree `4d991ce...18a77f`/`dadbf1b...0c6cd`; reject unlicensed SGN and
+  checkpoint-only Label Wave for this precision question. Protocol SHA is
+  `d2b94048...b687c8`; secondary/user reports remain hypothesis sources only.
+- [ ] Implement and run only the locked full-fit SOP gradient-compatibility
+  gate. Require exact official/independent equation replay and prove that SOP
+  preserves the corrective class1 logit gradient on all 185 restricted FP and
+  the support gradient on all 422 class1 TP. Any failure closes SOP before
+  trainer integration, holdout, validation, test, or an image epoch.

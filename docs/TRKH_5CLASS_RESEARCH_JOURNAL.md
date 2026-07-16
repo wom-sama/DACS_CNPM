@@ -17719,3 +17719,31 @@ Date: 2026-07-02
   ONNX dev artifact instead of shipping a rejected feature. Preserve the
   prospective protocol and
   `TRKH_5CLASS_DOMAIN_NBDT_A0_CLOSURE_20260717.md` as the no-repeat record.
+
+## Sparse Over-Parameterization A0 Lock 2026-07-17 - Gradient Safety Before Trainer Work
+
+- Re-screened the next route against accepted primary work and official
+  licensed code. Selected Liu et al.'s ICML-2022 Sparse Over-Parameterization
+  paper and the authors' MIT repository at commit/tree
+  `4d991ce...18a77f`/`dadbf1b...0c6cd`; the paper/source/license SHAs are
+  locked in the prospective protocol. The repository had 66 stars when
+  checked, but acceptance and source provenance, not popularity alone, are the
+  authority. User reports remain hypothesis sources only.
+- SOP is distinct from the closed GCE/SCE/ELR, co-teaching, Cleanlab,
+  neighbor, hierarchy, and static weighting routes because it jointly learns
+  sparse per-example additive label-noise variables that disappear at
+  deployment. ICLR-2024 SGN was not selected because its official repository
+  lacks a reusable license; Label Wave changes stopping rather than the
+  learned precision boundary.
+- Locked a fail-fast risk test before code at protocol SHA
+  `d2b94048da9d2a3ed261fda4f97c333c51bada3b008bd2303629aefd96b687c8`.
+  The isolated auditor may use only all 7,372 fit rows and fixed keeper logits,
+  then replay ten official real-noise `u/v` passes. It must preserve the
+  positive corrective `dL/dz_1` on all 185 restricted `{0,2,4}->1` false
+  positives and the negative support gradient on all 422 class1 true
+  positives.
+- This gate cannot be passed by better background localization: it operates on
+  exact class decisions and network-logit gradients. A material attenuation,
+  sign reversal, class1 clamp-to-zero gradient, source/hash mismatch, or
+  preferential noise absorption of restricted FP closes A0 before trainer
+  integration, holdout, validation, test, or any image epoch.
