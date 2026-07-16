@@ -17164,3 +17164,31 @@ Date: 2026-07-02
   match CIDT, while every method, schedule, cohort, behavior gate, and
   validation/test prohibition remains unchanged. Commands stay at three
   revisions/two updates and zero keeper replacements.
+
+## Supervised-Minority Condition-View A1 Closure 2026-07-16 - Exact Replay, Nonselective Shifted Geometry
+
+- Formal A1 on commit `45e9fda` corrected the numeric contract completely.
+  All four ordered 9,215-row caches were FP32/batch64 and finite; clean CIDT
+  maximum probability error was `8.94e-8` with zero argmax mismatches, and the
+  immediate 64-row pooled/logit replay error was exactly zero.
+- The immutable source-disjoint `7372/1843` train-only selectivity gate then
+  rejected before epoch 1. Clean TP-versus-hard-FP AUROC was `0.589174`, below
+  `0.60`, despite neighbor gap `0.040188`. Dim/bright/low-contrast AUROC was
+  `0.490784/0.501947/0.538811`, class1 CAC was zero in all three, and clean-to-
+  condition SAA was only `0.163863/0.315247/0.131850`.
+- This is a valid rejection of frozen pooled condition-view TTC, not another
+  infrastructure failure. The keeper embedding does not preserve sample
+  identity or selective class1 TP-versus-hard-FP evidence under the locked
+  views, so adapter training could unsafe-align the boundary. No representation
+  or probe training, XAI, ONNX, model binary, validation, or test occurred.
+- Independent replay reproduced the gate exactly and verified all manifest
+  hashes/sizes. Summary/metrics/manifest SHAs are
+  `6ae437b2...2b38f22`, `77f66bb2...d2978bf`, and
+  `b84cbbd8...07a3e7f`; no forbidden payload exists.
+- A cosmetic post-run report title still said A0; formal artifacts remain
+  preserved, while the generator now uses the runtime method and has a
+  regression test. Focused/full tests passed `14/14` and `1217/1217`.
+- Retention passed over 709 directories with `blockers=[]`, no deletion, and
+  summary SHA `9e8234e0...df26f5b`. Close k/condition/dtype/batch/loss/
+  adapter/schedule/fold/seed/threshold/router sweeps on this keeper. Closure
+  SHA is `aab02b4b...6f28005d`; current-best commands remain unchanged.

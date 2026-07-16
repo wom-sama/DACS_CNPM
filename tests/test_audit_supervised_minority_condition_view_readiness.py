@@ -26,6 +26,7 @@ from trkh.tools.audit_supervised_minority_condition_view_readiness import (
     _protocol_contract,
     _required_xai_events,
     _stage1_learning_rate,
+    _write_report,
     assess_pretraining_selectivity,
     assess_representation_mechanism,
     assess_train_holdout_behavior,
@@ -91,6 +92,28 @@ def test_a1_contract_locks_fp32_cidt_batch_and_replay_gate() -> None:
         ]
     )
     assert _locked_args_exact(mismatched) is False
+
+
+def test_report_uses_runtime_method_instead_of_hardcoded_a0(tmp_path) -> None:
+    path = tmp_path / "report.md"
+    _write_report(
+        path,
+        {
+            "method": "supervised_minority_condition_view_a1_fp32_cidt",
+            "status": "rejected_pretraining_selectivity",
+            "gate": {
+                "stage_b_authorized": False,
+                "failed_checks": ["pretraining_selectivity"],
+            },
+            "pretraining_selectivity_gate": {"failed_checks": ["clean_auroc"]},
+            "validation_predictions_used": False,
+            "test_data_used": False,
+        },
+    )
+    text = path.read_text(encoding="utf-8")
+    assert "# Supervised-Minority Condition-View Result" in text
+    assert "- Method: `supervised_minority_condition_view_a1_fp32_cidt`" in text
+    assert "A0 Result" not in text
 
 
 def test_stage1_learning_rate_has_locked_endpoints() -> None:

@@ -3106,8 +3106,23 @@
   bit-exact and FP32-to-CIDT error `<=5.96e-8` on the 64 tightest-margin rows.
   Close A0 before selectivity/training without validation/test or command
   revision; closure SHA is `49420090...fac2b453`.
-- [ ] Implement, test, precommit, and run the sole A1 numeric correction at
+- [x] Implement, test, precommit, and run the sole A1 numeric correction at
   protocol SHA `e17f5cb5...744d9aa2`. Preserve A0 as reproducible history;
   select `a1_fp32_cidt`, extract all condition caches in FP32/batch64, require
   all-row CIDT error `<=1e-6` and zero argmax mismatch, then continue only if
-  every inherited pre-training selectivity gate passes.
+  every inherited pre-training selectivity gate passes. Numeric replay passed
+  at `8.94e-8/0` mismatch, but pre-training selectivity rejected before epoch
+  1: clean TP-hard AUROC was `0.589174`, shifted class1 CAC was zero, and
+  shifted SAA was only `0.131850-0.315247`.
+- [x] Close A1 without training/XAI/deployment/validation/test. Independently
+  replay the gate and all three manifest payloads, fix the post-run hard-coded
+  A0 report title with a regression test, pass focused/full tests `14/14` and
+  `1217/1217`, verify protected hashes, and pass retention over 709 directories
+  with `blockers=[]`. Closure SHA is `aab02b4b...6f28005d`; commands remain
+  three revisions/two updates and zero keeper replacements.
+- [ ] Perform the next primary-source/no-repeat screen outside frozen pooled
+  condition alignment and every closed architecture/objective family. Require
+  a new scratch image representation to demonstrate train-only class1 TP-vs-
+  hard-FP selectivity and condition stability before any validation access;
+  favor an official, maintained implementation and a paper recipe that can be
+  adapted transparently to the fixed `<=30e` resource contract.

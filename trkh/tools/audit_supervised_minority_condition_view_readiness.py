@@ -2996,10 +2996,12 @@ def _replay_predictions(
 
 def _write_report(path: Path, summary: Mapping[str, object]) -> None:
     status = str(summary["status"])
+    method = str(summary["method"])
     gate = summary["gate"]
     lines = [
-        "# Supervised-Minority Condition-View A0 Result",
+        "# Supervised-Minority Condition-View Result",
         "",
+        f"- Method: `{method}`",
         f"- Status: `{status}`",
         f"- Stage B authorized: `{gate.get('stage_b_authorized', False)}`",
         f"- Validation used: `{summary.get('validation_predictions_used', False)}`",
