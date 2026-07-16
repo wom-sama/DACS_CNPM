@@ -2194,20 +2194,21 @@ def _benchmark_inference(
     metadata = _metadata_to_device(metadata_cpu, device=device, count=count)
 
     def iteration() -> Tensor:
-        with torch.inference_mode(), torch.autocast(
-            device_type="cuda", dtype=amp_dtype, enabled=True
-        ):
-            raw_logits, features = _forward_classification_with_metadata(
-                keeper, images, metadata, device=device
-            )
-        if adapter_device is None:
-            return raw_logits.float()
-        if not isinstance(features, Mapping):
-            raise ValueError("Benchmark keeper forward returned no features.")
-        patches, patch_indices, token_valid = _feature_tensors(features)
-        return adapter_device.forward_sparse(
-            patches.float(), patch_indices, token_valid, raw_logits.float()
-        )["logits"]
+        with torch.inference_mode():
+            with torch.autocast(
+                device_type="cuda", dtype=amp_dtype, enabled=True
+            ):
+                raw_logits, features = _forward_classification_with_metadata(
+                    keeper, images, metadata, device=device
+                )
+            if adapter_device is None:
+                return raw_logits.float()
+            if not isinstance(features, Mapping):
+                raise ValueError("Benchmark keeper forward returned no features.")
+            patches, patch_indices, token_valid = _feature_tensors(features)
+            return adapter_device.forward_sparse(
+                patches.float(), patch_indices, token_valid, raw_logits.float()
+            )["logits"]
 
     for _ in range(3):
         logits = iteration()
@@ -2455,25 +2456,25 @@ def _xai_audit(
             raw_logits, features = _forward_classification_with_metadata(
                 keeper, images, metadata_cpu, device=device
             )
-        if not isinstance(features, Mapping):
-            raise ValueError("CapsALM XAI keeper forward returned no features.")
-        patches, patch_indices, token_valid = _feature_tensors(features)
-        bbox_prior = features.get("patch_bbox_prior")
-        if not torch.is_tensor(bbox_prior) or bbox_prior.shape != token_valid.shape:
-            raise ValueError("CapsALM XAI requires aligned patch_bbox_prior.")
-        control_result = control_device.forward_sparse(
-            patches.float(), patch_indices, token_valid, raw_logits.float()
-        )
-        candidate_result = candidate_device.forward_sparse(
-            patches.float(), patch_indices, token_valid, raw_logits.float()
-        )
-        uniform_result = candidate_device.forward_sparse(
-            patches.float(),
-            patch_indices,
-            token_valid,
-            raw_logits.float(),
-            routing_iterations=1,
-        )
+            if not isinstance(features, Mapping):
+                raise ValueError("CapsALM XAI keeper forward returned no features.")
+            patches, patch_indices, token_valid = _feature_tensors(features)
+            bbox_prior = features.get("patch_bbox_prior")
+            if not torch.is_tensor(bbox_prior) or bbox_prior.shape != token_valid.shape:
+                raise ValueError("CapsALM XAI requires aligned patch_bbox_prior.")
+            control_result = control_device.forward_sparse(
+                patches.float(), patch_indices, token_valid, raw_logits.float()
+            )
+            candidate_result = candidate_device.forward_sparse(
+                patches.float(), patch_indices, token_valid, raw_logits.float()
+            )
+            uniform_result = candidate_device.forward_sparse(
+                patches.float(),
+                patch_indices,
+                token_valid,
+                raw_logits.float(),
+                routing_iterations=1,
+            )
         control_spatial = _routing_statistics(control_result, token_valid)[
             "class1_spatial"
         ][0]
