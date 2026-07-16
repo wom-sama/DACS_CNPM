@@ -1007,6 +1007,24 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--cropr-token-selector",
+        action="store_true",
+        default=False,
+        help=(
+            "Train detached task-supervised Cropr scorers at the two locked "
+            "TRKH pruning stages."
+        ),
+    )
+    parser.add_argument(
+        "--disable-cropr-token-selector-routing",
+        action="store_true",
+        default=False,
+        help=(
+            "Train the same Cropr scorers and auxiliary heads while retaining "
+            "native TRKH pruning scores for the causal control."
+        ),
+    )
+    parser.add_argument(
         "--pairwise-margin-head",
         action="store_true",
         default=False,
@@ -4799,6 +4817,62 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
             "--inattentive-token-fusion xung dot voi deep prompt, concurrent "
             "local-global, va late-member dynamic-prefix routes."
         )
+    if args.disable_cropr_token_selector_routing and not args.cropr_token_selector:
+        raise ValueError(
+            "--disable-cropr-token-selector-routing yeu cau --cropr-token-selector."
+        )
+    if args.cropr_token_selector:
+        if not args.token_pruning:
+            raise ValueError("--cropr-token-selector yeu cau --token-pruning.")
+        prune_layers = [
+            value.strip() for value in str(args.token_prune_layers).split(",")
+            if value.strip()
+        ]
+        try:
+            keep_rates = [
+                float(value.strip())
+                for value in str(args.token_keep_rates).split(",")
+                if value.strip()
+            ]
+        except ValueError as exc:
+            raise ValueError(
+                "--cropr-token-selector nhan token keep-rate khong hop le."
+            ) from exc
+        if prune_layers != ["2", "5"] or len(keep_rates) != 2 or any(
+            not math.isclose(actual, expected, rel_tol=0.0, abs_tol=1e-12)
+            for actual, expected in zip(keep_rates, (0.85, 0.65))
+        ):
+            raise ValueError(
+                "--cropr-token-selector A0 khoa token prune layers/rates "
+                "tai 2,5 / 0.85,0.65."
+            )
+        if not math.isclose(
+            float(args.token_prune_foreground_weight),
+            0.35,
+            rel_tol=0.0,
+            abs_tol=1e-12,
+        ):
+            raise ValueError(
+                "--cropr-token-selector A0 yeu cau "
+                "--token-prune-foreground-weight=0.35."
+            )
+        if args.early_token_mask_keep_rate < 1.0:
+            raise ValueError(
+                "--cropr-token-selector A0 yeu cau "
+                "--early-token-mask-keep-rate=1.0."
+            )
+        if args.inattentive_token_fusion:
+            raise ValueError(
+                "--cropr-token-selector khong ket hop inattentive-token-fusion."
+            )
+        if (
+            args.deep_class_prompt
+            or args.concurrent_local_global_coupling
+            or args.late_member_branch
+        ):
+            raise ValueError(
+                "--cropr-token-selector xung dot voi dynamic-prefix routes."
+            )
     if args.balanced_epoch_multiplier <= 0.0:
         raise ValueError("--balanced-epoch-multiplier phai > 0.")
     if not 0.0 <= args.balanced_epoch_tolerance <= 1.0:
@@ -6842,6 +6916,10 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         token_prune_bbox_margin_ratio=args.token_prune_bbox_margin_ratio,
         early_token_mask_keep_rate=args.early_token_mask_keep_rate,
         inattentive_token_fusion=bool(args.inattentive_token_fusion),
+        cropr_token_selector=bool(args.cropr_token_selector),
+        cropr_token_selector_routing=(
+            not bool(args.disable_cropr_token_selector_routing)
+        ),
         pairwise_margin_head=bool(args.pairwise_margin_head),
         pairwise_margin_pairs=args.pairwise_margin_pairs,
         pairwise_margin_logit_scale=args.pairwise_margin_logit_scale,
@@ -11932,6 +12010,63 @@ def _multi_granularity_auxiliary_loss_from_features(
         reference = next((value for value in auxiliary_logits.values() if torch.is_tensor(value)), None)
         return reference.sum() * 0.0 if torch.is_tensor(reference) else torch.tensor(0.0)
     return torch.stack(losses).mean()
+
+
+def _cropr_auxiliary_loss_from_features(
+    *,
+    features: Dict[str, Tensor],
+    targets: Tensor,
+) -> Tuple[Tensor, Dict[str, object]]:
+    auxiliary_logits = features.get("cropr_auxiliary_logits")
+    reference = next(
+        (value for value in features.values() if torch.is_tensor(value)),
+        None,
+    )
+    zero = (
+        reference.sum() * 0.0
+        if torch.is_tensor(reference)
+        else torch.tensor(0.0)
+    )
+    empty_stats: Dict[str, object] = {
+        "layer_count": 0,
+        "used_layers": [],
+        "accuracy": 0.0,
+        "loss_by_layer": {},
+    }
+    if not isinstance(auxiliary_logits, dict) or not auxiliary_logits:
+        return zero, empty_stats
+    if not torch.is_tensor(targets) or targets.ndim != 1:
+        raise ValueError(
+            "Cropr A0 auxiliary CE requires hard class-index targets; "
+            "MixUp/CutMix soft targets are outside the locked protocol."
+        )
+
+    losses: List[Tensor] = []
+    accuracies: List[Tensor] = []
+    used_layers: List[str] = []
+    loss_by_layer: Dict[str, float] = {}
+    for layer_name, logits in auxiliary_logits.items():
+        if not torch.is_tensor(logits) or logits.ndim != 2:
+            continue
+        if int(logits.size(0)) != int(targets.size(0)):
+            raise ValueError("Cropr auxiliary logits and targets have different batches.")
+        target_indices = targets.to(device=logits.device, dtype=torch.long)
+        layer_loss = F.cross_entropy(logits.float(), target_indices)
+        losses.append(layer_loss)
+        loss_by_layer[str(layer_name)] = float(layer_loss.detach().cpu().item())
+        accuracies.append(
+            (logits.detach().argmax(dim=1) == target_indices).float().mean()
+        )
+        used_layers.append(str(layer_name))
+    if not losses:
+        return zero, empty_stats
+
+    return torch.stack(losses).sum(), {
+        "layer_count": len(used_layers),
+        "used_layers": used_layers,
+        "accuracy": float(torch.stack(accuracies).mean().cpu().item()),
+        "loss_by_layer": loss_by_layer,
+    }
 
 
 def _multi_granularity_refinement_loss_from_features(
@@ -19423,6 +19558,11 @@ def _forward_train_loss(
             local_zoom_aux_loss = logits.sum() * 0.0
             high_frequency_texture_aux_loss = logits.sum() * 0.0
             high_frequency_texture_pairwise_loss = logits.sum() * 0.0
+            cropr_auxiliary_loss = logits.sum() * 0.0
+            cropr_auxiliary_loss_layer_2 = 0.0
+            cropr_auxiliary_loss_layer_5 = 0.0
+            cropr_auxiliary_layer_count = 0
+            cropr_auxiliary_accuracy = 0.0
             multi_granularity_aux_loss = logits.sum() * 0.0
             multi_granularity_refinement_loss = logits.sum() * 0.0
             multi_granularity_refinement_count = 0
@@ -20621,6 +20761,30 @@ def _forward_train_loss(
                     + float(multi_granularity_aux_loss_weight)
                     * multi_granularity_aux_loss
                 )
+            if features is not None:
+                cropr_auxiliary_loss, cropr_auxiliary_stats = (
+                    _cropr_auxiliary_loss_from_features(
+                        features=features,
+                        targets=targets,
+                    )
+                )
+                cropr_auxiliary_layer_count = int(
+                    cropr_auxiliary_stats.get("layer_count", 0) or 0
+                )
+                cropr_loss_by_layer = cropr_auxiliary_stats.get(
+                    "loss_by_layer", {}
+                )
+                if isinstance(cropr_loss_by_layer, dict):
+                    cropr_auxiliary_loss_layer_2 = float(
+                        cropr_loss_by_layer.get("2", 0.0) or 0.0
+                    )
+                    cropr_auxiliary_loss_layer_5 = float(
+                        cropr_loss_by_layer.get("5", 0.0) or 0.0
+                    )
+                cropr_auxiliary_accuracy = float(
+                    cropr_auxiliary_stats.get("accuracy", 0.0) or 0.0
+                )
+                loss = loss + cropr_auxiliary_loss
             if (
                 features is not None
                 and float(multi_granularity_refinement_loss_weight) > 0.0
@@ -22018,6 +22182,7 @@ def _forward_train_loss(
                             float(multi_granularity_aux_loss_weight)
                             * multi_granularity_aux_loss
                         )
+                        - cropr_auxiliary_loss
                         - (
                             float(multi_granularity_refinement_loss_weight)
                             * multi_granularity_refinement_loss
@@ -22378,6 +22543,19 @@ def _forward_train_loss(
                 "high_frequency_texture_pairwise_loss": float(
                     high_frequency_texture_pairwise_loss.detach().cpu().item()
                 ),
+                "cropr_auxiliary_loss": float(
+                    cropr_auxiliary_loss.detach().cpu().item()
+                ),
+                "cropr_auxiliary_loss_layer_2": float(
+                    cropr_auxiliary_loss_layer_2
+                ),
+                "cropr_auxiliary_loss_layer_5": float(
+                    cropr_auxiliary_loss_layer_5
+                ),
+                "cropr_auxiliary_layer_count": float(
+                    cropr_auxiliary_layer_count
+                ),
+                "cropr_auxiliary_accuracy": float(cropr_auxiliary_accuracy),
                 "multi_granularity_aux_loss": float(
                     multi_granularity_aux_loss.detach().cpu().item()
                 ),
@@ -23576,6 +23754,11 @@ def train_one_epoch(
         "local_zoom_aux_loss": 0.0,
         "high_frequency_texture_aux_loss": 0.0,
         "high_frequency_texture_pairwise_loss": 0.0,
+        "cropr_auxiliary_loss": 0.0,
+        "cropr_auxiliary_loss_layer_2": 0.0,
+        "cropr_auxiliary_loss_layer_5": 0.0,
+        "cropr_auxiliary_layer_count": 0.0,
+        "cropr_auxiliary_accuracy": 0.0,
         "multi_granularity_aux_loss": 0.0,
         "multi_granularity_refinement_loss": 0.0,
         "multi_granularity_refinement_count": 0.0,
@@ -32130,6 +32313,26 @@ def main() -> None:
                         "high_frequency_texture_pairwise_loss",
                         0.0,
                     ),
+                    "train_cropr_auxiliary_loss": train_artifact_stats.get(
+                        "cropr_auxiliary_loss",
+                        0.0,
+                    ),
+                    "train_cropr_auxiliary_loss_layer_2": train_artifact_stats.get(
+                        "cropr_auxiliary_loss_layer_2",
+                        0.0,
+                    ),
+                    "train_cropr_auxiliary_loss_layer_5": train_artifact_stats.get(
+                        "cropr_auxiliary_loss_layer_5",
+                        0.0,
+                    ),
+                    "train_cropr_auxiliary_layer_count": train_artifact_stats.get(
+                        "cropr_auxiliary_layer_count",
+                        0.0,
+                    ),
+                    "train_cropr_auxiliary_accuracy": train_artifact_stats.get(
+                        "cropr_auxiliary_accuracy",
+                        0.0,
+                    ),
                     "train_multi_granularity_aux_loss": train_artifact_stats.get(
                         "multi_granularity_aux_loss",
                         0.0,
@@ -33624,6 +33827,11 @@ def main() -> None:
                         "train_local_zoom_aux_loss",
                         "train_high_frequency_texture_aux_loss",
                         "train_high_frequency_texture_pairwise_loss",
+                        "train_cropr_auxiliary_loss",
+                        "train_cropr_auxiliary_loss_layer_2",
+                        "train_cropr_auxiliary_loss_layer_5",
+                        "train_cropr_auxiliary_layer_count",
+                        "train_cropr_auxiliary_accuracy",
                         "train_multi_granularity_aux_loss",
                         "train_multi_granularity_refinement_loss",
                         "train_multi_granularity_refinement_count",

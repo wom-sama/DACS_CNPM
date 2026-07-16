@@ -26,6 +26,7 @@ from trkh.models.visual_contrast_attention import VisualContrastAttention
 from trkh.models.foveal_aggregated_attention import FovealAggregatedAttention
 from trkh.models.deformable_spatial_attention import DeformableSpatialAttention
 from trkh.models.bi_level_routing_attention import BiLevelRoutingAttention
+from trkh.models.cropr_token_selector import CroprTokenSelector
 from trkh.models.diverse_branch_stem import DiverseBranchConvStem
 from trkh.models.cross_covariance_attention import (
     SharedProjectionCrossCovarianceAttention,
@@ -6031,6 +6032,8 @@ class VisionTransformerWithRegisters(nn.Module):
         token_prune_bbox_margin_ratio: float = 0.04,
         early_token_mask_keep_rate: float = 1.0,
         inattentive_token_fusion: bool = False,
+        cropr_token_selector: bool = False,
+        cropr_token_selector_routing: bool = True,
         pairwise_margin_head: bool = False,
         pairwise_margin_pairs: str = "0-1,2-3,4-rest",
         pairwise_margin_logit_scale: float = 0.35,
@@ -6756,6 +6759,8 @@ class VisionTransformerWithRegisters(nn.Module):
             min(1.0, max(0.0, early_token_mask_keep_rate))
         )
         self.inattentive_token_fusion_enabled = bool(inattentive_token_fusion)
+        self.cropr_token_selector_enabled = bool(cropr_token_selector)
+        self.cropr_token_selector_routing = bool(cropr_token_selector_routing)
         self.token_prune_schedule = (
             self._parse_token_prune_schedule(
                 depth=int(depth),
@@ -6798,6 +6803,54 @@ class VisionTransformerWithRegisters(nn.Module):
             if incompatible:
                 raise ValueError(
                     "inattentive_token_fusion is incompatible with dynamic-prefix "
+                    f"consumers: {', '.join(incompatible)}."
+                )
+        if self.cropr_token_selector_enabled:
+            if not self.token_pruning or not self.token_prune_schedule:
+                raise ValueError(
+                    "cropr_token_selector requires attention-based token pruning."
+                )
+            expected_schedule = {1: 0.85, 4: 0.65}
+            if set(self.token_prune_schedule) != set(expected_schedule) or any(
+                not math.isclose(
+                    float(self.token_prune_schedule[layer]),
+                    expected_rate,
+                    rel_tol=0.0,
+                    abs_tol=1e-12,
+                )
+                for layer, expected_rate in expected_schedule.items()
+            ):
+                raise ValueError(
+                    "cropr_token_selector A0 is locked to prune layers 2,5 and "
+                    "keep rates 0.85,0.65."
+                )
+            if not math.isclose(
+                self.token_prune_foreground_weight,
+                0.35,
+                rel_tol=0.0,
+                abs_tol=1e-12,
+            ):
+                raise ValueError(
+                    "cropr_token_selector A0 requires foreground weight 0.35."
+                )
+            if self.early_token_mask_keep_rate < 1.0:
+                raise ValueError(
+                    "cropr_token_selector A0 does not support early token masking."
+                )
+            if self.inattentive_token_fusion_enabled:
+                raise ValueError(
+                    "cropr_token_selector cannot be combined with inattentive token fusion."
+                )
+            incompatible = []
+            if self.deep_class_prompt_enabled:
+                incompatible.append("deep_class_prompt")
+            if self.concurrent_local_global_enabled:
+                incompatible.append("concurrent_local_global_coupling")
+            if self.late_member_enabled:
+                incompatible.append("late_member_branch")
+            if incompatible:
+                raise ValueError(
+                    "cropr_token_selector is incompatible with dynamic-prefix "
                     f"consumers: {', '.join(incompatible)}."
                 )
         if self.head_pooling not in {"cls", "cls_register_mean", "cls_branch_register_mean"}:
@@ -7668,6 +7721,18 @@ class VisionTransformerWithRegisters(nn.Module):
             nn.init.zeros_(self.cumulative_ordinal_head.weight)
             if self.cumulative_ordinal_head.bias is not None:
                 nn.init.zeros_(self.cumulative_ordinal_head.bias)
+        self.cropr_token_selectors = nn.ModuleDict(
+            {
+                str(int(layer_index + 1)): CroprTokenSelector(
+                    dim=int(embed_dim),
+                    num_classes=int(num_classes),
+                    mlp_ratio=4.0,
+                )
+                for layer_index in self.token_prune_schedule
+            }
+            if self.cropr_token_selector_enabled
+            else {}
+        )
         self.deep_class_prompt = (
             DeepClassPrompt(
                 depth=int(depth),
@@ -8346,6 +8411,9 @@ class VisionTransformerWithRegisters(nn.Module):
         original_patch_count: int,
         keep_rate: float,
         prefix_count: Optional[int] = None,
+        cropr_scores: Optional[Tensor] = None,
+        cropr_trace: Optional[Dict[str, Tensor]] = None,
+        cropr_routing: bool = False,
     ) -> Tuple[Tensor, Tensor, Dict[str, Tensor]]:
         resolved_prefix_count = int(
             self.num_prefix_tokens if prefix_count is None else prefix_count
@@ -8359,7 +8427,7 @@ class VisionTransformerWithRegisters(nn.Module):
         current_patch_count = int(patch_tokens.size(1))
         target_patch_count = max(1, int(math.ceil(float(original_patch_count) * float(keep_rate))))
         target_patch_count = min(current_patch_count, target_patch_count)
-        if target_patch_count >= current_patch_count:
+        if target_patch_count >= current_patch_count and cropr_scores is None:
             empty = {
                 "kept_indices": patch_indices,
                 "scores": foreground_prior.gather(1, patch_indices),
@@ -8371,9 +8439,34 @@ class VisionTransformerWithRegisters(nn.Module):
             :, :, :query_count, resolved_prefix_count:
         ].mean(dim=(1, 2))
         gathered_prior = foreground_prior.gather(1, patch_indices)
-        score = self._normalize_token_scores(attention_score)
+        native_score = self._normalize_token_scores(attention_score)
+        if cropr_scores is not None and tuple(cropr_scores.shape) != tuple(native_score.shape):
+            raise ValueError("Cropr scores must match the active spatial patch layout.")
+        if cropr_routing and cropr_scores is None:
+            raise ValueError("Cropr routing requires learned selector scores.")
+        learned_score = (
+            self._normalize_token_scores(cropr_scores)
+            if cropr_scores is not None
+            else None
+        )
+        score = learned_score if cropr_routing and learned_score is not None else native_score
         if self.token_prune_foreground_weight > 0.0:
             score = score + self.token_prune_foreground_weight * self._normalize_token_scores(gathered_prior)
+
+        if target_patch_count >= current_patch_count:
+            unpruned = {
+                "kept_indices": patch_indices,
+                "scores": score,
+            }
+            if learned_score is not None:
+                unpruned["native_scores"] = native_score
+                unpruned["cropr_scores"] = learned_score
+                unpruned["cropr_routing"] = torch.tensor(
+                    bool(cropr_routing), device=score.device, dtype=torch.bool
+                )
+            if cropr_trace:
+                unpruned.update(cropr_trace)
+            return tokens, patch_indices, unpruned
 
         selected_local = torch.topk(score, k=target_patch_count, dim=1, largest=True, sorted=False).indices
         selected_original = patch_indices.gather(1, selected_local)
@@ -8389,6 +8482,28 @@ class VisionTransformerWithRegisters(nn.Module):
             "kept_indices": selected_original,
             "scores": selected_scores,
         }
+        if learned_score is not None:
+            trace["native_scores"] = native_score
+            trace["cropr_scores"] = learned_score
+            trace["cropr_routing"] = torch.tensor(
+                bool(cropr_routing), device=score.device, dtype=torch.bool
+            )
+        if cropr_trace:
+            trace.update(cropr_trace)
+            active_local = torch.arange(
+                current_patch_count,
+                device=score.device,
+                dtype=torch.long,
+            ).unsqueeze(0).expand(int(score.size(0)), -1)
+            kept_mask = torch.zeros_like(score, dtype=torch.bool).scatter(
+                1, selected_local, True
+            )
+            dropped_local_for_trace = active_local.masked_select(
+                ~kept_mask
+            ).reshape(int(score.size(0)), current_patch_count - target_patch_count)
+            trace["dropped_indices"] = patch_indices.gather(
+                1, dropped_local_for_trace
+            )
         if self.inattentive_token_fusion_enabled:
             cls_patch_attention = attention[
                 :, :, 0, resolved_prefix_count:
@@ -8633,6 +8748,7 @@ class VisionTransformerWithRegisters(nn.Module):
         }
         attention_maps = {}
         pruning_trace: List[Dict[str, Tensor]] = []
+        cropr_auxiliary_logits: Dict[str, Tensor] = {}
         active_prefix_count = int(self.num_prefix_tokens)
         if pruning_enabled and self.early_token_mask_keep_rate < 1.0:
             before_count = int(tokens.size(1) - self.num_prefix_tokens)
@@ -8742,6 +8858,25 @@ class VisionTransformerWithRegisters(nn.Module):
                     layer_token_fusion_indices.append(layer_indices)
                 if should_prune:
                     before_count = int(block_tokens.size(1) - block_prefix_count)
+                    cropr_scores = None
+                    cropr_trace: Dict[str, Tensor] = {}
+                    cropr_selector = (
+                        self.cropr_token_selectors[layer_key]
+                        if layer_key in self.cropr_token_selectors
+                        else None
+                    )
+                    if cropr_selector is not None:
+                        (
+                            cropr_scores,
+                            cropr_logits,
+                            cropr_trace,
+                        ) = cropr_selector(
+                            block_tokens[:, block_prefix_count:],
+                            collect_auxiliary=bool(self.training or return_trace),
+                            return_trace=return_trace,
+                        )
+                        if cropr_logits is not None:
+                            cropr_auxiliary_logits[layer_key] = cropr_logits
                     block_tokens, patch_indices, prune_info = self._prune_patch_tokens(
                         tokens=block_tokens,
                         attention=attention,
@@ -8750,6 +8885,12 @@ class VisionTransformerWithRegisters(nn.Module):
                         original_patch_count=original_patch_count,
                         keep_rate=self.token_prune_schedule[block_index],
                         prefix_count=block_prefix_count,
+                        cropr_scores=cropr_scores,
+                        cropr_trace=cropr_trace,
+                        cropr_routing=bool(
+                            cropr_selector is not None
+                            and self.cropr_token_selector_routing
+                        ),
                     )
                     prune_info["layer"] = torch.tensor(
                         int(block_index + 1),
@@ -9009,6 +9150,8 @@ class VisionTransformerWithRegisters(nn.Module):
             features["multi_granularity_logits"] = multi_granularity_logits
         if multi_granularity_features:
             features["multi_granularity_features"] = multi_granularity_features
+        if cropr_auxiliary_logits:
+            features["cropr_auxiliary_logits"] = cropr_auxiliary_logits
         if self.training:
             features["stem_features"] = stem_features
         if pruning_enabled or return_trace:
@@ -9186,6 +9329,17 @@ class VisionTransformerWithRegisters(nn.Module):
                     active_prefix_count,
                     device=tokens.device,
                     dtype=torch.long,
+                )
+            if self.cropr_token_selector_enabled:
+                features["trace"]["cropr_token_selector_layers"] = torch.tensor(
+                    [int(layer) for layer in self.cropr_token_selectors.keys()],
+                    device=tokens.device,
+                    dtype=torch.long,
+                )
+                features["trace"]["cropr_token_selector_routing"] = torch.tensor(
+                    self.cropr_token_selector_routing,
+                    device=tokens.device,
+                    dtype=torch.bool,
                 )
             if deep_class_prompt_logits is not None:
                 features["trace"]["deep_class_prompt_layers"] = torch.arange(
@@ -11299,6 +11453,8 @@ class DETRVisionTransformerWithRegisters(VisionTransformerWithRegisters):
         token_prune_bbox_margin_ratio: float = 0.04,
         early_token_mask_keep_rate: float = 1.0,
         inattentive_token_fusion: bool = False,
+        cropr_token_selector: bool = False,
+        cropr_token_selector_routing: bool = True,
         pairwise_margin_head: bool = False,
         pairwise_margin_pairs: str = "0-1,2-3,4-rest",
         pairwise_margin_logit_scale: float = 0.35,
@@ -11667,6 +11823,8 @@ class DETRVisionTransformerWithRegisters(VisionTransformerWithRegisters):
             token_prune_bbox_margin_ratio=token_prune_bbox_margin_ratio,
             early_token_mask_keep_rate=early_token_mask_keep_rate,
             inattentive_token_fusion=inattentive_token_fusion,
+            cropr_token_selector=cropr_token_selector,
+            cropr_token_selector_routing=cropr_token_selector_routing,
             pairwise_margin_head=pairwise_margin_head,
             pairwise_margin_pairs=pairwise_margin_pairs,
             pairwise_margin_logit_scale=pairwise_margin_logit_scale,

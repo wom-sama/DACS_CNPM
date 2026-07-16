@@ -38,6 +38,9 @@ param(
     [double]$SourceContextAuxAttentionTemperature = 0.20,
     [bool]$TokenPruning = $true,
     [bool]$InattentiveTokenFusion = $false,
+    [bool]$CroprTokenSelector = $false,
+    [bool]$CroprTokenSelectorRouting = $true,
+    [double]$TokenPruneForegroundWeight = 0.45,
     [double]$TokenPruneBboxWeight = 0.0,
     [double]$TokenPruneBboxMarginRatio = 0.04,
     [ValidateSet("bbox", "crop_bbox")]
@@ -868,6 +871,23 @@ if ($InattentiveTokenFusion -and $EarlyTokenMaskKeepRate -lt 1.0) {
 if ($InattentiveTokenFusion -and ($DeepClassPrompt -or $ConcurrentLocalGlobalCoupling -or $LateMemberBranch)) {
     throw "InattentiveTokenFusion xung dot voi dynamic-prefix route dang bat."
 }
+if (-not $CroprTokenSelector -and -not $CroprTokenSelectorRouting) {
+    throw "CroprTokenSelectorRouting=`$false yeu cau CroprTokenSelector=`$true."
+}
+if ($CroprTokenSelector) {
+    if (-not $TokenPruning) {
+        throw "CroprTokenSelector yeu cau TokenPruning=`$true."
+    }
+    if ([math]::Abs($TokenPruneForegroundWeight - 0.35) -gt 1e-12) {
+        throw "CroprTokenSelector A0 yeu cau TokenPruneForegroundWeight=0.35."
+    }
+    if ($EarlyTokenMaskKeepRate -lt 1.0) {
+        throw "CroprTokenSelector A0 yeu cau EarlyTokenMaskKeepRate=1.0."
+    }
+    if ($InattentiveTokenFusion -or $DeepClassPrompt -or $ConcurrentLocalGlobalCoupling -or $LateMemberBranch) {
+        throw "CroprTokenSelector xung dot voi fusion/dynamic-prefix route dang bat."
+    }
+}
 if ($MaskedReconstructionLossWeight -lt 0.0) {
     throw "MaskedReconstructionLossWeight phai >= 0."
 }
@@ -1652,6 +1672,9 @@ if ($PreflightOnly) {
         source_context_aux_attention_temperature = $SourceContextAuxAttentionTemperature
         token_pruning = [bool]$TokenPruning
         inattentive_token_fusion = [bool]$InattentiveTokenFusion
+        cropr_token_selector = [bool]$CroprTokenSelector
+        cropr_token_selector_routing = [bool]$CroprTokenSelectorRouting
+        token_prune_foreground_weight = $TokenPruneForegroundWeight
         token_prune_bbox_weight = $TokenPruneBboxWeight
         token_prune_bbox_margin_ratio = $TokenPruneBboxMarginRatio
         bbox_token_prior_source = $BboxTokenPriorSource
@@ -2412,7 +2435,7 @@ try {
         "--detail-patch-dropout", "0.05",
         "--token-prune-layers", "2,5",
         "--token-keep-rates", "0.85,0.65",
-        "--token-prune-foreground-weight", "0.45",
+        "--token-prune-foreground-weight", "$TokenPruneForegroundWeight",
         "--token-prune-bbox-weight", "$TokenPruneBboxWeight",
         "--token-prune-bbox-margin-ratio", "$TokenPruneBboxMarginRatio",
         "--bbox-token-prior-source", "$BboxTokenPriorSource",
@@ -3414,6 +3437,12 @@ if ($ClassIndependentHead) {
     if ($InattentiveTokenFusion) {
         $TrainArgs += @("--inattentive-token-fusion")
     }
+    if ($CroprTokenSelector) {
+        $TrainArgs += @("--cropr-token-selector")
+        if (-not $CroprTokenSelectorRouting) {
+            $TrainArgs += @("--disable-cropr-token-selector-routing")
+        }
+    }
     if ($VisualContrastAttention) {
         $TrainArgs += @(
             "--visual-contrast-attention",
@@ -3598,6 +3627,9 @@ if ($ClassIndependentHead) {
         source_context_aux_attention_temperature = $SourceContextAuxAttentionTemperature
         token_pruning = [bool]$TokenPruning
         inattentive_token_fusion = [bool]$InattentiveTokenFusion
+        cropr_token_selector = [bool]$CroprTokenSelector
+        cropr_token_selector_routing = [bool]$CroprTokenSelectorRouting
+        token_prune_foreground_weight = $TokenPruneForegroundWeight
         token_prune_bbox_weight = $TokenPruneBboxWeight
         token_prune_bbox_margin_ratio = $TokenPruneBboxMarginRatio
         bbox_token_prior_source = $BboxTokenPriorSource
