@@ -17255,3 +17255,46 @@ Date: 2026-07-02
 - Validation/test, full train, command revision, bbox supervision, and all
   nearby group/kernel/range/layer/training sweeps remain forbidden unless every
   prospective A1 gate passes.
+
+## Deformable Attention A1 Closure 2026-07-16 - Precision Signal Without Stable Selectivity
+
+- Corrected formal preflight passed all `65/65` checks on pushed HEAD
+  `aa26c09`: official equation/gradient, prefix, common-state/RNG, BF16,
+  bilinear proxy, ONNX, runtime, VRAM, and exact source-disjoint fold contracts
+  all passed. DAT added only 11,528 parameters at `1.2920x` inference and
+  `1.07393x` training-memory ratios.
+- The outer shell timed out after the five-epoch control and before candidate
+  training. Six initialization-only files were hashed and removed; the exact
+  candidate arguments were replayed once. Both runs completed five epochs with
+  no official validation/test use.
+- Standard-inference checkpoint replay showed a real clean class1 signal:
+  F1 `0.277778 -> 0.293706`, precision `0.571429 -> 0.617647`, and recall
+  `0.183486 -> 0.192661`. Macro F1 fell `0.792451 -> 0.789104`, restricted FP
+  fell only `15 -> 13`, and `10/23` corrections/harms failed the locked safety
+  gate.
+- The gain was condition-unstable. Bright class1 F1 fell `-0.016450`; dim FP
+  rose `45 -> 61`; low-contrast FP rose `8 -> 16` while precision fell
+  `-0.109317`. Clean TP-hard AUROC was only `0.603583`, a `+0.006750` delta.
+- Spatial movement was active: offset/inter-group RMS was
+  `0.055461/0.076681`, bbox hit rose `+0.047965`, and frozen-cohort attention
+  bbox mass rose `+0.071488`. Outside-bbox distance nevertheless worsened
+  `0.077866 -> 0.089552`; active deformation was not selective exclusion.
+- All 94 XAI rows, 87 events, and 16 pages were reviewed. Stem/block-2
+  foreground mass fell `-0.061831/-0.179018`, with broad activation on hands,
+  shadows, borders, and background. Automated and visual gates both reject.
+- A first audit was invalidated because it used BF16 attention-trace logits for
+  behavior. Trace and deployment paths differed by up to `0.072754` logit.
+  The auditor now separates standard-inference decisions from trace-only
+  spatial evidence, has a regression test, and the full audit was regenerated.
+- Independent replay matched all 14,744 predictions at maximum metric error
+  `1.11e-16`. Final summary/prediction/visual SHAs are
+  `57f0638e...526a6`, `43788e35...a433d`, and `20a7f49a...dec667`.
+- Close the exact DAT family without sweeps, Stage B, validation/test, full
+  train, or command promotion. Compaction removed 520,134,563 bytes of rejected
+  checkpoints/ONNX at manifest SHA `953cf309...792454`; current-best commands
+  remain three revisions/two updates. Full detail is in
+  `TRKH_5CLASS_DEFORMABLE_ATTENTION_CLOSURE_20260716.md`.
+- Closure verification passed compileall, PowerShell parse, focused `19/19`,
+  full pytest `1250/1250`, protected hashes, and read-only retention over 719
+  directories with `blockers=[]`. Retention summary SHA is
+  `bae9909d...7c4228` and free space is 71.109 GiB.

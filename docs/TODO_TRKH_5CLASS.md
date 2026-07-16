@@ -3144,7 +3144,27 @@
   continuous RPE, global prefix path, exact pruning proxy, source-disjoint
   `7372/1843` scratch pair, precision/TP/condition/bbox-selectivity gates, and
   no validation/test/sweep/command promotion.
-- [ ] Implement the locked module, config/trainer/PowerShell integration,
+- [x] Implement the locked module, config/trainer/PowerShell integration,
   official-equation and bilinear-proxy preflight, deformable trace/audit, and
-  focused tests. Commit and push before the sole preflight; run the five-epoch
-  pair only if every engineering gate grants permission.
+  focused tests. Commit/push through `aa26c09`; corrected formal preflight
+  passed `65/65` and authorized exactly one five-epoch pair.
+- [x] Complete the DAT A1 pair and corrected full audit. Clean class1 F1/
+  precision improved `+0.015929/+0.046218`, but macro F1 fell `-0.003347`,
+  errors were `10/23` corrections/harms, dim/low-contrast FP increased, clean
+  selectivity AUROC stayed `0.603583`, outside-bbox distance worsened, and both
+  stem/block-2 XAI foreground mass fell. Deny Stage B and all DAT sweeps.
+- [x] Diagnose and fix the audit-only trace-path error. Separate standard-
+  inference behavior logits from attention-trace spatial evidence, add a
+  regression test, regenerate all 14,744 predictions and 16 XAI pages, and
+  independently replay metrics to `1.11e-16` maximum error.
+- [x] Complete DAT closure engineering: compile/parse, focused `19/19`, full
+  pytest `1250/1250`, protected hashes, and read-only retention over 719
+  directories all passed with `blockers=[]`. Compaction removed 520,134,563
+  bytes; current-best commands remain three revisions/two updates.
+- [ ] Review only the explicit DAT closure paths, commit them without protected
+  untracked reports, push, and record final commit/closure hashes.
+- [ ] Perform the next accepted-primary-paper/official-code no-repeat screen.
+  Reject stock catalog hybrids and any route overlapping closed local/global,
+  graph, deformable, channel, prompt, capsule, color/frequency, prototype,
+  calibration, gradient, or condition-alignment families before writing a new
+  prospective train-only protocol.
