@@ -251,6 +251,24 @@ ordered samples, transforms, optimizer/scheduler steps, losses, EMA handling,
 and stopping. The control runs first; the candidate must replay the control's
 per-epoch sample-occurrence hashes exactly.
 
+### Pre-Epoch Leakage Amendment
+
+This amendment was added before formal preflight or any Cropr data epoch. The
+original pre-implementation protocol SHA-256 was
+`adef2c6c5890ade0ec495f81e62a6da99eb2b052b4aa2714fcec3ae49abcb720`.
+The locked fold YAML exposes its 1,843-row holdout as `val`, so passing that YAML
+to the standard trainer would inspect holdout metrics every epoch and could
+affect early stopping/checkpoint state even if the later audit reads `last.pt`.
+
+Training must instead consume the tracked loader-compatibility view
+`configs/trkh_cropr_a0_fitonly_20260716.yaml`. Its `train`, `val`, and `test`
+entries all point to the unchanged 7,372-row fit partition. This does not copy,
+edit, or add any image/label; it only prevents the trainer from opening the
+holdout. The 1,843-row holdout remains in the hash-locked fold and may first be
+loaded by the post-training pair auditor after both `last.pt` files and their
+hashes are fixed. Pair decisions must use `last.pt`; fit-only validation output
+and `best.pt` are diagnostic and cannot select the audited epoch.
+
 Shared model recipe is the current scratch record: image 256, conv-pool stem,
 embed/depth/heads `256/8/8`, four registers, color/edge branch tokens,
 detail enhancement, bbox/CNN/fine-grained fusion, and pruning `2,5` at
