@@ -171,9 +171,9 @@ class DeformableSpatialAttention(nn.Module):
             torch.linspace(0.5, width - 0.5, width, dtype=dtype, device=device),
             indexing="ij",
         )
+        reference_y = reference_y / float(height) * 2.0 - 1.0
+        reference_x = reference_x / float(width) * 2.0 - 1.0
         reference = torch.stack((reference_y, reference_x), dim=-1)
-        reference[..., 1].div_(width).mul_(2.0).sub_(1.0)
-        reference[..., 0].div_(height).mul_(2.0).sub_(1.0)
         return reference.unsqueeze(0).expand(
             int(batch_size) * self.offset_groups,
             -1,
@@ -227,8 +227,8 @@ class DeformableSpatialAttention(nn.Module):
             batch_size=batch_size,
             dtype=patch_map.dtype,
             device=patch_map.device,
-        )
-        positions = offsets + reference
+        ).to(dtype=offsets.dtype)
+        positions = (offsets + reference).to(dtype=patch_map.dtype)
         grouped_inputs = patch_map.reshape(
             batch_size * self.offset_groups,
             self.group_channels,
@@ -237,7 +237,7 @@ class DeformableSpatialAttention(nn.Module):
         )
         sampled = F.grid_sample(
             grouped_inputs,
-            positions[..., (1, 0)],
+            positions[..., (1, 0)].to(dtype=grouped_inputs.dtype),
             mode="bilinear",
             padding_mode="zeros",
             align_corners=True,
@@ -264,7 +264,7 @@ class DeformableSpatialAttention(nn.Module):
             batch_size=batch_size,
             dtype=positions.dtype,
             device=positions.device,
-        )
+        ).to(dtype=positions.dtype)
         displacement = (
             query_grid.reshape(
                 batch_size * self.offset_groups,
@@ -290,7 +290,7 @@ class DeformableSpatialAttention(nn.Module):
                 2 * query_height - 1,
                 2 * query_width - 1,
             ),
-            displacement[..., (1, 0)],
+            displacement[..., (1, 0)].to(dtype=bias_table.dtype),
             mode="bilinear",
             padding_mode="zeros",
             align_corners=True,
@@ -349,7 +349,10 @@ class DeformableSpatialAttention(nn.Module):
             (y1, x1, (y - y0) * (x - x0)),
         ):
             valid = yy.ge(0) & yy.lt(height) & xx.ge(0) & xx.lt(width)
-            sample_valid_mass = sample_valid_mass + weight * valid.to(weight.dtype)
+            typed_weight = weight.to(dtype=attention.dtype)
+            sample_valid_mass = sample_valid_mass + typed_weight * valid.to(
+                dtype=attention.dtype
+            )
         return (attention * sample_valid_mass.unsqueeze(2)).sum(dim=-1)
 
     def bilinear_scatter_attention(
@@ -394,7 +397,10 @@ class DeformableSpatialAttention(nn.Module):
                 + xx.clamp(0, width - 1).to(dtype=torch.long)
             )
             scatter_index = flat_index.unsqueeze(2).expand(-1, -1, query_count, -1)
-            source = attention * (weight * valid.to(weight.dtype)).unsqueeze(2)
+            typed_weight = weight.to(dtype=attention.dtype)
+            source = attention * (
+                typed_weight * valid.to(dtype=attention.dtype)
+            ).unsqueeze(2)
             dense.scatter_add_(dim=-1, index=scatter_index, src=source)
 
         valid_mass = dense.sum(dim=-1)
@@ -419,8 +425,9 @@ class DeformableSpatialAttention(nn.Module):
         batch_size, token_count, _ = inputs.shape
         height, width = self.input_resolution
 
-        query_linear = self._project_query(inputs)
-        all_key_linear, all_value_linear = self._project_key_value(inputs)
+        query_linear, all_key_linear, all_value_linear = self.qkv(inputs).chunk(
+            3, dim=-1
+        )
         query = query_linear.reshape(
             batch_size,
             token_count,
@@ -524,10 +531,21 @@ class DeformableSpatialAttention(nn.Module):
             group_rms = group_delta.float().square().mean().sqrt()
         else:
             group_rms = positions.new_zeros((), dtype=torch.float32)
-        with torch.no_grad():
-            valid_mass = self.sampled_valid_interpolation_mass(
-                patch_attention_raw.detach(), positions.detach()
+        patch_dense = None
+        if return_attention:
+            patch_dense, proxy_valid_mass = self.bilinear_scatter_attention(
+                patch_attention,
+                positions,
             )
+        else:
+            proxy_valid_mass = None
+        if proxy_valid_mass is not None and not self.training:
+            valid_mass = proxy_valid_mass.detach()
+        else:
+            with torch.no_grad():
+                valid_mass = self.sampled_valid_interpolation_mass(
+                    patch_attention_raw.detach(), positions.detach()
+                )
         self._last_trace = {
             "positions": position_groups.detach(),
             "reference_positions": reference.reshape_as(position_groups).detach(),
@@ -549,10 +567,8 @@ class DeformableSpatialAttention(nn.Module):
             # calls; retaining this O(B*H*P^2) tensor during ordinary training would
             # materially increase memory use.
             self._last_trace["sample_attention"] = patch_attention_raw.detach()
-            patch_dense, _ = self.bilinear_scatter_attention(
-                patch_attention,
-                positions,
-            )
+            if patch_dense is None:
+                raise RuntimeError("DAT pruning proxy was not constructed.")
             if prefix_count:
                 patch_prefix = patch_dense.new_zeros(
                     batch_size,

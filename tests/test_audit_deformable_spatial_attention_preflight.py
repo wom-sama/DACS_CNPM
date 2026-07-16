@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import torch
+from torch import nn
 
 from trkh.models.deformable_spatial_attention import DeformableSpatialAttention
 from trkh.tools.audit_deformable_spatial_attention_preflight import (
@@ -109,6 +110,58 @@ def test_dat_preflight_proxy_replay_is_independent_and_exact() -> None:
         positions.reshape(4, 4, 4, 2),
     )
     torch.testing.assert_close(fast_mass, implementation_mass, atol=1e-6, rtol=1e-6)
+
+
+def test_dat_static_module_onnx_replay(tmp_path: Path) -> None:
+    ort = __import__("onnxruntime")
+
+    class ExportWrapper(nn.Module):
+        def __init__(self, module: DeformableSpatialAttention) -> None:
+            super().__init__()
+            self.module = module
+
+        def forward(self, inputs: torch.Tensor):
+            indices = torch.arange(16, device=inputs.device).unsqueeze(0)
+            return self.module(
+                inputs,
+                return_attention=True,
+                grid_size=(4, 4),
+                prefix_count=5,
+                patch_indices=indices,
+            )
+
+    torch.manual_seed(37)
+    wrapper = ExportWrapper(
+        DeformableSpatialAttention(
+            dim=32,
+            input_resolution=(4, 4),
+            num_heads=4,
+            offset_groups=2,
+            offset_kernel_size=5,
+            offset_range_factor=2.0,
+        ).eval()
+    ).eval()
+    inputs = torch.randn(1, 21, 32)
+    with torch.inference_mode():
+        torch_output, torch_attention = wrapper(inputs)
+    path = tmp_path / "dat_static_module.onnx"
+    torch.onnx.export(
+        wrapper,
+        (inputs,),
+        str(path),
+        opset_version=17,
+        input_names=("inputs",),
+        output_names=("output", "attention"),
+        do_constant_folding=True,
+    )
+    session = ort.InferenceSession(str(path), providers=["CPUExecutionProvider"])
+    onnx_output, onnx_attention = session.run(None, {"inputs": inputs.numpy()})
+    torch.testing.assert_close(
+        torch.from_numpy(onnx_output), torch_output, atol=1e-4, rtol=1e-4
+    )
+    torch.testing.assert_close(
+        torch.from_numpy(onnx_attention), torch_attention, atol=1e-4, rtol=1e-4
+    )
 
 
 def test_dat_a1_launcher_keeps_train_only_gate_and_locked_recipe() -> None:
