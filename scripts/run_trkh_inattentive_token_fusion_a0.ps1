@@ -7,6 +7,7 @@ param(
     [string]$ControlRunName = "probe_inattentive_fusion_a0_control_5e_20260716",
     [string]$CandidateRunName = "probe_inattentive_fusion_a0_candidate_5e_20260716",
     [switch]$PreflightOnly,
+    [switch]$ReplayEngineeringCorrection,
     [switch]$FinalizeVisualReview,
     [ValidateSet("pass", "fail")]
     [string]$VisualReviewResult = "pass",
@@ -22,9 +23,9 @@ $env:PYTHONPATH = $RepoRoot
 $env:TRKH_ALLOW_WINDOWS_MULTIPROCESSING = "1"
 $env:OMP_NUM_THREADS = "4"
 
-$SelectedModes = @($PreflightOnly, $FinalizeVisualReview, $RunPair) | Where-Object { $_ }
+$SelectedModes = @($PreflightOnly, $ReplayEngineeringCorrection, $FinalizeVisualReview, $RunPair) | Where-Object { $_ }
 if ($SelectedModes.Count -ne 1) {
-    throw "Chon dung mot mode: -PreflightOnly, -FinalizeVisualReview, hoac -RunPair."
+    throw "Chon dung mot mode: -PreflightOnly, -ReplayEngineeringCorrection, -FinalizeVisualReview, hoac -RunPair."
 }
 if (-not (Test-Path -LiteralPath $Python)) {
     throw "Khong tim thay Python: $Python"
@@ -78,6 +79,23 @@ if ($PreflightOnly) {
     Write-Host "Automated preflight passed. Review every fusion_overlay_page_*.png before finalization."
 }
 
+if ($ReplayEngineeringCorrection) {
+    if ($ExpectedSummarySha256 -notmatch '^[0-9a-fA-F]{64}$') {
+        throw "ReplayEngineeringCorrection yeu cau -ExpectedSummarySha256 gom 64 ky tu hex."
+    }
+    & $Python -m trkh.tools.audit_inattentive_token_fusion_preflight `
+        --output-dir $PreflightOutput `
+        --replay-engineering-correction `
+        --expected-summary-sha256 $ExpectedSummarySha256 `
+        --batch-size 32 `
+        --fp32-batch-size 2 `
+        --num-workers 4 `
+        --seed 42
+    if ($LASTEXITCODE -ne 0) {
+        throw "Inattentive-token fusion engineering correction rejected with exit code $LASTEXITCODE."
+    }
+}
+
 if ($FinalizeVisualReview) {
     if ([string]::IsNullOrWhiteSpace($VisualReviewNote)) {
         throw "FinalizeVisualReview yeu cau -VisualReviewNote."
@@ -117,8 +135,15 @@ if ($RunPair) {
     if ($LASTEXITCODE -ne 0 -or $Head -ne $Upstream) {
         throw "HEAD phai duoc push truoc formal pair."
     }
-    if ($Preflight.git.head -ne $Head -or $Preflight.git.upstream -ne $Head) {
-        throw "Preflight phai duoc tao tu chinh HEAD da push dang chay."
+    $EvidenceHead = [string]$Preflight.git.head
+    if ($null -ne $Preflight.postflight_replay) {
+        if (-not [bool]$Preflight.postflight_replay.passed -or -not [bool]$Preflight.postflight_replay.runtime_files_unchanged) {
+            throw "Postflight replay khong hop le hoac runtime files da thay doi."
+        }
+        $EvidenceHead = [string]$Preflight.postflight_replay.git.head
+    }
+    if ($EvidenceHead -ne $Head) {
+        throw "Preflight/correction evidence phai duoc tao tu chinh HEAD da push dang chay."
     }
 
     $ControlRunDir = Join-Path "runs" $ControlRunName

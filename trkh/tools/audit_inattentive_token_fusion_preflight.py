@@ -187,6 +187,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--warmup-iterations", type=int, default=2)
     parser.add_argument("--timed-iterations", type=int, default=5)
+    parser.add_argument("--replay-engineering-correction", action="store_true")
     parser.add_argument("--finalize-visual-review", action="store_true")
     parser.add_argument("--visual-review-result", choices=("pass", "fail"))
     parser.add_argument("--visual-review-note", type=str, default="")
@@ -1790,6 +1791,316 @@ def _write_manifest(output_dir: Path) -> Path:
     return manifest_path
 
 
+def _replay_engineering_correction(args: argparse.Namespace) -> Dict[str, object]:
+    if not torch.cuda.is_available():
+        raise RuntimeError("Engineering correction replay requires CUDA.")
+    output_dir = Path(args.output_dir).resolve()
+    summary_path = output_dir / "summary.json"
+    if not summary_path.is_file():
+        raise FileNotFoundError(f"Fusion preflight summary does not exist: {summary_path}")
+    expected_summary = str(args.expected_summary_sha256).strip().lower()
+    if len(expected_summary) != 64:
+        raise ValueError("Correction replay requires --expected-summary-sha256.")
+    observed_summary = _sha256(summary_path)
+    if observed_summary != expected_summary:
+        raise ValueError(
+            "Fusion summary changed before correction replay: "
+            f"observed={observed_summary} expected={expected_summary}"
+        )
+    correction_path = output_dir / "engineering_pruning_correction.json"
+    if correction_path.exists():
+        raise FileExistsError(f"Engineering correction already exists: {correction_path}")
+    summary = _load_json(summary_path)
+    if summary.get("method") != METHOD:
+        raise ValueError("Correction replay received a different audit method.")
+    original_failed = list(summary.get("gate", {}).get("failed_checks", []))
+    original_engineering = summary.get("engineering_pruning")
+    if not isinstance(original_engineering, Mapping):
+        raise ValueError("Fusion summary lacks original engineering pruning evidence.")
+
+    source_checks: Dict[str, bool] = {}
+    sources = summary.get("sources")
+    if not isinstance(sources, Mapping):
+        raise ValueError("Fusion summary lacks locked sources.")
+    for name, payload in sources.items():
+        if not isinstance(payload, Mapping):
+            source_checks[f"source_{name}"] = False
+            continue
+        path = Path(str(payload.get("path", ""))).resolve()
+        expected = str(payload.get("sha256", ""))
+        source_checks[f"source_{name}"] = bool(
+            path.is_file() and _sha256(path) == expected
+        )
+
+    behavior = summary.get("behavior")
+    visual = summary.get("visual_review_artifacts")
+    onnx = summary.get("onnx")
+    data = summary.get("data")
+    if not all(
+        isinstance(value, Mapping) for value in (behavior, visual, onnx, data)
+    ):
+        raise ValueError("Fusion summary lacks payload provenance.")
+    cohort = data.get("cohort")
+    if not isinstance(cohort, Mapping):
+        raise ValueError("Fusion summary lacks cohort provenance.")
+    payload_specs = {
+        "behavior_rows": (
+            Path(str(behavior["rows_csv"])),
+            str(behavior["rows_csv_sha256"]),
+        ),
+        "changed_rows": (
+            Path(str(behavior["changed_rows_csv"])),
+            str(behavior["changed_rows_csv_sha256"]),
+        ),
+        "cohort": (Path(str(cohort["path"])), str(cohort["sha256"])),
+        "onnx": (Path(str(onnx["path"])), str(onnx["sha256"])),
+    }
+    payload_checks = {
+        f"payload_{name}": bool(path.is_file() and _sha256(path) == expected)
+        for name, (path, expected) in payload_specs.items()
+    }
+    pages = visual.get("page_sha256")
+    if not isinstance(pages, Mapping):
+        raise ValueError("Fusion summary lacks visual page hashes.")
+    page_checks = {
+        f"visual_page_{index + 1}": bool(
+            Path(str(path)).is_file()
+            and _sha256(Path(str(path))) == str(expected)
+        )
+        for index, (path, expected) in enumerate(pages.items())
+    }
+
+    original_head = str(summary.get("git", {}).get("head", ""))
+    current_head = _git_value("rev-parse", "HEAD")
+    current_upstream = _git_value("rev-parse", "@{upstream}")
+    runtime_paths = (
+        "trkh/models/model.py",
+        "trkh/core/config.py",
+        "trkh/training/train.py",
+        "scripts/run_trkh_5class_attention_views_v8.ps1",
+    )
+    runtime_diff = subprocess.run(
+        ["git", "diff", "--quiet", original_head, current_head, "--", *runtime_paths],
+        check=False,
+    )
+
+    resolved_path = Path(str(sources["resolved_config"]["path"]))
+    fold_data_path = Path(str(sources["fold_data"]["path"]))
+    resolved_config = _load_json(resolved_path)
+    source_model_config = resolved_config.get("model_config")
+    if not isinstance(source_model_config, Mapping):
+        raise ValueError("Correction replay resolved config lacks model_config.")
+    control_config = _fusion_config(source_model_config, enabled=False)
+    candidate_config = _fusion_config(source_model_config, enabled=True)
+    fit_dataset = _build_dataset(
+        fold_data=fold_data_path,
+        model_config=candidate_config,
+        resolved_config=resolved_config,
+    )
+    loader_kwargs, loader_summary = build_safe_dataloader_kwargs(
+        requested_num_workers=int(args.num_workers),
+        requested_pin_memory=True,
+        context="inattentive_fusion_engineering_correction",
+        persistent_workers=False,
+    )
+    loader = DataLoader(
+        fit_dataset,
+        batch_size=int(args.batch_size),
+        shuffle=False,
+        drop_last=True,
+        **loader_kwargs,
+    )
+    images_cpu, labels_cpu, metadata_cpu = _unpack_batch(next(iter(loader)))
+    device = torch.device("cuda")
+    images = images_cpu.to(device=device, non_blocking=True)
+    labels = labels_cpu.to(device=device, dtype=torch.long, non_blocking=True)
+    metadata = {
+        key: value.to(device=device, non_blocking=True)
+        for key, value in metadata_cpu.items()
+    }
+    set_seed(int(args.seed), deterministic=True)
+    control = create_model(num_classes=5, model_config=control_config)
+    control_rng = _rng_snapshot()
+    set_seed(int(args.seed), deterministic=True)
+    candidate = create_model(num_classes=5, model_config=candidate_config)
+    candidate_rng = _rng_snapshot()
+    candidate.load_state_dict(control.state_dict(), strict=True)
+    pristine_state = _state_summary(control, candidate)
+    control = control.to(device).eval()
+    candidate = candidate.to(device).eval()
+    with torch.inference_mode():
+        _, control_features = _forward(
+            control, images, metadata, return_trace=True
+        )
+        _, candidate_features = _forward(
+            candidate, images, metadata, return_trace=True
+        )
+    pristine = _pruning_comparison(
+        control_features["trace"]["pruning"],
+        candidate_features["trace"]["pruning"],
+    )
+    state_before_backward = {
+        key: value.detach().cpu().clone()
+        for key, value in candidate.state_dict().items()
+    }
+    fp32_backward = _full_backward_check(
+        candidate,
+        images[: int(args.fp32_batch_size)],
+        labels[: int(args.fp32_batch_size)],
+        {
+            key: value[: int(args.fp32_batch_size)]
+            for key, value in metadata.items()
+        },
+        bf16=False,
+    )
+    bf16_backward = _full_backward_check(
+        candidate, images, labels, metadata, bf16=True
+    )
+    changed_state_keys = sorted(
+        key
+        for key, value in candidate.state_dict().items()
+        if not torch.equal(state_before_backward[key], value.detach().cpu())
+    )
+    candidate.eval()
+    with torch.inference_mode():
+        _, contaminated_features = _forward(
+            candidate, images, metadata, return_trace=True
+        )
+    contaminated = _pruning_comparison(
+        control_features["trace"]["pruning"],
+        contaminated_features["trace"]["pruning"],
+    )
+    expected_changed = sorted(
+        f"stem.blocks.{block}.block.norm.{suffix}"
+        for block in range(3)
+        for suffix in ("running_mean", "running_var", "num_batches_tracked")
+    )
+
+    def pruning_matches(left: Mapping[str, object], right: Mapping[str, object]) -> bool:
+        left_stages = left.get("stages")
+        right_stages = right.get("stages")
+        if not isinstance(left_stages, list) or not isinstance(right_stages, list):
+            return False
+        if len(left_stages) != len(right_stages):
+            return False
+        keys = ("mean_jaccard", "minimum_jaccard", "exact_fraction")
+        return all(
+            int(a["rows"]) == int(b["rows"])
+            and int(a["changed_rows"]) == int(b["changed_rows"])
+            and all(abs(float(a[key]) - float(b[key])) <= 1e-7 for key in keys)
+            for a, b in zip(left_stages, right_stages)
+        )
+
+    correction_checks = {
+        "original_summary_hash": observed_summary == expected_summary,
+        "original_failed_only_contaminated_engineering": original_failed
+        == ["engineering_pruning"],
+        "tracked_worktree_clean": _tracked_worktree_clean(),
+        "replay_head_pushed": current_head == current_upstream,
+        "runtime_files_unchanged": runtime_diff.returncode == 0,
+        "fit_rows_exact": len(fit_dataset) == EXPECTED_FIT_ROWS,
+        "constructor_rng_equal": _rng_equal(control_rng, candidate_rng),
+        "pristine_state_exact": bool(
+            pristine_state["inventory_equal"]
+            and pristine_state["all_common_bit_exact"]
+        ),
+        "pristine_engineering_pruning": bool(pristine["passed"]),
+        "backward_checks_replay": bool(
+            fp32_backward["passed"] and bf16_backward["passed"]
+        ),
+        "batchnorm_mutation_exact": changed_state_keys == expected_changed,
+        "contamination_replays_original": pruning_matches(
+            contaminated, original_engineering
+        ),
+        **source_checks,
+        **payload_checks,
+        **page_checks,
+    }
+    correction_passed = all(correction_checks.values())
+    correction = {
+        "method": "inattentive_token_fusion_engineering_correction",
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "original_summary_sha256": observed_summary,
+        "original_git_head": original_head,
+        "replay_git_head": current_head,
+        "runtime_paths": list(runtime_paths),
+        "runtime_files_unchanged": runtime_diff.returncode == 0,
+        "loader": loader_summary,
+        "batch_size": int(images.size(0)),
+        "pristine_state": pristine_state,
+        "pristine_engineering_pruning": pristine,
+        "fp32_backward": fp32_backward,
+        "bf16_backward": bf16_backward,
+        "changed_state_keys_after_backward": changed_state_keys,
+        "expected_changed_state_keys": expected_changed,
+        "contaminated_engineering_pruning": contaminated,
+        "original_engineering_pruning": original_engineering,
+        "checks": correction_checks,
+        "failed_checks": sorted(
+            name for name, passed in correction_checks.items() if not passed
+        ),
+        "passed": correction_passed,
+        "formal_pair_permission": False,
+        "validation_used": False,
+        "test_used": False,
+    }
+    correction_path.write_text(
+        json.dumps(correction, indent=2, sort_keys=True, ensure_ascii=True) + "\n",
+        encoding="utf-8",
+    )
+    correction_sha = _sha256(correction_path)
+    summary["engineering_pruning_correction"] = correction
+    summary["postflight_replay"] = {
+        "git": {"head": current_head, "upstream": current_upstream},
+        "runtime_files_unchanged": runtime_diff.returncode == 0,
+        "original_summary_sha256": observed_summary,
+        "correction_path": str(correction_path.resolve()),
+        "correction_sha256": correction_sha,
+        "passed": correction_passed,
+    }
+    gate = summary["gate"]
+    gate["checks"]["engineering_pruning"] = correction_passed
+    for name, passed in correction_checks.items():
+        gate["checks"][f"postflight_{name}"] = bool(passed)
+    gate["failed_checks"] = sorted(
+        name for name, passed in gate["checks"].items() if not bool(passed)
+    )
+    gate["automated_pass"] = not gate["failed_checks"]
+    gate["visual_review_completed"] = False
+    gate["visual_review_passed"] = False
+    gate["formal_pair_permission"] = False
+    summary_path.write_text(
+        json.dumps(summary, indent=2, sort_keys=True, ensure_ascii=True) + "\n",
+        encoding="utf-8",
+    )
+    updated_summary_sha = _sha256(summary_path)
+    (output_dir / "visual_review_required.json").write_text(
+        json.dumps(
+            {
+                "status": "pending_after_engineering_correction",
+                "required": True,
+                "page_count": int(
+                    summary["visual_review_artifacts"]["page_count"]
+                ),
+                "summary_sha256": updated_summary_sha,
+                "finalize_command": (
+                    "python -m trkh.tools.audit_inattentive_token_fusion_preflight "
+                    f"--output-dir \"{output_dir}\" --finalize-visual-review "
+                    f"--expected-summary-sha256 {updated_summary_sha} "
+                    "--visual-review-result pass|fail --visual-review-note \"...\""
+                ),
+            },
+            indent=2,
+            sort_keys=True,
+            ensure_ascii=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    _write_manifest(output_dir)
+    return summary
+
+
 def _finalize_visual_review(args: argparse.Namespace) -> Dict[str, object]:
     output_dir = Path(args.output_dir).resolve()
     summary_path = output_dir / "summary.json"
@@ -1990,6 +2301,10 @@ def run_preflight(args: argparse.Namespace) -> Dict[str, object]:
     bf16_backward = _full_backward_check(
         scratch_candidate, images, labels, metadata, bf16=True
     )
+    state_after_backward = _state_summary(scratch_control, scratch_candidate)
+    scratch_candidate.load_state_dict(scratch_control.state_dict(), strict=True)
+    scratch_candidate.zero_grad(set_to_none=True)
+    state_after_restore = _state_summary(scratch_control, scratch_candidate)
     scratch_control.eval()
     scratch_candidate.eval()
     with torch.inference_mode():
@@ -2315,6 +2630,9 @@ def run_preflight(args: argparse.Namespace) -> Dict[str, object]:
         "default_off_exact": bool(default_off["passed"]),
         "fp32_backward": bool(fp32_backward["passed"]),
         "bf16_backward": bool(bf16_backward["passed"]),
+        "scratch_state_restored_after_backward": bool(
+            state_after_restore["all_common_bit_exact"]
+        ),
         "engineering_pruning": bool(engineering_pruning["passed"]),
         "precision_stability": bool(precision_stability["passed"]),
         "trace_parity_fp32": bool(trace_parity_fp32["passed"]),
@@ -2397,6 +2715,10 @@ def run_preflight(args: argparse.Namespace) -> Dict[str, object]:
         "default_off": default_off,
         "fp32_backward": fp32_backward,
         "bf16_backward": bf16_backward,
+        "backward_state_mutation": {
+            "state_after_backward": state_after_backward,
+            "state_after_restore": state_after_restore,
+        },
         "engineering_pruning": engineering_pruning,
         "precision_stability": precision_stability,
         "trace_parity": {
@@ -2460,13 +2782,19 @@ def run_preflight(args: argparse.Namespace) -> Dict[str, object]:
 
 def main(argv: Optional[Sequence[str]] = None) -> None:
     args = parse_args(argv)
-    summary = (
-        _finalize_visual_review(args)
-        if bool(args.finalize_visual_review)
-        else run_preflight(args)
-    )
+    if bool(args.replay_engineering_correction) and bool(args.finalize_visual_review):
+        raise ValueError("Choose correction replay or visual finalization, not both.")
+    if bool(args.replay_engineering_correction):
+        summary = _replay_engineering_correction(args)
+    elif bool(args.finalize_visual_review):
+        summary = _finalize_visual_review(args)
+    else:
+        summary = run_preflight(args)
     print(json.dumps(summary["gate"], indent=2, sort_keys=True), flush=True)
-    if bool(args.finalize_visual_review):
+    if bool(args.replay_engineering_correction):
+        if not bool(summary["gate"]["automated_pass"]):
+            raise SystemExit(2)
+    elif bool(args.finalize_visual_review):
         if not bool(summary["gate"]["formal_pair_permission"]):
             raise SystemExit(2)
     elif not bool(summary["gate"]["automated_pass"]):

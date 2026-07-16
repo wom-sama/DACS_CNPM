@@ -169,10 +169,12 @@ def test_fusion_wrapper_locks_preflight_review_and_pair_modes() -> None:
         encoding="utf-8"
     )
     assert "[switch]$PreflightOnly" in script
+    assert "[switch]$ReplayEngineeringCorrection" in script
     assert "[switch]$FinalizeVisualReview" in script
     assert "[switch]$RunPair" in script
     assert "ExpectedSummarySha256" in script
     assert "formal_pair_permission" in script
+    assert "postflight_replay.runtime_files_unchanged" in script
     assert "-InattentiveTokenFusion $false" in script
     assert "-InattentiveTokenFusion $true" in script
     assert "SkipFinalTest = $true" in script
