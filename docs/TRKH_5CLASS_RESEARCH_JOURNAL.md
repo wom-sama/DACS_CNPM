@@ -17828,3 +17828,35 @@ Date: 2026-07-02
   unused. It does not remove conventional row-major center index `4`. This
   provenance-only erratum changed the protocol SHA but no cohort, readout,
   threshold, gate, or authorization boundary.
+
+## Pixel-Difference Stem Signal A0 Closure 2026-07-17 - Boundary Without Class Direction
+
+- Implemented the isolated auditor, focused tests, and VS Code-safe preflight/
+  formal wrapper at pushed commit `2f7432d`. Formal input remained the 607
+  locked fit rows (`421` class1 TP, `186` restricted FP) across source folds
+  1..4; no fold-0 image, validation, test, trainer, or epoch was used.
+- Official/local/oracle conversion, FP32 output/input-gradient/weight-gradient,
+  finite difference, BF16, nondegeneracy, runtime, and memory checks passed.
+  Maximum equation/gradient/BF16 errors were `1.79e-7`/`1.79e-7`/`0.004143`;
+  PDC runtime/memory ratios were `1.196914/1.000932`.
+- Strict structure still failed two checks. Keeper replay differed on only
+  sample `3657`, whose declaration p1/p2 margin was `0.000177`; excluding it
+  from the written scores lowered PDC AUROC to `0.497567`. ONNX used standard
+  ops with matching shapes but ORT error `3.33786e-5` exceeded `1e-5`. Neither
+  issue controls the decision.
+- PDC object-only clean AUROC was `0.499591` versus native `0.575141`, with
+  shifted PDC/native deltas `-0.090478/-0.039639/-0.037788`. Clean TP retention
+  passed at `0.971496`, but FP rejection was only `0.037634`; dim/bright/
+  low-contrast FP rejection was `0.005376/0.091398/0.010753`.
+- All three blocks showed bbox-boundary response above outside for both cohorts,
+  while contact sheets showed high scores on spots/roughness in both TP and FP
+  and low scores on smooth fruit in both. The operator captures edge magnitude
+  without a class-1 semantic direction. Twelve of fifteen information checks
+  failed, so no five-epoch pair or PDC rescue is authorized.
+- Retain the compact `8,292,757`-byte formal directory. CSV/summary/report/
+  manifest SHAs are `4b26a783...75c34`/`5f5afa2e...c4ee`/
+  `c0ca1f2f...8bde`/`39988fc3...7b0d05`. Retention passed over 738 directories
+  with `blockers=[]`, `70.288 GB` free, and summary SHA `68c6e5ec...50c3ae`.
+  Compileall, `pyflakes`, six PowerShell parses, focused `8/8`, and full pytest
+  `1345/1345` passed. Closure SHA is `a74c5744...ba00fd`; current-best command/
+  history hashes remain unchanged.

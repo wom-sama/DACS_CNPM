@@ -1723,7 +1723,7 @@ def _energy_image(energy: np.ndarray) -> Image.Image:
     green = np.clip(1.8 - np.abs(normalized - 0.55) * 3.2, 0, 1)
     blue = np.clip(1.4 * (1.0 - normalized), 0, 1)
     rgb = np.stack((red, green, blue), axis=-1)
-    return Image.fromarray(np.uint8(np.round(rgb * 255.0)), mode="RGB")
+    return Image.fromarray(np.uint8(np.round(rgb * 255.0)))
 
 
 def _render_contact_sheets(

@@ -3364,6 +3364,16 @@
   `weights[:, :, 1:]`: RPDC uses flattened source coefficients `1..8` and leaves
   source index `0` unused; it does not drop ordinary row-major center index `4`.
   Cohort, readout, thresholds, and gates are unchanged.
-- [ ] Implement and run the sole locked PDC A0 auditor. Continue to a matched
-  five-epoch pair only if every equation, deployment, object-only AUROC,
-  TP-retention, FP-rejection, and illumination gate passes.
+- [x] Implement and run the sole locked PDC A0 auditor at commit `2f7432d`.
+  Reject before training: object-only clean AUROC is `0.499591` versus native
+  `0.575141` (`-0.075550`), all three shifted deltas are negative, and clean
+  restricted-FP rejection is only `0.037634`. Equations/BF16/runtime/memory and
+  boundary localization pass, but one near-tie declaration and strict ONNX
+  error also fail. Preserve closure SHA `a74c5744...ba00fd` and formal manifest
+  SHA `39988fc3...7b0d05`; compileall, six PowerShell parses, focused `8/8`,
+  full pytest `1345/1345`, and retention all pass. Do not run the five-epoch
+  pair or nearby PDC sweeps.
+- [ ] Screen the next distinct accepted primary-source route with a cheap
+  class-conditional pre-training gate. Exclude PDC/edge-magnitude variants and
+  every existing closed family; prioritize a mechanism that can distinguish
+  class-1 TP from restricted FP while preserving high class-1 precision.
