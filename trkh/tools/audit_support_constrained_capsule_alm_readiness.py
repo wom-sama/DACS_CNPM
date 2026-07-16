@@ -3167,14 +3167,20 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
         reference_indices=cohorts["reference_indices"],
         rows=rows,
     )
+    (
+        mcl_raw_conditions,
+        _mcl_candidate_conditions,
+        mcl_comparisons,
+        mcl_replay,
+    ) = _load_mcl_comparator(paths=paths)
     hard_holdout_indices = [
-        int(sample_index)
-        for sample_index in cohorts["holdout_indices"]
-        if rows[int(sample_index)].target in RESTRICTED_NEGATIVE_CLASSES
-        and rows[int(sample_index)].keeper_prediction == FOCUS_CLASS
+        int(row["sample_index"])
+        for row in mcl_raw_conditions["clean"]
+        if int(row["target"]) in RESTRICTED_NEGATIVE_CLASSES
+        and int(row["prediction"]) == FOCUS_CLASS
     ]
     if len(hard_holdout_indices) != 37:
-        raise ValueError("CapsALM holdout restricted-hard cohort differs from keeper.")
+        raise ValueError("CapsALM MCL-locked holdout hard cohort differs from keeper.")
     (
         raw_conditions,
         control_conditions,
@@ -3199,12 +3205,6 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
         control_conditions=control_conditions,
         candidate_conditions=candidate_conditions,
     )
-    (
-        mcl_raw_conditions,
-        _mcl_candidate_conditions,
-        mcl_comparisons,
-        mcl_replay,
-    ) = _load_mcl_comparator(paths=paths)
     raw_mcl_replay = _compare_raw_to_mcl(raw_conditions, mcl_raw_conditions)
 
     raw_benchmark = _benchmark_inference(
