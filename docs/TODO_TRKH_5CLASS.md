@@ -3207,7 +3207,24 @@
   lock seven prefixes and incompatible routes, pass launcher/config preflight,
   focused `38/38`, and full pytest `1276/1276`. Commit/push this reviewed stage
   before the sole formal preflight.
-- [ ] Run the formal preflight exactly once. Train the five-epoch pair only if
-  every engineering and pre-training selectivity gate passes; otherwise close,
-  document, compact reproducible binaries, and continue to a new primary-source
-  route without weakening or sweeping the locked settings.
+- [x] Run the formal BRA preflight exactly once and apply the stop rule. The
+  formal artifact passed 64/75 checks but failed inference runtime
+  (`1.390526x`), two object-query coverage rows, clean positive-gain fraction
+  (`0.486692`), dim route stability (`0.616128`), and visual review. Deny the
+  pair, validation/test, full train, sweeps, and command promotion.
+- [x] Correct the three BRA reporting defects without rerunning formal work.
+  Hash-lock the original summary/CSV, replay role-RNG and deployment-compatible
+  trace parity, aggregate finite geometry while preserving invalid rows, and
+  confirm all five material rejection categories remain. Focused/full tests
+  pass `18/18` and `1279/1279`; fix/replay commit `6eb272e` is pushed.
+- [x] Complete BRA closure and compact only the reproducible 32,678,307-byte
+  ONNX. Preserve formal/replay/CSV/visual/overlay evidence at payload-manifest
+  SHA `5e19d833...f38773`; cleanup SHA is `cbbc2d8d...3bcb57`. Retention passes
+  over 723 directories, all 205 compacted originals are absent, and
+  `blockers=[]`. Closure SHA is `ab74dc74...766e4`; commands remain three
+  revisions/two updates.
+- [ ] Perform a new accepted-primary-paper/official-licensed-code no-repeat
+  screen outside BRA and every closed family. Require a prospective train-only
+  gate that directly covers tiny edge objects, post-pruning spatial support,
+  class1 precision/TP safety, and surface-boundary separability before any
+  implementation or epoch.

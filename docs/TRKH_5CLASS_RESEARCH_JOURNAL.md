@@ -17457,3 +17457,47 @@ Date: 2026-07-02
   `38/38`, and full pytest `1276/1276` pass. These are implementation checks,
   not the formal preflight result; no epoch, validation, test, full train, or
   current-best command update has occurred.
+
+## Bi-Level Routing Attention A1 Closure 2026-07-16 - Average Focus Without Reliable Coverage
+
+- Ran the locked preflight exactly once from pushed implementation commit
+  `063d1c9`. The formal summary passed 64/75 automated checks and denied
+  `formal_pair_permission`; no epoch, official validation, or test ran.
+- Engineering replay was strong: official output/attention errors were
+  `2.38e-7/7.45e-8`, dense-MHSA maximum parameter-gradient error was
+  `4.77e-7`, BF16 route Jaccard/exact fraction was
+  `0.984375/0.9609375`, ONNX error was `2.68e-7`, train runtime ratio was
+  `0.910171`, and train VRAM ratio was `1.000426`.
+- Inference failed at `1.390526x > 1.35x`. Samples `3536/5386` had no token
+  center inside their transformed bbox, so only `1841/1843` rows supported an
+  object-query route.
+- On valid clean rows, foreground gain and far-background reduction were
+  positive (`+0.047487/+0.040557`), but positive gain occurred on only
+  `0.486692` of rows versus `0.55`. Dim route stability was
+  `0.616128 < 0.65`.
+- Visual review failed all three pages: selected routes repeatedly covered far
+  background, hands, borders, and illumination-dependent regions. Tiny-edge
+  samples `3579/5386` showed severe mismatch. Aggregate focus therefore did
+  not translate into reliable hard-case support.
+- The formal auditor had three reporting defects. It compared candidate/control
+  constructor RNG with an unrelated MHSA baseline, disabled pruning by asking
+  for `return_attention=True` during trace parity, and propagated two invalid
+  geometry rows into every condition mean. Commit `6eb272e` fixes all three
+  and adds a hash-locked read-only replay.
+- Postflight replay proves topk-16/topk-4 RNG equality and exact FP32/BF16
+  standard/trace parity, and restores finite aggregate selectivity metrics.
+  It cannot grant pair/validation/test permission and confirms the independent
+  runtime, coverage, positive-fraction, dim-stability, and visual failures.
+- Compact evidence is under
+  `runs/evidence_bra_preflight_rejected_20260716`; formal/replay/payload/
+  cleanup SHAs are `e8f0c540...f8e0b`, `5e1e3b84...ccc29`,
+  `5e19d833...f38773`, and `cbbc2d8d...3bcb57`. Only the reproducible
+  32,678,307-byte ONNX was excluded.
+- Focused/full tests passed `18/18` and `1279/1279`. Retention passed over 723
+  directories with all 205 compacted originals absent and `blockers=[]` at
+  summary SHA `01577787...9afef`.
+- Close all BRA top-k/region/LCE/layer/detach/prefix/training/bbox/runtime and
+  combination sweeps. Current-best commands remain three revisions/two updates
+  and zero keeper replacements. Full detail is in
+  `TRKH_5CLASS_BILEVEL_ROUTING_ATTENTION_CLOSURE_20260716.md`, SHA
+  `ab74dc74...766e4`.
