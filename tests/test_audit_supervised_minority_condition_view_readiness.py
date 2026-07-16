@@ -6,6 +6,8 @@ import os
 import torch
 
 from trkh.tools.audit_supervised_minority_condition_view_readiness import (
+    A0_CONTRACT_ID,
+    A1_CONTRACT_ID,
     CONDITIONS,
     EXPECTED_PROBE_PARAMETERS,
     EXPECTED_REPRESENTATION_PARAMETERS,
@@ -19,7 +21,9 @@ from trkh.tools.audit_supervised_minority_condition_view_readiness import (
     _IsolatedCandidateExport,
     _counterfactual_tensors,
     _equation_diagnostics,
+    _locked_args_exact,
     _positive_mask,
+    _protocol_contract,
     _required_xai_events,
     _stage1_learning_rate,
     assess_pretraining_selectivity,
@@ -34,6 +38,7 @@ from trkh.tools.audit_supervised_minority_condition_view_readiness import (
 def test_protocol_defaults_and_locked_schedule_hashes() -> None:
     args = parse_args([])
     assert os.environ["CUBLAS_WORKSPACE_CONFIG"] == ":4096:8"
+    assert args.contract == A0_CONTRACT_ID
     assert args.device == "cuda"
     assert args.batch_size == 32
     assert args.num_workers == 4
@@ -45,6 +50,47 @@ def test_protocol_defaults_and_locked_schedule_hashes() -> None:
     assert LOCKED_PROBE_SCHEDULE_SHA256 == (
         "bf5568009a9e0480aec7f6f8d7f3cce7f08409ac74325930747f5d022a4f10f0"
     )
+
+
+def test_a1_contract_locks_fp32_cidt_batch_and_replay_gate() -> None:
+    args = parse_args(
+        [
+            "--contract",
+            A1_CONTRACT_ID,
+            "--batch-size",
+            "64",
+            "--output-dir",
+            "runs/audit_supervised_minority_condition_view_a1_fp32_20260716",
+        ]
+    )
+    contract = _protocol_contract(args)
+    assert _locked_args_exact(args) is True
+    assert contract == {
+        "contract_id": "a1_fp32_cidt",
+        "method": "supervised_minority_condition_view_a1_fp32_cidt",
+        "extract_batch_size": 64,
+        "cache_autocast_enabled": False,
+        "cache_precision": "fp32_autocast_disabled",
+        "replay_rows": 64,
+        "cidt_maximum_probability_error": 1e-6,
+        "protocol_sha256": (
+            "e17f5cb56631b1f24206b6183fdef7b92e17a050097b84c600adb0a0744d9aa2"
+        ),
+        "output_relative_path": (
+            "runs/audit_supervised_minority_condition_view_a1_fp32_20260716"
+        ),
+    }
+    mismatched = parse_args(
+        [
+            "--contract",
+            A1_CONTRACT_ID,
+            "--batch-size",
+            "32",
+            "--output-dir",
+            "runs/audit_supervised_minority_condition_view_a1_fp32_20260716",
+        ]
+    )
+    assert _locked_args_exact(mismatched) is False
 
 
 def test_stage1_learning_rate_has_locked_endpoints() -> None:

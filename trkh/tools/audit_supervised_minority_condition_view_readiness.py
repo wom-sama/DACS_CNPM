@@ -69,7 +69,8 @@ from trkh.tools.audit_xca_dual_axis_readiness import (
 )
 
 
-METHOD = "supervised_minority_condition_view_a0"
+A0_CONTRACT_ID = "a0_fp16"
+A1_CONTRACT_ID = "a1_fp32_cidt"
 NUM_CLASSES = 5
 EMBED_DIM = 256
 HIDDEN_DIM = 64
@@ -80,7 +81,8 @@ CONTRASTIVE_EPOCHS = 20
 PROBE_EPOCHS = 10
 CONTRASTIVE_BATCH_SIZE = 256
 PROBE_BATCH_SIZE = 1024
-EXTRACT_BATCH_SIZE = 32
+A0_EXTRACT_BATCH_SIZE = 32
+A1_EXTRACT_BATCH_SIZE = 64
 XAI_BATCH_SIZE = 4
 TEMPERATURE = 0.07
 BASE_TEMPERATURE = 0.07
@@ -113,7 +115,8 @@ LOCKED_LAUNCHER_ARGS_SHA256 = "908a05cf66b2a01162cae62e4ff2251eaae1297d31e705101
 LOCKED_DATA_SHA256 = "716e33df24c63a9e9920f97b685199707fb84ab4c7154544f5dd9a3e00d884ef"
 LOCKED_CIDT_SUMMARY_SHA256 = "d4891edf2963ab12385b7ce5bdc812ec3e19c5c098acd25c66eb557af541d7ad"
 LOCKED_CIDT_PREDICTIONS_SHA256 = "2e0993752d58d99ea429bfefe1e2bfe6fa949e45aea1a26cc4bdfee97d4db21c"
-LOCKED_PROTOCOL_SHA256 = "d4fb528cc45dbcfbbdfd0218971cde05e7ba203b3ce0ad29f6080c3f561b4ce9"
+LOCKED_A0_PROTOCOL_SHA256 = "d4fb528cc45dbcfbbdfd0218971cde05e7ba203b3ce0ad29f6080c3f561b4ce9"
+LOCKED_A1_PROTOCOL_SHA256 = "e17f5cb56631b1f24206b6183fdef7b92e17a050097b84c600adb0a0744d9aa2"
 LOCKED_CURRENT_COMMAND_SHA256 = "36b9aa1a21b765829acf4c8321be147bd76297de4ccdb8a40e6dee8e37940faf"
 LOCKED_COMMAND_HISTORY_SHA256 = "39bd2879ce66fddf36a953021ea1e40f8d9de6cb4334b9b825011b2b8dc98f53"
 LOCKED_TTC_COMMIT = "0b1e6974254993b074ad27a226c7ce864da7f95c"
@@ -128,6 +131,42 @@ LOCKED_HOLDOUT_INDEX_SHA256 = "a628686b491c8b8f10bbf1782e6c84a923f21c8b53617cf0b
 LOCKED_CONTRASTIVE_SCHEDULE_SHA256 = "d73ba25938afb8ba69061ea7c1ae79ac58b254d8a7c9dbb952566b130da1b52a"
 LOCKED_PROBE_SCHEDULE_SHA256 = "bf5568009a9e0480aec7f6f8d7f3cce7f08409ac74325930747f5d022a4f10f0"
 
+PROTOCOL_CONTRACTS: Dict[str, Dict[str, object]] = {
+    A0_CONTRACT_ID: {
+        "contract_id": A0_CONTRACT_ID,
+        "method": "supervised_minority_condition_view_a0",
+        "extract_batch_size": A0_EXTRACT_BATCH_SIZE,
+        "cache_autocast_enabled": True,
+        "cache_precision": "cuda_fp16",
+        "replay_rows": 32,
+        "cidt_maximum_probability_error": 2e-3,
+        "protocol_sha256": LOCKED_A0_PROTOCOL_SHA256,
+        "output_relative_path": (
+            "runs/audit_supervised_minority_condition_view_readiness_20260716"
+        ),
+    },
+    A1_CONTRACT_ID: {
+        "contract_id": A1_CONTRACT_ID,
+        "method": "supervised_minority_condition_view_a1_fp32_cidt",
+        "extract_batch_size": A1_EXTRACT_BATCH_SIZE,
+        "cache_autocast_enabled": False,
+        "cache_precision": "fp32_autocast_disabled",
+        "replay_rows": 64,
+        "cidt_maximum_probability_error": 1e-6,
+        "protocol_sha256": LOCKED_A1_PROTOCOL_SHA256,
+        "output_relative_path": (
+            "runs/audit_supervised_minority_condition_view_a1_fp32_20260716"
+        ),
+    },
+}
+
+
+def _protocol_contract(args: argparse.Namespace) -> Dict[str, object]:
+    contract_id = str(args.contract)
+    if contract_id not in PROTOCOL_CONTRACTS:
+        raise ValueError(f"Unknown TTC-SupMin protocol contract: {contract_id}")
+    return dict(PROTOCOL_CONTRACTS[contract_id])
+
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -135,6 +174,11 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
             "Locked train-only CVPR-2025 Supervised-Minority condition-view "
             "readiness audit. Validation and test access are forbidden."
         )
+    )
+    parser.add_argument(
+        "--contract",
+        choices=tuple(PROTOCOL_CONTRACTS),
+        default=A0_CONTRACT_ID,
     )
     parser.add_argument(
         "--checkpoint",
@@ -203,7 +247,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     )
     parser.add_argument("--preflight-only", action="store_true", default=False)
     parser.add_argument("--device", choices=("cuda",), default="cuda")
-    parser.add_argument("--batch-size", type=int, default=EXTRACT_BATCH_SIZE)
+    parser.add_argument("--batch-size", type=int, default=A0_EXTRACT_BATCH_SIZE)
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--xai-batch-size", type=int, default=XAI_BATCH_SIZE)
     parser.add_argument("--seed", type=int, default=SEED)
@@ -212,13 +256,16 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
 
 
 def _locked_args_exact(args: argparse.Namespace) -> bool:
+    contract = _protocol_contract(args)
     return bool(
         str(args.device) == "cuda"
-        and int(args.batch_size) == EXTRACT_BATCH_SIZE
+        and int(args.batch_size) == int(contract["extract_batch_size"])
         and int(args.num_workers) == 4
         and int(args.xai_batch_size) == XAI_BATCH_SIZE
         and int(args.seed) == SEED
         and int(args.fold) == FOLD
+        and Path(args.output_dir).resolve()
+        == Path(str(contract["output_relative_path"])).resolve()
     )
 
 
@@ -453,8 +500,12 @@ def _stream_tensor_sha256(value: Tensor) -> str:
 def _load_locked_inputs(
     args: argparse.Namespace,
 ) -> tuple[Dict[str, object], list[CleanTrainRow], Dict[str, object]]:
+    contract = _protocol_contract(args)
     if not _locked_args_exact(args):
-        raise ValueError("Arguments differ from the precommitted TTC-SupMin protocol.")
+        raise ValueError(
+            f"Arguments differ from precommitted TTC-SupMin contract "
+            f"{contract['contract_id']}."
+        )
     paths = _source_paths(args)
     hashes = {
         "checkpoint": _verify_sha256(paths["checkpoint"], LOCKED_KEEPER_SHA256, "keeper checkpoint"),
@@ -462,7 +513,11 @@ def _load_locked_inputs(
         "data": _verify_sha256(paths["data"], LOCKED_DATA_SHA256, "data YAML"),
         "cidt_summary": _verify_sha256(paths["cidt_summary"], LOCKED_CIDT_SUMMARY_SHA256, "CIDT summary"),
         "cidt_predictions": _verify_sha256(paths["cidt_predictions"], LOCKED_CIDT_PREDICTIONS_SHA256, "CIDT predictions"),
-        "protocol": _verify_sha256(paths["protocol"], LOCKED_PROTOCOL_SHA256, "TTC-SupMin protocol"),
+        "protocol": _verify_sha256(
+            paths["protocol"],
+            str(contract["protocol_sha256"]),
+            "TTC-SupMin protocol",
+        ),
         "current_commands": _verify_sha256(paths["current_commands"], LOCKED_CURRENT_COMMAND_SHA256, "current-best commands"),
         "command_history": _verify_sha256(paths["command_history"], LOCKED_COMMAND_HISTORY_SHA256, "command history"),
         "ttc_paper": _verify_sha256(paths["ttc_paper"], LOCKED_TTC_PAPER_SHA256, "TTC paper"),
@@ -506,7 +561,10 @@ def _load_locked_inputs(
         raise ValueError("Probe schedule hash differs from protocol.")
     repository_root = Path.cwd().resolve()
     if not _tracked_worktree_clean(repository_root):
-        raise ValueError("Tracked TRKH worktree must be clean for formal TTC-SupMin A0.")
+        raise ValueError(
+            f"Tracked TRKH worktree must be clean for formal TTC-SupMin "
+            f"{contract['contract_id']}."
+        )
     return (
         {
             "paths": {key: str(value) for key, value in paths.items()},
@@ -516,6 +574,7 @@ def _load_locked_inputs(
             "ttc_worktree_clean": True,
             "repository_commit": _git_commit(repository_root),
             "tracked_worktree_clean": True,
+            "protocol_contract": contract,
             "contrastive_schedule_sha256": contrastive_hash,
             "probe_schedule_sha256": probe_hash,
             "validation_predictions_used": False,
@@ -618,6 +677,7 @@ def _extract_condition_cache(
     args: argparse.Namespace,
     device: torch.device,
 ) -> tuple[Dict[str, Tensor], Dict[str, object]]:
+    contract = _protocol_contract(args)
     loader, loader_summary = _condition_loader(
         name=condition,
         dataset=dataset,
@@ -636,7 +696,11 @@ def _extract_condition_cache(
     with torch.inference_mode():
         for images_cpu, targets_cpu, metadata_cpu in loader:
             images = images_cpu.to(device=device, non_blocking=True)
-            with torch.autocast(device_type="cuda", dtype=torch.float16, enabled=True):
+            with torch.autocast(
+                device_type="cuda",
+                dtype=torch.float16,
+                enabled=bool(contract["cache_autocast_enabled"]),
+            ):
                 raw_logits, features = _forward_classification_with_metadata(
                     keeper, images, metadata_cpu, device=device
                 )
@@ -698,7 +762,7 @@ def _extract_condition_cache(
         "target_sha256": _stream_tensor_sha256(cache["targets"]),
         "sample_index_sha256": _stream_tensor_sha256(cache["sample_indices"]),
         "finite": finite,
-        "autocast": "cuda_fp16",
+        "autocast": str(contract["cache_precision"]),
         "loader": loader_summary,
         "elapsed_seconds": float(time.perf_counter() - started),
     }
@@ -713,6 +777,9 @@ def _extract_all_condition_caches(
     args: argparse.Namespace,
     device: torch.device,
 ) -> tuple[Dict[str, Dict[str, Tensor]], Dict[str, object]]:
+    contract = _protocol_contract(args)
+    replay_rows = int(contract["replay_rows"])
+    cidt_error_limit = float(contract["cidt_maximum_probability_error"])
     indices = list(range(EXPECTED_TRAIN_ROWS))
     caches: Dict[str, Dict[str, Tensor]] = {}
     summaries: Dict[str, object] = {}
@@ -731,16 +798,16 @@ def _extract_all_condition_caches(
         keeper=keeper,
         dataset=dataset,
         transform=transform,
-        indices=indices[:32],
+        indices=indices[:replay_rows],
         condition="clean",
         args=args,
         device=device,
     )
     replay_feature_error = float(
-        (clean["pooled"][:32] - replay["pooled"]).abs().amax().item()
+        (clean["pooled"][:replay_rows] - replay["pooled"]).abs().amax().item()
     )
     replay_logit_error = float(
-        (clean["raw_logits"][:32] - replay["raw_logits"]).abs().amax().item()
+        (clean["raw_logits"][:replay_rows] - replay["raw_logits"]).abs().amax().item()
     )
     clean_probabilities = F.softmax(clean["raw_logits"], dim=1)
     cidt_probabilities = torch.tensor(
@@ -756,19 +823,25 @@ def _extract_all_condition_caches(
         ).item()
     )
     replay_contract = {
-        "rows": 32,
+        "rows": replay_rows,
         "pooled_maximum_absolute_error": replay_feature_error,
         "logit_maximum_absolute_error": replay_logit_error,
         "deterministic_within_1e_6": max(replay_feature_error, replay_logit_error)
         <= 1e-6,
         "sample_indices_exact": torch.equal(
-            clean["sample_indices"][:32], replay["sample_indices"]
+            clean["sample_indices"][:replay_rows], replay["sample_indices"]
         ),
-        "targets_exact": torch.equal(clean["targets"][:32], replay["targets"]),
+        "targets_exact": torch.equal(
+            clean["targets"][:replay_rows], replay["targets"]
+        ),
         "cidt_maximum_probability_error": cidt_probability_error,
         "cidt_argmax_mismatches": cidt_argmax_mismatches,
+        "cidt_maximum_probability_error_limit": cidt_error_limit,
         "cidt_within_2e_3": cidt_probability_error <= 2e-3
         and cidt_argmax_mismatches == 0,
+        "cidt_within_contract": cidt_probability_error <= cidt_error_limit
+        and cidt_argmax_mismatches == 0,
+        "protocol_contract": str(contract["contract_id"]),
         "replay_loader": replay_summary["loader"],
     }
     if not all(
@@ -777,7 +850,7 @@ def _extract_all_condition_caches(
             "deterministic_within_1e_6",
             "sample_indices_exact",
             "targets_exact",
-            "cidt_within_2e_3",
+            "cidt_within_contract",
         )
     ):
         raise ValueError(f"Pooled-cache replay contract failed: {replay_contract}")
@@ -2702,7 +2775,7 @@ def _xai_audit(
         ),
     }
     manifest = {
-        "method": METHOD,
+        "method": str(_protocol_contract(args)["method"]),
         "selected_events": len(events),
         "required_events": len(required),
         "required_covered": len(required_covered),
@@ -2955,7 +3028,7 @@ def _write_report(path: Path, summary: Mapping[str, object]) -> None:
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def _write_manifest(output_dir: Path) -> Dict[str, object]:
+def _write_manifest(output_dir: Path, *, method: str) -> Dict[str, object]:
     manifest_path = output_dir / "artifact_manifest.json"
     forbidden = {".pt", ".pth", ".ckpt", ".engine", ".trt"}
     artifacts = []
@@ -2973,7 +3046,7 @@ def _write_manifest(output_dir: Path) -> Dict[str, object]:
             }
         )
     manifest = {
-        "method": METHOD,
+        "method": str(method),
         "artifact_count": len(artifacts),
         "total_bytes": sum(int(value["bytes"]) for value in artifacts),
         "artifacts": artifacts,
@@ -3162,6 +3235,7 @@ def _final_gate(
 
 def _pretraining_rejection_outputs(
     *,
+    method: str,
     output_dir: Path,
     provenance: Mapping[str, object],
     cohorts: Mapping[str, object],
@@ -3193,7 +3267,7 @@ def _pretraining_rejection_outputs(
         "command_file_revision_authorized": False,
     }
     summary: Dict[str, object] = {
-        "method": METHOD,
+        "method": str(method),
         "status": "rejected_pretraining_selectivity",
         "provenance": provenance,
         "cohort": _cohort_serializable(cohorts),
@@ -3215,16 +3289,18 @@ def _pretraining_rejection_outputs(
         encoding="utf-8",
     )
     _write_report(output_dir / "report.md", summary)
-    manifest = _write_manifest(output_dir)
+    manifest = _write_manifest(output_dir, method=method)
     return {**summary, "artifact_manifest": manifest}
 
 
 def run_audit(args: argparse.Namespace) -> Dict[str, object]:
+    contract = _protocol_contract(args)
+    method = str(contract["method"])
     provenance, rows, cohorts = _load_locked_inputs(args)
     if bool(args.preflight_only):
         return {
             "status": "preflight_passed",
-            "method": METHOD,
+            "method": method,
             "provenance": provenance,
             "cohort": _cohort_serializable(cohorts),
             "output_directory_created": False,
@@ -3233,7 +3309,7 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
             "test_data_used": False,
         }
     if not torch.cuda.is_available():
-        raise RuntimeError("Locked TTC-SupMin A0 requires CUDA.")
+        raise RuntimeError(f"Locked TTC-SupMin {contract['contract_id']} requires CUDA.")
     output_path = Path(args.output_dir).resolve()
     raw_root = Path(args.data).resolve().parent
     if output_path == raw_root or raw_root in output_path.parents:
@@ -3266,6 +3342,7 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
     output_dir = _prepare_output_dir(output_path)
     if not bool(selectivity["representation_training_authorized"]):
         return _pretraining_rejection_outputs(
+            method=method,
             output_dir=output_dir,
             provenance=provenance,
             cohorts=cohorts,
@@ -3391,7 +3468,7 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
         replay=replay,
     )
     summary: Dict[str, object] = {
-        "method": METHOD,
+        "method": method,
         "status": "stage_a_passed" if gate["stage_b_authorized"] else "rejected_stage_a",
         "provenance": provenance,
         "cohort": _cohort_serializable(cohorts),
@@ -3428,7 +3505,7 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
         encoding="utf-8",
     )
     _write_report(output_dir / "report.md", summary)
-    manifest = _write_manifest(output_dir)
+    manifest = _write_manifest(output_dir, method=method)
     return {**summary, "artifact_manifest": manifest}
 
 
@@ -3437,7 +3514,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     result = run_audit(args)
     output = {
         "status": result["status"],
-        "method": METHOD,
+        "method": str(result["method"]),
         "stage_b_authorized": bool(result.get("gate", {}).get("stage_b_authorized", False)),
         "validation_predictions_used": False,
         "test_data_used": False,
