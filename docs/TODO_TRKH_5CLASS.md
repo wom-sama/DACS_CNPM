@@ -3164,8 +3164,25 @@
 - [x] Review only the explicit DAT closure paths and push commit
   `d6e40e4d6bd79a659b7ee64f64c335c500726b7a` without protected untracked
   reports. Final closure SHA is `e97b03ef...f5225a5`; HEAD equals upstream.
-- [ ] Perform the next accepted-primary-paper/official-code no-repeat screen.
-  Reject stock catalog hybrids and any route overlapping closed local/global,
-  graph, deformable, channel, prompt, capsule, color/frequency, prototype,
-  calibration, gradient, or condition-alignment families before writing a new
-  prospective train-only protocol.
+- [x] Perform the next accepted-primary-paper/official-code no-repeat screen.
+  Reject HorNet/ODConv and stock Next-ViT/EfficientViT-style catalog hybrids as
+  overlaps; defer unlicensed/pretrained FENet; select CVPR-2021 Diverse Branch
+  Block from official Apache-2.0 commit `8d2b16b...ba929` as a distinct
+  training-time structural re-parameterization route for the current hybrid.
+- [x] Lock one exact three-block DBB stem A0 before implementation at protocol
+  SHA `578b208f...5d22ff`: official four paths, unchanged GELU/max-pool and
+  Transformer, exact deploy fusion, source-disjoint `7372/1843` scratch pair,
+  precision/TP/condition/mechanism/XAI gates, and no validation/test/sweep or
+  current-best command update.
+- [ ] Implement the Apache-attributed DBB stem, config/launcher integration,
+  exact official-equation/deploy replay, common-state construction, ONNX and
+  resource preflight, focused tests, and a VS Code-safe A0 wrapper. Commit and
+  push the implementation before any formal pair.
+- [ ] Run the sole authorized five-epoch train-only control/candidate pair only
+  if every preflight gate passes. Audit all 1,843 holdout rows under clean/dim/
+  bright/low-contrast, branch activity/diversity, converted deployment parity,
+  transitions, selectivity, and complete changed-case XAI before deciding.
+- [ ] Apply the locked DBB gate, independently replay all metrics/hashes, close
+  or promote without nearby sweeps, compact rejected binaries by manifest,
+  rerun retention and protected hashes, update journal/skill, and change the
+  current-best command/history only after a later official-validation win.

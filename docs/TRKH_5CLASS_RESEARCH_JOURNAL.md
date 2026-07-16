@@ -17301,3 +17301,42 @@ Date: 2026-07-02
 - Explicit-path closure commit `d6e40e4d6bd79a659b7ee64f64c335c500726b7a`
   was pushed with HEAD equal to upstream. Closure-document SHA is
   `e97b03efd3cf55b34b93cb862f687d80a1f1bac73c26937ffa4e66e05f5225a5`.
+
+## Diverse-Branch Stem A0 Lock 2026-07-16 - Train Rich, Deploy Plain
+
+- Applied the stricter source policy requested by the user: supplied research
+  reports remain hypothesis generators, while accepted primary papers and
+  official repositories define equations and protocols. Local no-repeat search
+  rejected HorNet as MogaNet/StarNet overlap, retained the existing ODConv
+  exclusion, and rejected Next-ViT/EfficientViT-style catalog hybrids as closed
+  local/global or stock-backbone territory.
+- NeurIPS-2021 FENet is scientifically relevant to the surface-texture problem,
+  but its official repository showed only 21 stars, no displayed license, and
+  the paper initializes ResNet from ImageNet. It is deferred rather than mixed
+  into the next experiment.
+- Selected Ding et al. CVPR-2021 Diverse Branch Block from the accepted CVF
+  paper and official Apache-2.0 repository. Observed 352 stars; locked official
+  commit/tree `8d2b16b...ba929`/`b038d8e...77b30`. Paper/source/transform/license
+  SHAs are `ba1c0f90...b0d991`, `5f67f200...77ccb0`,
+  `14246735...2b11f`, and `1eb85fc9...9c8c6`.
+- DBB is distinct from persistent InceptionNeXt/Moga/StarNet/OctConv/CEConv
+  stems. Its four train-time paths, `3x3`, `1x1`, `1x1-3x3`, and `1x1-AVG`,
+  are algebraically fused after training into the same single 3x3 convolution.
+  RepVGG was not selected because the official DBB FAQ reports negligible
+  RepVGG-style benefit on a non-plain ResNet-50 and positions DBB as the
+  universal replacement for non-plain architectures such as TRKH.
+- Prospective protocol
+  `TRKH_5CLASS_DIVERSE_BRANCH_STEM_READINESS_PROTOCOL_20260716.md` has SHA
+  `578b208f...5d22ff`. It changes only the three stem conv-BN pairs, keeps
+  GELU/max-pool and the entire Transformer unchanged, requires exact official
+  equation and deploy replay, and permits one five-epoch scratch pair on the
+  existing source-disjoint `7372/1843` train-only fold only after preflight.
+- Promotion prioritizes class1 precision: clean macro/class1 F1 deltas
+  `>=+0.003/+0.015`, precision `>=+0.025`, recall/TP safety, at least four
+  restricted-FP removals, clean and shifted-condition stability, active/diverse
+  branches, exact converted deployment, and complete transition XAI. Official
+  validation/test, full train, nearby DBB variants, and current-best command
+  changes remain forbidden during A0.
+- Keeper, scratch-complement, command, and command-history hashes remain
+  `1f49d577...482677`, `f8bd6309...1a549`, `36b9aa1a...40faf`, and
+  `39bd2879...98f53`. Command tracking remains three revisions/two updates.
