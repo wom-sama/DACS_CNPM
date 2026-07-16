@@ -17417,3 +17417,43 @@ Date: 2026-07-02
 - Keeper, command, and history hashes remain `1f49d577...482677`,
   `36b9aa1a...40faf`, and `39bd2879...98f53`. Current-best tracking remains
   three revisions/two updates and zero keeper replacements.
+
+## Bi-Level Routing Attention A1 Implementation Readiness 2026-07-16
+
+- Added an MIT-attributed, default-off prefix-aware BRA module that preserves
+  the current `qkv/proj` checkpoint schema. Block 2 uses the locked `16x16`,
+  `S=4`, topk-16/topk-4 roles, all-prefix access, depthwise-5x5 LCE, exact
+  dense scatter for pruning/XAI, and rejects a pruned or reordered grid.
+- The first integration review found that block-2 token pruning requests an
+  attention tensor even during ordinary inference. Route-set uniqueness and
+  Jaccard statistics are therefore collected only when `return_trace=True`;
+  pruning still receives the exact dense sparse-attention map, while standard
+  inference and ONNX avoid unrelated audit operations. A parity hook checks
+  both logits and the native BRA block output in FP32 and BF16.
+- Config, trainer, resume-extension, and V8 launcher wiring now lock layer 2,
+  `S=4`, top-k in `{4,16}`, LCE-5, a complete pre-block-2 grid, seven-prefix
+  formal configuration, and conflicts with DAT/FAA/VCA/relative-position/XCA/
+  ViG/Soft-MoE/deep-prompt routes. The matched keeper models have identical
+  7,252,246-parameter inventories; all 185 checkpoint tensors load bit-exact
+  and only the two prospective LCE tensors are new.
+- The preflight auditor independently replays official `nchwBRA` output,
+  native attention, route indices, input gradients, and all mapped parameter
+  gradients; replays topk-16 against current MHSA; checks constructor RNG,
+  Q/K/V/projection/LCE gradients, BF16 route sets, trace parity, dense scatter,
+  ONNX TopK/Gather, runtime/VRAM, exact fold provenance, and all 1,843 holdout
+  rows under clean/dim/bright/low-contrast conditions.
+- Selectivity uses transformed YOLO bbox centers only as audit evidence. It
+  writes all `1,843 x 4` rows and renders query/selected-region overlays for
+  class1 keeper TP/FN, restricted keeper FP, close, wide, partial, edge, and
+  tiny representatives. Automated success cannot authorize training until a
+  separate hash-checked visual review is finalized.
+- The VS Code-safe wrapper exposes exactly one phase at a time:
+  `PreflightOnly`, `FinalizeVisualReview`, or `RunPair`. It rejects overwrite,
+  dirty tracked state, unpushed/mismatched HEAD, missing visual permission, and
+  any run beyond the sole scratch five-epoch topk-16/topk-4 pair.
+- Official-equation replay currently reaches output/attention errors
+  `2.38e-7/7.45e-8`; dense-MHSA maximum parameter-gradient error is
+  `4.77e-7`. PowerShell parse, V8 configuration preflight, focused tests
+  `38/38`, and full pytest `1276/1276` pass. These are implementation checks,
+  not the formal preflight result; no epoch, validation, test, full train, or
+  current-best command update has occurred.

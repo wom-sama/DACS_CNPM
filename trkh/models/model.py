@@ -25,6 +25,7 @@ from trkh.models.starnet_s2_tokenizer import StarNetS2Tokenizer
 from trkh.models.visual_contrast_attention import VisualContrastAttention
 from trkh.models.foveal_aggregated_attention import FovealAggregatedAttention
 from trkh.models.deformable_spatial_attention import DeformableSpatialAttention
+from trkh.models.bi_level_routing_attention import BiLevelRoutingAttention
 from trkh.models.diverse_branch_stem import DiverseBranchConvStem
 from trkh.models.cross_covariance_attention import (
     SharedProjectionCrossCovarianceAttention,
@@ -5242,6 +5243,11 @@ class CustomTransformerEncoderLayer(nn.Module):
         deformable_spatial_attention_groups: int = 2,
         deformable_spatial_attention_kernel_size: int = 5,
         deformable_spatial_attention_offset_range: float = 2.0,
+        bi_level_routing_attention: bool = False,
+        bi_level_routing_attention_input_resolution: Tuple[int, int] = (16, 16),
+        bi_level_routing_attention_regions_per_axis: int = 4,
+        bi_level_routing_attention_topk: int = 4,
+        bi_level_routing_attention_local_context_kernel_size: int = 5,
         cross_covariance_attention: bool = False,
         cross_covariance_attention_residual_scale: float = 0.10,
         dynamic_graph_mixer: bool = False,
@@ -5296,6 +5302,41 @@ class CustomTransformerEncoderLayer(nn.Module):
             raise ValueError(
                 "Deformable Spatial Attention cannot share a block with "
                 "dynamic graph mixing."
+            )
+        if bool(bi_level_routing_attention) and bool(visual_contrast_attention):
+            raise ValueError(
+                "Bi-Level Routing Attention cannot share a block with "
+                "Visual-Contrast Attention."
+            )
+        if bool(bi_level_routing_attention) and bool(foveal_aggregated_attention):
+            raise ValueError(
+                "Bi-Level Routing Attention cannot share a block with "
+                "Foveal Aggregated Attention."
+            )
+        if bool(bi_level_routing_attention) and bool(deformable_spatial_attention):
+            raise ValueError(
+                "Bi-Level Routing Attention cannot share a block with "
+                "Deformable Spatial Attention."
+            )
+        if bool(bi_level_routing_attention) and bool(gated_relative_position_attention):
+            raise ValueError(
+                "Bi-Level Routing Attention cannot share a block with gated "
+                "relative position attention."
+            )
+        if bool(bi_level_routing_attention) and bool(cross_covariance_attention):
+            raise ValueError(
+                "Bi-Level Routing Attention cannot share a block with "
+                "cross-covariance attention."
+            )
+        if bool(bi_level_routing_attention) and bool(dynamic_graph_mixer):
+            raise ValueError(
+                "Bi-Level Routing Attention cannot share a block with "
+                "dynamic graph mixing."
+            )
+        if bool(bi_level_routing_attention) and bool(soft_moe_patch_adapter):
+            raise ValueError(
+                "Bi-Level Routing Attention cannot share a block with a "
+                "Soft-MoE patch adapter."
             )
         if bool(cross_covariance_attention) and bool(visual_contrast_attention):
             raise ValueError(
@@ -5374,6 +5415,31 @@ class CustomTransformerEncoderLayer(nn.Module):
                 )
             deformable_attention.copy_shared_projections_from(standard_attention)
             self.attn = deformable_attention
+        elif bool(bi_level_routing_attention):
+            standard_attention = MultiHeadSelfAttention(
+                dim=dim,
+                num_heads=num_heads,
+                attention_dropout=attention_dropout,
+                projection_dropout=dropout,
+                gated_relative_position_attention=False,
+            )
+            with torch.random.fork_rng(devices=[]):
+                routing_attention = BiLevelRoutingAttention(
+                    dim=dim,
+                    input_resolution=bi_level_routing_attention_input_resolution,
+                    num_heads=num_heads,
+                    regions_per_axis=(
+                        bi_level_routing_attention_regions_per_axis
+                    ),
+                    topk=bi_level_routing_attention_topk,
+                    local_context_kernel_size=(
+                        bi_level_routing_attention_local_context_kernel_size
+                    ),
+                    attention_dropout=attention_dropout,
+                    projection_dropout=dropout,
+                )
+            routing_attention.copy_shared_projections_from(standard_attention)
+            self.attn = routing_attention
         else:
             self.attn = MultiHeadSelfAttention(
                 dim=dim,
@@ -5388,6 +5454,9 @@ class CustomTransformerEncoderLayer(nn.Module):
         self.foveal_aggregated_attention_enabled = bool(foveal_aggregated_attention)
         self.deformable_spatial_attention_enabled = bool(
             deformable_spatial_attention
+        )
+        self.bi_level_routing_attention_enabled = bool(
+            bi_level_routing_attention
         )
         self.cross_covariance_attention = (
             SharedProjectionCrossCovarianceAttention(dim=dim, num_heads=num_heads)
@@ -5566,15 +5635,26 @@ class CustomTransformerEncoderLayer(nn.Module):
         grid_size: Optional[Tuple[int, int]] = None,
         prefix_count: int = 0,
         patch_indices: Optional[Tensor] = None,
+        collect_attention_trace: bool = False,
     ):
         if return_attention:
-            attn_out, attention = self.attn(
-                self.norm1(x),
-                return_attention=True,
-                grid_size=grid_size,
-                prefix_count=prefix_count,
-                patch_indices=patch_indices,
-            )
+            if self.bi_level_routing_attention_enabled:
+                attn_out, attention = self.attn(
+                    self.norm1(x),
+                    return_attention=True,
+                    grid_size=grid_size,
+                    prefix_count=prefix_count,
+                    patch_indices=patch_indices,
+                    collect_trace=bool(collect_attention_trace),
+                )
+            else:
+                attn_out, attention = self.attn(
+                    self.norm1(x),
+                    return_attention=True,
+                    grid_size=grid_size,
+                    prefix_count=prefix_count,
+                    patch_indices=patch_indices,
+                )
             x = x + self.drop_path1(attn_out)
             if self.cross_covariance_attention is not None:
                 x = self.apply_cross_covariance_attention(
@@ -5870,6 +5950,11 @@ class VisionTransformerWithRegisters(nn.Module):
         deformable_spatial_attention_groups: int = 2,
         deformable_spatial_attention_kernel_size: int = 5,
         deformable_spatial_attention_offset_range: float = 2.0,
+        bi_level_routing_attention: bool = False,
+        bi_level_routing_attention_layers: str = "2",
+        bi_level_routing_attention_regions_per_axis: int = 4,
+        bi_level_routing_attention_topk: int = 4,
+        bi_level_routing_attention_local_context_kernel_size: int = 5,
         cross_covariance_attention: bool = False,
         cross_covariance_attention_layers: str = "2,5",
         cross_covariance_attention_residual_scale: float = 0.10,
@@ -6358,6 +6443,78 @@ class VisionTransformerWithRegisters(nn.Module):
                     "Deformable Spatial Attention cannot be combined with gated "
                     "relative position attention."
                 )
+        self.bi_level_routing_attention_layer_numbers = (
+            _parse_auxiliary_layer_indices(
+                bi_level_routing_attention_layers,
+                int(depth),
+            )
+            if bool(bi_level_routing_attention)
+            else []
+        )
+        self.bi_level_routing_attention_enabled = bool(
+            self.bi_level_routing_attention_layer_numbers
+        )
+        self.bi_level_routing_attention_regions_per_axis = int(
+            bi_level_routing_attention_regions_per_axis
+        )
+        self.bi_level_routing_attention_topk = int(
+            bi_level_routing_attention_topk
+        )
+        self.bi_level_routing_attention_local_context_kernel_size = int(
+            bi_level_routing_attention_local_context_kernel_size
+        )
+        if self.bi_level_routing_attention_enabled:
+            if self.bi_level_routing_attention_layer_numbers != [2]:
+                raise ValueError(
+                    "Bi-Level Routing Attention is locked to transformer layer 2."
+                )
+            if float(early_token_mask_keep_rate) < 1.0:
+                raise ValueError(
+                    "Bi-Level Routing Attention requires the complete dense patch "
+                    "grid before block 2; disable early token masking."
+                )
+            if self.bi_level_routing_attention_regions_per_axis != 4:
+                raise ValueError(
+                    "The locked Bi-Level Routing Attention route requires S=4."
+                )
+            if self.bi_level_routing_attention_topk not in {4, 16}:
+                raise ValueError(
+                    "The locked Bi-Level Routing Attention roles require topk 4 or 16."
+                )
+            if self.bi_level_routing_attention_local_context_kernel_size != 5:
+                raise ValueError(
+                    "The locked Bi-Level Routing Attention route requires LCE kernel 5."
+                )
+            if self.foveal_aggregated_attention_enabled:
+                raise ValueError(
+                    "Bi-Level Routing Attention cannot be combined with "
+                    "Foveal Aggregated Attention."
+                )
+            if self.deformable_spatial_attention_enabled:
+                raise ValueError(
+                    "Bi-Level Routing Attention cannot be combined with "
+                    "Deformable Spatial Attention."
+                )
+            if self.visual_contrast_attention_enabled:
+                raise ValueError(
+                    "Bi-Level Routing Attention cannot be combined with "
+                    "Visual-Contrast Attention."
+                )
+            if self.gated_relative_position_attention_enabled:
+                raise ValueError(
+                    "Bi-Level Routing Attention cannot be combined with gated "
+                    "relative position attention."
+                )
+            if bool(soft_moe_patch_adapter):
+                raise ValueError(
+                    "Bi-Level Routing Attention cannot be combined with a "
+                    "Soft-MoE patch adapter."
+                )
+            if bool(deep_class_prompt):
+                raise ValueError(
+                    "Bi-Level Routing Attention requires the locked seven-prefix "
+                    "layout and cannot use deep class prompts."
+                )
         self.cross_covariance_attention_layer_numbers = (
             _parse_auxiliary_layer_indices(
                 cross_covariance_attention_layers,
@@ -6397,6 +6554,14 @@ class VisionTransformerWithRegisters(nn.Module):
                 "Cross-covariance attention cannot be combined with Deformable "
                 "Spatial Attention in the locked route."
             )
+        if (
+            self.cross_covariance_attention_enabled
+            and self.bi_level_routing_attention_enabled
+        ):
+            raise ValueError(
+                "Cross-covariance attention cannot be combined with Bi-Level "
+                "Routing Attention in the locked route."
+            )
         self.dynamic_graph_mixer_layer_numbers = (
             _parse_auxiliary_layer_indices(
                 dynamic_graph_mixer_layers,
@@ -6432,6 +6597,11 @@ class VisionTransformerWithRegisters(nn.Module):
                 raise ValueError(
                     "Dynamic graph mixing cannot be combined with Deformable "
                     "Spatial Attention in the locked route."
+                )
+            if self.bi_level_routing_attention_enabled:
+                raise ValueError(
+                    "Dynamic graph mixing cannot be combined with Bi-Level "
+                    "Routing Attention in the locked route."
                 )
             if self.cross_covariance_attention_enabled:
                 raise ValueError(
@@ -6598,6 +6768,12 @@ class VisionTransformerWithRegisters(nn.Module):
         ):
             raise ValueError(
                 "Deformable Spatial Attention requires no pruning before block 2."
+            )
+        if self.bi_level_routing_attention_enabled and any(
+            int(layer_index) < 1 for layer_index in self.token_prune_schedule
+        ):
+            raise ValueError(
+                "Bi-Level Routing Attention requires no pruning before block 2."
             )
         if not self.token_prune_schedule and self.early_token_mask_keep_rate >= 1.0:
             self.token_pruning = False
@@ -6838,6 +7014,22 @@ class VisionTransformerWithRegisters(nn.Module):
                     ),
                     deformable_spatial_attention_offset_range=(
                         self.deformable_spatial_attention_offset_range
+                    ),
+                    bi_level_routing_attention=(
+                        int(index + 1)
+                        in self.bi_level_routing_attention_layer_numbers
+                    ),
+                    bi_level_routing_attention_input_resolution=(
+                        self.patch_embed.base_grid_size
+                    ),
+                    bi_level_routing_attention_regions_per_axis=(
+                        self.bi_level_routing_attention_regions_per_axis
+                    ),
+                    bi_level_routing_attention_topk=(
+                        self.bi_level_routing_attention_topk
+                    ),
+                    bi_level_routing_attention_local_context_kernel_size=(
+                        self.bi_level_routing_attention_local_context_kernel_size
                     ),
                     cross_covariance_attention=(
                         int(index + 1)
@@ -8360,6 +8552,7 @@ class VisionTransformerWithRegisters(nn.Module):
                     grid_size=grid_size,
                     prefix_count=block_prefix_count,
                     patch_indices=patch_indices,
+                    collect_attention_trace=return_trace,
                 )
                 if collect_deep_class_prompt_attention:
                     deep_class_prompt_attention_maps[block_index] = (
@@ -8590,7 +8783,12 @@ class VisionTransformerWithRegisters(nn.Module):
                             "deformable_bilinear_sample_proxy"
                             if int(layer_index + 1)
                             in self.deformable_spatial_attention_layer_numbers
-                            else "mhsa_probability"
+                            else (
+                                "bi_level_routing_sparse_probability"
+                                if int(layer_index + 1)
+                                in self.bi_level_routing_attention_layer_numbers
+                                else "mhsa_probability"
+                            )
                         )
                     )
                 )
@@ -8990,6 +9188,36 @@ class VisionTransformerWithRegisters(nn.Module):
                     ):
                         features["trace"][f"deformable_{trace_key}"] = torch.stack(
                             [entry[trace_key] for _, entry in deformable_entries],
+                            dim=0,
+                        )
+            if self.bi_level_routing_attention_enabled:
+                routing_entries = []
+                for layer_number in self.bi_level_routing_attention_layer_numbers:
+                    module = self.blocks[int(layer_number) - 1].attn
+                    module_trace = module.trace() if hasattr(module, "trace") else {}
+                    if module_trace:
+                        routing_entries.append((int(layer_number), module_trace))
+                if routing_entries:
+                    features["trace"]["bi_level_routing_attention_layers"] = (
+                        torch.tensor(
+                            [layer for layer, _ in routing_entries],
+                            device=tokens.device,
+                            dtype=torch.long,
+                        )
+                    )
+                    for trace_key in (
+                        "topk",
+                        "region_count",
+                        "patch_count",
+                        "selected_affinity_margin_mean",
+                        "route_distance_mean",
+                        "nonlocal_route_fraction",
+                        "distinct_route_sets_mean",
+                        "pairwise_route_jaccard_mean",
+                        "local_context_norm_ratio",
+                    ):
+                        features["trace"][f"bi_level_routing_{trace_key}"] = torch.stack(
+                            [entry[trace_key] for _, entry in routing_entries],
                             dim=0,
                         )
             if self.cross_covariance_attention_enabled:
@@ -10810,6 +11038,11 @@ class DETRVisionTransformerWithRegisters(VisionTransformerWithRegisters):
         deformable_spatial_attention_groups: int = 2,
         deformable_spatial_attention_kernel_size: int = 5,
         deformable_spatial_attention_offset_range: float = 2.0,
+        bi_level_routing_attention: bool = False,
+        bi_level_routing_attention_layers: str = "2",
+        bi_level_routing_attention_regions_per_axis: int = 4,
+        bi_level_routing_attention_topk: int = 4,
+        bi_level_routing_attention_local_context_kernel_size: int = 5,
         cross_covariance_attention: bool = False,
         cross_covariance_attention_layers: str = "2,5",
         cross_covariance_attention_residual_scale: float = 0.10,
@@ -11155,6 +11388,19 @@ class DETRVisionTransformerWithRegisters(VisionTransformerWithRegisters):
             ),
             deformable_spatial_attention_offset_range=(
                 deformable_spatial_attention_offset_range
+            ),
+            bi_level_routing_attention=bi_level_routing_attention,
+            bi_level_routing_attention_layers=(
+                bi_level_routing_attention_layers
+            ),
+            bi_level_routing_attention_regions_per_axis=(
+                bi_level_routing_attention_regions_per_axis
+            ),
+            bi_level_routing_attention_topk=(
+                bi_level_routing_attention_topk
+            ),
+            bi_level_routing_attention_local_context_kernel_size=(
+                bi_level_routing_attention_local_context_kernel_size
             ),
             cross_covariance_attention=cross_covariance_attention,
             cross_covariance_attention_layers=cross_covariance_attention_layers,

@@ -579,6 +579,11 @@ param(
     [int]$DeformableSpatialAttentionGroups = 2,
     [int]$DeformableSpatialAttentionKernelSize = 5,
     [double]$DeformableSpatialAttentionOffsetRange = 2.0,
+    [bool]$BiLevelRoutingAttention = $false,
+    [string]$BiLevelRoutingAttentionLayers = "2",
+    [int]$BiLevelRoutingAttentionRegionsPerAxis = 4,
+    [int]$BiLevelRoutingAttentionTopK = 4,
+    [int]$BiLevelRoutingAttentionLocalContextKernelSize = 5,
     [bool]$CrossCovarianceAttention = $false,
     [string]$CrossCovarianceAttentionLayers = "2,5",
     [double]$CrossCovarianceAttentionResidualScale = 0.10,
@@ -966,6 +971,24 @@ if ($DeformableSpatialAttention -and $EarlyTokenMaskKeepRate -lt 1.0) {
 if ($DeformableSpatialAttention -and ($VisualContrastAttention -or $FovealAggregatedAttention -or $GatedRelativePositionAttention -or $CrossCovarianceAttention -or $DynamicGraphMixer)) {
     throw "DeformableSpatialAttention xung dot voi route attention/mixer dang bat."
 }
+if ($BiLevelRoutingAttention -and $BiLevelRoutingAttentionLayers.Trim() -ne "2") {
+    throw "BiLevelRoutingAttention hien duoc khoa o layer 2."
+}
+if ($BiLevelRoutingAttention -and $BiLevelRoutingAttentionRegionsPerAxis -ne 4) {
+    throw "BiLevelRoutingAttentionRegionsPerAxis phai bang 4."
+}
+if ($BiLevelRoutingAttention -and $BiLevelRoutingAttentionTopK -notin @(4, 16)) {
+    throw "BiLevelRoutingAttentionTopK phai bang 4 hoac 16."
+}
+if ($BiLevelRoutingAttention -and $BiLevelRoutingAttentionLocalContextKernelSize -ne 5) {
+    throw "BiLevelRoutingAttentionLocalContextKernelSize phai bang 5."
+}
+if ($BiLevelRoutingAttention -and $EarlyTokenMaskKeepRate -lt 1.0) {
+    throw "BiLevelRoutingAttention yeu cau EarlyTokenMaskKeepRate=1.0."
+}
+if ($BiLevelRoutingAttention -and ($VisualContrastAttention -or $FovealAggregatedAttention -or $DeformableSpatialAttention -or $GatedRelativePositionAttention -or $CrossCovarianceAttention -or $DynamicGraphMixer -or $SoftMoePatchAdapter -or $DeepClassPrompt)) {
+    throw "BiLevelRoutingAttention xung dot voi route attention/mixer dang bat."
+}
 if ($CrossCovarianceAttentionResidualScale -lt 0.0) {
     throw "CrossCovarianceAttentionResidualScale phai >= 0."
 }
@@ -977,6 +1000,9 @@ if ($CrossCovarianceAttention -and $FovealAggregatedAttention) {
 }
 if ($CrossCovarianceAttention -and $DeformableSpatialAttention) {
     throw "CrossCovarianceAttention khong the dung cung DeformableSpatialAttention."
+}
+if ($CrossCovarianceAttention -and $BiLevelRoutingAttention) {
+    throw "CrossCovarianceAttention khong the dung cung BiLevelRoutingAttention."
 }
 if ($DynamicGraphMixerBottleneckDim -le 0) {
     throw "DynamicGraphMixerBottleneckDim phai > 0."
@@ -992,6 +1018,9 @@ if ($DynamicGraphMixer -and $FovealAggregatedAttention) {
 }
 if ($DynamicGraphMixer -and $DeformableSpatialAttention) {
     throw "DynamicGraphMixer khong the dung cung DeformableSpatialAttention."
+}
+if ($DynamicGraphMixer -and $BiLevelRoutingAttention) {
+    throw "DynamicGraphMixer khong the dung cung BiLevelRoutingAttention."
 }
 if ($DynamicGraphMixer -and $CrossCovarianceAttention) {
     throw "DynamicGraphMixer khong the dung cung CrossCovarianceAttention."
@@ -2123,6 +2152,11 @@ if ($PreflightOnly) {
         deformable_spatial_attention_groups = $DeformableSpatialAttentionGroups
         deformable_spatial_attention_kernel_size = $DeformableSpatialAttentionKernelSize
         deformable_spatial_attention_offset_range = $DeformableSpatialAttentionOffsetRange
+        bi_level_routing_attention = [bool]$BiLevelRoutingAttention
+        bi_level_routing_attention_layers = $BiLevelRoutingAttentionLayers
+        bi_level_routing_attention_regions_per_axis = $BiLevelRoutingAttentionRegionsPerAxis
+        bi_level_routing_attention_topk = $BiLevelRoutingAttentionTopK
+        bi_level_routing_attention_local_context_kernel_size = $BiLevelRoutingAttentionLocalContextKernelSize
         visual_contrast_tokens = $VisualContrastTokens
         cross_covariance_attention = [bool]$CrossCovarianceAttention
         cross_covariance_attention_layers = $CrossCovarianceAttentionLayers
@@ -3390,6 +3424,15 @@ if ($ClassIndependentHead) {
             "--deformable-spatial-attention-offset-range", "$DeformableSpatialAttentionOffsetRange"
         )
     }
+    if ($BiLevelRoutingAttention) {
+        $TrainArgs += @(
+            "--bi-level-routing-attention",
+            "--bi-level-routing-attention-layers", "$BiLevelRoutingAttentionLayers",
+            "--bi-level-routing-attention-regions-per-axis", "$BiLevelRoutingAttentionRegionsPerAxis",
+            "--bi-level-routing-attention-topk", "$BiLevelRoutingAttentionTopK",
+            "--bi-level-routing-attention-local-context-kernel-size", "$BiLevelRoutingAttentionLocalContextKernelSize"
+        )
+    }
     if ($CrossCovarianceAttention) {
         $TrainArgs += @(
             "--cross-covariance-attention",
@@ -4174,6 +4217,11 @@ if ($ClassIndependentHead) {
         deformable_spatial_attention_groups = $DeformableSpatialAttentionGroups
         deformable_spatial_attention_kernel_size = $DeformableSpatialAttentionKernelSize
         deformable_spatial_attention_offset_range = $DeformableSpatialAttentionOffsetRange
+        bi_level_routing_attention = [bool]$BiLevelRoutingAttention
+        bi_level_routing_attention_layers = $BiLevelRoutingAttentionLayers
+        bi_level_routing_attention_regions_per_axis = $BiLevelRoutingAttentionRegionsPerAxis
+        bi_level_routing_attention_topk = $BiLevelRoutingAttentionTopK
+        bi_level_routing_attention_local_context_kernel_size = $BiLevelRoutingAttentionLocalContextKernelSize
         visual_contrast_tokens = $VisualContrastTokens
         cross_covariance_attention = [bool]$CrossCovarianceAttention
         cross_covariance_attention_layers = $CrossCovarianceAttentionLayers

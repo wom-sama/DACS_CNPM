@@ -3200,10 +3200,13 @@
   QKV/projection/LCE state, global prefix handling, official replay, source-
   disjoint pre-training selectivity, resource/export/precision/TP/condition/
   XAI gates, and no validation/test/sweep/current-command update.
-- [ ] Implement the default-off licensed BRA module, model/config/train/trace
-  wiring, official-equation and dense-parity tests, formal preflight auditor,
-  and VS Code-safe wrapper. Commit and push the reviewed implementation before
-  the sole formal preflight.
+- [x] Implement the default-off MIT-attributed BRA module, model/config/train/
+  trace wiring, exact official-equation and dense-MHSA parity tests, full
+  engineering/selectivity auditor, route-overlay review gate, and VS Code-safe
+  three-phase wrapper. Separate pruning attention from expensive audit trace,
+  lock seven prefixes and incompatible routes, pass launcher/config preflight,
+  focused `38/38`, and full pytest `1276/1276`. Commit/push this reviewed stage
+  before the sole formal preflight.
 - [ ] Run the formal preflight exactly once. Train the five-epoch pair only if
   every engineering and pre-training selectivity gate passes; otherwise close,
   document, compact reproducible binaries, and continue to a new primary-source

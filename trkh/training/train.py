@@ -2248,6 +2248,37 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         default=2.0,
     )
     parser.add_argument(
+        "--bi-level-routing-attention",
+        action="store_true",
+        default=False,
+        help=(
+            "Replace block-2 MHSA with the locked CVPR-2023 BiFormer-style "
+            "query-specific regional routing attention."
+        ),
+    )
+    parser.add_argument(
+        "--bi-level-routing-attention-layers",
+        type=str,
+        default="2",
+        help="Locked one-based BRA layer list; the current route requires exactly 2.",
+    )
+    parser.add_argument(
+        "--bi-level-routing-attention-regions-per-axis",
+        type=int,
+        default=4,
+    )
+    parser.add_argument(
+        "--bi-level-routing-attention-topk",
+        type=int,
+        default=4,
+        help="Locked causal role: candidate=4, matched all-region control=16.",
+    )
+    parser.add_argument(
+        "--bi-level-routing-attention-local-context-kernel-size",
+        type=int,
+        default=5,
+    )
+    parser.add_argument(
         "--cross-covariance-attention",
         action="store_true",
         default=False,
@@ -5248,10 +5279,55 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
             ),
             ("cross-covariance-attention", args.cross_covariance_attention),
             ("dynamic-graph-mixer", args.dynamic_graph_mixer),
+            ("soft-moe-patch-adapter", args.soft_moe_patch_adapter),
+            ("deep-class-prompt", args.deep_class_prompt),
         ):
             if bool(incompatible):
                 raise ValueError(
                     "--deformable-spatial-attention khong the dung cung "
+                    f"--{incompatible_name}."
+                )
+    if bool(args.bi_level_routing_attention):
+        normalized_routing_layers = ",".join(
+            value.strip()
+            for value in str(args.bi_level_routing_attention_layers).split(",")
+            if value.strip()
+        )
+        if normalized_routing_layers != "2":
+            raise ValueError(
+                "--bi-level-routing-attention-layers hien duoc khoa o layer 2."
+            )
+        if float(args.early_token_mask_keep_rate) < 1.0:
+            raise ValueError(
+                "--bi-level-routing-attention yeu cau "
+                "--early-token-mask-keep-rate=1.0."
+            )
+        if int(args.bi_level_routing_attention_regions_per_axis) != 4:
+            raise ValueError(
+                "--bi-level-routing-attention-regions-per-axis phai bang 4."
+            )
+        if int(args.bi_level_routing_attention_topk) not in {4, 16}:
+            raise ValueError(
+                "--bi-level-routing-attention-topk phai bang 4 hoac 16."
+            )
+        if int(args.bi_level_routing_attention_local_context_kernel_size) != 5:
+            raise ValueError(
+                "--bi-level-routing-attention-local-context-kernel-size phai bang 5."
+            )
+        for incompatible_name, incompatible in (
+            ("visual-contrast-attention", args.visual_contrast_attention),
+            ("foveal-aggregated-attention", args.foveal_aggregated_attention),
+            ("deformable-spatial-attention", args.deformable_spatial_attention),
+            (
+                "gated-relative-position-attention",
+                args.gated_relative_position_attention,
+            ),
+            ("cross-covariance-attention", args.cross_covariance_attention),
+            ("dynamic-graph-mixer", args.dynamic_graph_mixer),
+        ):
+            if bool(incompatible):
+                raise ValueError(
+                    "--bi-level-routing-attention khong the dung cung "
                     f"--{incompatible_name}."
                 )
     if args.cross_covariance_attention_residual_scale < 0.0:
@@ -5275,6 +5351,13 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
             "--cross-covariance-attention khong the dung cung "
             "--deformable-spatial-attention trong route da khoa."
         )
+    if bool(args.cross_covariance_attention) and bool(
+        args.bi_level_routing_attention
+    ):
+        raise ValueError(
+            "--cross-covariance-attention khong the dung cung "
+            "--bi-level-routing-attention trong route da khoa."
+        )
     if args.dynamic_graph_mixer_bottleneck_dim <= 0:
         raise ValueError("--dynamic-graph-mixer-bottleneck-dim phai > 0.")
     if args.dynamic_graph_mixer_k <= 0:
@@ -5292,6 +5375,11 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         raise ValueError(
             "--dynamic-graph-mixer khong the dung cung "
             "--deformable-spatial-attention trong route da khoa."
+        )
+    if bool(args.dynamic_graph_mixer) and bool(args.bi_level_routing_attention):
+        raise ValueError(
+            "--dynamic-graph-mixer khong the dung cung "
+            "--bi-level-routing-attention trong route da khoa."
         )
     if bool(args.dynamic_graph_mixer) and bool(args.cross_covariance_attention):
         raise ValueError(
@@ -6637,6 +6725,19 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         ),
         deformable_spatial_attention_offset_range=(
             args.deformable_spatial_attention_offset_range
+        ),
+        bi_level_routing_attention=bool(args.bi_level_routing_attention),
+        bi_level_routing_attention_layers=(
+            args.bi_level_routing_attention_layers
+        ),
+        bi_level_routing_attention_regions_per_axis=(
+            args.bi_level_routing_attention_regions_per_axis
+        ),
+        bi_level_routing_attention_topk=(
+            args.bi_level_routing_attention_topk
+        ),
+        bi_level_routing_attention_local_context_kernel_size=(
+            args.bi_level_routing_attention_local_context_kernel_size
         ),
         cross_covariance_attention=bool(args.cross_covariance_attention),
         cross_covariance_attention_layers=args.cross_covariance_attention_layers,
@@ -27148,6 +27249,7 @@ def main() -> None:
             or bool(args.visual_contrast_attention)
             or bool(args.foveal_aggregated_attention)
             or bool(args.deformable_spatial_attention)
+            or bool(args.bi_level_routing_attention)
             or bool(args.cross_covariance_attention)
             or bool(args.dynamic_graph_mixer)
             or bool(args.soft_moe_patch_adapter)
@@ -27506,6 +27608,8 @@ def main() -> None:
                     model_config.gated_relative_position_attention,
                     model_config.cross_covariance_attention,
                     model_config.dynamic_graph_mixer,
+                    model_config.soft_moe_patch_adapter,
+                    model_config.deep_class_prompt,
                 )
             ):
                 raise ValueError(
@@ -27549,6 +27653,64 @@ def main() -> None:
                 },
                 flush=True,
             )
+        if bool(args.bi_level_routing_attention):
+            if float(model_config.early_token_mask_keep_rate) < 1.0:
+                raise ValueError(
+                    "Bi-Level Routing Attention resume extension requires the "
+                    "complete dense block-2 patch grid."
+                )
+            if any(
+                bool(value)
+                for value in (
+                    model_config.visual_contrast_attention,
+                    model_config.foveal_aggregated_attention,
+                    model_config.deformable_spatial_attention,
+                    model_config.gated_relative_position_attention,
+                    model_config.cross_covariance_attention,
+                    model_config.dynamic_graph_mixer,
+                )
+            ):
+                raise ValueError(
+                    "Bi-Level Routing Attention resume extension conflicts with "
+                    "the checkpoint attention route."
+                )
+            model_config.bi_level_routing_attention = True
+            model_config.bi_level_routing_attention_layers = str(
+                args.bi_level_routing_attention_layers
+            )
+            model_config.bi_level_routing_attention_regions_per_axis = int(
+                args.bi_level_routing_attention_regions_per_axis
+            )
+            model_config.bi_level_routing_attention_topk = int(
+                args.bi_level_routing_attention_topk
+            )
+            model_config.bi_level_routing_attention_local_context_kernel_size = int(
+                args.bi_level_routing_attention_local_context_kernel_size
+            )
+            print(
+                {
+                    "resume_cli_model_extension": {
+                        "bi_level_routing_attention": True,
+                        "bi_level_routing_attention_layers": (
+                            model_config.bi_level_routing_attention_layers
+                        ),
+                        "bi_level_routing_attention_regions_per_axis": (
+                            model_config.bi_level_routing_attention_regions_per_axis
+                        ),
+                        "bi_level_routing_attention_topk": (
+                            model_config.bi_level_routing_attention_topk
+                        ),
+                        "bi_level_routing_attention_local_context_kernel_size": (
+                            model_config.bi_level_routing_attention_local_context_kernel_size
+                        ),
+                    },
+                    "reason": (
+                        "allow the locked block-2 query-specific routing extension "
+                        "while reusing compatible qkv/proj checkpoint parameters"
+                    ),
+                },
+                flush=True,
+            )
         if bool(args.cross_covariance_attention):
             if bool(model_config.visual_contrast_attention):
                 raise ValueError(
@@ -27564,6 +27726,11 @@ def main() -> None:
                 raise ValueError(
                     "Cross-covariance attention resume extension conflicts with "
                     "Deformable Spatial Attention."
+                )
+            if bool(model_config.bi_level_routing_attention):
+                raise ValueError(
+                    "Cross-covariance attention resume extension conflicts with "
+                    "Bi-Level Routing Attention."
                 )
             model_config.cross_covariance_attention = True
             model_config.cross_covariance_attention_layers = str(
@@ -27610,6 +27777,11 @@ def main() -> None:
                 raise ValueError(
                     "Dynamic graph mixer resume extension conflicts with Deformable "
                     "Spatial Attention."
+                )
+            if bool(model_config.bi_level_routing_attention):
+                raise ValueError(
+                    "Dynamic graph mixer resume extension conflicts with Bi-Level "
+                    "Routing Attention."
                 )
             model_config.dynamic_graph_mixer = True
             model_config.dynamic_graph_mixer_layers = str(
@@ -30151,6 +30323,7 @@ def main() -> None:
                 or bool(args.visual_contrast_attention)
                 or bool(args.foveal_aggregated_attention)
                 or bool(args.deformable_spatial_attention)
+                or bool(args.bi_level_routing_attention)
                 or bool(args.cross_covariance_attention)
                 or bool(args.dynamic_graph_mixer)
                 or bool(args.soft_moe_patch_adapter)
@@ -30251,6 +30424,7 @@ def main() -> None:
                     or bool(args.visual_contrast_attention)
                     or bool(args.foveal_aggregated_attention)
                     or bool(args.deformable_spatial_attention)
+                    or bool(args.bi_level_routing_attention)
                     or bool(args.cross_covariance_attention)
                     or bool(args.dynamic_graph_mixer)
                     or bool(args.soft_moe_patch_adapter)

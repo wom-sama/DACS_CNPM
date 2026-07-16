@@ -303,6 +303,11 @@ class ModelConfig:
     deformable_spatial_attention_groups: int = 2
     deformable_spatial_attention_kernel_size: int = 5
     deformable_spatial_attention_offset_range: float = 2.0
+    bi_level_routing_attention: bool = False
+    bi_level_routing_attention_layers: str = "2"
+    bi_level_routing_attention_regions_per_axis: int = 4
+    bi_level_routing_attention_topk: int = 4
+    bi_level_routing_attention_local_context_kernel_size: int = 5
     cross_covariance_attention: bool = False
     cross_covariance_attention_layers: str = "2,5"
     cross_covariance_attention_residual_scale: float = 0.10
