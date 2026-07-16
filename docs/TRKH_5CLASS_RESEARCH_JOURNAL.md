@@ -17510,7 +17510,7 @@ Date: 2026-07-02
   class-attention-weighted sum over non-top-k tokens; its core lines trace to
   the authors' initial 2022 commit. The local source is pinned at commit/tree
   `97e58f6...ed32c` / `7d907e8...08a6` and the paper/source/license hashes are
-  frozen in the readiness protocol, SHA `71cc952a...2d0468`.
+  frozen in the readiness protocol.
 - Treat the paper's ImageNet results conservatively: fusion usually adds only
   a small accuracy/stability gain, and scratch evidence uses 300 epochs plus a
   keep-rate warmup. It is credible mechanism evidence, not evidence that TRKH
@@ -17530,3 +17530,10 @@ Date: 2026-07-02
   tiny-edge, context-selectivity, condition, and visual gates all pass. A pass
   authorizes only one exact five-epoch scratch pair; it does not touch official
   validation/test or the current-best command/history.
+- Before any runtime edit, corrected one protocol contradiction: a context
+  token that participates after layer 2 can legitimately alter layer-5
+  representations and rankings. First-prune control/candidate identities
+  remain bit-exact; the second-prune gate is prospectively locked to mean
+  Jaccard `>=0.98` with every changed row reported. Corrected protocol SHA is
+  `438519c8...7e622`; no code, model output, or audit result existed when this
+  correction was made.

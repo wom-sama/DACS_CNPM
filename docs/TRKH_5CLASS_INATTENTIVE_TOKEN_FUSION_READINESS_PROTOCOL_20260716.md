@@ -15,9 +15,11 @@ retain useful object/context evidence, especially for small or edge-touching
 fruit, while improving class-1 false-positive control?
 
 The causal control is the current hard top-k pruning path. The candidate keeps
-the same selected spatial patches and adds only one attention-weighted global
-context token. No raw image, annotation, split, augmentation, loss, head,
-keep-rate, or selector score changes.
+the same first-prune spatial patches and adds only one attention-weighted
+global context token. Because that token then participates in self-attention,
+the later top-k set may evolve even though the selector formula is unchanged.
+No raw image, annotation, split, augmentation, loss, head, keep-rate, or
+selector-score formula changes.
 
 ## Primary-Source Lock
 
@@ -164,8 +166,10 @@ Before any epoch, a committed and pushed implementation must pass all checks:
    an independent replay of the official weighted-sum equation within `1e-6`;
 3. fusion-off reproduces the current model logits, traces, selected indices,
    and public feature shapes exactly;
-4. fusion-on and fusion-off select bit-exact spatial indices at both prune
-   layers, and every selected/dropped set is a disjoint complete partition;
+4. fusion-on and fusion-off select bit-exact spatial indices at the first
+   prune; at the second prune the unchanged selector must retain mean Jaccard
+   `>=0.98`, every changed row must be reported, and every selected/dropped set
+   must be a disjoint complete partition;
 5. context has shape `[B,1,256]`, no spatial sentinel is introduced, public
    patch count equals `patch_indices` count, and the legacy seven-prefix layout
    is restored in exported public tokens;
@@ -175,8 +179,9 @@ Before any epoch, a committed and pushed implementation must pass all checks:
 7. separately constructed seed-42 control/candidate models have identical
    state dictionaries, parameter counts, finite state, and unchanged CPU/CUDA
    constructor RNG checkpoints;
-8. standard and trace forwards have maximum logit error `<=1e-6`, zero argmax
-   mismatch, and identical selected/dropped indices in FP32 and CUDA BF16;
+8. standard and trace forwards of each arm have maximum logit error `<=1e-6`,
+   zero argmax mismatch, and identical selected/dropped indices in FP32 and
+   CUDA BF16;
 9. FP32 and BF16 forward/backward tensors are finite, and BF16 versus FP32
    selected-index mean Jaccard is at least `0.98`;
 10. static batch-1 ONNX output has maximum logit error `<=1e-4`, matching
@@ -196,8 +201,9 @@ low-contrast (`1.00`, `0.65`) inputs. Bboxes are audit-only.
 
 Every gate below must pass:
 
-- selected spatial patch indices are identical for control/candidate on every
-  row and condition;
+- first-prune spatial indices are identical for control/candidate on every row
+  and condition; second-prune mean Jaccard is at least `0.98` in every
+  condition and every changed row is exported;
 - clean candidate-control mean absolute probability change is at least `1e-5`
   but at most `0.05`, with zero nonfinite outputs;
 - clean macro F1, class-1 F1, and class-1 precision deltas are no worse than

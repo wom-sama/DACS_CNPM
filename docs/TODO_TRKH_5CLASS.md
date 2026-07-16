@@ -3238,7 +3238,9 @@
   non-spatial context token, exact source-equation replay, source-disjoint
   `7372/1843` gates, precision/TP/tiny-edge/context/XAI/resource checks, and no
   validation/test/sweep/current-command update. Protocol SHA is
-  `71cc952a...2d0468`.
+  `438519c8...7e622`; this prospectively corrects the downstream-selector gate
+  before code so first-prune identity is exact and second-prune Jaccard is
+  measured rather than logically forced to remain identical.
 - [ ] Implement and precommit the default-off A0 path, focused tests, formal
   engineering/selectivity auditor, overlay review, and a VS Code-safe wrapper.
 - [ ] Run the formal preflight once. Authorize the sole five-epoch scratch pair
