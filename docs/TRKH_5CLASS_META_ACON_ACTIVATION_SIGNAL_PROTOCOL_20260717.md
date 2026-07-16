@@ -118,8 +118,14 @@ linear-head initialization:
 2. `acon_static`: paper-initialized channel-wise `p1=1`, `p2=0`, learnable
    static `beta=1`, then the same object readout.
 3. `meta_acon`: paper-initialized `p1=1`, `p2=0`; channel-wise beta is generated
-   by the official `GAP -> Conv(256,16) -> BN -> ReLU -> Conv(16,256) -> BN ->
+   by the official `GAP -> Conv(256,16) -> BN -> Conv(16,256) -> BN ->
    sigmoid` route, then the same object readout.
+
+The first locked draft incorrectly inserted a ReLU between the two beta
+projections. Both the paper's `sigma(W1 W2 GAP(x))` equation and official
+`acon.py` omit that non-linearity. This correction was made before any cohort
+feature extraction, optimization, or formal output; every other setting and
+gate remains unchanged.
 
 The object mask is the complete transformed crop bbox (`core OR boundary`) at
 `32x32`; only activated pixels inside it enter the classifier. Meta-ACON's
