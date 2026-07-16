@@ -17087,3 +17087,41 @@ Date: 2026-07-02
   a distinct source and a precommitted natural-multiclass TP/support constraint
   across illumination. Current-best command tracking remains three revisions
   and two updates; no command or checkpoint changed.
+
+## Support-Constrained Capsule ALM Closure 2026-07-16 - Support Is Protected but Routing Is Uniform
+
+- A fresh primary-source/no-repeat screen selected one paper-grounded hybrid:
+  Sabour-style dynamic routing over the keeper's 167 final patches plus
+  Sangalli-style augmented-Lagrangian rank/support constraints. The immutable
+  train-only protocol used exact source-disjoint `7372/1843` rows, 432 class-1
+  references, 186 hard negatives, a natural-CE control, and 30 epochs.
+- Candidate/control consumed identical 221,160 natural occurrences and 3,240
+  boundary events. Equations, gradients, duals, frozen keeper, schedules,
+  resources, and full ONNX were valid; validation/test and model-binary writes
+  remained forbidden.
+- ALM genuinely protected support: clean violation mean was `0.020531` versus
+  control `0.649686`. It did not solve the decision boundary. Versus raw,
+  clean macro/class1 F1 fell `-0.012661/-0.007905`, precision/recall fell
+  `-0.006944/-0.009174`, restricted FP increased `37 -> 38`, and the 33
+  changes contained only four corrections versus 29 harms.
+- Dim/bright/low-contrast candidate class1 F1 was
+  `0.516129/0.615970/0.521008`; precision fell and restricted FP increased in
+  every condition. Routing entropy stayed near `0.9997`, effective patch count
+  near `163/167`, and residual-margin AUROC only `0.646-0.673`. Dynamic routing
+  changed tensors but remained practically uniform.
+- XAI covered all 107 events across 36 pages. Candidate/control maps were
+  nearly identical and broad. Sample 3576 exposed a real zero bbox-prior map
+  for a tiny edge object after pruning and became a new class1 FP; context was
+  not selectively recovered.
+- Independent replay matched all 7,372 rows and all 47 artifact hashes.
+  Summary/prediction/manifest/XAI SHAs are `17bad124...7d7a66`,
+  `3801ffd0...92330`, `804e8b31...29f39`, and `58f35124...b473`.
+- Post-run commit `2d4a40f` fixes isolated ONNX tracing of inference tensors
+  and removes a non-protocol CIDT near-tie diagnostic from authorization; full
+  behavior remains rejected independently. Compile/focused/full tests passed
+  `7/7` and `1203/1203`, preflight passed, and retention passed over 707
+  directories with `blockers=[]` and 71.278 GB free.
+- Close capsule dimensions/routing/ALM/residual/training/cohort/threshold
+  sweeps on this keeper. Stage B and command promotion are denied; current-best
+  tracking remains three revisions/two updates and zero keeper replacements.
+  Final closure SHA is `54fddeb9...fa4fc`.

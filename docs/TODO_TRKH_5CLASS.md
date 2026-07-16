@@ -3075,7 +3075,25 @@
   Deny Stage B, validation/test, neighboring sweeps, probe/full train, and
   command promotion. Replay `7372/7372`, XAI `92/92`, ONNX, full pytest
   `1196/1196`, protected hashes, and retention over 705 directories passed.
-- [ ] Perform a fresh primary-source/no-repeat screen for a genuinely distinct
+- [x] Perform a fresh primary-source/no-repeat screen for a genuinely distinct
   representation that prospectively constrains natural-multiclass class1 TP
-  and support under clean/dim/bright/low-contrast conditions. Retain raw,
-  natural-CE, and MCL comparators; forbid post-hoc threshold calibration.
+  and support under clean/dim/bright/low-contrast conditions. Select only
+  dynamic routing capsules plus augmented-Lagrangian rank/support constraints;
+  retain raw, natural-CE, and MCL comparators and forbid post-hoc calibration.
+- [x] Lock, implement, precommit, and run the sole CapsALM train-only A0 on the
+  exact source-disjoint `7372/1843` split. Support violation improved strongly
+  versus CE control, but routing stayed near uniform and clean macro/class1 F1
+  fell `-0.012661/-0.007905` versus raw; restricted FP increased `37 -> 38`
+  and corrections/harms were `4/29`. Deny Stage B and every nearby sweep.
+- [x] Complete CapsALM closure: inspect representative XAI pages including the
+  zero-prior tiny-edge event, replay all `7372` predictions and 47 payload
+  hashes, fix inference-tensor ONNX tracing, pass focused/full tests `7/7` and
+  `1203/1203`, parse/preflight, protected hashes, and retention over 707
+  directories with `blockers=[]`. Commands remain three revisions/two updates;
+  final closure SHA is `54fddeb9...fa4fc`.
+- [ ] Perform a fresh primary-source/no-repeat screen outside capsules, channel
+  diversity, color/frequency/style, prototype/subspace, output calibration,
+  feature stitching, and closed gradient/objective families. Before training,
+  require a train-only selectivity information gate on class1 TP versus hard
+  negatives across clean/dim/bright/low-contrast, and reject nonselective
+  spatial mechanisms without an image-model smoke.
