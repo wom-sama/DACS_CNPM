@@ -17637,3 +17637,9 @@ Date: 2026-07-02
   keeper. No official validation, test, full train, or current-best update was
   authorized. Full detail is in
   `TRKH_5CLASS_INATTENTIVE_TOKEN_FUSION_A0_CLOSURE_20260716.md`.
+- Verified compaction preserved 332 non-binary files and excluded exactly four
+  recorded rejected checkpoints (`348,760,480` bytes). Payload/cleanup SHAs are
+  `7eed039e...d0ec6`/`bb03882b...34626`; measured free-space gain was
+  `332.312 MiB`. Retention passed over 728 directories and 46 compaction
+  manifests with `blockers=[]` at summary SHA `260a34b2...afaf24`. Final
+  closure-document SHA is `de929023...e92a71`.

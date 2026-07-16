@@ -154,5 +154,23 @@ manifest SHAs are:
 
 Before binary compaction, both run summaries, histories, launchers, resolved
 configs, occurrence hashes, architecture traces, and all four checkpoint hashes
-above were recorded. The final audit directory and its 15 XAI pages must remain
-intact. Compaction details are appended only after fail-closed hash verification.
+above were recorded. Fail-closed compaction then copied and verified 332
+non-binary files (`46,238,611` bytes), excluded exactly the four recorded
+checkpoint files (`348,760,480` bytes), deleted only the two rejected pair run
+directories, and reclaimed `332.312 MiB` of measured free space.
+
+- compact evidence:
+  `runs/evidence_inattentive_fusion_a0_pair_rejected_20260716`;
+- compact payload-manifest SHA:
+  `7eed039e9cdf0f29cc18aed24a2e96a6c2f63bb438389fcc858bee46a34d0ec6`;
+- compact summary SHA:
+  `67b7e13cf83c8983f887ed4b41ad34f9bea7ba2f3d84722e3f6a9649d23dfa56`;
+- cleanup-manifest SHA:
+  `bb03882b13a754afe88cf6c39aea22e31f2dfdc8eacfaf1a72876bc516134626`.
+
+The final audit directory and all 15 XAI pages remain intact. Read-only
+retention passed over 728 run directories and 46 object-compaction manifests
+with `blockers=[]`, 70.803 GiB free, and summary SHA
+`260a34b235ccd30ea6fa637ad6b34b4e64f1a02c220df9e140d0af8378afaf24`.
+Keeper/current-best checkpoint, command, history, and final-audit hashes all
+remain exact.

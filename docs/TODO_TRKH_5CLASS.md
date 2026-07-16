@@ -3263,3 +3263,8 @@
   summary/prediction/visual SHAs `d7b3d1fe...c76348`/
   `82b41797...a1ff4`/`500c5374...251c4`. Deny validation/test/full train/
   current-command promotion and close nearby EViT fusion sweeps.
+- [x] Compact the rejected pair only after recording all four checkpoint hashes.
+  Preserve 332 non-binary files at payload SHA `7eed039e...d0ec6`, exclude
+  exactly four checkpoints (`348,760,480` bytes), reclaim `332.312 MiB`, and
+  pass retention over 728 directories/46 manifests with `blockers=[]` at SHA
+  `260a34b2...afaf24`. Keeper and all 15 final XAI pages remain exact.
