@@ -17747,3 +17747,39 @@ Date: 2026-07-02
   sign reversal, class1 clamp-to-zero gradient, source/hash mismatch, or
   preferential noise absorption of restricted FP closes A0 before trainer
   integration, holdout, validation, test, or any image epoch.
+
+## Sparse Over-Parameterization A0 Closure 2026-07-17 - Official Noise Buffers Stay Inactive
+
+- Implemented the isolated fit-only auditor and VS Code-safe wrapper at pushed
+  commit `5a8b03f`. Official loss/optimizer replay had zero error; the
+  independent gradient/probability errors were `2.98e-8/5.96e-8`, finite-
+  difference error was `8.65e-11`, and BF16 probability error was
+  `8.38e-4 < 2e-3`.
+- The first complete 7,372-row forward exposed three batch-context near-tie
+  differences in constants copied from the NBDT development scan. It stopped
+  before `u/v`. Preserved compact evidence at summary/manifest SHAs
+  `1dde47f0...71638`/`d9570f2d...9dea1`, kept the original protocol immutable,
+  and precommitted a replay-only erratum SHA `34b117ba...e8ec` plus fail-
+  artifact behavior at pushed commit `e18d063`.
+- Corrected batch-64 replay passed every row/target/declaration/confusion gate:
+  flat macro/class1 F1 `0.937583/0.807287`, class1 P/R
+  `0.689034/0.974537`, TP/FP `421/190`, and restricted FP `186`.
+- The formal SOP gate rejected A0 solely because the official mechanism never
+  activated. Effective-V active fraction was `0` after all ten passes;
+  `|u|max/|v|max=3.98e-8/4.29e-8`, effective `V|max=1.84e-15`, maximum noise
+  energy `3.38e-30`, changed decisions `0`, and maximum probability delta
+  `5.96e-8`.
+- Restricted-FP and class1-TP gradient ratios remained `1.0` only because SOP
+  was an identity transform. Deny trainer integration, image epoch, holdout,
+  validation, test, full train, and all initialization/LR/pass/epoch/batch/
+  projection/SOP+/SGN/Label-Wave/seed/fold rescues.
+- Formal summary/gradient/report/manifest SHAs are
+  `1b88ca7b...e479f`/`8bd9960f...a75f2`/`ea4be71f...d56b`/
+  `a1528f42...bd73`. The complete formal evidence is only `2,875,888` bytes,
+  contains no checkpoint/image, and is retained without cleanup. XAI was not
+  run because model state and all predictions remained unchanged.
+- Full details and the no-repeat rule are in
+  `TRKH_5CLASS_SPARSE_OVERPARAMETERIZATION_A0_CLOSURE_20260717.md`. Current-
+  best command/history hashes remain exact and tracking stays three revisions/
+  two updates. Compileall, six PowerShell parses, focused `5/5`, and full
+  pytest `1337/1337` passed; closure SHA is `a62b4329...a8e78`.

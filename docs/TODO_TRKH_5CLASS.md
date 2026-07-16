@@ -3321,7 +3321,7 @@
   runtime/trainer/launcher integration plus temporary ONNX artifact. Close
   topology/depth/loss/weight/schedule/inference/threshold variants and retain
   only the prospective protocol and dated closure document.
-- [ ] Select the next distinct precision-first route only after a new
+- [x] Select the next distinct precision-first route only after a new
   accepted-primary-paper/official-licensed-code no-repeat screen. Require a
   pre-training gate that cannot be satisfied by background localization alone
   and that protects class1 TP as well as restricted false positives.
@@ -3330,8 +3330,20 @@
   commit/tree `4d991ce...18a77f`/`dadbf1b...0c6cd`; reject unlicensed SGN and
   checkpoint-only Label Wave for this precision question. Protocol SHA is
   `d2b94048...b687c8`; secondary/user reports remain hypothesis sources only.
-- [ ] Implement and run only the locked full-fit SOP gradient-compatibility
-  gate. Require exact official/independent equation replay and prove that SOP
-  preserves the corrective class1 logit gradient on all 185 restricted FP and
-  the support gradient on all 422 class1 TP. Any failure closes SOP before
-  trainer integration, holdout, validation, test, or an image epoch.
+- [x] Implement and run only the locked full-fit SOP gradient-compatibility
+  gate. Preserve the first pre-SOP replay mismatch, precommit erratum SHA
+  `34b117ba...e8ec`, and exactly replay the canonical batch-64 keeper at
+  macro/class1 F1 `0.937583/0.807287`, `186` restricted FP, and `421` class1
+  TP. Official/independent equations and every row replay passed.
+- [x] Reject SOP A0 before trainer integration: after ten locked passes the
+  effective-V active fraction is `0`, effective `V|max=1.84e-15`, no decision
+  changes, and maximum probability delta is `5.96e-8`. Gradient retention
+  near `1.0` is identity behavior, not an active precision mechanism. Deny all
+  init/LR/pass/epoch/batch/projection/SOP+/SGN/Label-Wave/seed/fold rescues;
+  preserve formal manifest SHA `a1528f42...bd73` and closure SHA
+  `a62b4329...a8e78`. Compileall, six PowerShell parses, focused `5/5`, and
+  full pytest `1337/1337` pass.
+- [ ] Screen the next distinct precision-first route from an accepted paper
+  and licensed official repository. Exclude every closed loss/sample-selection/
+  hierarchy/token-routing family, and require a cheap prospective gate that
+  proves an active class-1 boundary signal before any trainer integration.
