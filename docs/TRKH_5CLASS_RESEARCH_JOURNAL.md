@@ -17036,5 +17036,12 @@ Date: 2026-07-02
   `alpha=1.5/beta=20`, SGD recipe, residual scale, and all precision/F1/TP/
   restricted-FP/illumination/mechanism/ONNX/runtime/XAI gates. No validation,
   test, shared-code implementation, parameter sweep, or command revision is
-  authorized before every A0 gate passes. Immutable protocol SHA is
+  authorized before every A0 gate passes. Initial protocol SHA was
   `778aa77f...672ae8`.
+- Before any training or behavior metric access, a two-row real keeper replay
+  exposed `167`, not `142`, final patches. Inspection of `_prune_patch_tokens`
+  confirmed both keep rates are absolute against the original 256-token grid;
+  the last stage is therefore `ceil(256 * 0.65) = 167`. The protocol and
+  auditor were amended only for this factual shape correction. No data split,
+  loss, optimizer, gate, seed, or method choice changed; amended protocol SHA
+  is `5444f20b...680b2`.

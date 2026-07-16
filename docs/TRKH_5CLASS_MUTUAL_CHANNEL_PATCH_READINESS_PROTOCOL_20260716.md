@@ -86,9 +86,13 @@ revision unless every gate below passes.
 
 - Keep all 7,245,590 keeper parameters frozen in evaluation mode.
 - Use the keeper's final normalized post-pruning patch tokens and their original
-  patch indices. Scatter the 142 retained 256D tokens into the native `16x16`
-  grid and maintain an exact boolean valid-token mask. Missing cells never
-  participate in spatial softmax, max pooling, or averaging.
+  patch indices. A preimplementation real-batch structural replay established
+  exactly `167` retained 256D tokens. The model applies each keep rate to the
+  original 256-token grid, so the final `0.65` rate gives
+  `ceil(256 * 0.65) = 167`; multiplying sequential rates to infer 142 was
+  incorrect. Scatter the 167 tokens into the native `16x16` grid and maintain
+  an exact boolean valid-token mask. Missing cells never participate in spatial
+  softmax, max pooling, or averaging.
 - Candidate and control each add a `1x1 Conv2d(256,15,bias=True)` projection.
   The 15 output channels are five contiguous groups of exactly three channels.
 - Masked spatial max pooling over all 15 maps feeds

@@ -3060,6 +3060,10 @@
   feature epochs, and strict precision/TP/illumination/mechanism/deployment/XAI
   gates. Validation, test, trainer integration, sweeps, and command promotion
   remain forbidden unless every gate passes.
+- [x] Correct the pre-metric patch-count assumption with a real keeper batch:
+  final pruning retains `ceil(256 * 0.65) = 167` tokens because keep rates are
+  absolute to the original grid, not sequential. Amend only this structural
+  contract before formal training; no behavior metric or gate changed.
 - [ ] Implement the isolated MCL auditor, focused equation/replay tests, and a
   VS Code-safe PowerShell launcher. Preflight must verify all hashes and create
   no run directory; do not modify the shared model or trainer.
