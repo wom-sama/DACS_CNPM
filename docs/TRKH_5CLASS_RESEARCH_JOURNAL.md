@@ -17501,3 +17501,32 @@ Date: 2026-07-02
   and zero keeper replacements. Full detail is in
   `TRKH_5CLASS_BILEVEL_ROUTING_ATTENTION_CLOSURE_20260716.md`, SHA
   `ab74dc74...766e4`.
+
+## Research Lock 2026-07-16 - EViT-Style Inattentive-Token Fusion A0
+
+- Rechecked the unresolved hard-drop path against accepted papers and official
+  licensed repositories. EViT is an ICLR-2022 Spotlight with official
+  Apache-2.0 code. The reviewed source computes one unnormalized
+  class-attention-weighted sum over non-top-k tokens; its core lines trace to
+  the authors' initial 2022 commit. The local source is pinned at commit/tree
+  `97e58f6...ed32c` / `7d907e8...08a6` and the paper/source/license hashes are
+  frozen in the readiness protocol, SHA `71cc952a...2d0468`.
+- Treat the paper's ImageNet results conservatively: fusion usually adds only
+  a small accuracy/stability gain, and scratch evidence uses 300 epochs plus a
+  keep-rate warmup. It is credible mechanism evidence, not evidence that TRKH
+  will improve within 30 epochs.
+- TNT, NesT, PaCaViT, and Evo-ViT were not selected because they change broader
+  tokenizer/local-routing structure and overlap closed routes. The already
+  rejected higher-keep/no-prune diagnostic also rules out simply restoring all
+  context.
+- Lock exactly one default-off, parameter-free adaptation. Keep the current
+  TRKH selector and exact spatial top-k identities, represent the weighted
+  complement as one non-spatial context token, refold it at the second prune,
+  and never assign it a fake patch index. The protocol explicitly records the
+  post-block TRKH prune-point difference from stock EViT and forbids claiming
+  exact architectural equivalence.
+- No epoch is authorized until official-equation, gradient, public-layout,
+  selected-index, FP32/BF16, trace, ONNX, resource, source-disjoint class-1,
+  tiny-edge, context-selectivity, condition, and visual gates all pass. A pass
+  authorizes only one exact five-epoch scratch pair; it does not touch official
+  validation/test or the current-best command/history.

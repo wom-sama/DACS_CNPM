@@ -3228,3 +3228,19 @@
   gate that directly covers tiny edge objects, post-pruning spatial support,
   class1 precision/TP safety, and surface-boundary separability before any
   implementation or epoch.
+- [x] Complete that screen against accepted papers and official licensed code.
+  Select ICLR-2022 EViT inattentive-token fusion as the exact unresolved
+  hard-drop operation; defer TNT/NesT/PaCaViT/Evo-ViT and forbid revisiting
+  no-prune or higher keep rates.
+- [x] Lock one parameter-free TRKH adaptation before code at
+  `docs/TRKH_5CLASS_INATTENTIVE_TOKEN_FUSION_READINESS_PROTOCOL_20260716.md`:
+  unchanged layers/keep rates/selector and spatial indices, one explicit
+  non-spatial context token, exact source-equation replay, source-disjoint
+  `7372/1843` gates, precision/TP/tiny-edge/context/XAI/resource checks, and no
+  validation/test/sweep/current-command update. Protocol SHA is
+  `71cc952a...2d0468`.
+- [ ] Implement and precommit the default-off A0 path, focused tests, formal
+  engineering/selectivity auditor, overlay review, and a VS Code-safe wrapper.
+- [ ] Run the formal preflight once. Authorize the sole five-epoch scratch pair
+  only if every locked engineering and train-only gate passes; otherwise close
+  A0 without epochs and continue the next primary-source route.
