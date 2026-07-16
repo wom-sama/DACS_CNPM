@@ -23,6 +23,7 @@ from trkh.models.octave_conv_stem import OctaveConvStem
 from trkh.models.patch_style_recalibration import PatchStyleRecalibration
 from trkh.models.starnet_s2_tokenizer import StarNetS2Tokenizer
 from trkh.models.visual_contrast_attention import VisualContrastAttention
+from trkh.models.foveal_aggregated_attention import FovealAggregatedAttention
 from trkh.models.cross_covariance_attention import (
     SharedProjectionCrossCovarianceAttention,
 )
@@ -5230,6 +5231,10 @@ class CustomTransformerEncoderLayer(nn.Module):
         relative_position_locality_strength: float = 1.0,
         visual_contrast_attention: bool = False,
         visual_contrast_tokens: int = 64,
+        foveal_aggregated_attention: bool = False,
+        foveal_aggregated_attention_input_resolution: Tuple[int, int] = (16, 16),
+        foveal_aggregated_attention_window_size: int = 3,
+        foveal_aggregated_attention_pool_size: int = 4,
         cross_covariance_attention: bool = False,
         cross_covariance_attention_residual_scale: float = 0.10,
         dynamic_graph_mixer: bool = False,
@@ -5249,6 +5254,16 @@ class CustomTransformerEncoderLayer(nn.Module):
             raise ValueError(
                 "Visual-Contrast Attention cannot share a block with gated relative "
                 "position attention."
+            )
+        if bool(foveal_aggregated_attention) and bool(visual_contrast_attention):
+            raise ValueError(
+                "Foveal Aggregated Attention cannot share a block with "
+                "Visual-Contrast Attention."
+            )
+        if bool(foveal_aggregated_attention) and bool(gated_relative_position_attention):
+            raise ValueError(
+                "Foveal Aggregated Attention cannot share a block with gated "
+                "relative position attention."
             )
         if bool(cross_covariance_attention) and bool(visual_contrast_attention):
             raise ValueError(
@@ -5274,8 +5289,8 @@ class CustomTransformerEncoderLayer(nn.Module):
             )
         hidden_dim = int(dim * mlp_ratio)
         self.norm1 = nn.LayerNorm(dim)
-        self.attn = (
-            VisualContrastAttention(
+        if bool(visual_contrast_attention):
+            self.attn = VisualContrastAttention(
                 dim=dim,
                 num_heads=num_heads,
                 visual_contrast_tokens=visual_contrast_tokens,
@@ -5283,8 +5298,8 @@ class CustomTransformerEncoderLayer(nn.Module):
                 attention_dropout=attention_dropout,
                 projection_dropout=dropout,
             )
-            if bool(visual_contrast_attention)
-            else MultiHeadSelfAttention(
+        elif bool(foveal_aggregated_attention):
+            standard_attention = MultiHeadSelfAttention(
                 dim=dim,
                 num_heads=num_heads,
                 attention_dropout=attention_dropout,
@@ -5293,8 +5308,30 @@ class CustomTransformerEncoderLayer(nn.Module):
                 relative_position_max_mix=relative_position_max_mix,
                 relative_position_locality_strength=relative_position_locality_strength,
             )
-        )
+            with torch.random.fork_rng(devices=[]):
+                foveal_attention = FovealAggregatedAttention(
+                    dim=dim,
+                    input_resolution=foveal_aggregated_attention_input_resolution,
+                    num_heads=num_heads,
+                    window_size=foveal_aggregated_attention_window_size,
+                    fixed_pool_size=foveal_aggregated_attention_pool_size,
+                    attention_dropout=attention_dropout,
+                    projection_dropout=dropout,
+                )
+            foveal_attention.copy_shared_projections_from(standard_attention)
+            self.attn = foveal_attention
+        else:
+            self.attn = MultiHeadSelfAttention(
+                dim=dim,
+                num_heads=num_heads,
+                attention_dropout=attention_dropout,
+                projection_dropout=dropout,
+                gated_relative_position_attention=gated_relative_position_attention,
+                relative_position_max_mix=relative_position_max_mix,
+                relative_position_locality_strength=relative_position_locality_strength,
+            )
         self.visual_contrast_attention_enabled = bool(visual_contrast_attention)
+        self.foveal_aggregated_attention_enabled = bool(foveal_aggregated_attention)
         self.cross_covariance_attention = (
             SharedProjectionCrossCovarianceAttention(dim=dim, num_heads=num_heads)
             if bool(cross_covariance_attention)
@@ -5767,6 +5804,10 @@ class VisionTransformerWithRegisters(nn.Module):
         visual_contrast_attention: bool = False,
         visual_contrast_attention_layers: str = "1,2,3,4,5,6,7,8",
         visual_contrast_tokens: int = 64,
+        foveal_aggregated_attention: bool = False,
+        foveal_aggregated_attention_layers: str = "1",
+        foveal_aggregated_attention_window_size: int = 3,
+        foveal_aggregated_attention_pool_size: int = 4,
         cross_covariance_attention: bool = False,
         cross_covariance_attention_layers: str = "2,5",
         cross_covariance_attention_residual_scale: float = 0.10,
@@ -6144,6 +6185,58 @@ class VisionTransformerWithRegisters(nn.Module):
                     "Visual-Contrast Attention and gated relative position attention "
                     "cannot be enabled in the same model."
                 )
+        self.foveal_aggregated_attention_layer_numbers = (
+            _parse_auxiliary_layer_indices(
+                foveal_aggregated_attention_layers,
+                int(depth),
+            )
+            if bool(foveal_aggregated_attention)
+            else []
+        )
+        self.foveal_aggregated_attention_enabled = bool(
+            self.foveal_aggregated_attention_layer_numbers
+        )
+        self.foveal_aggregated_attention_window_size = int(
+            foveal_aggregated_attention_window_size
+        )
+        self.foveal_aggregated_attention_pool_size = int(
+            foveal_aggregated_attention_pool_size
+        )
+        if self.foveal_aggregated_attention_enabled:
+            if self.foveal_aggregated_attention_layer_numbers != [1]:
+                raise ValueError(
+                    "Foveal Aggregated Attention is locked to transformer layer 1."
+                )
+            if float(early_token_mask_keep_rate) < 1.0:
+                raise ValueError(
+                    "Foveal Aggregated Attention requires the complete dense patch "
+                    "grid before block 1; disable early token masking."
+                )
+            if self.foveal_aggregated_attention_window_size < 3 or (
+                self.foveal_aggregated_attention_window_size % 2 == 0
+            ):
+                raise ValueError(
+                    "foveal_aggregated_attention_window_size must be odd and >= 3."
+                )
+            if (
+                self.foveal_aggregated_attention_pool_size <= 0
+                or self.foveal_aggregated_attention_pool_size
+                >= int(image_size) // int(patch_size)
+            ):
+                raise ValueError(
+                    "foveal_aggregated_attention_pool_size must be positive and "
+                    "smaller than the base patch grid."
+                )
+            if self.visual_contrast_attention_enabled:
+                raise ValueError(
+                    "Foveal Aggregated Attention cannot be combined with "
+                    "Visual-Contrast Attention."
+                )
+            if self.gated_relative_position_attention_enabled:
+                raise ValueError(
+                    "Foveal Aggregated Attention cannot be combined with gated "
+                    "relative position attention."
+                )
         self.cross_covariance_attention_layer_numbers = (
             _parse_auxiliary_layer_indices(
                 cross_covariance_attention_layers,
@@ -6166,6 +6259,14 @@ class VisionTransformerWithRegisters(nn.Module):
         ):
             raise ValueError(
                 "Cross-covariance attention cannot be combined with Visual-Contrast Attention."
+            )
+        if (
+            self.cross_covariance_attention_enabled
+            and self.foveal_aggregated_attention_enabled
+        ):
+            raise ValueError(
+                "Cross-covariance attention cannot be combined with Foveal "
+                "Aggregated Attention in the locked route."
             )
         self.dynamic_graph_mixer_layer_numbers = (
             _parse_auxiliary_layer_indices(
@@ -6192,6 +6293,11 @@ class VisionTransformerWithRegisters(nn.Module):
             if self.visual_contrast_attention_enabled:
                 raise ValueError(
                     "Dynamic graph mixing cannot be combined with Visual-Contrast Attention."
+                )
+            if self.foveal_aggregated_attention_enabled:
+                raise ValueError(
+                    "Dynamic graph mixing cannot be combined with Foveal "
+                    "Aggregated Attention in the locked route."
                 )
             if self.cross_covariance_attention_enabled:
                 raise ValueError(
@@ -6545,6 +6651,19 @@ class VisionTransformerWithRegisters(nn.Module):
                         in self.visual_contrast_attention_layer_numbers
                     ),
                     visual_contrast_tokens=self.visual_contrast_tokens,
+                    foveal_aggregated_attention=(
+                        int(index + 1)
+                        in self.foveal_aggregated_attention_layer_numbers
+                    ),
+                    foveal_aggregated_attention_input_resolution=(
+                        self.patch_embed.base_grid_size
+                    ),
+                    foveal_aggregated_attention_window_size=(
+                        self.foveal_aggregated_attention_window_size
+                    ),
+                    foveal_aggregated_attention_pool_size=(
+                        self.foveal_aggregated_attention_pool_size
+                    ),
                     cross_covariance_attention=(
                         int(index + 1)
                         in self.cross_covariance_attention_layer_numbers
@@ -6962,6 +7081,19 @@ class VisionTransformerWithRegisters(nn.Module):
             for block in self.blocks
             if block.soft_moe_patch_adapter is not None
         ]
+        foveal_extra_modules = []
+        for block in self.blocks:
+            attention_module = block.attn
+            if not isinstance(attention_module, FovealAggregatedAttention):
+                continue
+            foveal_extra_modules.extend(
+                (
+                    attention_module.sr,
+                    attention_module.pool_norm,
+                    attention_module.cpb_fc1,
+                    attention_module.cpb_fc2,
+                )
+            )
         if isinstance(self.stem, OctaveConvStem):
             octave_module_ids = {id(child) for child in self.stem.modules()}
             gabor_module_ids = {
@@ -6974,8 +7106,16 @@ class VisionTransformerWithRegisters(nn.Module):
                 for soft_moe_module in soft_moe_modules
                 for child in soft_moe_module.modules()
             }
+            foveal_extra_module_ids = {
+                id(child)
+                for foveal_extra_module in foveal_extra_modules
+                for child in foveal_extra_module.modules()
+            }
             excluded_module_ids = (
-                octave_module_ids | gabor_module_ids | soft_moe_module_ids
+                octave_module_ids
+                | gabor_module_ids
+                | soft_moe_module_ids
+                | foveal_extra_module_ids
             )
             with torch.random.fork_rng(devices=[]):
                 legacy_init_proxy = HybridConvStem(
@@ -7001,12 +7141,16 @@ class VisionTransformerWithRegisters(nn.Module):
                 with torch.random.fork_rng(devices=[]):
                     for gabor_module in gabor_modules:
                         gabor_module.apply(self._init_weights)
-        elif not gabor_modules and not soft_moe_modules:
+        elif not gabor_modules and not soft_moe_modules and not foveal_extra_modules:
             self.apply(self._init_weights)
         else:
             isolated_module_ids = {
                 id(child)
-                for isolated_module in (*gabor_modules, *soft_moe_modules)
+                for isolated_module in (
+                    *gabor_modules,
+                    *soft_moe_modules,
+                    *foveal_extra_modules,
+                )
                 for child in isolated_module.modules()
             }
 
@@ -8244,7 +8388,12 @@ class VisionTransformerWithRegisters(nn.Module):
                     "vca_effective_positive"
                     if int(layer_index + 1)
                     in self.visual_contrast_attention_layer_numbers
-                    else "mhsa_probability"
+                    else (
+                        "faa_local_pool_proxy"
+                        if int(layer_index + 1)
+                        in self.foveal_aggregated_attention_layer_numbers
+                        else "mhsa_probability"
+                    )
                 )
                 for layer_index in attention_maps
             }
@@ -8586,6 +8735,34 @@ class VisionTransformerWithRegisters(nn.Module):
                     ):
                         features["trace"][f"visual_contrast_{trace_key}"] = torch.stack(
                             [entry[trace_key] for _, entry in visual_contrast_entries],
+                            dim=0,
+                        )
+            if self.foveal_aggregated_attention_enabled:
+                foveal_entries = []
+                for layer_number in self.foveal_aggregated_attention_layer_numbers:
+                    module = self.blocks[int(layer_number) - 1].attn
+                    module_trace = module.trace() if hasattr(module, "trace") else {}
+                    if module_trace:
+                        foveal_entries.append((int(layer_number), module_trace))
+                if foveal_entries:
+                    features["trace"]["foveal_aggregated_attention_layers"] = torch.tensor(
+                        [layer for layer, _ in foveal_entries],
+                        device=tokens.device,
+                        dtype=torch.long,
+                    )
+                    for trace_key in (
+                        "local_mass_mean",
+                        "local_mass_min",
+                        "local_mass_max",
+                        "pooled_mass_mean",
+                        "pooled_mass_min",
+                        "pooled_mass_max",
+                        "dual_route_fraction",
+                        "temperature_mean",
+                        "patch_count",
+                    ):
+                        features["trace"][f"foveal_{trace_key}"] = torch.stack(
+                            [entry[trace_key] for _, entry in foveal_entries],
                             dim=0,
                         )
             if self.cross_covariance_attention_enabled:
@@ -10397,6 +10574,10 @@ class DETRVisionTransformerWithRegisters(VisionTransformerWithRegisters):
         visual_contrast_attention: bool = False,
         visual_contrast_attention_layers: str = "1,2,3,4,5,6,7,8",
         visual_contrast_tokens: int = 64,
+        foveal_aggregated_attention: bool = False,
+        foveal_aggregated_attention_layers: str = "1",
+        foveal_aggregated_attention_window_size: int = 3,
+        foveal_aggregated_attention_pool_size: int = 4,
         cross_covariance_attention: bool = False,
         cross_covariance_attention_layers: str = "2,5",
         cross_covariance_attention_residual_scale: float = 0.10,
@@ -10720,6 +10901,16 @@ class DETRVisionTransformerWithRegisters(VisionTransformerWithRegisters):
             visual_contrast_attention=visual_contrast_attention,
             visual_contrast_attention_layers=visual_contrast_attention_layers,
             visual_contrast_tokens=visual_contrast_tokens,
+            foveal_aggregated_attention=foveal_aggregated_attention,
+            foveal_aggregated_attention_layers=(
+                foveal_aggregated_attention_layers
+            ),
+            foveal_aggregated_attention_window_size=(
+                foveal_aggregated_attention_window_size
+            ),
+            foveal_aggregated_attention_pool_size=(
+                foveal_aggregated_attention_pool_size
+            ),
             cross_covariance_attention=cross_covariance_attention,
             cross_covariance_attention_layers=cross_covariance_attention_layers,
             cross_covariance_attention_residual_scale=(

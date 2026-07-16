@@ -8,6 +8,7 @@ import argparse
 import copy
 import csv
 import gc
+import hashlib
 import logging
 import math
 import os
@@ -2187,6 +2188,31 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         type=int,
         default=64,
         help="Positive/negative regional token count per VCA stream; must be square.",
+    )
+    parser.add_argument(
+        "--foveal-aggregated-attention",
+        action="store_true",
+        default=False,
+        help=(
+            "Replace block-1 MHSA with prefix-aware TransNeXt-style local plus "
+            "pooled Aggregated Attention."
+        ),
+    )
+    parser.add_argument(
+        "--foveal-aggregated-attention-layers",
+        type=str,
+        default="1",
+        help="Locked one-based FAA layer list; the current route requires exactly 1.",
+    )
+    parser.add_argument(
+        "--foveal-aggregated-attention-window-size",
+        type=int,
+        default=3,
+    )
+    parser.add_argument(
+        "--foveal-aggregated-attention-pool-size",
+        type=int,
+        default=4,
     )
     parser.add_argument(
         "--cross-covariance-attention",
@@ -5117,12 +5143,55 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
             "Visual-Contrast Attention khong the dung dong thoi voi gated relative "
             "position attention."
         )
+    if bool(args.foveal_aggregated_attention):
+        normalized_foveal_layers = ",".join(
+            value.strip()
+            for value in str(args.foveal_aggregated_attention_layers).split(",")
+            if value.strip()
+        )
+        if normalized_foveal_layers != "1":
+            raise ValueError(
+                "--foveal-aggregated-attention-layers hien duoc khoa o layer 1."
+            )
+        if float(args.early_token_mask_keep_rate) < 1.0:
+            raise ValueError(
+                "--foveal-aggregated-attention yeu cau "
+                "--early-token-mask-keep-rate=1.0."
+            )
+        if (
+            int(args.foveal_aggregated_attention_window_size) < 3
+            or int(args.foveal_aggregated_attention_window_size) % 2 == 0
+        ):
+            raise ValueError(
+                "--foveal-aggregated-attention-window-size phai le va >= 3."
+            )
+        if int(args.foveal_aggregated_attention_pool_size) <= 0:
+            raise ValueError(
+                "--foveal-aggregated-attention-pool-size phai > 0."
+            )
+        if bool(args.visual_contrast_attention):
+            raise ValueError(
+                "Foveal Aggregated Attention khong the dung cung "
+                "Visual-Contrast Attention."
+            )
+        if bool(args.gated_relative_position_attention):
+            raise ValueError(
+                "Foveal Aggregated Attention khong the dung cung gated relative "
+                "position attention."
+            )
     if args.cross_covariance_attention_residual_scale < 0.0:
         raise ValueError("--cross-covariance-attention-residual-scale phai >= 0.")
     if bool(args.cross_covariance_attention) and bool(args.visual_contrast_attention):
         raise ValueError(
             "--cross-covariance-attention khong the dung cung "
             "--visual-contrast-attention."
+        )
+    if bool(args.cross_covariance_attention) and bool(
+        args.foveal_aggregated_attention
+    ):
+        raise ValueError(
+            "--cross-covariance-attention khong the dung cung "
+            "--foveal-aggregated-attention trong route da khoa."
         )
     if args.dynamic_graph_mixer_bottleneck_dim <= 0:
         raise ValueError("--dynamic-graph-mixer-bottleneck-dim phai > 0.")
@@ -5131,6 +5200,11 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
     if bool(args.dynamic_graph_mixer) and bool(args.visual_contrast_attention):
         raise ValueError(
             "--dynamic-graph-mixer khong the dung cung --visual-contrast-attention."
+        )
+    if bool(args.dynamic_graph_mixer) and bool(args.foveal_aggregated_attention):
+        raise ValueError(
+            "--dynamic-graph-mixer khong the dung cung "
+            "--foveal-aggregated-attention trong route da khoa."
         )
     if bool(args.dynamic_graph_mixer) and bool(args.cross_covariance_attention):
         raise ValueError(
@@ -6454,6 +6528,16 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         visual_contrast_attention=bool(args.visual_contrast_attention),
         visual_contrast_attention_layers=args.visual_contrast_attention_layers,
         visual_contrast_tokens=args.visual_contrast_tokens,
+        foveal_aggregated_attention=bool(args.foveal_aggregated_attention),
+        foveal_aggregated_attention_layers=(
+            args.foveal_aggregated_attention_layers
+        ),
+        foveal_aggregated_attention_window_size=(
+            args.foveal_aggregated_attention_window_size
+        ),
+        foveal_aggregated_attention_pool_size=(
+            args.foveal_aggregated_attention_pool_size
+        ),
         cross_covariance_attention=bool(args.cross_covariance_attention),
         cross_covariance_attention_layers=args.cross_covariance_attention_layers,
         cross_covariance_attention_residual_scale=(
@@ -8509,6 +8593,15 @@ def _is_allowed_resume_extension_key(key: str) -> bool:
                 ".attn.stage1_norm.",
                 ".attn.stage2_norm.",
                 ".attn.depthwise_value.",
+                ".attn.temperature",
+                ".attn.query_embedding",
+                ".attn.sr.",
+                ".attn.pool_norm.",
+                ".attn.cpb_fc1.",
+                ".attn.cpb_fc2.",
+                ".attn.relative_position_bias_local",
+                ".attn.learnable_tokens",
+                ".attn.learnable_bias",
             )
         )
     )
@@ -17202,6 +17295,26 @@ class DataCartographyRecorder:
         self.prediction_counts = [
             [0 for _ in range(self.num_classes)] for _ in range(sample_count)
         ]
+        self.occurrence_output_path = self.output_path.with_name(
+            f"{self.output_path.stem}_occurrence_hashes.json"
+        )
+        self._occurrence_epoch: Optional[int] = None
+        self._occurrence_hasher = hashlib.sha256()
+        self._occurrence_count = 0
+        self._occurrence_indices: set[int] = set()
+        self._occurrence_class_counts = [0 for _ in range(self.num_classes)]
+        self._occurrence_epochs: List[Dict[str, object]] = []
+
+    def start_epoch(self, epoch: int) -> None:
+        if self._occurrence_epoch is not None:
+            raise RuntimeError(
+                "Data-cartography occurrence epoch was not finalized before the next epoch."
+            )
+        self._occurrence_epoch = int(epoch)
+        self._occurrence_hasher = hashlib.sha256()
+        self._occurrence_count = 0
+        self._occurrence_indices = set()
+        self._occurrence_class_counts = [0 for _ in range(self.num_classes)]
 
     def _ensure_class_count(self, num_classes: int) -> None:
         num_classes = int(num_classes)
@@ -17234,6 +17347,20 @@ class DataCartographyRecorder:
         logits_cpu = logits.detach().float().cpu()
         probabilities = torch.softmax(logits_cpu, dim=1)
         self._ensure_class_count(int(probabilities.size(1)))
+        if self._occurrence_epoch is None:
+            raise RuntimeError("Call DataCartographyRecorder.start_epoch before update.")
+        if len(self._occurrence_class_counts) < self.num_classes:
+            self._occurrence_class_counts.extend(
+                [0 for _ in range(self.num_classes - len(self._occurrence_class_counts))]
+            )
+        for sample_index, target_index in zip(indices.tolist(), targets.tolist()):
+            self._occurrence_hasher.update(
+                f"{int(sample_index)}:{int(target_index)}\n".encode("ascii")
+            )
+            self._occurrence_count += 1
+            self._occurrence_indices.add(int(sample_index))
+            if 0 <= int(target_index) < len(self._occurrence_class_counts):
+                self._occurrence_class_counts[int(target_index)] += 1
         predictions = probabilities.argmax(dim=1)
         safe_targets = targets.clamp(min=0, max=max(0, probabilities.size(1) - 1))
         row_indices = torch.arange(probabilities.size(0), dtype=torch.long)
@@ -17272,6 +17399,29 @@ class DataCartographyRecorder:
         return "review"
 
     def write(self, *, epoch: int) -> None:
+        if self._occurrence_epoch != int(epoch):
+            raise RuntimeError(
+                "Data-cartography occurrence epoch differs from the write epoch: "
+                f"{self._occurrence_epoch} != {int(epoch)}."
+            )
+        self._occurrence_epochs.append(
+            {
+                "epoch": int(epoch),
+                "ordered_sample_target_sha256": self._occurrence_hasher.hexdigest(),
+                "occurrences": int(self._occurrence_count),
+                "unique_sample_indices": int(len(self._occurrence_indices)),
+                "class_counts": [int(value) for value in self._occurrence_class_counts],
+            }
+        )
+        self._occurrence_epoch = None
+        json_dump(
+            self.occurrence_output_path,
+            {
+                "method": "ordered_train_sample_occurrence_sha256",
+                "hash_record": "sample_index:target_index\\n in dataloader order",
+                "epochs": self._occurrence_epochs,
+            },
+        )
         self.output_path.parent.mkdir(parents=True, exist_ok=True)
         with self.output_path.open("w", encoding="utf-8", newline="") as handle:
             writer = csv.DictWriter(
@@ -23134,6 +23284,8 @@ def train_one_epoch(
     batch_sampler = getattr(dataloader, "batch_sampler", None)
     if batch_sampler is not None and hasattr(batch_sampler, "set_epoch"):
         batch_sampler.set_epoch(epoch_index)
+    if data_cartography_recorder is not None:
+        data_cartography_recorder.start_epoch(epoch_index)
     loss_sum = 0.0
     batch_count = 0
     train_artifact_totals = {
@@ -26894,6 +27046,7 @@ def main() -> None:
             or bool(args.shifted_patch_tokenization)
             or bool(args.gated_relative_position_attention)
             or bool(args.visual_contrast_attention)
+            or bool(args.foveal_aggregated_attention)
             or bool(args.cross_covariance_attention)
             or bool(args.dynamic_graph_mixer)
             or bool(args.soft_moe_patch_adapter)
@@ -27194,11 +27347,60 @@ def main() -> None:
                 },
                 flush=True,
             )
+        if bool(args.foveal_aggregated_attention):
+            if float(model_config.early_token_mask_keep_rate) < 1.0:
+                raise ValueError(
+                    "Foveal Aggregated Attention resume extension requires the "
+                    "complete dense block-1 patch grid."
+                )
+            if bool(model_config.visual_contrast_attention) or bool(
+                model_config.gated_relative_position_attention
+            ):
+                raise ValueError(
+                    "Foveal Aggregated Attention resume extension conflicts with "
+                    "the checkpoint attention route."
+                )
+            model_config.foveal_aggregated_attention = True
+            model_config.foveal_aggregated_attention_layers = str(
+                args.foveal_aggregated_attention_layers
+            )
+            model_config.foveal_aggregated_attention_window_size = int(
+                args.foveal_aggregated_attention_window_size
+            )
+            model_config.foveal_aggregated_attention_pool_size = int(
+                args.foveal_aggregated_attention_pool_size
+            )
+            print(
+                {
+                    "resume_cli_model_extension": {
+                        "foveal_aggregated_attention": True,
+                        "foveal_aggregated_attention_layers": (
+                            model_config.foveal_aggregated_attention_layers
+                        ),
+                        "foveal_aggregated_attention_window_size": (
+                            model_config.foveal_aggregated_attention_window_size
+                        ),
+                        "foveal_aggregated_attention_pool_size": (
+                            model_config.foveal_aggregated_attention_pool_size
+                        ),
+                    },
+                    "reason": (
+                        "allow the locked block-1 foveal attention extension while "
+                        "reusing compatible qkv/proj checkpoint parameters"
+                    ),
+                },
+                flush=True,
+            )
         if bool(args.cross_covariance_attention):
             if bool(model_config.visual_contrast_attention):
                 raise ValueError(
                     "Cross-covariance attention resume extension conflicts with "
                     "Visual-Contrast Attention."
+                )
+            if bool(model_config.foveal_aggregated_attention):
+                raise ValueError(
+                    "Cross-covariance attention resume extension conflicts with "
+                    "Foveal Aggregated Attention."
                 )
             model_config.cross_covariance_attention = True
             model_config.cross_covariance_attention_layers = str(
@@ -27235,6 +27437,11 @@ def main() -> None:
                 raise ValueError(
                     "Dynamic graph mixer resume extension conflicts with "
                     "cross-covariance attention."
+                )
+            if bool(model_config.foveal_aggregated_attention):
+                raise ValueError(
+                    "Dynamic graph mixer resume extension conflicts with Foveal "
+                    "Aggregated Attention."
                 )
             model_config.dynamic_graph_mixer = True
             model_config.dynamic_graph_mixer_layers = str(
@@ -28828,6 +29035,9 @@ def main() -> None:
             "enabled": True,
             "samples": int(len(data_cartography_paths)),
             "output": str(data_cartography_output),
+            "occurrence_output": str(
+                data_cartography_recorder.occurrence_output_path
+            ),
             "source_split": "train_only_after_repeat_wrappers",
             "note": "CSV co image_path de gom lai theo sample goc khi rare/hard repeat bat.",
         }
@@ -29771,6 +29981,7 @@ def main() -> None:
                 or bool(args.patch_evidence_router_head)
                 or float(args.patch_evidence_router_loss_weight) > 0.0
                 or bool(args.visual_contrast_attention)
+                or bool(args.foveal_aggregated_attention)
                 or bool(args.cross_covariance_attention)
                 or bool(args.dynamic_graph_mixer)
                 or bool(args.soft_moe_patch_adapter)
@@ -29869,6 +30080,7 @@ def main() -> None:
                     or bool(args.patch_evidence_router_head)
                     or float(args.patch_evidence_router_loss_weight) > 0.0
                     or bool(args.visual_contrast_attention)
+                    or bool(args.foveal_aggregated_attention)
                     or bool(args.cross_covariance_attention)
                     or bool(args.dynamic_graph_mixer)
                     or bool(args.soft_moe_patch_adapter)

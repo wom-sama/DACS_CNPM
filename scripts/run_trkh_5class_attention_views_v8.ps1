@@ -570,6 +570,10 @@ param(
     [bool]$VisualContrastAttention = $false,
     [string]$VisualContrastAttentionLayers = "1,2,3,4,5,6,7,8",
     [int]$VisualContrastTokens = 64,
+    [bool]$FovealAggregatedAttention = $false,
+    [string]$FovealAggregatedAttentionLayers = "1",
+    [int]$FovealAggregatedAttentionWindowSize = 3,
+    [int]$FovealAggregatedAttentionPoolSize = 4,
     [bool]$CrossCovarianceAttention = $false,
     [string]$CrossCovarianceAttentionLayers = "2,5",
     [double]$CrossCovarianceAttentionResidualScale = 0.10,
@@ -921,11 +925,32 @@ if ($VisualContrastAttention -and $EarlyTokenMaskKeepRate -lt 1.0) {
 if ($VisualContrastAttention -and $GatedRelativePositionAttention) {
     throw "VisualContrastAttention khong the dung cung GatedRelativePositionAttention."
 }
+if ($FovealAggregatedAttention -and $FovealAggregatedAttentionLayers.Trim() -ne "1") {
+    throw "FovealAggregatedAttention hien duoc khoa o layer 1."
+}
+if ($FovealAggregatedAttentionWindowSize -lt 3 -or ($FovealAggregatedAttentionWindowSize % 2) -eq 0) {
+    throw "FovealAggregatedAttentionWindowSize phai le va >= 3."
+}
+if ($FovealAggregatedAttentionPoolSize -le 0) {
+    throw "FovealAggregatedAttentionPoolSize phai > 0."
+}
+if ($FovealAggregatedAttention -and $EarlyTokenMaskKeepRate -lt 1.0) {
+    throw "FovealAggregatedAttention yeu cau EarlyTokenMaskKeepRate=1.0."
+}
+if ($FovealAggregatedAttention -and $VisualContrastAttention) {
+    throw "FovealAggregatedAttention khong the dung cung VisualContrastAttention."
+}
+if ($FovealAggregatedAttention -and $GatedRelativePositionAttention) {
+    throw "FovealAggregatedAttention khong the dung cung GatedRelativePositionAttention."
+}
 if ($CrossCovarianceAttentionResidualScale -lt 0.0) {
     throw "CrossCovarianceAttentionResidualScale phai >= 0."
 }
 if ($CrossCovarianceAttention -and $VisualContrastAttention) {
     throw "CrossCovarianceAttention khong the dung cung VisualContrastAttention."
+}
+if ($CrossCovarianceAttention -and $FovealAggregatedAttention) {
+    throw "CrossCovarianceAttention khong the dung cung FovealAggregatedAttention."
 }
 if ($DynamicGraphMixerBottleneckDim -le 0) {
     throw "DynamicGraphMixerBottleneckDim phai > 0."
@@ -935,6 +960,9 @@ if ($DynamicGraphMixerK -le 0) {
 }
 if ($DynamicGraphMixer -and $VisualContrastAttention) {
     throw "DynamicGraphMixer khong the dung cung VisualContrastAttention."
+}
+if ($DynamicGraphMixer -and $FovealAggregatedAttention) {
+    throw "DynamicGraphMixer khong the dung cung FovealAggregatedAttention."
 }
 if ($DynamicGraphMixer -and $CrossCovarianceAttention) {
     throw "DynamicGraphMixer khong the dung cung CrossCovarianceAttention."
@@ -2057,6 +2085,10 @@ if ($PreflightOnly) {
         gated_relative_position_attention_locality_strength = $GatedRelativePositionAttentionLocalityStrength
         visual_contrast_attention = [bool]$VisualContrastAttention
         visual_contrast_attention_layers = $VisualContrastAttentionLayers
+        foveal_aggregated_attention = [bool]$FovealAggregatedAttention
+        foveal_aggregated_attention_layers = $FovealAggregatedAttentionLayers
+        foveal_aggregated_attention_window_size = $FovealAggregatedAttentionWindowSize
+        foveal_aggregated_attention_pool_size = $FovealAggregatedAttentionPoolSize
         visual_contrast_tokens = $VisualContrastTokens
         cross_covariance_attention = [bool]$CrossCovarianceAttention
         cross_covariance_attention_layers = $CrossCovarianceAttentionLayers
@@ -3307,6 +3339,14 @@ if ($ClassIndependentHead) {
             "--visual-contrast-tokens", "$VisualContrastTokens"
         )
     }
+    if ($FovealAggregatedAttention) {
+        $TrainArgs += @(
+            "--foveal-aggregated-attention",
+            "--foveal-aggregated-attention-layers", "$FovealAggregatedAttentionLayers",
+            "--foveal-aggregated-attention-window-size", "$FovealAggregatedAttentionWindowSize",
+            "--foveal-aggregated-attention-pool-size", "$FovealAggregatedAttentionPoolSize"
+        )
+    }
     if ($CrossCovarianceAttention) {
         $TrainArgs += @(
             "--cross-covariance-attention",
@@ -4082,6 +4122,10 @@ if ($ClassIndependentHead) {
         gated_relative_position_attention_locality_strength = $GatedRelativePositionAttentionLocalityStrength
         visual_contrast_attention = [bool]$VisualContrastAttention
         visual_contrast_attention_layers = $VisualContrastAttentionLayers
+        foveal_aggregated_attention = [bool]$FovealAggregatedAttention
+        foveal_aggregated_attention_layers = $FovealAggregatedAttentionLayers
+        foveal_aggregated_attention_window_size = $FovealAggregatedAttentionWindowSize
+        foveal_aggregated_attention_pool_size = $FovealAggregatedAttentionPoolSize
         visual_contrast_tokens = $VisualContrastTokens
         cross_covariance_attention = [bool]$CrossCovarianceAttention
         cross_covariance_attention_layers = $CrossCovarianceAttentionLayers

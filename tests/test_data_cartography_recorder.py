@@ -1,4 +1,5 @@
 import csv
+import json
 from pathlib import Path
 
 import torch
@@ -63,6 +64,7 @@ def test_data_cartography_recorder_writes_targets_and_unseen_rows(tmp_path):
         output_path=output_path,
     )
 
+    recorder.start_epoch(3)
     recorder.update(
         sample_indices=torch.tensor([0, 1], dtype=torch.long),
         logits=torch.tensor([[0.1, 2.0, -1.0], [2.0, 0.1, -1.0]], dtype=torch.float32),
@@ -89,3 +91,19 @@ def test_data_cartography_recorder_writes_targets_and_unseen_rows(tmp_path):
     assert rows[2]["prediction_index"] == "-1"
     assert rows[2]["prob_2"] == "0.00000000"
     assert rows[2]["last_epoch"] == "3"
+
+    occurrence = json.loads(
+        (tmp_path / "cartography_occurrence_hashes.json").read_text(encoding="utf-8")
+    )
+    assert occurrence["hash_record"] == "sample_index:target_index\\n in dataloader order"
+    assert occurrence["epochs"] == [
+        {
+            "class_counts": [1, 1, 0],
+            "epoch": 3,
+            "occurrences": 2,
+            "ordered_sample_target_sha256": (
+                "4785aee12ff54ef90bb49b6efcf2778a4b32a318e24537a56fcf8992f5e7d022"
+            ),
+            "unique_sample_indices": 2,
+        }
+    ]
