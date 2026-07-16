@@ -4,6 +4,7 @@ param(
     [string]$Declaration = "runs\audit_cidt_readiness_full_train_20260714\predictions_all_conditions.csv",
     [string]$FoldRoot = "runs\yolof_cidt_fold0_trainonly_20260716",
     [string]$PreflightOutput = "runs\audit_inattentive_fusion_preflight_20260716",
+    [string]$PairAuditOutput = "runs\audit_inattentive_fusion_a0_pair_20260716",
     [string]$ControlRunName = "probe_inattentive_fusion_a0_control_5e_20260716",
     [string]$CandidateRunName = "probe_inattentive_fusion_a0_candidate_5e_20260716",
     [switch]$PreflightOnly,
@@ -13,7 +14,9 @@ param(
     [string]$VisualReviewResult = "pass",
     [string]$VisualReviewNote = "",
     [string]$ExpectedSummarySha256 = "",
-    [switch]$RunPair
+    [switch]$RunPair,
+    [switch]$AuditPair,
+    [switch]$FinalizePairVisualReview
 )
 
 $ErrorActionPreference = "Stop"
@@ -23,9 +26,16 @@ $env:PYTHONPATH = $RepoRoot
 $env:TRKH_ALLOW_WINDOWS_MULTIPROCESSING = "1"
 $env:OMP_NUM_THREADS = "4"
 
-$SelectedModes = @($PreflightOnly, $ReplayEngineeringCorrection, $FinalizeVisualReview, $RunPair) | Where-Object { $_ }
+$SelectedModes = @(
+    $PreflightOnly,
+    $ReplayEngineeringCorrection,
+    $FinalizeVisualReview,
+    $RunPair,
+    $AuditPair,
+    $FinalizePairVisualReview
+) | Where-Object { $_ }
 if ($SelectedModes.Count -ne 1) {
-    throw "Chon dung mot mode: -PreflightOnly, -ReplayEngineeringCorrection, -FinalizeVisualReview, hoac -RunPair."
+    throw "Chon dung mot mode: -PreflightOnly, -ReplayEngineeringCorrection, -FinalizeVisualReview, -RunPair, -AuditPair, hoac -FinalizePairVisualReview."
 }
 if (-not (Test-Path -LiteralPath $Python)) {
     throw "Khong tim thay Python: $Python"
@@ -34,6 +44,10 @@ if (-not (Test-Path -LiteralPath $Python)) {
 $FoldDataYaml = Join-Path $FoldRoot "data.yaml"
 $FoldSummary = Join-Path $FoldRoot "summary.json"
 $Protocol = "docs\TRKH_5CLASS_INATTENTIVE_TOKEN_FUSION_READINESS_PROTOCOL_20260716.md"
+$PreflightSummary = Join-Path $PreflightOutput "summary.json"
+$ControlRunDir = Join-Path "runs" $ControlRunName
+$CandidateRunDir = Join-Path "runs" $CandidateRunName
+$PairManifestPath = Join-Path "runs" "inattentive_fusion_a0_pair_manifest_20260716.json"
 $RequiredFiles = @($RawDataYaml, $Declaration, $FoldDataYaml, $FoldSummary, $Protocol)
 foreach ($Path in $RequiredFiles) {
     if (-not (Test-Path -LiteralPath $Path)) {
@@ -115,7 +129,6 @@ if ($FinalizeVisualReview) {
 }
 
 if ($RunPair) {
-    $PreflightSummary = Join-Path $PreflightOutput "summary.json"
     if (-not (Test-Path -LiteralPath $PreflightSummary)) {
         throw "Khong tim thay preflight summary: $PreflightSummary"
     }
@@ -146,9 +159,6 @@ if ($RunPair) {
         throw "Preflight/correction evidence phai duoc tao tu chinh HEAD da push dang chay."
     }
 
-    $ControlRunDir = Join-Path "runs" $ControlRunName
-    $CandidateRunDir = Join-Path "runs" $CandidateRunName
-    $PairManifestPath = Join-Path "runs" "inattentive_fusion_a0_pair_manifest_20260716.json"
     if (
         (Test-Path -LiteralPath $ControlRunDir) -or
         (Test-Path -LiteralPath $CandidateRunDir) -or
@@ -247,4 +257,59 @@ if ($RunPair) {
     }
     $PairManifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $PairManifestPath -Encoding utf8
     Write-Host "Inattentive-token fusion A0 pair completed: $PairManifestPath"
+}
+
+if ($AuditPair) {
+    $AuditInputs = @(
+        $PreflightSummary,
+        $ControlRunDir,
+        $CandidateRunDir,
+        $PairManifestPath
+    )
+    foreach ($Path in $AuditInputs) {
+        if (-not (Test-Path -LiteralPath $Path)) {
+            throw "Khong tim thay formal-pair input: $Path"
+        }
+    }
+    if (Test-Path -LiteralPath $PairAuditOutput) {
+        throw "Pair audit output da ton tai; protocol cam overwrite/rerun: $PairAuditOutput"
+    }
+    & $Python -m trkh.tools.audit_inattentive_token_fusion_pair `
+        --control-checkpoint (Join-Path $ControlRunDir "checkpoints\best.pt") `
+        --candidate-checkpoint (Join-Path $CandidateRunDir "checkpoints\best.pt") `
+        --control-run-dir $ControlRunDir `
+        --candidate-run-dir $CandidateRunDir `
+        --pair-manifest $PairManifestPath `
+        --fold-data $FoldDataYaml `
+        --fold-summary $FoldSummary `
+        --declaration $Declaration `
+        --preflight-summary $PreflightSummary `
+        --protocol $Protocol `
+        --output-dir $PairAuditOutput `
+        --batch-size 32 `
+        --xai-batch-size 2 `
+        --num-workers 4 `
+        --seed 42
+    if ($LASTEXITCODE -ne 0) {
+        throw "Inattentive-token fusion pair audit rejected or failed with exit code $LASTEXITCODE."
+    }
+    Write-Host "Automated pair audit passed. Review every fusion_pair_xai_contact_sheet_*.png before finalization."
+}
+
+if ($FinalizePairVisualReview) {
+    if ([string]::IsNullOrWhiteSpace($VisualReviewNote)) {
+        throw "FinalizePairVisualReview yeu cau -VisualReviewNote."
+    }
+    if ($ExpectedSummarySha256 -notmatch '^[0-9a-fA-F]{64}$') {
+        throw "FinalizePairVisualReview yeu cau -ExpectedSummarySha256 gom 64 ky tu hex."
+    }
+    & $Python -m trkh.tools.audit_inattentive_token_fusion_pair `
+        --output-dir $PairAuditOutput `
+        --finalize-visual-review `
+        --visual-review-result $VisualReviewResult `
+        --visual-review-note $VisualReviewNote `
+        --expected-summary-sha256 $ExpectedSummarySha256
+    if ($LASTEXITCODE -ne 0) {
+        throw "Inattentive-token fusion pair visual finalization rejected with exit code $LASTEXITCODE."
+    }
 }
