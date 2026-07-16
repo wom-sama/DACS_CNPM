@@ -574,6 +574,11 @@ param(
     [string]$FovealAggregatedAttentionLayers = "1",
     [int]$FovealAggregatedAttentionWindowSize = 3,
     [int]$FovealAggregatedAttentionPoolSize = 4,
+    [bool]$DeformableSpatialAttention = $false,
+    [string]$DeformableSpatialAttentionLayers = "2",
+    [int]$DeformableSpatialAttentionGroups = 2,
+    [int]$DeformableSpatialAttentionKernelSize = 5,
+    [double]$DeformableSpatialAttentionOffsetRange = 2.0,
     [bool]$CrossCovarianceAttention = $false,
     [string]$CrossCovarianceAttentionLayers = "2,5",
     [double]$CrossCovarianceAttentionResidualScale = 0.10,
@@ -943,6 +948,24 @@ if ($FovealAggregatedAttention -and $VisualContrastAttention) {
 if ($FovealAggregatedAttention -and $GatedRelativePositionAttention) {
     throw "FovealAggregatedAttention khong the dung cung GatedRelativePositionAttention."
 }
+if ($DeformableSpatialAttention -and $DeformableSpatialAttentionLayers.Trim() -ne "2") {
+    throw "DeformableSpatialAttention hien duoc khoa o layer 2."
+}
+if ($DeformableSpatialAttention -and $DeformableSpatialAttentionGroups -ne 2) {
+    throw "DeformableSpatialAttentionGroups phai bang 2."
+}
+if ($DeformableSpatialAttention -and $DeformableSpatialAttentionKernelSize -ne 5) {
+    throw "DeformableSpatialAttentionKernelSize phai bang 5."
+}
+if ($DeformableSpatialAttention -and $DeformableSpatialAttentionOffsetRange -ne 2.0) {
+    throw "DeformableSpatialAttentionOffsetRange phai bang 2.0."
+}
+if ($DeformableSpatialAttention -and $EarlyTokenMaskKeepRate -lt 1.0) {
+    throw "DeformableSpatialAttention yeu cau EarlyTokenMaskKeepRate=1.0."
+}
+if ($DeformableSpatialAttention -and ($VisualContrastAttention -or $FovealAggregatedAttention -or $GatedRelativePositionAttention -or $CrossCovarianceAttention -or $DynamicGraphMixer)) {
+    throw "DeformableSpatialAttention xung dot voi route attention/mixer dang bat."
+}
 if ($CrossCovarianceAttentionResidualScale -lt 0.0) {
     throw "CrossCovarianceAttentionResidualScale phai >= 0."
 }
@@ -951,6 +974,9 @@ if ($CrossCovarianceAttention -and $VisualContrastAttention) {
 }
 if ($CrossCovarianceAttention -and $FovealAggregatedAttention) {
     throw "CrossCovarianceAttention khong the dung cung FovealAggregatedAttention."
+}
+if ($CrossCovarianceAttention -and $DeformableSpatialAttention) {
+    throw "CrossCovarianceAttention khong the dung cung DeformableSpatialAttention."
 }
 if ($DynamicGraphMixerBottleneckDim -le 0) {
     throw "DynamicGraphMixerBottleneckDim phai > 0."
@@ -963,6 +989,9 @@ if ($DynamicGraphMixer -and $VisualContrastAttention) {
 }
 if ($DynamicGraphMixer -and $FovealAggregatedAttention) {
     throw "DynamicGraphMixer khong the dung cung FovealAggregatedAttention."
+}
+if ($DynamicGraphMixer -and $DeformableSpatialAttention) {
+    throw "DynamicGraphMixer khong the dung cung DeformableSpatialAttention."
 }
 if ($DynamicGraphMixer -and $CrossCovarianceAttention) {
     throw "DynamicGraphMixer khong the dung cung CrossCovarianceAttention."
@@ -2089,6 +2118,11 @@ if ($PreflightOnly) {
         foveal_aggregated_attention_layers = $FovealAggregatedAttentionLayers
         foveal_aggregated_attention_window_size = $FovealAggregatedAttentionWindowSize
         foveal_aggregated_attention_pool_size = $FovealAggregatedAttentionPoolSize
+        deformable_spatial_attention = [bool]$DeformableSpatialAttention
+        deformable_spatial_attention_layers = $DeformableSpatialAttentionLayers
+        deformable_spatial_attention_groups = $DeformableSpatialAttentionGroups
+        deformable_spatial_attention_kernel_size = $DeformableSpatialAttentionKernelSize
+        deformable_spatial_attention_offset_range = $DeformableSpatialAttentionOffsetRange
         visual_contrast_tokens = $VisualContrastTokens
         cross_covariance_attention = [bool]$CrossCovarianceAttention
         cross_covariance_attention_layers = $CrossCovarianceAttentionLayers
@@ -3347,6 +3381,15 @@ if ($ClassIndependentHead) {
             "--foveal-aggregated-attention-pool-size", "$FovealAggregatedAttentionPoolSize"
         )
     }
+    if ($DeformableSpatialAttention) {
+        $TrainArgs += @(
+            "--deformable-spatial-attention",
+            "--deformable-spatial-attention-layers", "$DeformableSpatialAttentionLayers",
+            "--deformable-spatial-attention-groups", "$DeformableSpatialAttentionGroups",
+            "--deformable-spatial-attention-kernel-size", "$DeformableSpatialAttentionKernelSize",
+            "--deformable-spatial-attention-offset-range", "$DeformableSpatialAttentionOffsetRange"
+        )
+    }
     if ($CrossCovarianceAttention) {
         $TrainArgs += @(
             "--cross-covariance-attention",
@@ -4126,6 +4169,11 @@ if ($ClassIndependentHead) {
         foveal_aggregated_attention_layers = $FovealAggregatedAttentionLayers
         foveal_aggregated_attention_window_size = $FovealAggregatedAttentionWindowSize
         foveal_aggregated_attention_pool_size = $FovealAggregatedAttentionPoolSize
+        deformable_spatial_attention = [bool]$DeformableSpatialAttention
+        deformable_spatial_attention_layers = $DeformableSpatialAttentionLayers
+        deformable_spatial_attention_groups = $DeformableSpatialAttentionGroups
+        deformable_spatial_attention_kernel_size = $DeformableSpatialAttentionKernelSize
+        deformable_spatial_attention_offset_range = $DeformableSpatialAttentionOffsetRange
         visual_contrast_tokens = $VisualContrastTokens
         cross_covariance_attention = [bool]$CrossCovarianceAttention
         cross_covariance_attention_layers = $CrossCovarianceAttentionLayers

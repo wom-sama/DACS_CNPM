@@ -24,6 +24,7 @@ from trkh.models.patch_style_recalibration import PatchStyleRecalibration
 from trkh.models.starnet_s2_tokenizer import StarNetS2Tokenizer
 from trkh.models.visual_contrast_attention import VisualContrastAttention
 from trkh.models.foveal_aggregated_attention import FovealAggregatedAttention
+from trkh.models.deformable_spatial_attention import DeformableSpatialAttention
 from trkh.models.cross_covariance_attention import (
     SharedProjectionCrossCovarianceAttention,
 )
@@ -5235,6 +5236,11 @@ class CustomTransformerEncoderLayer(nn.Module):
         foveal_aggregated_attention_input_resolution: Tuple[int, int] = (16, 16),
         foveal_aggregated_attention_window_size: int = 3,
         foveal_aggregated_attention_pool_size: int = 4,
+        deformable_spatial_attention: bool = False,
+        deformable_spatial_attention_input_resolution: Tuple[int, int] = (16, 16),
+        deformable_spatial_attention_groups: int = 2,
+        deformable_spatial_attention_kernel_size: int = 5,
+        deformable_spatial_attention_offset_range: float = 2.0,
         cross_covariance_attention: bool = False,
         cross_covariance_attention_residual_scale: float = 0.10,
         dynamic_graph_mixer: bool = False,
@@ -5264,6 +5270,31 @@ class CustomTransformerEncoderLayer(nn.Module):
             raise ValueError(
                 "Foveal Aggregated Attention cannot share a block with gated "
                 "relative position attention."
+            )
+        if bool(deformable_spatial_attention) and bool(visual_contrast_attention):
+            raise ValueError(
+                "Deformable Spatial Attention cannot share a block with "
+                "Visual-Contrast Attention."
+            )
+        if bool(deformable_spatial_attention) and bool(foveal_aggregated_attention):
+            raise ValueError(
+                "Deformable Spatial Attention cannot share a block with "
+                "Foveal Aggregated Attention."
+            )
+        if bool(deformable_spatial_attention) and bool(gated_relative_position_attention):
+            raise ValueError(
+                "Deformable Spatial Attention cannot share a block with gated "
+                "relative position attention."
+            )
+        if bool(deformable_spatial_attention) and bool(cross_covariance_attention):
+            raise ValueError(
+                "Deformable Spatial Attention cannot share a block with "
+                "cross-covariance attention."
+            )
+        if bool(deformable_spatial_attention) and bool(dynamic_graph_mixer):
+            raise ValueError(
+                "Deformable Spatial Attention cannot share a block with "
+                "dynamic graph mixing."
             )
         if bool(cross_covariance_attention) and bool(visual_contrast_attention):
             raise ValueError(
@@ -5320,6 +5351,28 @@ class CustomTransformerEncoderLayer(nn.Module):
                 )
             foveal_attention.copy_shared_projections_from(standard_attention)
             self.attn = foveal_attention
+        elif bool(deformable_spatial_attention):
+            standard_attention = MultiHeadSelfAttention(
+                dim=dim,
+                num_heads=num_heads,
+                attention_dropout=attention_dropout,
+                projection_dropout=dropout,
+                gated_relative_position_attention=False,
+            )
+            with torch.random.fork_rng(devices=[]):
+                deformable_attention = DeformableSpatialAttention(
+                    dim=dim,
+                    input_resolution=deformable_spatial_attention_input_resolution,
+                    num_heads=num_heads,
+                    offset_groups=deformable_spatial_attention_groups,
+                    offset_kernel_size=deformable_spatial_attention_kernel_size,
+                    offset_stride=1,
+                    offset_range_factor=deformable_spatial_attention_offset_range,
+                    attention_dropout=attention_dropout,
+                    projection_dropout=dropout,
+                )
+            deformable_attention.copy_shared_projections_from(standard_attention)
+            self.attn = deformable_attention
         else:
             self.attn = MultiHeadSelfAttention(
                 dim=dim,
@@ -5332,6 +5385,9 @@ class CustomTransformerEncoderLayer(nn.Module):
             )
         self.visual_contrast_attention_enabled = bool(visual_contrast_attention)
         self.foveal_aggregated_attention_enabled = bool(foveal_aggregated_attention)
+        self.deformable_spatial_attention_enabled = bool(
+            deformable_spatial_attention
+        )
         self.cross_covariance_attention = (
             SharedProjectionCrossCovarianceAttention(dim=dim, num_heads=num_heads)
             if bool(cross_covariance_attention)
@@ -5808,6 +5864,11 @@ class VisionTransformerWithRegisters(nn.Module):
         foveal_aggregated_attention_layers: str = "1",
         foveal_aggregated_attention_window_size: int = 3,
         foveal_aggregated_attention_pool_size: int = 4,
+        deformable_spatial_attention: bool = False,
+        deformable_spatial_attention_layers: str = "2",
+        deformable_spatial_attention_groups: int = 2,
+        deformable_spatial_attention_kernel_size: int = 5,
+        deformable_spatial_attention_offset_range: float = 2.0,
         cross_covariance_attention: bool = False,
         cross_covariance_attention_layers: str = "2,5",
         cross_covariance_attention_residual_scale: float = 0.10,
@@ -6237,6 +6298,63 @@ class VisionTransformerWithRegisters(nn.Module):
                     "Foveal Aggregated Attention cannot be combined with gated "
                     "relative position attention."
                 )
+        self.deformable_spatial_attention_layer_numbers = (
+            _parse_auxiliary_layer_indices(
+                deformable_spatial_attention_layers,
+                int(depth),
+            )
+            if bool(deformable_spatial_attention)
+            else []
+        )
+        self.deformable_spatial_attention_enabled = bool(
+            self.deformable_spatial_attention_layer_numbers
+        )
+        self.deformable_spatial_attention_groups = int(
+            deformable_spatial_attention_groups
+        )
+        self.deformable_spatial_attention_kernel_size = int(
+            deformable_spatial_attention_kernel_size
+        )
+        self.deformable_spatial_attention_offset_range = float(
+            deformable_spatial_attention_offset_range
+        )
+        if self.deformable_spatial_attention_enabled:
+            if self.deformable_spatial_attention_layer_numbers != [2]:
+                raise ValueError(
+                    "Deformable Spatial Attention is locked to transformer layer 2."
+                )
+            if float(early_token_mask_keep_rate) < 1.0:
+                raise ValueError(
+                    "Deformable Spatial Attention requires the complete dense patch "
+                    "grid before block 2; disable early token masking."
+                )
+            if self.deformable_spatial_attention_groups != 2:
+                raise ValueError(
+                    "The locked Deformable Spatial Attention route requires 2 groups."
+                )
+            if self.deformable_spatial_attention_kernel_size != 5:
+                raise ValueError(
+                    "The locked Deformable Spatial Attention route requires kernel 5."
+                )
+            if self.deformable_spatial_attention_offset_range != 2.0:
+                raise ValueError(
+                    "The locked Deformable Spatial Attention route requires range 2.0."
+                )
+            if self.foveal_aggregated_attention_enabled:
+                raise ValueError(
+                    "Deformable Spatial Attention cannot be combined with "
+                    "Foveal Aggregated Attention."
+                )
+            if self.visual_contrast_attention_enabled:
+                raise ValueError(
+                    "Deformable Spatial Attention cannot be combined with "
+                    "Visual-Contrast Attention."
+                )
+            if self.gated_relative_position_attention_enabled:
+                raise ValueError(
+                    "Deformable Spatial Attention cannot be combined with gated "
+                    "relative position attention."
+                )
         self.cross_covariance_attention_layer_numbers = (
             _parse_auxiliary_layer_indices(
                 cross_covariance_attention_layers,
@@ -6268,6 +6386,14 @@ class VisionTransformerWithRegisters(nn.Module):
                 "Cross-covariance attention cannot be combined with Foveal "
                 "Aggregated Attention in the locked route."
             )
+        if (
+            self.cross_covariance_attention_enabled
+            and self.deformable_spatial_attention_enabled
+        ):
+            raise ValueError(
+                "Cross-covariance attention cannot be combined with Deformable "
+                "Spatial Attention in the locked route."
+            )
         self.dynamic_graph_mixer_layer_numbers = (
             _parse_auxiliary_layer_indices(
                 dynamic_graph_mixer_layers,
@@ -6298,6 +6424,11 @@ class VisionTransformerWithRegisters(nn.Module):
                 raise ValueError(
                     "Dynamic graph mixing cannot be combined with Foveal "
                     "Aggregated Attention in the locked route."
+                )
+            if self.deformable_spatial_attention_enabled:
+                raise ValueError(
+                    "Dynamic graph mixing cannot be combined with Deformable "
+                    "Spatial Attention in the locked route."
                 )
             if self.cross_covariance_attention_enabled:
                 raise ValueError(
@@ -6459,6 +6590,12 @@ class VisionTransformerWithRegisters(nn.Module):
             if self.token_pruning
             else {}
         )
+        if self.deformable_spatial_attention_enabled and any(
+            int(layer_index) < 1 for layer_index in self.token_prune_schedule
+        ):
+            raise ValueError(
+                "Deformable Spatial Attention requires no pruning before block 2."
+            )
         if not self.token_prune_schedule and self.early_token_mask_keep_rate >= 1.0:
             self.token_pruning = False
         if self.head_pooling not in {"cls", "cls_register_mean", "cls_branch_register_mean"}:
@@ -6663,6 +6800,22 @@ class VisionTransformerWithRegisters(nn.Module):
                     ),
                     foveal_aggregated_attention_pool_size=(
                         self.foveal_aggregated_attention_pool_size
+                    ),
+                    deformable_spatial_attention=(
+                        int(index + 1)
+                        in self.deformable_spatial_attention_layer_numbers
+                    ),
+                    deformable_spatial_attention_input_resolution=(
+                        self.patch_embed.base_grid_size
+                    ),
+                    deformable_spatial_attention_groups=(
+                        self.deformable_spatial_attention_groups
+                    ),
+                    deformable_spatial_attention_kernel_size=(
+                        self.deformable_spatial_attention_kernel_size
+                    ),
+                    deformable_spatial_attention_offset_range=(
+                        self.deformable_spatial_attention_offset_range
                     ),
                     cross_covariance_attention=(
                         int(index + 1)
@@ -7082,18 +7235,20 @@ class VisionTransformerWithRegisters(nn.Module):
             if block.soft_moe_patch_adapter is not None
         ]
         foveal_extra_modules = []
+        deformable_extra_modules = []
         for block in self.blocks:
             attention_module = block.attn
-            if not isinstance(attention_module, FovealAggregatedAttention):
-                continue
-            foveal_extra_modules.extend(
-                (
-                    attention_module.sr,
-                    attention_module.pool_norm,
-                    attention_module.cpb_fc1,
-                    attention_module.cpb_fc2,
+            if isinstance(attention_module, FovealAggregatedAttention):
+                foveal_extra_modules.extend(
+                    (
+                        attention_module.sr,
+                        attention_module.pool_norm,
+                        attention_module.cpb_fc1,
+                        attention_module.cpb_fc2,
+                    )
                 )
-            )
+            if isinstance(attention_module, DeformableSpatialAttention):
+                deformable_extra_modules.append(attention_module.conv_offset)
         if isinstance(self.stem, OctaveConvStem):
             octave_module_ids = {id(child) for child in self.stem.modules()}
             gabor_module_ids = {
@@ -7111,11 +7266,17 @@ class VisionTransformerWithRegisters(nn.Module):
                 for foveal_extra_module in foveal_extra_modules
                 for child in foveal_extra_module.modules()
             }
+            deformable_extra_module_ids = {
+                id(child)
+                for deformable_extra_module in deformable_extra_modules
+                for child in deformable_extra_module.modules()
+            }
             excluded_module_ids = (
                 octave_module_ids
                 | gabor_module_ids
                 | soft_moe_module_ids
                 | foveal_extra_module_ids
+                | deformable_extra_module_ids
             )
             with torch.random.fork_rng(devices=[]):
                 legacy_init_proxy = HybridConvStem(
@@ -7141,7 +7302,12 @@ class VisionTransformerWithRegisters(nn.Module):
                 with torch.random.fork_rng(devices=[]):
                     for gabor_module in gabor_modules:
                         gabor_module.apply(self._init_weights)
-        elif not gabor_modules and not soft_moe_modules and not foveal_extra_modules:
+        elif (
+            not gabor_modules
+            and not soft_moe_modules
+            and not foveal_extra_modules
+            and not deformable_extra_modules
+        ):
             self.apply(self._init_weights)
         else:
             isolated_module_ids = {
@@ -7150,6 +7316,7 @@ class VisionTransformerWithRegisters(nn.Module):
                     *gabor_modules,
                     *soft_moe_modules,
                     *foveal_extra_modules,
+                    *deformable_extra_modules,
                 )
                 for child in isolated_module.modules()
             }
@@ -8392,7 +8559,12 @@ class VisionTransformerWithRegisters(nn.Module):
                         "faa_local_pool_proxy"
                         if int(layer_index + 1)
                         in self.foveal_aggregated_attention_layer_numbers
-                        else "mhsa_probability"
+                        else (
+                            "deformable_bilinear_sample_proxy"
+                            if int(layer_index + 1)
+                            in self.deformable_spatial_attention_layer_numbers
+                            else "mhsa_probability"
+                        )
                     )
                 )
                 for layer_index in attention_maps
@@ -8763,6 +8935,34 @@ class VisionTransformerWithRegisters(nn.Module):
                     ):
                         features["trace"][f"foveal_{trace_key}"] = torch.stack(
                             [entry[trace_key] for _, entry in foveal_entries],
+                            dim=0,
+                        )
+            if self.deformable_spatial_attention_enabled:
+                deformable_entries = []
+                for layer_number in self.deformable_spatial_attention_layer_numbers:
+                    module = self.blocks[int(layer_number) - 1].attn
+                    module_trace = module.trace() if hasattr(module, "trace") else {}
+                    if module_trace:
+                        deformable_entries.append((int(layer_number), module_trace))
+                if deformable_entries:
+                    features["trace"]["deformable_spatial_attention_layers"] = (
+                        torch.tensor(
+                            [layer for layer, _ in deformable_entries],
+                            device=tokens.device,
+                            dtype=torch.long,
+                        )
+                    )
+                    for trace_key in (
+                        "offset_rms",
+                        "offset_rms_per_group",
+                        "inter_group_position_rms",
+                        "valid_interpolation_mass_mean",
+                        "valid_interpolation_mass_min",
+                        "position_min",
+                        "position_max",
+                    ):
+                        features["trace"][f"deformable_{trace_key}"] = torch.stack(
+                            [entry[trace_key] for _, entry in deformable_entries],
                             dim=0,
                         )
             if self.cross_covariance_attention_enabled:
@@ -10578,6 +10778,11 @@ class DETRVisionTransformerWithRegisters(VisionTransformerWithRegisters):
         foveal_aggregated_attention_layers: str = "1",
         foveal_aggregated_attention_window_size: int = 3,
         foveal_aggregated_attention_pool_size: int = 4,
+        deformable_spatial_attention: bool = False,
+        deformable_spatial_attention_layers: str = "2",
+        deformable_spatial_attention_groups: int = 2,
+        deformable_spatial_attention_kernel_size: int = 5,
+        deformable_spatial_attention_offset_range: float = 2.0,
         cross_covariance_attention: bool = False,
         cross_covariance_attention_layers: str = "2,5",
         cross_covariance_attention_residual_scale: float = 0.10,
@@ -10910,6 +11115,19 @@ class DETRVisionTransformerWithRegisters(VisionTransformerWithRegisters):
             ),
             foveal_aggregated_attention_pool_size=(
                 foveal_aggregated_attention_pool_size
+            ),
+            deformable_spatial_attention=deformable_spatial_attention,
+            deformable_spatial_attention_layers=(
+                deformable_spatial_attention_layers
+            ),
+            deformable_spatial_attention_groups=(
+                deformable_spatial_attention_groups
+            ),
+            deformable_spatial_attention_kernel_size=(
+                deformable_spatial_attention_kernel_size
+            ),
+            deformable_spatial_attention_offset_range=(
+                deformable_spatial_attention_offset_range
             ),
             cross_covariance_attention=cross_covariance_attention,
             cross_covariance_attention_layers=cross_covariance_attention_layers,

@@ -2215,6 +2215,36 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         default=4,
     )
     parser.add_argument(
+        "--deformable-spatial-attention",
+        action="store_true",
+        default=False,
+        help=(
+            "Replace block-2 patch MHSA with locked CVPR-2022 DAT-style "
+            "deformable key/value sampling."
+        ),
+    )
+    parser.add_argument(
+        "--deformable-spatial-attention-layers",
+        type=str,
+        default="2",
+        help="Locked one-based DAT layer list; the current route requires exactly 2.",
+    )
+    parser.add_argument(
+        "--deformable-spatial-attention-groups",
+        type=int,
+        default=2,
+    )
+    parser.add_argument(
+        "--deformable-spatial-attention-kernel-size",
+        type=int,
+        default=5,
+    )
+    parser.add_argument(
+        "--deformable-spatial-attention-offset-range",
+        type=float,
+        default=2.0,
+    )
+    parser.add_argument(
         "--cross-covariance-attention",
         action="store_true",
         default=False,
@@ -5179,6 +5209,48 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
                 "Foveal Aggregated Attention khong the dung cung gated relative "
                 "position attention."
             )
+    if bool(args.deformable_spatial_attention):
+        normalized_deformable_layers = ",".join(
+            value.strip()
+            for value in str(args.deformable_spatial_attention_layers).split(",")
+            if value.strip()
+        )
+        if normalized_deformable_layers != "2":
+            raise ValueError(
+                "--deformable-spatial-attention-layers hien duoc khoa o layer 2."
+            )
+        if float(args.early_token_mask_keep_rate) < 1.0:
+            raise ValueError(
+                "--deformable-spatial-attention yeu cau "
+                "--early-token-mask-keep-rate=1.0."
+            )
+        if int(args.deformable_spatial_attention_groups) != 2:
+            raise ValueError(
+                "--deformable-spatial-attention-groups phai bang 2."
+            )
+        if int(args.deformable_spatial_attention_kernel_size) != 5:
+            raise ValueError(
+                "--deformable-spatial-attention-kernel-size phai bang 5."
+            )
+        if float(args.deformable_spatial_attention_offset_range) != 2.0:
+            raise ValueError(
+                "--deformable-spatial-attention-offset-range phai bang 2.0."
+            )
+        for incompatible_name, incompatible in (
+            ("visual-contrast-attention", args.visual_contrast_attention),
+            ("foveal-aggregated-attention", args.foveal_aggregated_attention),
+            (
+                "gated-relative-position-attention",
+                args.gated_relative_position_attention,
+            ),
+            ("cross-covariance-attention", args.cross_covariance_attention),
+            ("dynamic-graph-mixer", args.dynamic_graph_mixer),
+        ):
+            if bool(incompatible):
+                raise ValueError(
+                    "--deformable-spatial-attention khong the dung cung "
+                    f"--{incompatible_name}."
+                )
     if args.cross_covariance_attention_residual_scale < 0.0:
         raise ValueError("--cross-covariance-attention-residual-scale phai >= 0.")
     if bool(args.cross_covariance_attention) and bool(args.visual_contrast_attention):
@@ -5193,6 +5265,13 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
             "--cross-covariance-attention khong the dung cung "
             "--foveal-aggregated-attention trong route da khoa."
         )
+    if bool(args.cross_covariance_attention) and bool(
+        args.deformable_spatial_attention
+    ):
+        raise ValueError(
+            "--cross-covariance-attention khong the dung cung "
+            "--deformable-spatial-attention trong route da khoa."
+        )
     if args.dynamic_graph_mixer_bottleneck_dim <= 0:
         raise ValueError("--dynamic-graph-mixer-bottleneck-dim phai > 0.")
     if args.dynamic_graph_mixer_k <= 0:
@@ -5205,6 +5284,11 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         raise ValueError(
             "--dynamic-graph-mixer khong the dung cung "
             "--foveal-aggregated-attention trong route da khoa."
+        )
+    if bool(args.dynamic_graph_mixer) and bool(args.deformable_spatial_attention):
+        raise ValueError(
+            "--dynamic-graph-mixer khong the dung cung "
+            "--deformable-spatial-attention trong route da khoa."
         )
     if bool(args.dynamic_graph_mixer) and bool(args.cross_covariance_attention):
         raise ValueError(
@@ -6537,6 +6621,19 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         ),
         foveal_aggregated_attention_pool_size=(
             args.foveal_aggregated_attention_pool_size
+        ),
+        deformable_spatial_attention=bool(args.deformable_spatial_attention),
+        deformable_spatial_attention_layers=(
+            args.deformable_spatial_attention_layers
+        ),
+        deformable_spatial_attention_groups=(
+            args.deformable_spatial_attention_groups
+        ),
+        deformable_spatial_attention_kernel_size=(
+            args.deformable_spatial_attention_kernel_size
+        ),
+        deformable_spatial_attention_offset_range=(
+            args.deformable_spatial_attention_offset_range
         ),
         cross_covariance_attention=bool(args.cross_covariance_attention),
         cross_covariance_attention_layers=args.cross_covariance_attention_layers,
@@ -27047,6 +27144,7 @@ def main() -> None:
             or bool(args.gated_relative_position_attention)
             or bool(args.visual_contrast_attention)
             or bool(args.foveal_aggregated_attention)
+            or bool(args.deformable_spatial_attention)
             or bool(args.cross_covariance_attention)
             or bool(args.dynamic_graph_mixer)
             or bool(args.soft_moe_patch_adapter)
@@ -27391,6 +27489,63 @@ def main() -> None:
                 },
                 flush=True,
             )
+        if bool(args.deformable_spatial_attention):
+            if float(model_config.early_token_mask_keep_rate) < 1.0:
+                raise ValueError(
+                    "Deformable Spatial Attention resume extension requires the "
+                    "complete dense block-2 patch grid."
+                )
+            if any(
+                bool(value)
+                for value in (
+                    model_config.visual_contrast_attention,
+                    model_config.foveal_aggregated_attention,
+                    model_config.gated_relative_position_attention,
+                    model_config.cross_covariance_attention,
+                    model_config.dynamic_graph_mixer,
+                )
+            ):
+                raise ValueError(
+                    "Deformable Spatial Attention resume extension conflicts with "
+                    "the checkpoint attention route."
+                )
+            model_config.deformable_spatial_attention = True
+            model_config.deformable_spatial_attention_layers = str(
+                args.deformable_spatial_attention_layers
+            )
+            model_config.deformable_spatial_attention_groups = int(
+                args.deformable_spatial_attention_groups
+            )
+            model_config.deformable_spatial_attention_kernel_size = int(
+                args.deformable_spatial_attention_kernel_size
+            )
+            model_config.deformable_spatial_attention_offset_range = float(
+                args.deformable_spatial_attention_offset_range
+            )
+            print(
+                {
+                    "resume_cli_model_extension": {
+                        "deformable_spatial_attention": True,
+                        "deformable_spatial_attention_layers": (
+                            model_config.deformable_spatial_attention_layers
+                        ),
+                        "deformable_spatial_attention_groups": (
+                            model_config.deformable_spatial_attention_groups
+                        ),
+                        "deformable_spatial_attention_kernel_size": (
+                            model_config.deformable_spatial_attention_kernel_size
+                        ),
+                        "deformable_spatial_attention_offset_range": (
+                            model_config.deformable_spatial_attention_offset_range
+                        ),
+                    },
+                    "reason": (
+                        "allow the locked block-2 deformable attention extension "
+                        "while reusing compatible qkv/proj checkpoint parameters"
+                    ),
+                },
+                flush=True,
+            )
         if bool(args.cross_covariance_attention):
             if bool(model_config.visual_contrast_attention):
                 raise ValueError(
@@ -27401,6 +27556,11 @@ def main() -> None:
                 raise ValueError(
                     "Cross-covariance attention resume extension conflicts with "
                     "Foveal Aggregated Attention."
+                )
+            if bool(model_config.deformable_spatial_attention):
+                raise ValueError(
+                    "Cross-covariance attention resume extension conflicts with "
+                    "Deformable Spatial Attention."
                 )
             model_config.cross_covariance_attention = True
             model_config.cross_covariance_attention_layers = str(
@@ -27442,6 +27602,11 @@ def main() -> None:
                 raise ValueError(
                     "Dynamic graph mixer resume extension conflicts with Foveal "
                     "Aggregated Attention."
+                )
+            if bool(model_config.deformable_spatial_attention):
+                raise ValueError(
+                    "Dynamic graph mixer resume extension conflicts with Deformable "
+                    "Spatial Attention."
                 )
             model_config.dynamic_graph_mixer = True
             model_config.dynamic_graph_mixer_layers = str(
@@ -29982,6 +30147,7 @@ def main() -> None:
                 or float(args.patch_evidence_router_loss_weight) > 0.0
                 or bool(args.visual_contrast_attention)
                 or bool(args.foveal_aggregated_attention)
+                or bool(args.deformable_spatial_attention)
                 or bool(args.cross_covariance_attention)
                 or bool(args.dynamic_graph_mixer)
                 or bool(args.soft_moe_patch_adapter)
@@ -30081,6 +30247,7 @@ def main() -> None:
                     or float(args.patch_evidence_router_loss_weight) > 0.0
                     or bool(args.visual_contrast_attention)
                     or bool(args.foveal_aggregated_attention)
+                    or bool(args.deformable_spatial_attention)
                     or bool(args.cross_covariance_attention)
                     or bool(args.dynamic_graph_mixer)
                     or bool(args.soft_moe_patch_adapter)

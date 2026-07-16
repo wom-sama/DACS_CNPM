@@ -298,6 +298,11 @@ class ModelConfig:
     foveal_aggregated_attention_layers: str = "1"
     foveal_aggregated_attention_window_size: int = 3
     foveal_aggregated_attention_pool_size: int = 4
+    deformable_spatial_attention: bool = False
+    deformable_spatial_attention_layers: str = "2"
+    deformable_spatial_attention_groups: int = 2
+    deformable_spatial_attention_kernel_size: int = 5
+    deformable_spatial_attention_offset_range: float = 2.0
     cross_covariance_attention: bool = False
     cross_covariance_attention_layers: str = "2,5"
     cross_covariance_attention_residual_scale: float = 0.10
