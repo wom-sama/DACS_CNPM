@@ -3268,3 +3268,40 @@
   exactly four checkpoints (`348,760,480` bytes), reclaim `332.312 MiB`, and
   pass retention over 728 directories/46 manifests with `blockers=[]` at SHA
   `260a34b2...afaf24`. Keeper and all 15 final XAI pages remain exact.
+- [x] Screen accepted primary work and official licensed code outside EViT and
+  every closed family. Select CVPR-2025 Token Cropr at official MIT
+  commit/tree `fa259e9...61524de6f9`/`4a83993...86851d`, and lock one
+  task-supervised routing A0 before implementation at protocol SHA
+  `42e912a6...6a847`.
+- [x] Implement the default-off two-layer Cropr scorer, matched native/learned
+  routing roles, auxiliary loss/telemetry, official-equation replay, config/
+  resume/launcher wiring, formal preflight, and VS Code-safe three-phase
+  wrappers. Preflight passed `66/66` and authorized exactly one train-only
+  five-epoch pair.
+- [x] Run the sole source-disjoint `7372/1843` pair with identical natural
+  occurrence records and no official validation/test. Preserve pair-manifest
+  SHA `09a89cbe...0cc1e` and all four checkpoint hashes before any cleanup.
+- [x] Audit all 1,843 holdout rows under clean/dim/bright/low-contrast. Reject
+  learned routing: clean class1 F1 rose `+0.021631`, but precision fell
+  `-0.024828`, restricted FP worsened `8 -> 10`, harms exceeded corrections
+  `13 > 8`, and low-contrast class1 F1 fell `-0.010023`.
+- [x] Preserve both failed XAI attempts and replay predictions, selector rows,
+  perturbations, and events byte-exactly. Fix the auditor to hook the standard
+  deployment forward while retaining the exact locked batch-32 composition;
+  final parity is exact on all 57 requests per role.
+- [x] Review all 29 hash-locked XAI pages and finalize visual fail. Candidate
+  Cropr maps remain broad/high-entropy and mean layer-5 foreground mass falls
+  `0.719379 -> 0.640683`. Final summary/visual SHAs are
+  `ee2d4456...38c5b`/`1f5c2e57...69dc3`; deny validation/test/full train/
+  sweeps/current-command promotion.
+- [x] Compact the rejected pair after hash recording. Preserve 332 non-binary
+  files at payload SHA `75a54745...a6df77`, exclude four checkpoints
+  (`399,569,848` bytes), reclaim `446,504,960` measured bytes, and leave all
+  three audit directories plus 29 final pages intact.
+- [x] Complete Cropr closure verification. Compileall, both wrapper parses,
+  focused `32/32`, full pytest `1332/1332`, protected hashes, and read-only
+  retention over 734 directories/47 compaction manifests passed. All 209
+  compacted originals are absent and `blockers=[]` at retention SHA
+  `95128604...382e9`; final closure SHA is `dd54924d...2b42d`. Commit/push
+  only explicit closure paths; current-best commands remain three revisions/
+  two updates.

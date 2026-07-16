@@ -17643,3 +17643,50 @@ Date: 2026-07-02
   `332.312 MiB`. Retention passed over 728 directories and 46 compaction
   manifests with `blockers=[]` at summary SHA `260a34b2...afaf24`. Final
   closure-document SHA is `de929023...e92a71`.
+
+## Cropr Token Selector A0 Closure 2026-07-17 - Learned Routing Widens Class 1
+
+- Locked CVPR-2025 Token Cropr from the accepted CVF paper and official MIT
+  repository at commit/tree `fa259e9...61524de6f9`/
+  `4a83993...86851d`. The prospective protocol SHA is
+  `42e912a6...6a847`; user/secondary reports were hypothesis sources only.
+- The default-off implementation and fail-closed preflight passed `66/66`
+  engineering/provenance checks. The sole exact source-disjoint five-epoch
+  native-routing/learned-routing pair used `7372/1843` train-only rows, no
+  official validation/test, and pair-manifest SHA `09a89cbe...0cc1e`.
+- Independent standard-BF16 audit rejected the learned selector. Clean macro/
+  class1 F1 rose `+0.001804/+0.021631`, but class1 precision fell `-0.024828`,
+  restricted FP worsened `8 -> 10`, and corrections/harms were `8/13`.
+  Low-contrast class1 F1 also fell `-0.010023`.
+- Clean candidate Cropr-L2/L5 auxiliary class1 F1 was only
+  `0.230769/0.223881`, TP-hard-negative AUROC `0.537462/0.549185`, and
+  normalized entropy `0.992872/0.996811`. Cropr bbox mass was
+  `0.285063/0.317162` versus native `0.434829/0.442484`; learned routing did
+  not create a sparse object/boundary relevance signal.
+- Object removal remained causal (`0.253820` class1-margin change) while the
+  frozen far-background perturbation was zero. The failure is the selector's
+  class-boundary precision, not evidence that the backbone ignores fruit.
+- Two XAI corrections were preserved rather than overwritten. A trace-forward
+  path and then a selected-only batch-2 path both changed BF16 near ties. The
+  final auditor hooks the standard deployment forward while preserving the
+  complete batch-32 composition; all 57 requests per role have exact logit and
+  prediction parity, and four quantitative artifacts replay byte-for-byte.
+- Reviewed all 29 final pages. Candidate Cropr maps remained broad/high-
+  entropy, repeatedly covered padding/background, and usually lost layer-5
+  bbox mass; mean Cropr-L5 foreground mass fell `0.719379 -> 0.640683`.
+  Final summary/visual SHAs are `ee2d4456...38c5b`/
+  `1f5c2e57...69dc3`; automated and visual gates both fail.
+- Close exact Cropr routing and nearby query/head/loss/blend/temperature/
+  keep-rate/layer/training/threshold/router sweeps on this keeper. No
+  validation, test, full train, or current-best update is authorized. Full
+  detail is in `TRKH_5CLASS_CROPR_TOKEN_SELECTOR_A0_CLOSURE_20260717.md`.
+- Verified compaction retained 332 non-binary files, excluded exactly four
+  recorded checkpoints (`399,569,848` bytes), and reclaimed `446,504,960`
+  measured bytes. Payload/cleanup SHAs are `75a54745...a6df77`/
+  `1bcef94e...9b441a`; current-best hashes remain exact and command tracking
+  remains three revisions/two updates.
+- Closure verification passed compileall, both wrapper parses, focused
+  `32/32`, full pytest `1332/1332`, and retention over 734 directories/47
+  compaction manifests. All 209 compacted originals are absent,
+  `blockers=[]`, and retention SHA is `95128604...382e9`. Final closure SHA is
+  `dd54924d...2b42d`; only explicit closure paths will be published.

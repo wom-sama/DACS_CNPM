@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
 
@@ -24,7 +25,6 @@ from trkh.tools.audit_cropr_token_selector_pair import (
     _forward_trace,
     _maximum_tree_error,
     _perturbation_summary,
-    _run_provenance,
     _selector_summary_with_expected,
     _set_jaccard,
     _verify_failed_attempt,
@@ -119,33 +119,83 @@ def test_cropr_batch2_xai_failure_is_locked_before_batch32_correction() -> None:
     )
 
 
-def test_cropr_pair_provenance_passes_without_loading_holdout() -> None:
-    provenance = _run_provenance(
-        control_run=Path("runs/probe_cropr_a0_native_control_5e_20260716"),
-        candidate_run=Path("runs/probe_cropr_a0_learned_candidate_5e_20260716"),
-        control_checkpoint=Path(
-            "runs/probe_cropr_a0_native_control_5e_20260716/checkpoints/last.pt"
-        ),
-        candidate_checkpoint=Path(
-            "runs/probe_cropr_a0_learned_candidate_5e_20260716/checkpoints/last.pt"
-        ),
-        pair_manifest_path=Path("runs/cropr_a0_pair_manifest_20260716.json"),
-        preflight_path=Path(
-            "runs/audit_cropr_token_selector_preflight_20260716/summary.json"
-        ),
-        fold_summary_path=Path(
-            "runs/yolof_cidt_fold0_trainonly_20260716/summary.json"
-        ),
-        protocol_path=Path(
-            "docs/TRKH_5CLASS_CROPR_TOKEN_SELECTOR_READINESS_PROTOCOL_20260716.md"
-        ),
-        require_clean_worktree=False,
+def test_cropr_pair_provenance_is_preserved_after_compaction() -> None:
+    control = Path("runs/probe_cropr_a0_native_control_5e_20260716")
+    candidate = Path("runs/probe_cropr_a0_learned_candidate_5e_20260716")
+    evidence = Path("runs/evidence_cropr_token_selector_a0_pair_rejected_20260717")
+    cleanup_path = Path(
+        "runs/cleanup_manifest_20260717_cropr_token_selector_a0_pair_rejected.json"
     )
-    assert provenance["all_checks_pass"], provenance["failed_checks"]
-    assert provenance["tracked_worktree_clean_required"] is False
-    assert provenance["occurrence"]["control"]["epochs"] == provenance[
-        "occurrence"
-    ]["candidate"]["epochs"]
+    final_audit = Path(
+        "runs/audit_cropr_token_selector_a0_pair_standard_batch32_20260717/summary.json"
+    )
+
+    assert not control.exists()
+    assert not candidate.exists()
+    assert _sha256(evidence / "file_manifest.sha256.txt") == (
+        "75a54745b324f1931c2998c790edeeb1d7d49cebdb29eea89d4f818a4ea6df77"
+    )
+    assert _sha256(cleanup_path) == (
+        "1bcef94e3dbbf581a07d1457f302a9ddab52ac994a6fccbf7ccefad3d39b441a"
+    )
+    assert _sha256(final_audit) == (
+        "ee2d4456356256ee10aefb3004aee2e15d4e63823a42611eb272b85671238c5b"
+    )
+
+    cleanup = json.loads(cleanup_path.read_text(encoding="utf-8"))
+    evidence_summary = json.loads(
+        (evidence / "summary.json").read_text(encoding="utf-8")
+    )
+    assert cleanup["status"] == "completed"
+    assert cleanup["deletion_verified"] is True
+    assert evidence_summary["status"] == "compacted_verified"
+    assert evidence_summary["test_data_used"] is False
+    assert cleanup["compacted_names"] == [control.name, candidate.name]
+    assert cleanup["excluded_files"] == 4
+    assert cleanup["excluded_bytes"] == 399_569_848
+
+    inventory = json.loads(
+        (evidence / "source_inventory.json").read_text(encoding="utf-8")
+    )
+    excluded = {
+        f"{source['alias']}/{row['relative_path']}": row["sha256"]
+        for source in inventory["sources"]
+        for row in source["files"]
+        if row["excluded"]
+    }
+    assert excluded == {
+        "native_control/checkpoints/best.pt": (
+            "47a3c919dfef53cf14a81cf2959e177b0652f55f6895d8a2afc51ebf9f76a996"
+        ),
+        "native_control/checkpoints/last.pt": (
+            "97c0ed6d922926c670c55799c972bb39d1c19e13f295623e44bac4cb66a7225d"
+        ),
+        "learned_candidate/checkpoints/best.pt": (
+            "58736fdc4d54f32cad0f8ee17d5012d0252d4b3b1db8548fda3fe5c4f73f89db"
+        ),
+        "learned_candidate/checkpoints/last.pt": (
+            "6fa48de9b4d1a07ded560c9730e80987a535769c6b69d2d7af6940ca9fa7c98a"
+        ),
+    }
+
+    control_occurrence = json.loads(
+        (
+            evidence
+            / "native_control/data_cartography_train_occurrence_hashes.json"
+        ).read_text(encoding="utf-8")
+    )
+    candidate_occurrence = json.loads(
+        (
+            evidence
+            / "learned_candidate/data_cartography_train_occurrence_hashes.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert control_occurrence["epochs"] == candidate_occurrence["epochs"]
+
+    final_summary = json.loads(final_audit.read_text(encoding="utf-8"))
+    assert final_summary["provenance"]["all_checks_pass"] is True
+    assert final_summary["official_validation_used"] is False
+    assert final_summary["test_data_used"] is False
 
 
 def test_cropr_trace_keeps_the_deployment_pruning_path_enabled() -> None:
