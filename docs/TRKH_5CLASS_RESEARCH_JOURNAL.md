@@ -17125,3 +17125,42 @@ Date: 2026-07-02
   sweeps on this keeper. Stage B and command promotion are denied; current-best
   tracking remains three revisions/two updates and zero keeper replacements.
   Final closure SHA is `54fddeb9...fa4fc`.
+
+## Supervised-Minority Condition-View A0 Lock 2026-07-16 - Primary Source Before Adaptation
+
+- A fresh no-repeat screen selected Mildenberger et al.'s CVPR-2025
+  Supervised Minority objective as a distinct binary-imbalance representation
+  route. The accepted CVF paper and official MIT repository at commit
+  `0b1e697...a7f95c` are authoritative; secondary/user research reports are
+  not used to define the method.
+- The immutable train-only A0 kept non-class1 samples instance-discriminative,
+  used deterministic condition pairs over exact frozen keeper pooled features,
+  and retained identity-CE plus standard-SupCon controls. It locked the
+  source-disjoint `7372/1843` cohort, a pre-training selectivity gate, 20+10
+  epochs, precision/TP/illumination/XAI/deployment gates, and no validation or
+  test. Protocol SHA is `d4fb528c...61b4ce9`.
+- Implementation commit `35f767b` passed focused `12/12`, related `15/15`,
+  full pytest `1215/1215`, launcher parse/preflight, protected hashes, and
+  tracked-worktree cleanliness before the sole formal execution.
+
+## Supervised-Minority A0 Numeric Closure 2026-07-16 - FP16 Cannot Replay FP32 CIDT Near Ties
+
+- A0 completed its 9,215-row clean FP16 cache and exact immediate 32-row
+  deterministic replay, then stopped at the mandatory CIDT provenance gate.
+  Maximum probability error was `0.014133721590042114` with one argmax
+  mismatch. No shifted cache, selectivity metric, training, XAI, deployment
+  payload, validation/test access, or output directory was produced.
+- Both model-construction paths produced the same architecture and 185
+  bit-exact state tensors. On the 64 smallest-margin CIDT rows, both FP32 paths
+  matched CIDT within `5.960464477539063e-08` with zero mismatches; both FP16
+  paths changed sample `2589`. CIDT gives `p0=0.24788621` and
+  `p1=0.24808544`; FP16 rounds both to `0.24801132`, so argmax changes from
+  class1 to class0.
+- Close A0 as an internally inconsistent numeric replay contract, not a TTC
+  behavioral rejection. Gate thresholds were not loosened and A0 will not be
+  rerun. Closure SHA is `49420090...fac2b453`.
+- One A1 infrastructure correction is prospectively locked at protocol SHA
+  `e17f5cb5...744d9aa2`: FP32/no-autocast cache extraction and batch64 exactly
+  match CIDT, while every method, schedule, cohort, behavior gate, and
+  validation/test prohibition remains unchanged. Commands stay at three
+  revisions/two updates and zero keeper replacements.

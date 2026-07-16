@@ -3091,9 +3091,23 @@
   `1203/1203`, parse/preflight, protected hashes, and retention over 707
   directories with `blockers=[]`. Commands remain three revisions/two updates;
   final closure SHA is `54fddeb9...fa4fc`.
-- [ ] Perform a fresh primary-source/no-repeat screen outside capsules, channel
+- [x] Perform a fresh primary-source/no-repeat screen outside capsules, channel
   diversity, color/frequency/style, prototype/subspace, output calibration,
   feature stitching, and closed gradient/objective families. Before training,
   require a train-only selectivity information gate on class1 TP versus hard
   negatives across clean/dim/bright/low-contrast, and reject nonselective
-  spatial mechanisms without an image-model smoke.
+  spatial mechanisms without an image-model smoke. Select CVPR-2025
+  Supervised Minority from the accepted CVF paper and official MIT repository;
+  lock the exact condition-view A0 at protocol SHA `d4fb528c...61b4ce9`.
+- [x] Implement/precommit A0 and diagnose its formal provenance stop. The full
+  clean FP16 cache replayed deterministically but could not reproduce FP32
+  CIDT: maximum probability error `0.01413372`, with sample `2589` changing
+  class because FP16 tied p0/p1. Prove both model loaders/state dictionaries
+  bit-exact and FP32-to-CIDT error `<=5.96e-8` on the 64 tightest-margin rows.
+  Close A0 before selectivity/training without validation/test or command
+  revision; closure SHA is `49420090...fac2b453`.
+- [ ] Implement, test, precommit, and run the sole A1 numeric correction at
+  protocol SHA `e17f5cb5...744d9aa2`. Preserve A0 as reproducible history;
+  select `a1_fp32_cidt`, extract all condition caches in FP32/batch64, require
+  all-row CIDT error `<=1e-6` and zero argmax mismatch, then continue only if
+  every inherited pre-training selectivity gate passes.
