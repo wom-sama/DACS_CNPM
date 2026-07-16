@@ -16978,3 +16978,38 @@ Date: 2026-07-02
   retention over `701` directories with `blockers=[]`. Retention SHA is
   `ae5266f5...3f426`; current-best commands remain three revisions/two
   updates. Final closure SHA is `047e3ba6...83cfe0`.
+
+## AugSelf Color-Adapter Closure 2026-07-16 - Color Prediction Collapses Multiclass Precision
+
+- NeurIPS-2021 AugSelf was selected because predicting augmentation-parameter
+  differences preserves color information instead of enforcing invariance.
+  A paper-only clean-room implementation used the exact source-disjoint
+  `7372/1843` `yolo_f/train` split, `432/186` balanced fit cohort, 60 batches,
+  a zero-init `256->64->256` final-head adapter, and a matched detached-gradient
+  control. Protocol SHA is `248f1ade...203ae`.
+- Every structural gate passed: exact `32,768/528,388` adapter/predictor
+  parameters, initial deployed-logit equivalence, isolated gradient detach,
+  frozen keeper, candidate/control view equality, independent RNG/view replay,
+  ONNX, runtime/VRAM, and full XAI coverage.
+- Candidate focused color MSE `0.050474` beat zero MSE `0.137060` but was
+  `1.06315x` control MSE `0.047476`. Two-view accuracy/class1 F1 also lost
+  `0.637931/0.771930` versus control `0.641379/0.773626`; the representation
+  gradient added no held-out value.
+- Clean candidate macro/class1 F1 collapsed to `0.308590/0.149315`, precision
+  to `0.080681`, and restricted FP expanded `36 -> 740`. The `2/1215`
+  corrections/harms show catastrophic class-1 support expansion. Detached
+  control also expanded FP to `718`, and candidate added another 22 FP.
+- Dim/bright/low-contrast candidate FP reached `834/828/817`. XAI covered all
+  `708` required rows across 59 pages: candidate/control Grad-CAM correlation
+  was `0.998049`, maps stayed fruit-centered, and broad color-loss saliency did
+  not create selective class evidence. This is not a background-localization
+  failure.
+- Close this final-head AugSelf color adapter and all locked neighboring
+  jitter/adapter/predictor/optimizer/cohort sweeps. Summary/prediction/manifest
+  SHAs are `b928b2bf...cd4740a`, `dc8da86c...deb1a3`, and
+  `a63a333d...45f0e`; 69 payloads total `759,894,298` bytes.
+- Compile/focused/full tests passed `6/6` and `1188/1188`; parse/preflight,
+  prediction/view/XAI replay, protected hashes, and retention over `703`
+  directories with `blockers=[]` passed. Retention SHA is
+  `ff2ee941...f64d9`. Commands remain three revisions/two updates. Final
+  closure SHA is `7968c0e1...3b817`.

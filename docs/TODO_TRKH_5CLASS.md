@@ -3033,9 +3033,25 @@
   directories with `blockers=[]`. Summary/manifest SHAs are
   `8177f976...3bca7a`/`96fc5719...1f5972`; commands remain three revisions/two
   updates. Final closure SHA is `047e3ba6...83cfe0`.
-- [ ] Perform the next primary-source/no-repeat screen outside color-
-  invariance/equivariance residuals and every family already closed in the
-  journal. Prefer a scratch-compatible objective that preserves augmentation
-  information or creates a new class1-positive supervision signal, with a
-  source-disjoint train-only information gate, explicit precision/TP/
-  illumination protection, and `<=30`-epoch feasibility before code.
+- [x] Perform a primary-source/no-repeat screen outside color invariance and
+  equivariance. Select NeurIPS-2021 AugSelf because color-parameter difference
+  prediction preserves augmentation information; lock a paper-only final-head
+  adapter with matched detached-gradient control, exact source-disjoint
+  train-only cohorts, precision/TP/illumination/resource/export/XAI gates, and
+  no validation/test access. Protocol SHA is `248f1ade...203ae`.
+- [x] Implement, precommit, and run the sole AugSelf color-adapter A0. All
+  structural/replay/deployment gates passed, but candidate color MSE was
+  `1.06315x` control and clean macro/class1 F1 collapsed to
+  `0.308590/0.149315`; class1 precision was `0.080681` and restricted FP rose
+  `36 -> 740`. Deny Stage B and all nearby sweeps.
+- [x] Complete AugSelf closure: inspect representative pages plus all-map
+  statistics over 708 required XAI rows, replay all `7372` behavior rows and
+  color views, pass compile/focused/full tests `6/6` and `1188/1188`, parse/
+  preflight, protected hashes, and retention over `703` directories with
+  `blockers=[]`. Commands remain three revisions/two updates.
+- [ ] Perform the next primary-source/no-repeat screen outside color adapters,
+  invariance/equivariance, narrow-cohort CE updates, and every closed family in
+  the journal. Prefer a scratch-compatible mechanism that preserves natural
+  multiclass geometry while adding conservative class1-positive evidence;
+  require train-only information and precision/TP/illumination gates before
+  any shared-code implementation.
