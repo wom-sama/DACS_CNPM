@@ -49,6 +49,10 @@ LOCKED_FOLD_SUMMARY_SHA256 = (
 LOCKED_PROTOCOL_SHA256 = (
     "d3f8de6fbef7ad5d88ca33e5db71f9c5ca587f32c1ad5ee4797fd400aaf3ee4b"
 )
+FAILED_AUDIT_HEAD = "262c0ec72b813781a666b6e5be04acfb6298a111"
+LOCKED_FAILED_ATTEMPT_MANIFEST_SHA256 = (
+    "0bb4d7c50880592400dfa61aa1c0d586f1bf5cfa7bc50e75150d278907d5bdce"
+)
 RUNTIME_PATHS = (
     "trkh/models/model.py",
     "trkh/core/config.py",
@@ -131,6 +135,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--xai-batch-size", type=int, default=2)
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--failed-attempt-manifest", type=Path)
     parser.add_argument("--finalize-visual-review", action="store_true")
     parser.add_argument("--visual-review-result", choices=("pass", "fail"))
     parser.add_argument("--visual-review-note", type=str, default="")
@@ -183,6 +188,121 @@ def _evidence_head(preflight: Mapping[str, object]) -> str:
             return str(replay_git.get("head", ""))
     git = preflight.get("git")
     return str(git.get("head", "")) if isinstance(git, Mapping) else ""
+
+
+def _verify_failed_attempt(
+    manifest_path: Path, *, current_head: str
+) -> Dict[str, object]:
+    resolved = Path(manifest_path).resolve()
+    if common._sha256(resolved) != LOCKED_FAILED_ATTEMPT_MANIFEST_SHA256:
+        raise ValueError("Failed pair-audit manifest hash differs.")
+    manifest = common._load_json(resolved)
+    artifacts = manifest.get("artifacts")
+    if not isinstance(artifacts, list):
+        raise ValueError("Failed pair-audit manifest lacks artifacts.")
+    expected_names = {
+        "context_rows_all_conditions.csv",
+        "event_manifest.csv",
+        "failure_record.json",
+        "predictions_all_conditions.csv",
+        "tiny_edge_cohort.json",
+    }
+    artifact_map = {
+        str(row.get("name", "")): row
+        for row in artifacts
+        if isinstance(row, Mapping)
+    }
+    changed_paths = {
+        value.strip().replace("\\", "/")
+        for value in _git_value(
+            "diff", "--name-only", FAILED_AUDIT_HEAD, current_head
+        ).splitlines()
+        if value.strip()
+    }
+    allowed_correction_paths = {
+        "scripts/run_trkh_inattentive_token_fusion_a0.ps1",
+        "tests/test_audit_inattentive_token_fusion_pair.py",
+        "trkh/tools/audit_inattentive_token_fusion_pair.py",
+    }
+    checks: Dict[str, bool] = {
+        "manifest_method": manifest.get("method")
+        == "inattentive_token_fusion_a0_pair_failed_attempt_manifest",
+        "failed_head_exact": manifest.get("audit_git_head") == FAILED_AUDIT_HEAD,
+        "artifact_inventory_exact": set(artifact_map) == expected_names,
+        "failed_output_has_no_summary": not (resolved.parent / "summary.json").exists(),
+        "raw_data_unmodified": manifest.get("raw_data_modified") is False,
+        "validation_unused": manifest.get("validation_used") is False,
+        "test_unused": manifest.get("test_used") is False,
+        "correction_commit_is_new": current_head != FAILED_AUDIT_HEAD,
+        "correction_delta_nonempty": bool(changed_paths),
+        "correction_delta_scoped": changed_paths.issubset(
+            allowed_correction_paths
+        ),
+    }
+    for name in sorted(expected_names):
+        row = artifact_map.get(name, {})
+        path = resolved.parent / name
+        checks[f"source_{name}_exists"] = path.is_file()
+        checks[f"source_{name}_bytes"] = path.is_file() and int(
+            path.stat().st_size
+        ) == int(row.get("bytes", -1))
+        checks[f"source_{name}_sha256"] = path.is_file() and common._sha256(
+            path
+        ) == str(row.get("sha256", ""))
+    return {
+        "manifest": str(resolved),
+        "manifest_sha256": common._sha256(resolved),
+        "failed_output_dir": str(resolved.parent),
+        "failed_audit_head": FAILED_AUDIT_HEAD,
+        "correction_audit_head": current_head,
+        "changed_paths": sorted(changed_paths),
+        "checks": checks,
+        "all_checks_pass": all(checks.values()),
+        "failed_checks": sorted(
+            name for name, passed in checks.items() if not passed
+        ),
+        "artifacts": artifact_map,
+    }
+
+
+def _compare_correction_artifacts(
+    failed_attempt: Mapping[str, object], *, output_dir: Path
+) -> Dict[str, object]:
+    expected = failed_attempt.get("artifacts")
+    if not isinstance(expected, Mapping):
+        raise ValueError("Failed-attempt evidence lacks artifact hashes.")
+    names = (
+        "context_rows_all_conditions.csv",
+        "event_manifest.csv",
+        "predictions_all_conditions.csv",
+        "tiny_edge_cohort.json",
+    )
+    checks: Dict[str, bool] = {}
+    observed: Dict[str, object] = {}
+    for name in names:
+        row = expected.get(name)
+        if not isinstance(row, Mapping):
+            raise ValueError(f"Failed-attempt evidence lacks {name}.")
+        path = output_dir / name
+        exists = path.is_file()
+        size = int(path.stat().st_size) if exists else -1
+        digest = common._sha256(path) if exists else ""
+        checks[f"replay_{name}_exists"] = exists
+        checks[f"replay_{name}_bytes_exact"] = size == int(
+            row.get("bytes", -1)
+        )
+        checks[f"replay_{name}_sha256_exact"] = digest == str(
+            row.get("sha256", "")
+        )
+        observed[name] = {"bytes": size, "sha256": digest}
+    return {
+        "checks": checks,
+        "all_checks_pass": all(checks.values()),
+        "failed_checks": sorted(
+            name for name, passed in checks.items() if not passed
+        ),
+        "replayed_artifacts": observed,
+    }
 
 
 def _run_provenance(
@@ -1164,6 +1284,13 @@ def _caption_gradcam(
     return canvas
 
 
+def _pair_visual_row(row: Mapping[str, object]) -> Dict[str, object]:
+    visual_row = dict(row)
+    # Jaccard compared preflight off/on pruning; no such pair exists post-train.
+    visual_row["second_prune_jaccard"] = math.nan
+    return visual_row
+
+
 def _render_xai_pages(
     *,
     base_dataset,
@@ -1214,7 +1341,7 @@ def _render_xai_pages(
         fusion_panel = fusion._draw_fusion_overlay(
             image_tensor,
             metadata["bbox"],
-            trace,
+            _pair_visual_row(trace),
             mean=mean,
             std=std,
             title=f"context {prefix} {categories}",
@@ -1329,6 +1456,7 @@ def _gate_checks(
     perturbation: Mapping[str, object],
     xai: Mapping[str, object],
     replay: Mapping[str, object],
+    correction_replay: Optional[Mapping[str, object]],
 ) -> Dict[str, bool]:
     clean = comparisons["clean"]
     clean_delta = clean["delta"]
@@ -1357,6 +1485,8 @@ def _gate_checks(
     total_xai_rows = int(xai["request_rows"])
     checks: Dict[str, bool] = {
         "provenance_and_training": bool(provenance["all_checks_pass"]),
+        "correction_replay_exact": correction_replay is None
+        or bool(correction_replay["all_checks_pass"]),
         "prediction_replay_exact": bool(replay["metrics_exact"]),
         "prediction_rows_exact": int(replay["rows"])
         == 2 * len(common.CONDITIONS) * EXPECTED_HOLDOUT_ROWS,
@@ -1535,6 +1665,17 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
         raise ValueError("Fusion pair XAI batch size must be in [1,2].")
     if not torch.cuda.is_available():
         raise RuntimeError("Fusion pair audit requires CUDA.")
+    current_head = _git_value("rev-parse", "HEAD")
+    failed_attempt = None
+    if args.failed_attempt_manifest is not None:
+        failed_attempt = _verify_failed_attempt(
+            Path(args.failed_attempt_manifest), current_head=current_head
+        )
+        if not bool(failed_attempt["all_checks_pass"]):
+            raise ValueError(
+                "Failed-attempt evidence did not pass correction replay preflight: "
+                f"{failed_attempt['failed_checks']}"
+            )
     output_dir = _prepare_output(args.output_dir)
     declaration = Path(args.declaration).resolve()
     fold_summary_path = Path(args.fold_summary).resolve()
@@ -1719,6 +1860,21 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
     )
     xai["control_collection"] = control_xai
     xai["candidate_collection"] = candidate_xai
+    correction_replay = None
+    if failed_attempt is not None:
+        artifact_replay = _compare_correction_artifacts(
+            failed_attempt, output_dir=output_dir
+        )
+        correction_replay = {
+            **failed_attempt,
+            "artifact_replay": artifact_replay,
+            "all_checks_pass": bool(failed_attempt["all_checks_pass"])
+            and bool(artifact_replay["all_checks_pass"]),
+            "failed_checks": [
+                *failed_attempt["failed_checks"],
+                *artifact_replay["failed_checks"],
+            ],
+        }
     checks = _gate_checks(
         provenance=provenance,
         comparisons=comparisons,
@@ -1728,6 +1884,7 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
         perturbation=perturbation,
         xai=xai,
         replay=replay,
+        correction_replay=correction_replay,
     )
     summary: Dict[str, object] = {
         "method": METHOD,
@@ -1748,6 +1905,11 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
             "preflight_summary": str(preflight_path),
             "pair_manifest": str(pair_manifest_path),
             "protocol": str(protocol_path),
+            "failed_attempt_manifest": (
+                str(Path(args.failed_attempt_manifest).resolve())
+                if args.failed_attempt_manifest is not None
+                else None
+            ),
         },
         "dataset": dataset_summary,
         "provenance": provenance,
@@ -1764,6 +1926,7 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
             "sha256": common._sha256(event_path),
         },
         "xai": xai,
+        "correction_replay": correction_replay,
         "predictions": {
             "path": str(prediction_path.resolve()),
             "sha256": common._sha256(prediction_path),

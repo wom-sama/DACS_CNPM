@@ -5,6 +5,8 @@ param(
     [string]$FoldRoot = "runs\yolof_cidt_fold0_trainonly_20260716",
     [string]$PreflightOutput = "runs\audit_inattentive_fusion_preflight_20260716",
     [string]$PairAuditOutput = "runs\audit_inattentive_fusion_a0_pair_20260716",
+    [string]$PairAuditCorrectionOutput = "runs\audit_inattentive_fusion_a0_pair_correction_replay_20260716",
+    [string]$FailedPairAuditManifest = "runs\audit_inattentive_fusion_a0_pair_20260716\failure_manifest.json",
     [string]$ControlRunName = "probe_inattentive_fusion_a0_control_5e_20260716",
     [string]$CandidateRunName = "probe_inattentive_fusion_a0_candidate_5e_20260716",
     [switch]$PreflightOnly,
@@ -16,6 +18,7 @@ param(
     [string]$ExpectedSummarySha256 = "",
     [switch]$RunPair,
     [switch]$AuditPair,
+    [switch]$AuditPairCorrectionReplay,
     [switch]$FinalizePairVisualReview
 )
 
@@ -32,10 +35,11 @@ $SelectedModes = @(
     $FinalizeVisualReview,
     $RunPair,
     $AuditPair,
+    $AuditPairCorrectionReplay,
     $FinalizePairVisualReview
 ) | Where-Object { $_ }
 if ($SelectedModes.Count -ne 1) {
-    throw "Chon dung mot mode: -PreflightOnly, -ReplayEngineeringCorrection, -FinalizeVisualReview, -RunPair, -AuditPair, hoac -FinalizePairVisualReview."
+    throw "Chon dung mot mode: -PreflightOnly, -ReplayEngineeringCorrection, -FinalizeVisualReview, -RunPair, -AuditPair, -AuditPairCorrectionReplay, hoac -FinalizePairVisualReview."
 }
 if (-not (Test-Path -LiteralPath $Python)) {
     throw "Khong tim thay Python: $Python"
@@ -296,6 +300,46 @@ if ($AuditPair) {
     Write-Host "Automated pair audit passed. Review every fusion_pair_xai_contact_sheet_*.png before finalization."
 }
 
+if ($AuditPairCorrectionReplay) {
+    $CorrectionInputs = @(
+        $PreflightSummary,
+        $ControlRunDir,
+        $CandidateRunDir,
+        $PairManifestPath,
+        $FailedPairAuditManifest
+    )
+    foreach ($Path in $CorrectionInputs) {
+        if (-not (Test-Path -LiteralPath $Path)) {
+            throw "Khong tim thay correction-replay input: $Path"
+        }
+    }
+    Assert-FileSha256 -Path $FailedPairAuditManifest -Expected "0bb4d7c50880592400dfa61aa1c0d586f1bf5cfa7bc50e75150d278907d5bdce"
+    if (Test-Path -LiteralPath $PairAuditCorrectionOutput) {
+        throw "Pair correction output da ton tai; protocol cam overwrite/rerun: $PairAuditCorrectionOutput"
+    }
+    & $Python -m trkh.tools.audit_inattentive_token_fusion_pair `
+        --control-checkpoint (Join-Path $ControlRunDir "checkpoints\best.pt") `
+        --candidate-checkpoint (Join-Path $CandidateRunDir "checkpoints\best.pt") `
+        --control-run-dir $ControlRunDir `
+        --candidate-run-dir $CandidateRunDir `
+        --pair-manifest $PairManifestPath `
+        --fold-data $FoldDataYaml `
+        --fold-summary $FoldSummary `
+        --declaration $Declaration `
+        --preflight-summary $PreflightSummary `
+        --protocol $Protocol `
+        --failed-attempt-manifest $FailedPairAuditManifest `
+        --output-dir $PairAuditCorrectionOutput `
+        --batch-size 32 `
+        --xai-batch-size 2 `
+        --num-workers 4 `
+        --seed 42
+    if ($LASTEXITCODE -ne 0) {
+        throw "Inattentive-token fusion pair correction replay rejected or failed with exit code $LASTEXITCODE."
+    }
+    Write-Host "Automated correction replay passed. Review every fusion_pair_xai_contact_sheet_*.png before finalization."
+}
+
 if ($FinalizePairVisualReview) {
     if ([string]::IsNullOrWhiteSpace($VisualReviewNote)) {
         throw "FinalizePairVisualReview yeu cau -VisualReviewNote."
@@ -304,7 +348,7 @@ if ($FinalizePairVisualReview) {
         throw "FinalizePairVisualReview yeu cau -ExpectedSummarySha256 gom 64 ky tu hex."
     }
     & $Python -m trkh.tools.audit_inattentive_token_fusion_pair `
-        --output-dir $PairAuditOutput `
+        --output-dir $PairAuditCorrectionOutput `
         --finalize-visual-review `
         --visual-review-result $VisualReviewResult `
         --visual-review-note $VisualReviewNote `

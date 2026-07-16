@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import math
 
 import pytest
+import torch
 
 from trkh.tools import audit_foveal_aggregated_attention_pair as common
 from trkh.tools.audit_inattentive_token_fusion_pair import (
@@ -10,7 +12,9 @@ from trkh.tools.audit_inattentive_token_fusion_pair import (
     _context_condition_summary,
     _gate_checks,
     _normalize_train_args,
+    _pair_visual_row,
 )
+from trkh.tools import audit_inattentive_token_fusion_preflight as fusion
 
 
 def test_normalize_train_args_removes_only_locked_pair_differences() -> None:
@@ -80,6 +84,32 @@ def test_context_condition_summary_replays_mass_and_cohort_statistics() -> None:
     assert summary["tiny_edge_nonzero_object_mass_fraction"] == pytest.approx(0.5)
     assert summary["weighted_object_gain_mean"] == pytest.approx(0.05)
     assert summary["clean_context_cosine_mean"] == pytest.approx(0.8)
+
+
+def test_pair_visual_row_marks_preflight_only_jaccard_not_applicable() -> None:
+    row = {
+        "stage1_dropped_indices": "",
+        "stage1_fusion_weights": "",
+        "stage2_dropped_indices": "",
+        "stage2_fusion_weights": "",
+        "stage2_kept_indices": "",
+        "stage2_previous_context_attention": 0.0,
+        "weighted_object_fraction": 0.0,
+        "raw_dropped_object_fraction": 0.0,
+        "outside_context_fraction": 1.0,
+    }
+    visual_row = _pair_visual_row(row)
+
+    assert math.isnan(float(visual_row["second_prune_jaccard"]))
+    image = fusion._draw_fusion_overlay(
+        torch.zeros(3, 32, 32),
+        torch.tensor([0.5, 0.5, 0.5, 0.5]),
+        visual_row,
+        mean=(0.0, 0.0, 0.0),
+        std=(1.0, 1.0, 1.0),
+        title="correction smoke",
+    )
+    assert image.size == (32, 90)
 
 
 def _passing_gate_payloads() -> dict[str, object]:
@@ -155,6 +185,7 @@ def _passing_gate_payloads() -> dict[str, object]:
             "metrics_exact": True,
             "rows": 2 * len(common.CONDITIONS) * EXPECTED_HOLDOUT_ROWS,
         },
+        "correction_replay": None,
     }
 
 
