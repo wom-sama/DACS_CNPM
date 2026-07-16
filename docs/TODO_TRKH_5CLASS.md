@@ -3049,9 +3049,21 @@
   color views, pass compile/focused/full tests `6/6` and `1188/1188`, parse/
   preflight, protected hashes, and retention over `703` directories with
   `blockers=[]`. Commands remain three revisions/two updates.
-- [ ] Perform the next primary-source/no-repeat screen outside color adapters,
+- [x] Perform the next primary-source/no-repeat screen outside color adapters,
   invariance/equivariance, narrow-cohort CE updates, and every closed family in
-  the journal. Prefer a scratch-compatible mechanism that preserves natural
-  multiclass geometry while adding conservative class1-positive evidence;
-  require train-only information and precision/TP/illumination gates before
-  any shared-code implementation.
+  the journal. Stock hybrids and Conformer-style coupling were already closed;
+  select TIP-2020 Mutual-Channel Loss as a distinct class-aligned channel-group
+  mechanism, with official commit/source/license and paper hashes verified.
+- [x] Lock the exact train-only final-patch MCL residual A0 before code. Reuse
+  source-disjoint `7372/1843`, natural multiclass fit order, three channels per
+  class, an identical CE-only control, official `alpha=1.5/beta=20`, ten frozen-
+  feature epochs, and strict precision/TP/illumination/mechanism/deployment/XAI
+  gates. Validation, test, trainer integration, sweeps, and command promotion
+  remain forbidden unless every gate passes.
+- [ ] Implement the isolated MCL auditor, focused equation/replay tests, and a
+  VS Code-safe PowerShell launcher. Preflight must verify all hashes and create
+  no run directory; do not modify the shared model or trainer.
+- [ ] Run the sole locked MCL A0, inspect all audits/XAI, independently replay
+  artifacts, then either authorize Stage B or close the exact route without a
+  neighboring sweep. Keep current-best commands at three revisions unless a
+  later locked validation win occurs.

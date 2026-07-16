@@ -17013,3 +17013,28 @@ Date: 2026-07-02
   directories with `blockers=[]` passed. Retention SHA is
   `ff2ee941...f64d9`. Commands remain three revisions/two updates. Final
   closure SHA is `7968c0e1...3b817`.
+
+## Mutual-Channel Patch A0 Lock 2026-07-16 - Natural Geometry Before Channel Diversity
+
+- A fresh no-repeat screen rejected another catalogue hybrid or Conformer-like
+  branch because MobileViT, EdgeNeXt, CoAtNet, LeFF, and persistent concurrent
+  coupling are already closed. Re-read Chang et al.'s TIP-2020 Mutual-Channel
+  Loss paper and cloned the MIT-licensed official repository at commit
+  `befb369...09fd9` instead of inferring the equations from a secondary report.
+- MCL is distinct from RSC, prompts, semantic parts, register diversity, and
+  Soft-MoE: it assigns three final-map channels to each class, randomly removes
+  one for discriminality, and rewards complementary spatial coverage within
+  every group. It can therefore be tested as positive fine-grained evidence
+  without changing token routing or the frozen keeper.
+- The official scratch recipe is 300 epochs and cannot be transferred to TRKH.
+  The sole A0 instead freezes all 7,245,590 keeper parameters, trains an exact
+  3,935-parameter final-patch residual on the natural source-disjoint fit fold
+  for ten cached-feature epochs, and compares MCL against raw plus an identical
+  CE-only adapter. Initial deployed logits are bit-exact to raw.
+- The prospective protocol fixes the `7372/1843` split, 73,720-row order SHA
+  `d56903f...12d4`, mask SHA `0b158657...afb7`, official-code
+  `alpha=1.5/beta=20`, SGD recipe, residual scale, and all precision/F1/TP/
+  restricted-FP/illumination/mechanism/ONNX/runtime/XAI gates. No validation,
+  test, shared-code implementation, parameter sweep, or command revision is
+  authorized before every A0 gate passes. Immutable protocol SHA is
+  `778aa77f...672ae8`.
