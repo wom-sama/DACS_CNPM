@@ -17298,3 +17298,6 @@ Date: 2026-07-02
   full pytest `1250/1250`, protected hashes, and read-only retention over 719
   directories with `blockers=[]`. Retention summary SHA is
   `bae9909d...7c4228` and free space is 71.109 GiB.
+- Explicit-path closure commit `d6e40e4d6bd79a659b7ee64f64c335c500726b7a`
+  was pushed with HEAD equal to upstream. Closure-document SHA is
+  `e97b03efd3cf55b34b93cb862f687d80a1f1bac73c26937ffa4e66e05f5225a5`.
