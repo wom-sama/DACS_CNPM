@@ -17690,3 +17690,32 @@ Date: 2026-07-02
   compaction manifests. All 209 compacted originals are absent,
   `blockers=[]`, and retention SHA is `95128604...382e9`. Final closure SHA is
   `dd54924d...2b42d`; only explicit closure paths will be published.
+
+## Domain NBDT A0 Closure 2026-07-17 - Unequal-Depth Soft Path Collapses To Class 4
+
+- Cross-checked the ICLR-2021 accepted NBDT paper against the authors' MIT
+  repository at commit/tree `a7a2ee6...a75fc1e`/
+  `681fd2ca...809b8df`; secondary/user reports were not treated as authority.
+- Prospectively locked one fixed domain tree `((0,1),(2,3))|4`, the official
+  descendant-logit means, node softmaxes, leaf-path products, probability-
+  vector cross entropy, and an inclusive five-epoch `0 -> 0.5` adaptation.
+- Official AST and independent equation/gradient/HVP/finite-difference replay,
+  FP32/BF16 probability checks, trace-only deployment parity, ONNX Runtime,
+  and one-batch resource checks passed during development.
+- The required full 7,372-row fit-only keeper compatibility scan rejected the
+  route before any training. Flat keeper macro/class1 F1 was
+  `0.937980/0.809204` with class1 P/R `0.690671/0.976852` and `422` TP.
+  Soft-path inference predicted class 4 for every row, giving macro/class1 F1
+  `0.079722/0`, class1 TP `0`, and precision delta `-0.690671`.
+- All four node-probability variances were finite and nonzero. The collapse is
+  the prospectively fixed tree/flat-logit incompatibility: at equal logits,
+  the one-edge class-4 leaf has probability `0.5`, while each three-edge leaf
+  has probability `0.125`.
+- The 1,843-row source-disjoint holdout, official validation, test, full train,
+  and current-best commands were never opened or changed. No five-epoch pair
+  is authorized, and no topology/depth/loss/weight/schedule/inference/threshold
+  sweep may follow this observed result.
+- Removed the uncommitted runtime/trainer/launcher integration and temporary
+  ONNX dev artifact instead of shipping a rejected feature. Preserve the
+  prospective protocol and
+  `TRKH_5CLASS_DOMAIN_NBDT_A0_CLOSURE_20260717.md` as the no-repeat record.

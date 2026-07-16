@@ -3305,3 +3305,23 @@
   `95128604...382e9`; final closure SHA is `dd54924d...2b42d`. Commit/push
   only explicit closure paths; current-best commands remain three revisions/
   two updates.
+- [x] Cross-check ICLR-2021 NBDT against the accepted OpenReview paper and
+  official MIT repository, screen the rejected semantic-attribute route, and
+  prospectively lock one fixed domain tree `((0,1),(2,3))|4` before runtime
+  implementation or data output.
+- [x] Replay the official descendant-logit/path equations and independent
+  gradients, HVP, finite differences, FP32/BF16, trace-only parity, ONNX, and
+  resource behavior. Keep all prediction metrics on the standard deployment
+  forward; never use the attention-return path as behavior evidence.
+- [x] Apply the full-fit compatibility stop rule before training. On all 7,372
+  fit rows, the flat keeper reached macro/class1 F1 `0.937980/0.809204`, while
+  soft NBDT predicted class 4 for every row and reduced class1 TP `422 -> 0`.
+  Deny the five-epoch pair and all holdout/validation/test/full-train access.
+- [x] Record the unequal-depth diagnosis and remove the uncommitted NBDT
+  runtime/trainer/launcher integration plus temporary ONNX artifact. Close
+  topology/depth/loss/weight/schedule/inference/threshold variants and retain
+  only the prospective protocol and dated closure document.
+- [ ] Select the next distinct precision-first route only after a new
+  accepted-primary-paper/official-licensed-code no-repeat screen. Require a
+  pre-training gate that cannot be satisfied by background localization alone
+  and that protects class1 TP as well as restricted false positives.
