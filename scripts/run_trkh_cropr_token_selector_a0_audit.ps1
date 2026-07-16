@@ -1,6 +1,6 @@
 param(
     [string]$Python = "D:\DataAI\.venv\Scripts\python.exe",
-    [string]$OutputDir = "runs\audit_cropr_token_selector_a0_pair_corrected_20260717",
+    [string]$OutputDir = "runs\audit_cropr_token_selector_a0_pair_standard_batch32_20260717",
     [string]$ExpectedSummarySha256 = "",
     [string]$VisualReviewNote = "",
     [switch]$RunAudit,
@@ -39,6 +39,9 @@ $CandidateLast = "runs\probe_cropr_a0_learned_candidate_5e_20260716\checkpoints\
 $FailedSummary = "runs\audit_cropr_token_selector_a0_pair_20260717\summary.json"
 $FailureRecord = "runs\audit_cropr_token_selector_a0_pair_20260717\failure_record.json"
 $FailedManifest = "runs\audit_cropr_token_selector_a0_pair_20260717\artifact_manifest.json"
+$Batch2FailedSummary = "runs\audit_cropr_token_selector_a0_pair_corrected_20260717\summary.json"
+$Batch2FailureRecord = "runs\audit_cropr_token_selector_a0_pair_corrected_20260717\failure_record.json"
+$Batch2FailedManifest = "runs\audit_cropr_token_selector_a0_pair_corrected_20260717\artifact_manifest.json"
 
 Assert-FileSha256 $Protocol "42e912a6bdc320d98a9acbb79b6d48c1e372a5df861f279af1c6988b3ff6a847"
 Assert-FileSha256 $Preflight "12902d6930ec89fd658c2b86e42a30f07ea44643a2fd67a8a1fddb5b7f1e873c"
@@ -48,6 +51,9 @@ Assert-FileSha256 $CandidateLast "6fa48de9b4d1a07ded560c9730e80987a535769c6b69d2
 Assert-FileSha256 $FailedSummary "6404590b0a25049d41238b019bba6da0ef84aea35184f68c588d922f4c04f9cb"
 Assert-FileSha256 $FailureRecord "5dc48089553d747656d6e014df71bcbc8ef0fd4c0adea53b5b61301f1a6c7311"
 Assert-FileSha256 $FailedManifest "af4ff08eebccd75d13ec5d7764fe4e0db0966ff44fffa5f0ae68b53f68fcbdc0"
+Assert-FileSha256 $Batch2FailedSummary "b89bb1b5c28901aeec8f43dc54b7058b19c8d1ccc116cc5e1c15fc51d64f422f"
+Assert-FileSha256 $Batch2FailureRecord "5007bd44cb8caa6166d6112e9f6ef9344b6964a35537f0cd582e059f14444d41"
+Assert-FileSha256 $Batch2FailedManifest "9eb152ae4cc582fb5e208c5d72e7263f2bde50a481f065653784bf27d2ed5127"
 
 if ($RunAudit) {
     if (Test-Path -LiteralPath $OutputDir) {
@@ -70,7 +76,7 @@ if ($RunAudit) {
         --protocol $Protocol `
         --output-dir $OutputDir `
         --batch-size 32 `
-        --xai-batch-size 2 `
+        --xai-batch-size 32 `
         --num-workers 4 `
         --seed 42
     if ($LASTEXITCODE -ne 0) {

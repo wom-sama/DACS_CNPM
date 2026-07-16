@@ -82,6 +82,19 @@ LOCKED_FAILURE_RECORD_SHA256 = (
 LOCKED_FAILED_MANIFEST_SHA256 = (
     "af4ff08eebccd75d13ec5d7764fe4e0db0966ff44fffa5f0ae68b53f68fcbdc0"
 )
+BATCH2_FAILED_AUDIT_HEAD = "cce375a50d5c74c1a2636043cbbff62c6e2bead1"
+BATCH2_FAILED_AUDIT_DIR = Path(
+    "runs/audit_cropr_token_selector_a0_pair_corrected_20260717"
+)
+LOCKED_BATCH2_FAILED_SUMMARY_SHA256 = (
+    "b89bb1b5c28901aeec8f43dc54b7058b19c8d1ccc116cc5e1c15fc51d64f422f"
+)
+LOCKED_BATCH2_FAILURE_RECORD_SHA256 = (
+    "5007bd44cb8caa6166d6112e9f6ef9344b6964a35537f0cd582e059f14444d41"
+)
+LOCKED_BATCH2_FAILED_MANIFEST_SHA256 = (
+    "9eb152ae4cc582fb5e208c5d72e7263f2bde50a481f065653784bf27d2ed5127"
+)
 RUNTIME_PATHS = (
     "trkh/models/cropr_token_selector.py",
     "trkh/models/model.py",
@@ -162,7 +175,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     )
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--batch-size", type=int, default=32)
-    parser.add_argument("--xai-batch-size", type=int, default=2)
+    parser.add_argument("--xai-batch-size", type=int, default=32)
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--finalize-visual-review", action="store_true")
@@ -371,6 +384,124 @@ def _compare_failed_artifacts(
             name for name, passed in checks.items() if not passed
         ),
         "artifacts": observed,
+    }
+
+
+def _verify_batch2_failed_attempt(
+    *,
+    current_head: str,
+    require_correction_commit: bool = True,
+) -> Dict[str, object]:
+    output_dir = BATCH2_FAILED_AUDIT_DIR.resolve()
+    summary_path = output_dir / "summary.json"
+    failure_path = output_dir / "failure_record.json"
+    manifest_path = output_dir / "artifact_manifest.json"
+    checks: Dict[str, bool] = {
+        "batch2_failed_summary_sha256": summary_path.is_file()
+        and common._sha256(summary_path) == LOCKED_BATCH2_FAILED_SUMMARY_SHA256,
+        "batch2_failure_record_sha256": failure_path.is_file()
+        and common._sha256(failure_path)
+        == LOCKED_BATCH2_FAILURE_RECORD_SHA256,
+        "batch2_failed_manifest_sha256": manifest_path.is_file()
+        and common._sha256(manifest_path)
+        == LOCKED_BATCH2_FAILED_MANIFEST_SHA256,
+    }
+    if not all(checks.values()):
+        return {
+            "checks": checks,
+            "all_checks_pass": False,
+            "failed_checks": sorted(
+                name for name, passed in checks.items() if not passed
+            ),
+            "output_dir": str(output_dir),
+        }
+    failure = common._load_json(failure_path)
+    manifest = common._load_json(manifest_path)
+    manifest_rows = manifest.get("files")
+    if not isinstance(manifest_rows, list):
+        raise ValueError("Cropr batch-2 failed manifest lacks artifact rows.")
+    for row in manifest_rows:
+        if not isinstance(row, Mapping):
+            raise ValueError("Cropr batch-2 failed artifact row is invalid.")
+        relative = str(row.get("path", ""))
+        path = output_dir / relative
+        checks[f"batch2_manifest_{relative}_exists"] = path.is_file()
+        checks[f"batch2_manifest_{relative}_bytes"] = path.is_file() and int(
+            path.stat().st_size
+        ) == int(row.get("bytes", -1))
+        checks[f"batch2_manifest_{relative}_sha256"] = (
+            path.is_file()
+            and common._sha256(path) == str(row.get("sha256", ""))
+        )
+    defect = failure.get("defect")
+    if not isinstance(defect, Mapping):
+        raise ValueError("Cropr batch-2 failure record lacks defect metadata.")
+    checks.update(
+        {
+            "batch2_failure_method": failure.get("method")
+            == "cropr_token_selector_a0_pair_batch2_xai_failed_attempt",
+            "batch2_failure_status": failure.get("status")
+            == "preserved_before_batch32_xai_correction",
+            "batch2_failure_head": failure.get("audit_git_head")
+            == BATCH2_FAILED_AUDIT_HEAD,
+            "batch2_failure_summary_sha256": failure.get("summary_sha256")
+            == LOCKED_BATCH2_FAILED_SUMMARY_SHA256,
+            "batch2_failure_scope_xai_only": defect.get("scope") == "xai_only",
+            "batch2_fit_gradient_replay_exact": _approx(
+                defect.get("fit_batch32_gradient_maximum_error"), 0.0
+            ),
+            "batch2_fit_trace_replay_exact": _approx(
+                defect.get("fit_batch32_trace_maximum_error"), 0.0
+            ),
+            "batch2_first_failure_lineage": failure.get("lineage", {}).get(
+                "first_failed_manifest_sha256"
+            )
+            == LOCKED_FAILED_MANIFEST_SHA256,
+            "batch2_validation_unused": failure.get("official_validation_used")
+            is False,
+            "batch2_test_unused": failure.get("test_data_used") is False,
+            "batch2_raw_data_unmodified": failure.get("raw_data_modified")
+            is False,
+            "batch2_current_best_unchanged": failure.get(
+                "current_best_command_updated"
+            )
+            is False,
+        }
+    )
+    changed_paths = {
+        value.strip().replace("\\", "/")
+        for value in _git_value(
+            "diff", "--name-only", BATCH2_FAILED_AUDIT_HEAD, current_head
+        ).splitlines()
+        if value.strip()
+    }
+    if require_correction_commit:
+        allowed = {
+            "scripts/run_trkh_cropr_token_selector_a0_audit.ps1",
+            "tests/test_audit_cropr_token_selector_pair.py",
+            "trkh/tools/audit_cropr_token_selector_pair.py",
+        }
+        checks.update(
+            {
+                "batch32_correction_commit_is_new": current_head
+                != BATCH2_FAILED_AUDIT_HEAD,
+                "batch32_correction_delta_nonempty": bool(changed_paths),
+                "batch32_correction_delta_scoped": changed_paths.issubset(allowed),
+            }
+        )
+    return {
+        "checks": checks,
+        "all_checks_pass": all(checks.values()),
+        "failed_checks": sorted(
+            name for name, passed in checks.items() if not passed
+        ),
+        "output_dir": str(output_dir),
+        "summary_sha256": common._sha256(summary_path),
+        "failure_record_sha256": common._sha256(failure_path),
+        "artifact_manifest_sha256": common._sha256(manifest_path),
+        "batch2_failed_audit_head": BATCH2_FAILED_AUDIT_HEAD,
+        "batch32_correction_audit_head": current_head,
+        "changed_paths": sorted(changed_paths),
     }
 
 
@@ -1397,11 +1528,11 @@ def _collect_xai_maps(
         for name, brightness, contrast in common.CONDITIONS
     }
     for condition_index, (condition, selected) in enumerate(by_condition.items()):
-        unique_indices = sorted(set(selected))
+        requested_indices = {int(value) for value in selected}
         brightness, contrast = condition_specs[condition]
         condition_dataset = common._SelectedConditionDataset(
             base_dataset,
-            unique_indices,
+            list(range(len(base_dataset))),
             corruption=common._condition_corruption(condition, brightness, contrast),
             transform=transform,
         )
@@ -1413,13 +1544,25 @@ def _collect_xai_maps(
             seed=seed + 900 + condition_index,
         )
         loaders[condition] = loader_summary
+        loader_summary["full_batch_composition"] = True
+        loader_summary["full_rows"] = len(condition_dataset)
+        loader_summary["requested_rows"] = len(requested_indices)
+        gradient_batches = 0
         for images_cpu, _, metadata_cpu in loader:
-            images = images_cpu.to(device=device, non_blocking=True).requires_grad_(True)
-            metadata = common._metadata_to_device(metadata_cpu, device)
             sample_indices = metadata_cpu.get("sample_index")
             crop_bbox_cpu = metadata_cpu.get("crop_bbox")
             if not torch.is_tensor(sample_indices) or not torch.is_tensor(crop_bbox_cpu):
                 raise ValueError("Cropr XAI lacks sample_index/crop_bbox.")
+            selected_positions = [
+                position
+                for position, local_value in enumerate(sample_indices.tolist())
+                if int(local_value) in requested_indices
+            ]
+            if not selected_positions:
+                continue
+            gradient_batches += 1
+            images = images_cpu.to(device=device, non_blocking=True).requires_grad_(True)
+            metadata = common._metadata_to_device(metadata_cpu, device)
             captured: Dict[str, Tensor] = {}
 
             def stem_hook(_module, _inputs, output):
@@ -1457,7 +1600,12 @@ def _collect_xai_maps(
                     logits, _ = common._forward_classification_with_metadata(
                         model, images, metadata, device=device
                     )
-                logits[:, FOCUS_CLASS].float().sum().backward()
+                selected_position_tensor = torch.tensor(
+                    selected_positions, device=device, dtype=torch.long
+                )
+                logits.index_select(0, selected_position_tensor)[
+                    :, FOCUS_CLASS
+                ].float().sum().backward()
             finally:
                 for handle in handles:
                     handle.remove()
@@ -1524,7 +1672,8 @@ def _collect_xai_maps(
             }
             logits_cpu = logits.detach().float().cpu()
             trace_logits_cpu = trace_logits.detach().float().cpu()
-            for position, local_value in enumerate(sample_indices.tolist()):
+            for position in selected_positions:
+                local_value = int(sample_indices[position].item())
                 local_index = int(local_value)
                 standard = standard_rows[(condition, local_index)]
                 standard_logits = torch.tensor(
@@ -1577,6 +1726,7 @@ def _collect_xai_maps(
             gc.collect()
             if device.type == "cuda":
                 torch.cuda.empty_cache()
+        loader_summary["gradient_batches"] = gradient_batches
     expected = {
         (str(request["condition"]), int(request["local_index"]))
         for request in requests
@@ -1769,6 +1919,7 @@ def _xai_summary(
 def _gate_checks(
     *,
     failed_attempt: Mapping[str, object],
+    batch2_failed_attempt: Mapping[str, object],
     correction_replay: Mapping[str, object],
     provenance: Mapping[str, object],
     comparisons: Mapping[str, object],
@@ -1819,6 +1970,9 @@ def _gate_checks(
     total_xai_rows = int(xai["request_rows"])
     checks = {
         "failed_attempt_preserved": bool(failed_attempt["all_checks_pass"]),
+        "batch2_failed_attempt_preserved": bool(
+            batch2_failed_attempt["all_checks_pass"]
+        ),
         "unaffected_artifact_replay_exact": bool(
             correction_replay["all_checks_pass"]
         ),
@@ -2055,8 +2209,12 @@ def _finalize_visual_review(args: argparse.Namespace) -> Dict[str, object]:
 def run_audit(args: argparse.Namespace) -> Dict[str, object]:
     if int(args.seed) != 42 or int(args.batch_size) != 32:
         raise ValueError("Cropr pair audit is locked to seed=42 and batch_size=32.")
-    if int(args.xai_batch_size) <= 0 or int(args.xai_batch_size) > 2:
-        raise ValueError("Cropr pair XAI batch size must be in [1,2].")
+    if int(args.xai_batch_size) != 32 or int(args.xai_batch_size) != int(
+        args.batch_size
+    ):
+        raise ValueError(
+            "Cropr pair XAI must preserve the locked full-holdout batch size 32."
+        )
     if not torch.cuda.is_available():
         raise RuntimeError("Cropr pair audit requires CUDA.")
     declaration = Path(args.declaration).resolve()
@@ -2081,6 +2239,17 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
             "Cropr failed-attempt preservation checks failed: "
             + ", ".join(
                 str(value) for value in failed_attempt["failed_checks"]
+            )
+        )
+    batch2_failed_attempt = _verify_batch2_failed_attempt(
+        current_head=current_head
+    )
+    if not bool(batch2_failed_attempt["all_checks_pass"]):
+        raise RuntimeError(
+            "Cropr batch-2 failed-attempt preservation checks failed: "
+            + ", ".join(
+                str(value)
+                for value in batch2_failed_attempt["failed_checks"]
             )
         )
     control_checkpoint_path = Path(args.control_checkpoint).resolve()
@@ -2271,6 +2440,7 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
     xai["candidate_collection"] = candidate_xai
     checks = _gate_checks(
         failed_attempt=failed_attempt,
+        batch2_failed_attempt=batch2_failed_attempt,
         correction_replay=correction_replay,
         provenance=provenance,
         comparisons=comparisons,
@@ -2299,6 +2469,7 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
         },
         "dataset": dataset_summary,
         "failed_attempt": failed_attempt,
+        "batch2_failed_attempt": batch2_failed_attempt,
         "correction_replay": correction_replay,
         "provenance": provenance,
         "prediction_loaders": prediction_loaders,

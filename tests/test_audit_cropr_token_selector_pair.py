@@ -7,9 +7,14 @@ import torch
 from torch import nn
 
 from trkh.tools.audit_cropr_token_selector_pair import (
+    BATCH2_FAILED_AUDIT_HEAD,
+    BATCH2_FAILED_AUDIT_DIR,
     EXPECTED_HOLDOUT_ROWS,
     FAILED_AUDIT_DIR,
     FAILED_AUDIT_HEAD,
+    LOCKED_BATCH2_FAILED_MANIFEST_SHA256,
+    LOCKED_BATCH2_FAILED_SUMMARY_SHA256,
+    LOCKED_BATCH2_FAILURE_RECORD_SHA256,
     LOCKED_FAILED_MANIFEST_SHA256,
     LOCKED_FAILED_SUMMARY_SHA256,
     LOCKED_FAILURE_RECORD_SHA256,
@@ -23,6 +28,7 @@ from trkh.tools.audit_cropr_token_selector_pair import (
     _selector_summary_with_expected,
     _set_jaccard,
     _verify_failed_attempt,
+    _verify_batch2_failed_attempt,
     parse_args,
 )
 from trkh.tools.audit_foveal_aggregated_attention_pair import _sha256
@@ -75,7 +81,7 @@ def test_cropr_pair_locked_artifact_hashes_and_cli_defaults() -> None:
 
     args = parse_args(["--output-dir", "runs/unit_cropr_pair"])
     assert args.batch_size == 32
-    assert args.xai_batch_size == 2
+    assert args.xai_batch_size == 32
     assert args.seed == 42
     assert args.control_checkpoint.name == "last.pt"
     assert args.candidate_checkpoint.name == "last.pt"
@@ -93,6 +99,24 @@ def test_cropr_failed_attempt_is_hash_locked_before_xai_correction() -> None:
     assert failed["artifact_manifest_sha256"] == LOCKED_FAILED_MANIFEST_SHA256
     replay = _compare_failed_artifacts(failed, output_dir=FAILED_AUDIT_DIR)
     assert replay["all_checks_pass"], replay["failed_checks"]
+
+
+def test_cropr_batch2_xai_failure_is_locked_before_batch32_correction() -> None:
+    failed = _verify_batch2_failed_attempt(
+        current_head=BATCH2_FAILED_AUDIT_HEAD,
+        require_correction_commit=False,
+    )
+    assert failed["all_checks_pass"], failed["failed_checks"]
+    assert Path(failed["output_dir"]) == BATCH2_FAILED_AUDIT_DIR.resolve()
+    assert failed["summary_sha256"] == LOCKED_BATCH2_FAILED_SUMMARY_SHA256
+    assert (
+        failed["failure_record_sha256"]
+        == LOCKED_BATCH2_FAILURE_RECORD_SHA256
+    )
+    assert (
+        failed["artifact_manifest_sha256"]
+        == LOCKED_BATCH2_FAILED_MANIFEST_SHA256
+    )
 
 
 def test_cropr_pair_provenance_passes_without_loading_holdout() -> None:
@@ -204,6 +228,7 @@ def test_cropr_pair_gate_and_wrapper_keep_locked_scope() -> None:
         "object_perturbation_more_causal_than_background",
         "xai_all_events_covered",
         "failed_attempt_preserved",
+        "batch2_failed_attempt_preserved",
         "unaffected_artifact_replay_exact",
         '"official_validation_permission": False',
         '"test_permission": False',
@@ -219,6 +244,8 @@ def test_cropr_pair_gate_and_wrapper_keep_locked_scope() -> None:
     standard_forward = xai_source.index("_forward_classification_with_metadata")
     trace_forward = xai_source.index("_forward_trace")
     assert standard_forward < trace_forward
+    assert "list(range(len(base_dataset)))" in xai_source
+    assert 'loader_summary["full_batch_composition"] = True' in xai_source
     wrapper = Path(
         "scripts/run_trkh_cropr_token_selector_a0_audit.ps1"
     ).read_text(encoding="utf-8")
@@ -227,7 +254,8 @@ def test_cropr_pair_gate_and_wrapper_keep_locked_scope() -> None:
     assert "-FinalizePass" in wrapper
     assert "ExpectedSummarySha256" in wrapper
     assert "git status --short --untracked-files=no" in wrapper
-    assert "audit_cropr_token_selector_a0_pair_corrected_20260717" in wrapper
+    assert "audit_cropr_token_selector_a0_pair_standard_batch32_20260717" in wrapper
+    assert "--xai-batch-size 32" in wrapper
 
     command = (
         "$errors=$null; "
