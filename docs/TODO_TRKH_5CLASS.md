@@ -3189,7 +3189,22 @@
   manifest `33724530...de722`; retention passed over 721 directories with
   `blockers=[]` at SHA `77cc4282...c381d`. Leave current-best commands
   unchanged.
-- [ ] Perform the next accepted-primary-paper and official-licensed-code
+- [x] Perform the next accepted-primary-paper and official-licensed-code
   no-repeat screen outside DBB/RepVGG/structural-reparameterization sweeps,
   DAT/FAA, persistent tokenizer branches, and all previously closed families.
-  Lock one genuinely distinct mechanism before implementation or training.
+  Reject SCConv/DilateFormer/LSKNet as license or local-overlap failures and
+  select official MIT CVPR-2023 BiFormer BRA as the distinct query-specific
+  context-filtering mechanism.
+- [x] Lock the exact block-2 BRA A1 before code at protocol SHA
+  `e7ce7cf3...c3ede3`: `16x16`, `S=4`, matched topk-16/topk-4 roles, identical
+  QKV/projection/LCE state, global prefix handling, official replay, source-
+  disjoint pre-training selectivity, resource/export/precision/TP/condition/
+  XAI gates, and no validation/test/sweep/current-command update.
+- [ ] Implement the default-off licensed BRA module, model/config/train/trace
+  wiring, official-equation and dense-parity tests, formal preflight auditor,
+  and VS Code-safe wrapper. Commit and push the reviewed implementation before
+  the sole formal preflight.
+- [ ] Run the formal preflight exactly once. Train the five-epoch pair only if
+  every engineering and pre-training selectivity gate passes; otherwise close,
+  document, compact reproducible binaries, and continue to a new primary-source
+  route without weakening or sweeping the locked settings.

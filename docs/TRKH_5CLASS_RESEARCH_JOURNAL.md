@@ -17371,3 +17371,49 @@ Date: 2026-07-02
 - Current-best commands remain three revisions/two updates and zero keeper
   replacements. The next route must again be screened from accepted primary
   work and official licensed code, outside every closed family.
+
+## Bi-Level Routing Attention A1 Lock 2026-07-16 - Query-Specific Context Filtering
+
+- Re-screened accepted primary papers and official repositories under the
+  stricter source policy. SCConv was rejected as an unlicensed generic
+  spatial/channel-redundancy mechanism overlapping closed gate/efficient-conv
+  work. DilateFormer was rejected as unlicensed static dilated local attention
+  overlapping MaxViT/local-window/FAA. LSKNet was rejected because its remote-
+  sensing large selective kernels overlap closed large-kernel, Selective
+  Kernel, InceptionNeXt, Moga, StarNet, and OctConv routes, with unclear direct-
+  reuse license metadata.
+- Selected Zhu et al.'s accepted CVPR-2023 BiFormer mechanism from the official
+  MIT repository. GitHub reported 581 stars/41 forks on 2026-07-16. Locked
+  branch/commit/tree are `public_release`/
+  `1697bbbeafb8680524898f1dcaac10defd0604be`/
+  `313af0f24b31141cdde68fd775e75105278f8e52`. Paper, NCHW BRA, regional
+  gather, architecture, recipe, and license SHAs are recorded in the protocol.
+- BRA is distinct from DAT, ViG, Soft-MoE, token pruning, and FAA: every query
+  region builds a content-dependent directed top-k graph to different global
+  key/value regions, then performs fine token attention only over gathered
+  regions. The official supplement specifically reports explicit sparsity as
+  useful regularization against background distraction, while also reporting
+  routing/gather throughput overhead.
+- Stock BiFormer and its 300-epoch ImageNet recipe are forbidden. The exact
+  adaptation changes block 2 only on the complete `16x16` grid. Both causal
+  roles use 16 regions of `4x4` tokens, identical QKV/projection/depthwise-5x5
+  LCE parameters, global prefix handling, and TRKH attention temperature. The
+  matched control attends all 16 regions; the candidate attends top four, or
+  64/256 patch keys per query plus all seven prefixes.
+- Prospective protocol
+  `TRKH_5CLASS_BILEVEL_ROUTING_ATTENTION_READINESS_PROTOCOL_20260716.md` has
+  SHA `e7ce7cf3ba44361f29760ed2b1ed1f06538db50b44613ce03c1373a35cc3ede3`.
+  Before any epoch it requires official-equation/gradient replay, dense-MHSA
+  parity, common-state/RNG, FP32/BF16 route stability, standard/trace parity,
+  ONNX, runtime/VRAM, exact fold provenance, and a keeper-based source-
+  disjoint selectivity audit across clean/dim/bright/low-contrast.
+- Only a complete preflight and spatial-selectivity pass can authorize one
+  exact five-epoch scratch topk-16/topk-4 pair on the existing `7372/1843`
+  train-only fold. Promotion prioritizes class1 precision/F1, restricted-FP
+  removal, TP/recall protection, condition stability, query-adaptive routing,
+  foreground gain, background perturbations, and complete route/XAI review.
+  Validation, test, full train, nearby BRA sweeps, and command promotion remain
+  closed during A1.
+- Keeper, command, and history hashes remain `1f49d577...482677`,
+  `36b9aa1a...40faf`, and `39bd2879...98f53`. Current-best tracking remains
+  three revisions/two updates and zero keeper replacements.
