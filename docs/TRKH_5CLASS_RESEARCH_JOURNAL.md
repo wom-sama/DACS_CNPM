@@ -17340,3 +17340,34 @@ Date: 2026-07-02
 - Keeper, scratch-complement, command, and command-history hashes remain
   `1f49d577...482677`, `f8bd6309...1a549`, `36b9aa1a...40faf`, and
   `39bd2879...98f53`. Command tracking remains three revisions/two updates.
+
+## Diverse-Branch Stem A0 Closure 2026-07-16 - Correct Structure, Excess Precision And Resource Cost
+
+- Apache-attributed implementation commit `ed45a46` was pushed before formal
+  execution. Full pytest passed `1261/1261`; all source/data/fold/checkpoint/
+  command hashes and the exact source-disjoint `7372/1843` contract passed.
+- The formal preflight passed 53/58 checks. Independent equations reached
+  maximum error `7.15e-7`; all 12 paths were active, distinct, and received
+  finite nonzero FP32/BF16 gradients. True-FP32 deploy stem/logit errors were
+  `6.68e-6/1.56e-7`, and static ONNX error was `1.90e-7`.
+- Five immutable gates rejected before training. Real-fit train replay against
+  official code was `1.91e-6 > 1e-6`; BF16 branch/deploy stem error was
+  `0.09375 > 0.002`; train runtime was `1.840986x > 1.50x`; training VRAM was
+  `1.556958x > 1.25x`; converted inference was `1.083225x > 1.05x`.
+- The candidate added 211,951 train-time parameters and used 3.944 GiB peak
+  VRAM. Resource failure independently confirms that weakening numeric gates
+  would not authorize this route.
+- No epoch, behavior metric, XAI, validation, test, full train, or command
+  promotion occurred. Close exact DBB and nearby branch/width/gamma/block/
+  insertion/training/precision/combination sweeps under the prospective rule.
+- Exact retained summary/manifest SHAs are `a60983ff...b55c8e` and
+  `cd1e0fa6...16c37`. Verified compaction excluded the reproducible
+  30,419,262-byte ONNX; evidence/cleanup manifest SHAs are
+  `16b26674...f8d7`/`33724530...de722`. Full detail is in
+  `TRKH_5CLASS_DIVERSE_BRANCH_STEM_CLOSURE_20260716.md`.
+- Read-only retention passed over 721 directories with `blockers=[]`, all 204
+  compacted originals absent, 71.100 GiB free, and summary SHA
+  `77cc4282...c381d`. Closure-document SHA is `c2436764...d31504`.
+- Current-best commands remain three revisions/two updates and zero keeper
+  replacements. The next route must again be screened from accepted primary
+  work and official licensed code, outside every closed family.

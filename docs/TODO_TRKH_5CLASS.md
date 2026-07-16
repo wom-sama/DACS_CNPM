@@ -3174,15 +3174,22 @@
   Transformer, exact deploy fusion, source-disjoint `7372/1843` scratch pair,
   precision/TP/condition/mechanism/XAI gates, and no validation/test/sweep or
   current-best command update.
-- [ ] Implement the Apache-attributed DBB stem, config/launcher integration,
+- [x] Implement the Apache-attributed DBB stem, config/launcher integration,
   exact official-equation/deploy replay, common-state construction, ONNX and
-  resource preflight, focused tests, and a VS Code-safe A0 wrapper. Commit and
-  push the implementation before any formal pair.
-- [ ] Run the sole authorized five-epoch train-only control/candidate pair only
-  if every preflight gate passes. Audit all 1,843 holdout rows under clean/dim/
-  bright/low-contrast, branch activity/diversity, converted deployment parity,
-  transitions, selectivity, and complete changed-case XAI before deciding.
-- [ ] Apply the locked DBB gate, independently replay all metrics/hashes, close
-  or promote without nearby sweeps, compact rejected binaries by manifest,
-  rerun retention and protected hashes, update journal/skill, and change the
-  current-best command/history only after a later official-validation win.
+  resource preflight, focused tests, and a VS Code-safe A0 wrapper. Commit
+  `ed45a46` was pushed before formal execution; full pytest passed `1261/1261`.
+- [x] Run the formal preflight gate before the authorized five-epoch pair. It
+  passed 53/58 checks but denied the pair: official real-train replay
+  `1.91e-6 > 1e-6`, BF16 deploy stem error `0.09375 > 0.002`, train runtime
+  `1.841x > 1.50x`, VRAM ratio `1.557x > 1.25x`, and converted inference
+  `1.083x > 1.05x`. Therefore no pair, behavior audit, or XAI was run.
+- [x] Apply the locked DBB stop rule and compact rejected preflight evidence.
+  Preserve summary/manifest SHAs `a60983ff...b55c8e`/`cd1e0fa6...16c37`,
+  remove only the reproducible 30,419,262-byte ONNX through verified cleanup
+  manifest `33724530...de722`; retention passed over 721 directories with
+  `blockers=[]` at SHA `77cc4282...c381d`. Leave current-best commands
+  unchanged.
+- [ ] Perform the next accepted-primary-paper and official-licensed-code
+  no-repeat screen outside DBB/RepVGG/structural-reparameterization sweeps,
+  DAT/FAA, persistent tokenizer branches, and all previously closed families.
+  Lock one genuinely distinct mechanism before implementation or training.
