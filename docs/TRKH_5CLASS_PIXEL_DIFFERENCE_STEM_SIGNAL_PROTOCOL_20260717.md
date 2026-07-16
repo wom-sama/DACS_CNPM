@@ -66,9 +66,13 @@ For a learned `3x3` kernel `W` and source `theta=1`:
 1. Central difference (`CD`) subtracts `sum(W)` from the center coefficient.
 2. Angular difference (`AD`) subtracts the official clockwise permutation
    `[3,0,1,6,4,2,7,8,5]` from the flattened `3x3` kernel.
-3. Radial difference (`RD`) maps the eight non-center coefficients to official
-   positive positions `[0,2,4,10,14,20,22,24]` and negative positions
-   `[6,7,8,11,13,16,17,18]` in a `5x5` kernel; its center is zero.
+3. Radial difference (`RD`) uses exactly the eight learned coefficients at
+   flattened source indices `1..8`; official PiDiNet leaves flattened index `0`
+   unused in this RPDC parameterization. It maps those coefficients to positive
+   positions `[0,2,4,10,14,20,22,24]` and negative positions
+   `[6,7,8,11,13,16,17,18]` in a `5x5` kernel; its center is zero. This follows
+   official `weights[:, :, 1:]` literally and does not reinterpret ordinary
+   row-major index `4` as a removable center coefficient.
 
 The official conversion must produce an ordinary convolution with the same
 forward and input/weight gradients. Only the converted ordinary-convolution

@@ -3355,11 +3355,15 @@
   already closed local-attention families.
 - [x] Select ICCV-2021 PiDiNet/PDC from the official research-licensed repository
   at commit/tree `d21aa88...517ebd`/`b57c160...632887f`. Prospectively lock one
-  fit-only `CD -> AD -> RD` frozen-stem signal gate at protocol SHA
-  `ed385dd7...26fd7fa`: 421 class1 TP versus 186 restricted FP, four source-fold
+  fit-only `CD -> AD -> RD` frozen-stem signal gate at corrected protocol SHA
+  `af2a2ba8...57adcaa`: 421 class1 TP versus 186 restricted FP, four source-fold
   OOF readouts, clean/dim/bright/low-contrast, object-only/context controls,
   exact ordinary-convolution conversion, ONNX/resource checks, and no holdout,
   validation, test, trainer, epoch, sweep, or command update.
+- [x] Correct the pre-measurement RD wording against official
+  `weights[:, :, 1:]`: RPDC uses flattened source coefficients `1..8` and leaves
+  source index `0` unused; it does not drop ordinary row-major center index `4`.
+  Cohort, readout, thresholds, and gates are unchanged.
 - [ ] Implement and run the sole locked PDC A0 auditor. Continue to a matched
   five-epoch pair only if every equation, deployment, object-only AUROC,
   TP-retention, FP-rejection, and illumination gate passes.

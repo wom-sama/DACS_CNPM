@@ -17809,7 +17809,7 @@ Date: 2026-07-02
   research-purpose/MIT-style license. Work remains research-only pending any
   future commercial license review.
 - Protocol `TRKH_5CLASS_PIXEL_DIFFERENCE_STEM_SIGNAL_PROTOCOL_20260717.md` at
-  SHA `ed385dd7...26fd7fa` fixes a no-training `CD -> AD -> RD` shadow of the
+  corrected SHA `af2a2ba8...57adcaa` fixes a no-training `CD -> AD -> RD` shadow of the
   three keeper stem convolutions. It uses only the 607 fit rows comprising 421
   current class1 TP and 186 restricted FP, with fold counts
   `112/45,100/48,101/52,108/41`; fold 0 holdout, validation, and test are banned.
@@ -17822,3 +17822,9 @@ Date: 2026-07-02
   and independent replay gates precede any trainer integration.
 - No PDC measurement, image epoch, holdout, validation, test, XAI, or current-
   command change has run at protocol lock time.
+- Before implementation or measurement, direct source review corrected one RD
+  wording error: official PiDiNet uses `weight[:, :, 1:]`, so RPDC maps the
+  eight source coefficients at flattened indices `1..8` and leaves index `0`
+  unused. It does not remove conventional row-major center index `4`. This
+  provenance-only erratum changed the protocol SHA but no cohort, readout,
+  threshold, gate, or authorization boundary.
