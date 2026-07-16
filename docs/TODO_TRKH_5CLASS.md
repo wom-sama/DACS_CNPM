@@ -3250,6 +3250,16 @@
   Compileall/pyflakes, launcher configuration preflight, focused `151/151`,
   and full pytest `1296/1296` pass. The first full suite exposed and then
   verified the fix for a default-off deep-prompt prefix regression.
-- [ ] Run the formal preflight once. Authorize the sole five-epoch scratch pair
-  only if every locked engineering and train-only gate passes; otherwise close
-  A0 without epochs and continue the next primary-source route.
+- [x] Run the formal EViT preflight once and correct its audit-order
+  contamination with a hash-locked pristine replay. All engineering,
+  source-disjoint behavior, deployment, and visual gates then passed and
+  authorized exactly one five-epoch scratch pair.
+- [x] Run and independently audit the sole control/fusion pair. Clean class1 F1
+  rose `+0.017105`, but precision fell `-0.027903`, restricted FP worsened
+  `13 -> 16`, bright class1 F1 fell `-0.041418`, and tiny/edge class1 F1/
+  precision fell `-0.013285/-0.078947`. Review all 15 XAI pages and reject A0.
+- [x] Hash-lock the failed renderer, replay four complete quantitative artifacts
+  byte-for-byte after the scoped fix, and finalize visual review as fail at
+  summary/prediction/visual SHAs `d7b3d1fe...c76348`/
+  `82b41797...a1ff4`/`500c5374...251c4`. Deny validation/test/full train/
+  current-command promotion and close nearby EViT fusion sweeps.

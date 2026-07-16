@@ -17603,3 +17603,37 @@ Date: 2026-07-02
   thresholds, routers, TTA, and final test. This documents the launcher already
   implemented; no result or argument was changed. Final protocol SHA is
   `d3f8de6fbef7ad5d88ca33e5db71f9c5ca587f32c1ad5ee4797fd400aaf3ee4b`.
+
+## EViT Inattentive-Token Fusion A0 Closure 2026-07-16
+
+- Formal preflight passed only after a hash-locked replay proved that nine
+  BatchNorm buffer mutations from backward/resource checks caused the original
+  engineering-pruning mismatch. Pristine first-prune identity was exact and
+  second-prune mean Jaccard was `0.999628`; all visual/mechanism gates passed.
+- Ran the sole source-disjoint five-epoch control/fusion pair from pushed commit
+  `ed9bb12`. Both roles had 7,245,590 parameters, identical five-epoch sample
+  occurrence records, no pretrained weights, and no validation/test access.
+  Architecture traces covered all classes and showed only the intended extra
+  internal context token in the candidate.
+- Independent standard-inference audit rejected the candidate. Clean macro/
+  class1 F1 rose `+0.004534/+0.017105`, but precision fell `-0.027903` and
+  restricted FP worsened `13 -> 16`. Bright class1 F1/precision fell
+  `-0.041418/-0.081720`; low-contrast precision also fell `-0.034839`.
+- Tiny/edge macro/class1 F1 fell `-0.002556/-0.013285`; class1 precision fell
+  `0.578947 -> 0.500000`. Candidate TP-hard-negative AUROC was only
+  `0.594496` clean and `0.541667-0.609294` under shifts.
+- Fusion was numerically active and stable, but clean effective context was
+  `90.69%` outside bbox. All 54 decision events and 15 pages showed repeated
+  border/background lineage; candidate stem Grad-CAM foreground mass fell
+  `-0.033744`. Grad-CAM prediction parity was only `58/60` per role, so future
+  XAI must hook the standard forward directly.
+- The first renderer failed on a preflight-only Jaccard label after quantitative
+  artifacts were complete. Those outputs were hash-locked; correction commit
+  `78d41e1` reproduced cohort/predictions/context/events byte-identically and
+  completed all pages. Final summary/prediction/visual SHAs are
+  `d7b3d1fe...c76348`/`82b41797...a1ff4`/`500c5374...251c4`.
+- Close EViT-style discarded-token fusion and all nearby weight/count/layer/
+  keep-rate/warmup/training/threshold/pretrained/combination sweeps on this
+  keeper. No official validation, test, full train, or current-best update was
+  authorized. Full detail is in
+  `TRKH_5CLASS_INATTENTIVE_TOKEN_FUSION_A0_CLOSURE_20260716.md`.
