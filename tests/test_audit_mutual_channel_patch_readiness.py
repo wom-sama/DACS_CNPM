@@ -4,11 +4,14 @@ import copy
 
 import torch
 import torch.nn.functional as F
+from torch import nn
 
 from trkh.tools.audit_mutual_channel_patch_readiness import (
     EXPECTED_ADAPTER_PARAMETERS,
     MutualChannelPatchAdapter,
     _equation_diagnostics,
+    _deterministic_occlusion_saliency,
+    _repeat_metadata,
     _stream_tensor_sha256,
     assess_stage_a,
     mcl_drop_index,
@@ -57,6 +60,74 @@ def test_streaming_tensor_hash_matches_contiguous_bytes() -> None:
 
     expected = hashlib.sha256(value.numpy().tobytes()).hexdigest()
     assert _stream_tensor_sha256(value, rows_per_chunk=8) == expected
+
+
+def test_xai_metadata_repeat_preserves_non_tensor_values() -> None:
+    metadata = {
+        "bbox": torch.arange(8, dtype=torch.float32).reshape(1, 8),
+        "image_mask": torch.ones(1, 3, 4, dtype=torch.bool),
+        "label": "locked",
+    }
+    repeated = _repeat_metadata(metadata, 3)
+    assert repeated["bbox"].shape == (3, 8)
+    assert repeated["image_mask"].shape == (3, 3, 4)
+    assert torch.equal(repeated["bbox"][0], repeated["bbox"][2])
+    assert repeated["label"] == "locked"
+
+
+class _TinyKeeper(nn.Module):
+    num_registers = 0
+
+    def forward_features(
+        self, images, image_valid_mask=None, bbox_token_prior=None
+    ):
+        del image_valid_mask, bbox_token_prior
+        scalar = images.mean(dim=(1, 2, 3), keepdim=False)
+        patches = scalar[:, None, None].expand(-1, 4, 256)
+        return {
+            "patches": patches,
+            "patch_indices": torch.arange(4).reshape(1, 4).expand(images.size(0), -1),
+        }
+
+    def forward_heads(self, features):
+        scalar = features["patches"].mean(dim=(1, 2))
+        return torch.stack(
+            (scalar * 0.0, scalar * 2.0, scalar, -scalar, scalar * 0.5),
+            dim=1,
+        )
+
+
+def test_occlusion_saliency_is_finite_nonzero_and_replay_exact() -> None:
+    keeper = _TinyKeeper().eval()
+    adapter = MutualChannelPatchAdapter().eval()
+    image = torch.ones(1, 3, 8, 8)
+    metadata = {
+        "bbox": torch.zeros(1, 8),
+        "image_mask": torch.ones(1, 8, 8, dtype=torch.bool),
+    }
+    base_margin = torch.tensor([1.0])
+    first = _deterministic_occlusion_saliency(
+        keeper=keeper,
+        candidate=adapter,
+        image=image,
+        metadata=metadata,
+        base_margin=base_margin,
+        device=torch.device("cpu"),
+        batch_size=3,
+    )
+    second = _deterministic_occlusion_saliency(
+        keeper=keeper,
+        candidate=adapter,
+        image=image,
+        metadata=metadata,
+        base_margin=base_margin,
+        device=torch.device("cpu"),
+        batch_size=3,
+    )
+    assert first.shape == (16, 16)
+    assert torch.isfinite(first).all()
+    assert torch.count_nonzero(first).item() > 0
+    assert torch.equal(first, second)
 
 
 def test_vectorized_mutual_channel_equations_match_independent_reference() -> None:

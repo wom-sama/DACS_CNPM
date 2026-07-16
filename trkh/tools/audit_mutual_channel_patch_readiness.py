@@ -1609,6 +1609,9 @@ def _evaluate_conditions(
     keeper = keeper.to(device).eval()
     control_device = copy.deepcopy(control).to(device).eval()
     candidate_device = copy.deepcopy(candidate).to(device).eval()
+    for module in (control_device, candidate_device):
+        for parameter in module.parameters():
+            parameter.requires_grad_(False)
     raw_conditions: Dict[str, list[Dict[str, object]]] = {}
     control_conditions: Dict[str, list[Dict[str, object]]] = {}
     candidate_conditions: Dict[str, list[Dict[str, object]]] = {}
@@ -1944,6 +1947,82 @@ def _saliency_subset(
     return output
 
 
+def _repeat_metadata(
+    metadata: Mapping[str, object], count: int
+) -> Dict[str, object]:
+    repeated: Dict[str, object] = {}
+    for key, value in metadata.items():
+        if torch.is_tensor(value):
+            if int(value.size(0)) != 1:
+                raise ValueError(f"XAI metadata {key} is not batch-one.")
+            repeats = (int(count), *(1 for _ in range(value.ndim - 1)))
+            repeated[key] = value.repeat(repeats)
+        else:
+            repeated[key] = value
+    return repeated
+
+
+def _deterministic_occlusion_saliency(
+    *,
+    keeper: nn.Module,
+    candidate: MutualChannelPatchAdapter,
+    image: Tensor,
+    metadata: Mapping[str, object],
+    base_margin: Tensor,
+    device: torch.device,
+    batch_size: int,
+    grid: int = 4,
+) -> Tensor:
+    if image.shape[0] != 1 or image.ndim != 4:
+        raise ValueError("Occlusion saliency requires one BCHW input.")
+    height, width = int(image.size(-2)), int(image.size(-1))
+    occluded = image.detach().repeat(int(grid * grid), 1, 1, 1)
+    for row in range(int(grid)):
+        y0 = row * height // int(grid)
+        y1 = (row + 1) * height // int(grid)
+        for column in range(int(grid)):
+            x0 = column * width // int(grid)
+            x1 = (column + 1) * width // int(grid)
+            occluded[row * int(grid) + column, :, y0:y1, x0:x1] = 0.0
+    margins = []
+    with torch.inference_mode():
+        for start in range(0, int(occluded.size(0)), max(1, int(batch_size))):
+            stop = min(start + max(1, int(batch_size)), int(occluded.size(0)))
+            metadata_batch = _repeat_metadata(metadata, stop - start)
+            raw_logits, features = _forward_classification_with_metadata(
+                keeper,
+                occluded[start:stop],
+                metadata_batch,
+                device=device,
+            )
+            if not isinstance(features, Mapping):
+                raise ValueError("Occlusion keeper forward returned no features.")
+            patches, patch_indices, token_valid = _feature_tensors(features)
+            result = candidate.forward_sparse(
+                patches.float(), patch_indices, token_valid, raw_logits.float()
+            )
+            restricted = torch.tensor(
+                RESTRICTED_NEGATIVE_CLASSES,
+                device=device,
+                dtype=torch.long,
+            )
+            margin = (
+                result["logits"][:, FOCUS_CLASS]
+                - result["logits"].index_select(1, restricted).amax(dim=1)
+            )
+            margins.append(margin)
+    values = torch.cat(margins)
+    coarse = (base_margin.detach().reshape(1) - values).abs().reshape(
+        1, 1, int(grid), int(grid)
+    )
+    return F.interpolate(
+        coarse,
+        size=(GRID_HEIGHT, GRID_WIDTH),
+        mode="bilinear",
+        align_corners=False,
+    )[0, 0]
+
+
 def _render_xai_pages(
     records: Sequence[Mapping[str, object]], output_dir: Path
 ) -> list[str]:
@@ -2016,6 +2095,9 @@ def _xai_audit(
     keeper = keeper.to(device).eval()
     control_device = copy.deepcopy(control).to(device).eval()
     candidate_device = copy.deepcopy(candidate).to(device).eval()
+    for module in (control_device, candidate_device):
+        for parameter in module.parameters():
+            parameter.requires_grad_(False)
     records = []
     arrays: Dict[str, np.ndarray] = {}
     all_maps_finite = True
@@ -2033,10 +2115,10 @@ def _xai_audit(
         images_cpu, targets_cpu, metadata_cpu = next(iter(loader))
         images = images_cpu.to(device)
         need_saliency = sample_index in saliency_indices
-        images.requires_grad_(need_saliency)
-        raw_logits, features = _forward_classification_with_metadata(
-            keeper, images, metadata_cpu, device=device
-        )
+        with torch.inference_mode():
+            raw_logits, features = _forward_classification_with_metadata(
+                keeper, images, metadata_cpu, device=device
+            )
         if not isinstance(features, Mapping):
             raise ValueError("XAI keeper forward returned no features.")
         patches, patch_indices, token_valid = _feature_tensors(features)
@@ -2081,8 +2163,15 @@ def _xai_audit(
                 candidate_result["logits"][:, FOCUS_CLASS]
                 - candidate_result["logits"].index_select(1, restricted).amax(dim=1)
             )
-            deployed_margin.sum().backward()
-            saliency = images.grad.detach().abs().mean(dim=1)[0]
+            saliency = _deterministic_occlusion_saliency(
+                keeper=keeper,
+                candidate=candidate_device,
+                image=images,
+                metadata=metadata_cpu,
+                base_margin=deployed_margin,
+                device=device,
+                batch_size=int(args.xai_batch_size),
+            )
         else:
             saliency = torch.zeros_like(valid)
         source_maps = {
@@ -2123,9 +2212,6 @@ def _xai_audit(
         arrays[f"sample_{sample_index}_rgb"] = rgb
         for key, value in map_values.items():
             arrays[f"sample_{sample_index}_{key}"] = value
-        keeper.zero_grad(set_to_none=True)
-        control_device.zero_grad(set_to_none=True)
-        candidate_device.zero_grad(set_to_none=True)
     tensor_path = output_dir / "mutual_channel_xai_tensors.npz"
     np.savez_compressed(tensor_path, **arrays)
     pages = _render_xai_pages(records, output_dir)
@@ -2147,6 +2233,9 @@ def _xai_audit(
         >= min(12, len(raw_clean)),
         "all_maps_finite": all_maps_finite,
         "all_defined_maps_nonzero": all_defined_nonzero,
+        "input_saliency_method": (
+            "deterministic_4x4_zero_occlusion_absolute_deployed_margin_drop"
+        ),
         "selection_replay_exact": _required_xai_indices(
             raw_clean, control_clean, candidate_clean, minimum_rows=12
         )[0]
