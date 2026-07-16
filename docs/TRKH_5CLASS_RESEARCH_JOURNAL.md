@@ -17192,3 +17192,36 @@ Date: 2026-07-02
   summary SHA `9e8234e0...df26f5b`. Close k/condition/dtype/batch/loss/
   adapter/schedule/fold/seed/threshold/router sweeps on this keeper. Closure
   SHA is `aab02b4b...6f28005d`; current-best commands remain unchanged.
+
+## Foveal Aggregated Attention A1 Closure 2026-07-16 - Correct Equation, Insufficient Joint Routing
+
+- The next primary-source/no-repeat screen selected TransNeXt Aggregated
+  Attention from the accepted CVPR-2024 paper and official Apache-2.0 repository
+  at commit `c8a9974...fe21`. Stock TransNeXt was excluded because its official
+  recipe is 300 epochs; only one scratch-initialized block-1 local-plus-pooled
+  attention replacement was prospectively authorized.
+- Implementation commit `6ce3114` reproduced the official native output and
+  input gradient with zero maximum error. Common state was bit-exact, all FP32/
+  BF16 gradient families were finite and nonzero, ONNX error was `1.49e-7`, and
+  the candidate added 74,656 parameters at `1.0997x` runtime and 2.637 GiB peak
+  VRAM. Full pytest passed `1231/1231` before execution.
+- The reusable generated fold exactly preserved the locked source-disjoint
+  `7372/1843` `yolo_f/train` rows with zero source overlap and no raw-data
+  modification. Validation and test were not loaded.
+- Preflight passed 41/42 checks but failed the immutable mechanism gate. Mean
+  local/pooled mass was balanced at `0.514835/0.485165`, while only `0.599609`
+  of patch queries assigned at least 0.05 to both routes, below the locked
+  `0.95`. Aggregate balance therefore hid head/query-level route collapse.
+- Do not lower the gate or sweep window/pool/temperature/CPB/layers/insertion/
+  losses/training settings. The formal five-epoch pair, XAI, Stage B,
+  validation, test, and command promotion are denied. Summary/manifest SHAs are
+  `0d15bfa3...7941135`/`140a1173...8198245`; closure is documented in
+  `TRKH_5CLASS_FOVEAL_AGGREGATED_ATTENTION_CLOSURE_20260716.md`.
+- Current-best commands remain three revisions/two updates and zero keeper
+  replacements. The next screen must use an accepted primary paper and official
+  code, with user/secondary reports treated only as hypotheses.
+- Compact evidence preserves the exact summary/manifest and excludes the
+  reproducible 30.789 MB ONNX. Cleanup manifest SHA is
+  `e7278182...a20ff9c`; read-only retention passed over 712 directories with
+  `blockers=[]`, 71.226 GB free, and summary SHA `7bb8b6db...f1a0b7e`.
+  Final closure-document SHA is `3cb72200...070a896`.

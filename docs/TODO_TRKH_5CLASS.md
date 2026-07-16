@@ -3120,9 +3120,23 @@
   `1217/1217`, verify protected hashes, and pass retention over 709 directories
   with `blockers=[]`. Closure SHA is `aab02b4b...6f28005d`; commands remain
   three revisions/two updates and zero keeper replacements.
-- [ ] Perform the next primary-source/no-repeat screen outside frozen pooled
-  condition alignment and every closed architecture/objective family. Require
-  a new scratch image representation to demonstrate train-only class1 TP-vs-
-  hard-FP selectivity and condition stability before any validation access;
-  favor an official, maintained implementation and a paper recipe that can be
-  adapted transparently to the fixed `<=30e` resource contract.
+- [x] Perform the next primary-source/no-repeat screen outside frozen pooled
+  condition alignment and every closed architecture/objective family. Select
+  TransNeXt Aggregated Attention from the accepted CVPR-2024 paper and official
+  Apache-2.0 repository, but authorize only one bounded block-1 replacement
+  because the stock recipe uses 300 epochs.
+- [x] Implement and preflight the sole locked FAA A1 on the exact source-
+  disjoint `7372/1843` train-only fold. Official output/gradient replay, common
+  state, gradients, BF16, ONNX, resources, and 41/42 checks passed, but only
+  `0.599609` of patch queries used both routes above mass 0.05 versus the locked
+  `0.95`. Deny the formal pair, XAI, validation/test, Stage B, and command
+  promotion; do not sweep this family.
+- [x] Preserve the FAA closure and compact only reproducible preflight payloads.
+  Retain the exact summary/manifest, exclude the 30.789 MB reproducible ONNX,
+  verify cleanup manifest SHA `e7278182...a20ff9c`, and pass read-only retention
+  over 712 directories with `blockers=[]` and 71.226 GB free.
+- [ ] Perform a new primary-source/no-repeat screen outside static local/global
+  attention competition. Prefer an accepted paper with licensed official code,
+  transparent equations, and a bounded scratch mechanism compatible with
+  `<=30e`; reject it before training unless a prospective train-only selectivity
+  and TP/precision gate is credible.
