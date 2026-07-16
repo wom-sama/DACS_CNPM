@@ -1,6 +1,6 @@
 param(
     [string]$Python = "D:\DataAI\.venv\Scripts\python.exe",
-    [string]$RunName = "audit_sparse_overparameterization_a0_20260717",
+    [string]$RunName = "audit_sparse_overparameterization_a0_corrected_replay_20260717",
     [switch]$PreflightOnly
 )
 

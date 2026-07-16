@@ -56,20 +56,21 @@ EXPECTED_FIT_COUNTS = [1_561, 432, 1_527, 2_017, 1_835]
 EXPECTED_HOLDOUT_COUNTS = [380, 109, 393, 503, 458]
 EXPECTED_CONFUSION = [
     [1_416, 135, 5, 0, 5],
-    [9, 422, 0, 0, 1],
-    [4, 41, 1_455, 22, 5],
+    [10, 421, 0, 0, 1],
+    [4, 42, 1_454, 22, 5],
     [0, 4, 33, 1_978, 2],
-    [13, 9, 2, 0, 1_811],
+    [12, 9, 2, 0, 1_812],
 ]
 EXPECTED_METRICS = {
-    "macro_f1": 0.937980,
-    "class1_f1": 0.809204,
-    "class1_precision": 0.690671,
-    "class1_recall": 0.976852,
+    "accuracy": 0.9605263157894737,
+    "macro_f1": 0.9375834511834891,
+    "class1_f1": 0.8072866730584852,
+    "class1_precision": 0.6890343698854338,
+    "class1_recall": 0.9745370370370371,
 }
-EXPECTED_CLASS1_TP = 422
-EXPECTED_CLASS1_FP = 189
-EXPECTED_RESTRICTED_FP = 185
+EXPECTED_CLASS1_TP = 421
+EXPECTED_CLASS1_FP = 190
+EXPECTED_RESTRICTED_FP = 186
 
 LOCKED_KEEPER_SHA256 = (
     "1f49d577240c69dc63c30af70db52ec2aa9da65a17aef1c4b1c09ece6c482677"
@@ -95,6 +96,9 @@ LOCKED_HOLDOUT_INDEX_SHA256 = (
 LOCKED_PROTOCOL_SHA256 = (
     "d2b94048da9d2a3ed261fda4f97c333c51bada3b008bd2303629aefd96b687c8"
 )
+LOCKED_REPLAY_ERRATUM_SHA256 = (
+    "34b117ba422157c876c4f4cf650b846a961a2eead409f97cad08f2201591e8ec"
+)
 LOCKED_PAPER_SHA256 = (
     "087e1c05425bf9682351a27097ce25cb2ecc94a912b715bbebc97589506bac12"
 )
@@ -117,6 +121,9 @@ LOCKED_HISTORY_SHA256 = (
 )
 LOCKED_NBDT_CLOSURE_SHA256 = (
     "d1747782630eaa57f38239025e4925f1b1d393562bc65028e7b5dc3231a9dd3b"
+)
+LOCKED_OUTPUT_RELATIVE = Path(
+    "runs/audit_sparse_overparameterization_a0_corrected_replay_20260717"
 )
 
 
@@ -172,6 +179,14 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         default=Path("docs/TRKH_5CLASS_DOMAIN_NBDT_A0_CLOSURE_20260717.md"),
     )
     parser.add_argument(
+        "--replay-erratum",
+        type=Path,
+        default=Path(
+            "docs/TRKH_5CLASS_SPARSE_OVERPARAMETERIZATION_A0_"
+            "REPLAY_ERRATUM_20260717.md"
+        ),
+    )
+    parser.add_argument(
         "--official-root",
         type=Path,
         default=Path(r"D:\DataAI\external_sources\official\sop-icml2022"),
@@ -194,7 +209,9 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("runs/audit_sparse_overparameterization_a0_20260717"),
+        default=Path(
+            "runs/audit_sparse_overparameterization_a0_corrected_replay_20260717"
+        ),
     )
     parser.add_argument("--device", choices=("cuda",), default="cuda")
     parser.add_argument("--batch-size", type=int, default=64)
@@ -686,6 +703,7 @@ def _source_paths(args: argparse.Namespace) -> Dict[str, Path]:
         "raw_data": Path(args.raw_data).resolve(),
         "declaration": Path(args.declaration).resolve(),
         "protocol": Path(args.protocol).resolve(),
+        "replay_erratum": Path(args.replay_erratum).resolve(),
         "nbdt_closure": Path(args.nbdt_closure).resolve(),
         "paper": Path(args.paper).resolve(),
         "official_loss": official_root / "model" / "loss.py",
@@ -708,6 +726,12 @@ def _verify_inputs(
         or not math.isclose(float(args.v_lr), 1.0)
     ):
         raise ValueError("SOP A0 schedule differs from the precommitted protocol.")
+    expected_output = (Path.cwd().resolve() / LOCKED_OUTPUT_RELATIVE).resolve()
+    if Path(args.output_dir).resolve() != expected_output:
+        raise ValueError(
+            "SOP corrected replay output differs from the precommitted erratum: "
+            f"{Path(args.output_dir).resolve()} != {expected_output}"
+        )
     paths = _source_paths(args)
     expected_hashes = {
         "checkpoint": LOCKED_KEEPER_SHA256,
@@ -716,6 +740,7 @@ def _verify_inputs(
         "raw_data": LOCKED_RAW_DATA_SHA256,
         "declaration": LOCKED_DECLARATION_SHA256,
         "protocol": LOCKED_PROTOCOL_SHA256,
+        "replay_erratum": LOCKED_REPLAY_ERRATUM_SHA256,
         "nbdt_closure": LOCKED_NBDT_CLOSURE_SHA256,
         "paper": LOCKED_PAPER_SHA256,
         "official_loss": LOCKED_OFFICIAL_LOSS_SHA256,
@@ -1390,32 +1415,67 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
         "targets_exact": targets.tolist() == [int(row.target) for row in selected_rows],
         "declaration_predictions_exact": prediction_replay_rows == EXPECTED_FIT_ROWS,
         "confusion_exact": metrics["confusion_matrix"] == EXPECTED_CONFUSION,
+        "accuracy": abs(float(metrics["accuracy"]) - EXPECTED_METRICS["accuracy"])
+        <= 1e-12,
         "macro_f1": abs(float(metrics["macro_f1"]) - EXPECTED_METRICS["macro_f1"])
-        <= 1e-6,
+        <= 1e-12,
         "class1_f1": abs(
             float(metrics["per_class_f1"][FOCUS_CLASS])
             - EXPECTED_METRICS["class1_f1"]
         )
-        <= 1e-6,
+        <= 1e-12,
         "class1_precision": abs(
             float(metrics["per_class_precision"][FOCUS_CLASS])
             - EXPECTED_METRICS["class1_precision"]
         )
-        <= 1e-6,
+        <= 1e-12,
         "class1_recall": abs(
             float(metrics["per_class_recall"][FOCUS_CLASS])
             - EXPECTED_METRICS["class1_recall"]
         )
-        <= 1e-6,
+        <= 1e-12,
         "class1_tp_exact": class1_tp == EXPECTED_CLASS1_TP,
         "class1_fp_exact": class1_fp == EXPECTED_CLASS1_FP,
         "restricted_fp_exact": restricted_fp == EXPECTED_RESTRICTED_FP,
     }
     if not all(replay_checks.values()):
-        raise ValueError(
-            f"Keeper fit replay differs from the protocol: "
-            f"{[name for name, passed in replay_checks.items() if not passed]}"
+        failed = [name for name, passed in replay_checks.items() if not passed]
+        output_dir = _prepare_output(Path(args.output_dir), raw_data=Path(args.raw_data))
+        failure = {
+            "method": METHOD,
+            "status": "stopped_before_sop_due_to_keeper_replay_mismatch",
+            "provenance": provenance,
+            "dataset": dataset_summary,
+            "inference": inference,
+            "source_equation_replay": source_replay,
+            "keeper_fit_replay": {
+                "rows": len(targets),
+                "metrics": metrics,
+                "class1_tp": class1_tp,
+                "class1_fp": class1_fp,
+                "restricted_fp": restricted_fp,
+                "declaration_prediction_rows_matched": prediction_replay_rows,
+                "checks": replay_checks,
+                "failed_checks": failed,
+                "model_state_sha256_before": model_state_before,
+                "model_state_sha256_after": model_state_after,
+            },
+            "sop_noise_optimization_started": False,
+            "sop_gradient_gate_evaluated": False,
+            "holdout_loader_constructed": False,
+            "validation_predictions_used": False,
+            "test_data_used": False,
+        }
+        (output_dir / "summary.json").write_text(
+            json.dumps(failure, indent=2, sort_keys=True) + "\n", encoding="utf-8"
         )
+        (output_dir / "report.md").write_text(
+            "# SOP A0 Keeper Replay Failure\n\n"
+            f"Failed checks: `{', '.join(failed)}`. SOP optimization did not start.\n",
+            encoding="utf-8",
+        )
+        _write_manifest(output_dir)
+        raise ValueError(f"Keeper fit replay differs from the erratum: {failed}")
 
     u, v, optimization = optimize_noise_buffers(
         logits,
