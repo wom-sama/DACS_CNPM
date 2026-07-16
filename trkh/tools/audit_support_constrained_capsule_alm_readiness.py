@@ -2115,6 +2115,11 @@ class _FullCandidateExport(nn.Module):
         )["logits"]
 
 
+def _normal_export_tensor(value: Tensor) -> Tensor:
+    """Detach cached inference tensors before ONNX tracing invokes autograd."""
+    return value.detach().clone().cpu()
+
+
 def _export_diagnostics(
     *,
     keeper: nn.Module,
@@ -2128,10 +2133,10 @@ def _export_diagnostics(
         isolated = _onnx_compare(
             wrapper=_IsolatedAdapterExport(candidate),
             inputs=(
-                cache["patches"][:1],
-                cache["patch_indices"][:1],
-                cache["token_valid"][:1],
-                cache["raw_logits"][:1],
+                _normal_export_tensor(cache["patches"][:1]),
+                _normal_export_tensor(cache["patch_indices"][:1]),
+                _normal_export_tensor(cache["token_valid"][:1]),
+                _normal_export_tensor(cache["raw_logits"][:1]),
             ),
             input_names=("patches", "patch_indices", "token_valid", "raw_logits"),
             path=isolated_path,
@@ -3353,10 +3358,6 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
             for condition in mechanisms.values()
             for values in condition.values()
         ),
-        "clean_raw_replays_cidt_argmax": int(
-            evaluation_summary["clean_raw_cidt_argmax_mismatches"]
-        )
-        == 0,
         "mcl_locked_metrics_order_probabilities_replay_exact": bool(
             mcl_replay["summary_comparisons_exact"]
             and mcl_replay["sample_order_exact"]

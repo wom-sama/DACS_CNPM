@@ -10,6 +10,7 @@ from trkh.tools.audit_support_constrained_capsule_alm_readiness import (
     SupportConstrainedCapsuleAdapter,
     _dense_patch_map,
     _equation_diagnostics,
+    _normal_export_tensor,
     assess_stage_a,
     augmented_lagrangian_loss,
     boundary_schedule_sha256,
@@ -50,6 +51,15 @@ def test_adapter_schema_rng_isolation_and_zero_residual_are_exact() -> None:
         atol=1e-6,
         rtol=0.0,
     )
+
+
+def test_cached_inference_tensor_is_normalized_for_onnx_export() -> None:
+    with torch.inference_mode():
+        cached = torch.randn(2, 3)
+    assert torch.is_inference(cached)
+    exported = _normal_export_tensor(cached)
+    assert not torch.is_inference(exported)
+    assert torch.equal(exported, cached)
 
 
 def test_vectorized_routing_and_alm_match_independent_references() -> None:
