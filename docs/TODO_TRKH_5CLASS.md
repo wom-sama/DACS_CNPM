@@ -3347,3 +3347,19 @@
   and licensed official repository. Exclude every closed loss/sample-selection/
   hierarchy/token-routing family, and require a cheap prospective gate that
   proves an active class-1 boundary signal before any trainer integration.
+- [x] Cross-check the next route against accepted papers, official repositories,
+  licenses, current popularity, local no-repeat evidence, and deployment. Reject
+  AdaFace because frozen feature norm reverses TP-vs-FP direction from train
+  AUROC `0.557205` to validation `0.447959`; reject exact NAT because official
+  NATTEN has no matching Windows wheel and adds custom-op export risk on top of
+  already closed local-attention families.
+- [x] Select ICCV-2021 PiDiNet/PDC from the official research-licensed repository
+  at commit/tree `d21aa88...517ebd`/`b57c160...632887f`. Prospectively lock one
+  fit-only `CD -> AD -> RD` frozen-stem signal gate at protocol SHA
+  `ed385dd7...26fd7fa`: 421 class1 TP versus 186 restricted FP, four source-fold
+  OOF readouts, clean/dim/bright/low-contrast, object-only/context controls,
+  exact ordinary-convolution conversion, ONNX/resource checks, and no holdout,
+  validation, test, trainer, epoch, sweep, or command update.
+- [ ] Implement and run the sole locked PDC A0 auditor. Continue to a matched
+  five-epoch pair only if every equation, deployment, object-only AUROC,
+  TP-retention, FP-rejection, and illumination gate passes.

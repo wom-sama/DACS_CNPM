@@ -17783,3 +17783,42 @@ Date: 2026-07-02
   best command/history hashes remain exact and tracking stays three revisions/
   two updates. Compileall, six PowerShell parses, focused `5/5`, and full
   pytest `1337/1337` passed; closure SHA is `a62b4329...a8e78`.
+
+## Pixel-Difference Stem Signal A0 Lock 2026-07-17 - Object Evidence Before Integration
+
+- Applied a primary-source-first screen after SOP. User-supplied research reports
+  remain hypothesis generators; accepted proceedings and official source are the
+  authority, followed by direct TRKH measurements.
+- AdaFace was checked against its CVPR-2022 paper and official MIT repository
+  (947 stars when opened). Its distinct premise is that feature norm proxies
+  image quality, but current keeper head norm separates class1 TP from restricted
+  FP at only `0.557205` train AUROC and reverses to `0.447959` on validation.
+  This fails before another angular-margin implementation and avoids reopening
+  rejected plain margin, center-margin, and sub-center routes.
+- NAT was checked against its CVPR-2023 paper and official MIT repository (about
+  1.2k stars). Exact deployment depends on NATTEN; the current Windows,
+  Python-3.9, Torch-2.6.0+cu124 environment has no installation and the official
+  matching wheels are Linux-only. A local approximation would add ONNX/TensorRT
+  risk and repeat shifted-window/FAA/DAT/BRA/local-attention evidence, so NAT is
+  not selected.
+- Selected the ICCV-2021 oral PiDiNet/PDC paper and official repository (614
+  stars, 87 forks) because CD/AD/RD inject learned-kernel-compatible local
+  differences and convert exactly to ordinary convolution. Locked local paper
+  SHA `7ac63751...a4e09`, official commit/tree
+  `d21aa881...517ebd`/`b57c160...632887f`, source hashes, and the mixed
+  research-purpose/MIT-style license. Work remains research-only pending any
+  future commercial license review.
+- Protocol `TRKH_5CLASS_PIXEL_DIFFERENCE_STEM_SIGNAL_PROTOCOL_20260717.md` at
+  SHA `ed385dd7...26fd7fa` fixes a no-training `CD -> AD -> RD` shadow of the
+  three keeper stem convolutions. It uses only the 607 fit rows comprising 421
+  current class1 TP and 186 restricted FP, with fold counts
+  `112/45,100/48,101/52,108/41`; fold 0 holdout, validation, and test are banned.
+- Four source-fold OOF logistic readouts compare native and PDC core/boundary
+  descriptors under clean/dim/bright/low-contrast. PDC must beat native clean
+  AUROC by `0.025`, reach object-only AUROC `>=0.64`, retain `>=97%` clean TP,
+  reject `>=20%` restricted FP, remain stable under shifts, and show that the
+  signal does not depend on outside-bbox features. Exact official equations,
+  gradient/conversion replay, BF16, ONNX, runtime, memory, mapping, contact-sheet,
+  and independent replay gates precede any trainer integration.
+- No PDC measurement, image epoch, holdout, validation, test, XAI, or current-
+  command change has run at protocol lock time.
