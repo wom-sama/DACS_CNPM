@@ -17045,3 +17045,45 @@ Date: 2026-07-02
   auditor were amended only for this factual shape correction. No data split,
   loss, optimizer, gate, seed, or method choice changed; amended protocol SHA
   is `5444f20b...680b2`.
+
+## Mutual-Channel Patch A0 Closure 2026-07-16 - Diversity Works, True Class-1 Support Does Not
+
+- The complete source-disjoint `7372/1843` natural-multiclass A0 ran from
+  frozen 167-patch FP32 caches for ten epochs. Candidate/control each had 3,935
+  parameters, bit-exact initialization, identical 73,720-row order/masks, and
+  a zero residual head. Equations, gradients, movement, frozen keeper, and
+  deployment checks passed.
+- MCL learned its intended mechanism. Clean-holdout L_dis fell
+  `5.228253 -> 0.257927`, coverage rose `2.754525 -> 2.996192`, grouped
+  accuracy rose `0.236028 -> 0.912100`, and maximum class1 channel cosine fell
+  `0.999331 -> 0.529963`. Residual-margin AUROC was high at `0.946437` but
+  slightly below control `0.948628`.
+- The deployed result was unsafe suppression. Clean macro/class1 F1 fell
+  `-0.049074/-0.158670` versus raw. Precision rose `+0.036014` only because
+  recall fell `-0.366972`: 40 class1 TP broke, zero FN were rescued, restricted
+  FP fell `37 -> 19`, and corrections/harms were `24/73`.
+- Natural CE control itself fell to clean macro/class1 `0.900524/0.691099` and
+  broke 41 class1 TP. MCL also lost to this matched control by macro/class1 F1
+  `-0.001229/-0.003920`, precision `-0.025808`, and FP `16 -> 19`. Strong
+  channel diversity and rank AUROC did not solve class-support calibration.
+- Dim/bright/low-contrast candidate class1 F1 was
+  `0.397727/0.460784/0.405063`, all below raw. TP breaks were `23/40/32` with
+  only `5/5/1` rescues. The exact route fails the agricultural precision/TP
+  contract and cannot reach validation.
+- XAI covered all 92 required events over 31 pages. Candidate channels were
+  genuinely decorrelated (mean pairwise map correlation `-0.011779`) and
+  divided fruit surface/tip evidence, with some border/background activation.
+  Broken TP and removed FP both included close and wide views. The failure is
+  support suppression across subtle fruit boundaries, not missing diversity
+  or a simple context-localization error.
+- Independent replay matched all 7,372 predictions/comparisons. Summary,
+  prediction, manifest, and XAI-manifest SHAs are
+  `cf4a0143...183b0f`, `1feff96c...5a1d5`, `e4e727a7...4a924`, and
+  `83fb7b24...c9973`; 42 payloads total 54,138,676 bytes. Full pytest passed
+  `1196/1196`; retention passed over 705 directories with `blockers=[]`.
+- Close this exact final-patch MCL residual and every neighboring channel-count,
+  source, head, scale, loss-weight, optimizer, schedule, seed/fold/mask,
+  sampling, threshold, and router sweep. A future channel-aligned route needs
+  a distinct source and a precommitted natural-multiclass TP/support constraint
+  across illumination. Current-best command tracking remains three revisions
+  and two updates; no command or checkpoint changed.

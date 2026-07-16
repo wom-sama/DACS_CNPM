@@ -3064,10 +3064,18 @@
   final pruning retains `ceil(256 * 0.65) = 167` tokens because keep rates are
   absolute to the original grid, not sequential. Amend only this structural
   contract before formal training; no behavior metric or gate changed.
-- [ ] Implement the isolated MCL auditor, focused equation/replay tests, and a
-  VS Code-safe PowerShell launcher. Preflight must verify all hashes and create
-  no run directory; do not modify the shared model or trainer.
-- [ ] Run the sole locked MCL A0, inspect all audits/XAI, independently replay
-  artifacts, then either authorize Stage B or close the exact route without a
-  neighboring sweep. Keep current-best commands at three revisions unless a
-  later locked validation win occurs.
+- [x] Implement the isolated MCL auditor, focused equation/replay tests, and a
+  VS Code-safe PowerShell launcher without modifying shared model/trainer code.
+  Correct the pre-metric patch count to 167, pass equation tests `8/8`, and
+  pass formal hash/order/mask/source/license preflight without creating output.
+- [x] Run and close the sole locked MCL A0. The mechanism worked (holdout group
+  accuracy `0.912100`, max cosine `0.529963`, AUROC `0.946437`) but clean
+  macro/class1 F1 fell `-0.049074/-0.158670`; 40 class1 TP broke while only 18
+  net restricted FP were removed. Candidate also lost to natural CE control.
+  Deny Stage B, validation/test, neighboring sweeps, probe/full train, and
+  command promotion. Replay `7372/7372`, XAI `92/92`, ONNX, full pytest
+  `1196/1196`, protected hashes, and retention over 705 directories passed.
+- [ ] Perform a fresh primary-source/no-repeat screen for a genuinely distinct
+  representation that prospectively constrains natural-multiclass class1 TP
+  and support under clean/dim/bright/low-contrast conditions. Retain raw,
+  natural-CE, and MCL comparators; forbid post-hoc threshold calibration.
