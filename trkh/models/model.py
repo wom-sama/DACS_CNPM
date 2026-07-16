@@ -25,6 +25,7 @@ from trkh.models.starnet_s2_tokenizer import StarNetS2Tokenizer
 from trkh.models.visual_contrast_attention import VisualContrastAttention
 from trkh.models.foveal_aggregated_attention import FovealAggregatedAttention
 from trkh.models.deformable_spatial_attention import DeformableSpatialAttention
+from trkh.models.diverse_branch_stem import DiverseBranchConvStem
 from trkh.models.cross_covariance_attention import (
     SharedProjectionCrossCovarianceAttention,
 )
@@ -6002,6 +6003,7 @@ class VisionTransformerWithRegisters(nn.Module):
         if self.stem_architecture not in {
             "conv_pool",
             "coatnet_mbconv",
+            "dbb_conv_pool",
             "inceptionnext_atto_tokenizer",
             "moganet_xt_tokenizer",
             "octave_conv",
@@ -6009,6 +6011,7 @@ class VisionTransformerWithRegisters(nn.Module):
         }:
             raise ValueError(
                 "stem_architecture must be one of: conv_pool, coatnet_mbconv, "
+                "dbb_conv_pool, "
                 "inceptionnext_atto_tokenizer, moganet_xt_tokenizer, "
                 "octave_conv, starnet_s2_tokenizer; "
                 f"got {stem_architecture!r}."
@@ -6613,6 +6616,25 @@ class VisionTransformerWithRegisters(nn.Module):
                 # parameters remain paired under the same seed.
                 with torch.random.fork_rng(devices=[]):
                     self.stem = OctaveConvStem(
+                        in_channels=in_channels,
+                        stem_channels=stem_channels,
+                        embed_dim=embed_dim,
+                    )
+                constructor_rng_proxy = HybridConvStem(
+                    in_channels=in_channels,
+                    stem_channels=stem_channels,
+                    embed_dim=embed_dim,
+                    pooling_mode=self.stem_pooling_mode,
+                    softpool_blend=self.stem_softpool_blend,
+                )
+                del constructor_rng_proxy
+            elif self.stem_architecture == "dbb_conv_pool":
+                if self.stem_pooling_mode != "max":
+                    raise ValueError(
+                        "dbb_conv_pool requires the locked stem_pooling_mode=max."
+                    )
+                with torch.random.fork_rng(devices=[]):
+                    self.stem = DiverseBranchConvStem(
                         in_channels=in_channels,
                         stem_channels=stem_channels,
                         embed_dim=embed_dim,
@@ -7249,8 +7271,8 @@ class VisionTransformerWithRegisters(nn.Module):
                 )
             if isinstance(attention_module, DeformableSpatialAttention):
                 deformable_extra_modules.append(attention_module.conv_offset)
-        if isinstance(self.stem, OctaveConvStem):
-            octave_module_ids = {id(child) for child in self.stem.modules()}
+        if isinstance(self.stem, (OctaveConvStem, DiverseBranchConvStem)):
+            isolated_stem_module_ids = {id(child) for child in self.stem.modules()}
             gabor_module_ids = {
                 id(child)
                 for gabor_module in gabor_modules
@@ -7272,7 +7294,7 @@ class VisionTransformerWithRegisters(nn.Module):
                 for child in deformable_extra_module.modules()
             }
             excluded_module_ids = (
-                octave_module_ids
+                isolated_stem_module_ids
                 | gabor_module_ids
                 | soft_moe_module_ids
                 | foveal_extra_module_ids
@@ -7286,18 +7308,23 @@ class VisionTransformerWithRegisters(nn.Module):
                     pooling_mode=self.stem_pooling_mode,
                     softpool_blend=self.stem_softpool_blend,
                 )
-            octave_init_rng_state = torch.get_rng_state().clone()
+            isolated_stem_init_rng_state = torch.get_rng_state().clone()
             legacy_init_proxy.apply(self._init_weights)
+            if isinstance(self.stem, DiverseBranchConvStem):
+                self.stem.reset_origin_from_control(legacy_init_proxy)
             del legacy_init_proxy
 
-            def init_non_octave_module(module: nn.Module) -> None:
+            def init_non_isolated_stem_module(module: nn.Module) -> None:
                 if id(module) not in excluded_module_ids:
                     self._init_weights(module)
 
-            self.apply(init_non_octave_module)
+            self.apply(init_non_isolated_stem_module)
             with torch.random.fork_rng(devices=[]):
-                torch.set_rng_state(octave_init_rng_state)
-                self.stem.reset_from_virtual_vanilla_kernels()
+                torch.set_rng_state(isolated_stem_init_rng_state)
+                if isinstance(self.stem, OctaveConvStem):
+                    self.stem.reset_from_virtual_vanilla_kernels()
+                else:
+                    self.stem.reset_candidate_only_parameters(self._init_weights)
             if gabor_modules:
                 with torch.random.fork_rng(devices=[]):
                     for gabor_module in gabor_modules:

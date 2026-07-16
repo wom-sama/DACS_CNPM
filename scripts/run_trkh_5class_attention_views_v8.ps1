@@ -9,7 +9,7 @@ param(
     [string]$RunName = "mango_cls_256_5class_attention_views_v8_30e",
     [string]$ResumeCheckpoint = "runs\mango_cls_256_5class_hardneg_maskfix_v4_30e\checkpoints\best.pt",
     [int]$ImageSize = 256,
-    [ValidateSet("conv_pool", "coatnet_mbconv")]
+    [ValidateSet("conv_pool", "coatnet_mbconv", "dbb_conv_pool")]
     [string]$StemArchitecture = "conv_pool",
     [ValidateSet("max", "soft", "max_soft")]
     [string]$StemPoolingMode = "max",

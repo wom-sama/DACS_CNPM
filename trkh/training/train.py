@@ -367,6 +367,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         choices=(
             "conv_pool",
             "coatnet_mbconv",
+            "dbb_conv_pool",
             "inceptionnext_atto_tokenizer",
             "moganet_xt_tokenizer",
             "octave_conv",
@@ -376,6 +377,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         help=(
             "Early convolutional hierarchy. coatnet_mbconv reuses the scratch "
             "CoAtNet-Nano stem plus its first two MBConv stages; "
+            "dbb_conv_pool uses CVPR-2021 train-time diverse branches that "
+            "fuse to the legacy three-convolution stem for deployment; "
             "inceptionnext_atto_tokenizer uses official Atto stages 1-3; "
             "moganet_xt_tokenizer uses MogaNet-XT stages 1-3; "
             "octave_conv uses parameter-matched high/low-frequency paths; "
