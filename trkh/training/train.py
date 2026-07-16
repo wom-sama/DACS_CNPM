@@ -998,6 +998,15 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--token-prune-bbox-margin-ratio", type=float, default=0.04)
     parser.add_argument("--early-token-mask-keep-rate", type=float, default=1.0)
     parser.add_argument(
+        "--inattentive-token-fusion",
+        action="store_true",
+        default=False,
+        help=(
+            "EViT-style parameter-free weighted summary of patches rejected by "
+            "the existing TRKH pruning selector."
+        ),
+    )
+    parser.add_argument(
         "--pairwise-margin-head",
         action="store_true",
         default=False,
@@ -4775,6 +4784,21 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         raise ValueError("--token-prune-bbox-margin-ratio phai >= 0.")
     if not 0.0 < args.early_token_mask_keep_rate <= 1.0:
         raise ValueError("--early-token-mask-keep-rate phai nam trong (0, 1].")
+    if args.inattentive_token_fusion and not args.token_pruning:
+        raise ValueError("--inattentive-token-fusion yeu cau --token-pruning.")
+    if args.inattentive_token_fusion and args.early_token_mask_keep_rate < 1.0:
+        raise ValueError(
+            "--inattentive-token-fusion yeu cau --early-token-mask-keep-rate=1.0."
+        )
+    if args.inattentive_token_fusion and (
+        args.deep_class_prompt
+        or args.concurrent_local_global_coupling
+        or args.late_member_branch
+    ):
+        raise ValueError(
+            "--inattentive-token-fusion xung dot voi deep prompt, concurrent "
+            "local-global, va late-member dynamic-prefix routes."
+        )
     if args.balanced_epoch_multiplier <= 0.0:
         raise ValueError("--balanced-epoch-multiplier phai > 0.")
     if not 0.0 <= args.balanced_epoch_tolerance <= 1.0:
@@ -6817,6 +6841,7 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         token_prune_bbox_weight=args.token_prune_bbox_weight,
         token_prune_bbox_margin_ratio=args.token_prune_bbox_margin_ratio,
         early_token_mask_keep_rate=args.early_token_mask_keep_rate,
+        inattentive_token_fusion=bool(args.inattentive_token_fusion),
         pairwise_margin_head=bool(args.pairwise_margin_head),
         pairwise_margin_pairs=args.pairwise_margin_pairs,
         pairwise_margin_logit_scale=args.pairwise_margin_logit_scale,

@@ -199,6 +199,16 @@ source-disjoint holdout rows without updating a parameter. Use clean, dim
 (`brightness=0.70`, `contrast=0.90`), bright (`1.25`, `1.10`), and
 low-contrast (`1.00`, `0.65`) inputs. Bboxes are audit-only.
 
+The locked `tiny/edge-object cohort` is defined before model inference from
+clean transformed holdout metadata only. A row is `tiny` when its normalized
+bbox area is at or below the 25th percentile over all 1,843 valid clean
+holdout bboxes, computed with the linear quantile method. A row is `edge` when
+`min(x_min, y_min, 1-x_max, 1-y_max) <= 1/16`; negative gaps remain edge rows.
+The cohort is the union of those predicates. The auditor must export the
+resolved area threshold, all member sample indices, predicate counts, and the
+ordered cohort-index SHA-256 before scoring any model output. Rows with a
+missing or nonfinite bbox are hard audit failures rather than silently omitted.
+
 Every gate below must pass:
 
 - first-prune spatial indices are identical for control/candidate on every row
@@ -231,6 +241,11 @@ Failure closes A0 before training. These permissive behavior thresholds do not
 promote a counterfactual keeper; they only verify that the parameter-free path
 is active, spatially valid, and not already unsafe before adaptation.
 
+This cohort definition was added prospectively after the default-off runtime
+path and unit test existed, but before the formal auditor, any full-holdout
+output, visual page, or gate result existed. It resolves an underspecified
+term; it does not change the fusion equation or any numeric acceptance gate.
+
 ## Sole Five-Epoch Train-Only Pair
 
 Only a complete preflight pass authorizes one control/fusion pair from random
@@ -245,8 +260,15 @@ Every unrelated experimental module remains disabled.
 
 Shared training recipe: five epochs, batch 32, accumulation 2, AdamW
 `2.5e-4`, weight decay `0.05`, warmup 1, cosine horizon 5, min LR `1e-6`, clip
-`0.7`, patience 3, EMA `0.995`, natural-frequency sampling, and the frozen
-scratch-record augmentation/loss recipe. There is no EViT keep-rate warmup in
+`0.7`, patience 3, EMA `0.995`, and natural-frequency sampling. `ldam_focal`,
+label smoothing `0.02`, LDAM margin/scale `0.3/18`, focal gamma/mix `1.0/0.1`,
+and pairwise-margin/metric-learning losses `0.04/0.04` retain the same pairs
+and sources as the scratch record. Crop/pad, mild affine/color jitter,
+illumination normalization, background suppression, local exposure, obstacle,
+and horizontal flip remain shared. Attention-view loss/drop, teacher focus or
+cache, distillation, manifests, sample weighting, MixUp/CutMix/copy-paste,
+thresholds, routers, TTA, and final test are disabled to isolate the
+architecture and prevent holdout leakage. There is no EViT keep-rate warmup in
 A0 because both arms must preserve the current TRKH pruning control.
 
 The candidate advances only if all conditions pass on the train-only holdout:

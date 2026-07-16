@@ -17537,3 +17537,69 @@ Date: 2026-07-02
   Jaccard `>=0.98` with every changed row reported. Corrected protocol SHA is
   `438519c8...7e622`; no code, model output, or audit result existed when this
   correction was made.
+
+## EViT A0 Prospective Cohort Clarification 2026-07-16
+
+- The readiness protocol used `tiny/edge-object cohort` without an exact
+  membership rule. Before implementing or running the formal auditor, lock it
+  from clean transformed holdout metadata only: `tiny` is bbox-area linear Q25,
+  `edge` is normalized minimum boundary gap `<=1/16`, and the cohort is their
+  union. Invalid bbox rows are hard failures; membership, counts, threshold,
+  and ordered-index SHA must be exported before model scoring.
+- This clarification occurs after the default-off runtime path and focused
+  unit test were drafted, but before any 1,843-row output, visual page, or
+  formal gate result. No fusion equation, behavior threshold, training recipe,
+  validation/test permission, or command-promotion rule changes.
+- The resulting protocol SHA is
+  `44ac40ea4c627982db1138b0fe996dfa9c3ca158e7df70284b87d8a33a09aae6`,
+  superseding `438519c8...7e622` before formal execution.
+
+## EViT A0 Implementation Readiness 2026-07-16
+
+- Added a default-off, parameter-free `inattentive_token_fusion` path. The
+  first prune applies the independently replayed EViT weighted complement;
+  the second prune refolds the prior context with its current class attention.
+  The context remains a single non-spatial prefix and is removed from public
+  tokens, patch indices, spatial priors, local modules, and fine-grained
+  pooling. Control/candidate keeper models strict-load the same 185 tensors and
+  contain the same 7,245,590 parameters.
+- Added config, CLI, and V8 PowerShell wiring plus the three-phase VS Code-safe
+  wrapper `run_trkh_inattentive_token_fusion_a0.ps1`. Python is invoked
+  directly with `$LASTEXITCODE`; the wrapper rejects overwrite, dirty tracked
+  state, unpushed/mismatched HEAD, validation/test use, missing hash-locked
+  visual permission, and any second five-epoch pair.
+- Added a formal auditor that hashes every primary source/input, independently
+  replays both fusion equations and gradients, checks default-off parity,
+  constructor RNG/state, FP32/BF16 backward and pruning stability, standard/
+  trace parity, public layout, ONNX operators, runtime/VRAM, and all 1,843
+  source-disjoint rows under four conditions. Behavior metrics always use the
+  standard inference path; traces only provide context/pruning evidence.
+- Context attribution recursively preserves original-patch coefficients:
+  `lineage_2 = attention_to_context_2 * lineage_1 + newly_dropped_weights_2`.
+  The auditor exports all 7,372 behavior rows, every second-prune change, and
+  weighted/raw object and outside-bbox context mass without dropping invalid
+  rows. Visual pages overlay effective lineage, both drop stages, final kept
+  patches, and bbox; finalization requires the pre-review summary SHA and every
+  page SHA.
+- A metadata-only real holdout scan, performed before model scoring, resolved
+  linear bbox-area Q25 to `0.1389025839`: 461 tiny rows, 796 edge rows, and
+  1,123 union rows at ordered cohort SHA `c96cf626...33c5`. This is an
+  engineering check, not a formal gate result.
+- The first full suite found that a fusion-off guard rejected temporary deep
+  class-prompt prefixes. Removed that legacy regression and recomputed active
+  prefix count after prompt extraction; candidate fusion remains constructor-
+  incompatible with deep prompt. Compileall, pyflakes, PowerShell parse,
+  candidate launcher config preflight, focused `151/151`, and full pytest
+  `1296/1296` now pass.
+- A four-row keeper sanity check produced context `[4,1,256]`, public tokens
+  `[4,174,256]`, exact first-prune identity, valid partitions, and probability
+  MAE `0.00012383`. One row had zero dropped-object mass, confirming that only
+  the locked full-holdout audit may decide selectivity. No formal preflight,
+  epoch, official validation/test, full train, or command update has run.
+- Final pre-execution recipe clarification matches the earlier FAA/DAT/BRA
+  causal pairs: keep pairwise-margin/metric losses `0.04/0.04` and ordinary
+  scratch augmentation, while disabling attention-view loss/drop, every
+  teacher/cache/distillation path, manifests, sample weighting, mixing,
+  thresholds, routers, TTA, and final test. This documents the launcher already
+  implemented; no result or argument was changed. Final protocol SHA is
+  `d3f8de6fbef7ad5d88ca33e5db71f9c5ca587f32c1ad5ee4797fd400aaf3ee4b`.

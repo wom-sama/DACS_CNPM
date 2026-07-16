@@ -373,6 +373,7 @@ class ModelConfig:
     token_prune_bbox_weight: float = 0.0
     token_prune_bbox_margin_ratio: float = 0.04
     early_token_mask_keep_rate: float = 1.0
+    inattentive_token_fusion: bool = False
     pairwise_margin_head: bool = False
     pairwise_margin_pairs: str = "0-1,2-3,4-rest"
     pairwise_margin_logit_scale: float = 0.35

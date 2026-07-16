@@ -3223,7 +3223,7 @@
   over 723 directories, all 205 compacted originals are absent, and
   `blockers=[]`. Closure SHA is `ab74dc74...766e4`; commands remain three
   revisions/two updates.
-- [ ] Perform a new accepted-primary-paper/official-licensed-code no-repeat
+- [x] Perform a new accepted-primary-paper/official-licensed-code no-repeat
   screen outside BRA and every closed family. Require a prospective train-only
   gate that directly covers tiny edge objects, post-pruning spatial support,
   class1 precision/TP safety, and surface-boundary separability before any
@@ -3237,12 +3237,19 @@
   unchanged layers/keep rates/selector and spatial indices, one explicit
   non-spatial context token, exact source-equation replay, source-disjoint
   `7372/1843` gates, precision/TP/tiny-edge/context/XAI/resource checks, and no
-  validation/test/sweep/current-command update. Protocol SHA is
-  `438519c8...7e622`; this prospectively corrects the downstream-selector gate
+  validation/test/sweep/current-command update. Current protocol SHA is
+  `d3f8de6f...3ee4b`; it includes the prospective downstream-selector
+  correction and exact metadata-only tiny/edge cohort definition
   before code so first-prune identity is exact and second-prune Jaccard is
   measured rather than logically forced to remain identical.
-- [ ] Implement and precommit the default-off A0 path, focused tests, formal
+- [x] Implement and precommit the default-off A0 path, focused tests, formal
   engineering/selectivity auditor, overlay review, and a VS Code-safe wrapper.
+  Before auditor execution, prospectively define the tiny/edge cohort from
+  clean metadata only: linear bbox-area Q25 or normalized edge gap `<=1/16`,
+  export membership/hash, and fail on invalid bbox metadata.
+  Compileall/pyflakes, launcher configuration preflight, focused `151/151`,
+  and full pytest `1296/1296` pass. The first full suite exposed and then
+  verified the fix for a default-off deep-prompt prefix regression.
 - [ ] Run the formal preflight once. Authorize the sole five-epoch scratch pair
   only if every locked engineering and train-only gate passes; otherwise close
   A0 without epochs and continue the next primary-source route.

@@ -6030,6 +6030,7 @@ class VisionTransformerWithRegisters(nn.Module):
         token_prune_bbox_weight: float = 0.0,
         token_prune_bbox_margin_ratio: float = 0.04,
         early_token_mask_keep_rate: float = 1.0,
+        inattentive_token_fusion: bool = False,
         pairwise_margin_head: bool = False,
         pairwise_margin_pairs: str = "0-1,2-3,4-rest",
         pairwise_margin_logit_scale: float = 0.35,
@@ -6754,6 +6755,7 @@ class VisionTransformerWithRegisters(nn.Module):
         self.early_token_mask_keep_rate = float(
             min(1.0, max(0.0, early_token_mask_keep_rate))
         )
+        self.inattentive_token_fusion_enabled = bool(inattentive_token_fusion)
         self.token_prune_schedule = (
             self._parse_token_prune_schedule(
                 depth=int(depth),
@@ -6777,6 +6779,27 @@ class VisionTransformerWithRegisters(nn.Module):
             )
         if not self.token_prune_schedule and self.early_token_mask_keep_rate >= 1.0:
             self.token_pruning = False
+        if self.inattentive_token_fusion_enabled:
+            if not self.token_pruning or not self.token_prune_schedule:
+                raise ValueError(
+                    "inattentive_token_fusion requires attention-based token pruning."
+                )
+            if self.early_token_mask_keep_rate < 1.0:
+                raise ValueError(
+                    "inattentive_token_fusion does not support early token masking."
+                )
+            incompatible = []
+            if self.deep_class_prompt_enabled:
+                incompatible.append("deep_class_prompt")
+            if self.concurrent_local_global_enabled:
+                incompatible.append("concurrent_local_global_coupling")
+            if self.late_member_enabled:
+                incompatible.append("late_member_branch")
+            if incompatible:
+                raise ValueError(
+                    "inattentive_token_fusion is incompatible with dynamic-prefix "
+                    f"consumers: {', '.join(incompatible)}."
+                )
         if self.head_pooling not in {"cls", "cls_register_mean", "cls_branch_register_mean"}:
             raise ValueError(f"Khong ho tro head_pooling={head_pooling!r}.")
 
@@ -8239,6 +8262,80 @@ class VisionTransformerWithRegisters(nn.Module):
         overlap = (inter_w * inter_h / max(patch_area, 1e-6)).flatten(1)
         return self._normalize_token_scores(overlap)
 
+    @staticmethod
+    def _fuse_inattentive_context(
+        *,
+        patch_tokens: Tensor,
+        cls_attention: Tensor,
+        selected_local: Tensor,
+        previous_context: Optional[Tensor] = None,
+        previous_context_attention: Optional[Tensor] = None,
+    ) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
+        """Apply the parameter-free EViT weighted sum to rejected patches.
+
+        The first-stage equation follows the official Apache-2.0 EViT source
+        (`youweiliang/evit`, commit 97e58f6). A later stage also refolds the
+        existing non-spatial context with its current CLS attention.
+        """
+
+        if patch_tokens.ndim != 3 or cls_attention.ndim != 2:
+            raise ValueError("Inattentive fusion expects [B,N,C] tokens and [B,N] attention.")
+        if tuple(patch_tokens.shape[:2]) != tuple(cls_attention.shape):
+            raise ValueError("Patch-token and CLS-attention shapes must agree.")
+        if selected_local.ndim != 2 or selected_local.size(0) != patch_tokens.size(0):
+            raise ValueError("Selected patch indices must have shape [B,K].")
+
+        patch_count = int(patch_tokens.size(1))
+        dropped_count = patch_count - int(selected_local.size(1))
+        if dropped_count <= 0:
+            raise ValueError("Inattentive fusion requires at least one rejected patch.")
+
+        selected_mask = cls_attention.new_zeros(cls_attention.shape).scatter(
+            1,
+            selected_local,
+            torch.ones_like(selected_local, dtype=cls_attention.dtype),
+        )
+        dropped_mask = (1.0 - selected_mask).clamp(min=0.0, max=1.0)
+        dropped_weight_map = cls_attention * dropped_mask
+        context = torch.sum(
+            patch_tokens * dropped_weight_map.to(dtype=patch_tokens.dtype).unsqueeze(-1),
+            dim=1,
+            keepdim=True,
+        )
+
+        previous_mass = cls_attention.new_zeros((patch_tokens.size(0), 1))
+        if previous_context is not None:
+            if previous_context_attention is None:
+                raise ValueError("Previous context requires its current CLS attention.")
+            if tuple(previous_context.shape) != (
+                int(patch_tokens.size(0)),
+                1,
+                int(patch_tokens.size(2)),
+            ):
+                raise ValueError("Previous context must have shape [B,1,C].")
+            if tuple(previous_context_attention.shape) != (
+                int(patch_tokens.size(0)),
+                1,
+            ):
+                raise ValueError("Previous context attention must have shape [B,1].")
+            previous_mass = previous_context_attention
+            context = context + previous_context * previous_mass.to(
+                dtype=previous_context.dtype
+            ).unsqueeze(-1)
+        elif previous_context_attention is not None:
+            raise ValueError("Previous context attention was provided without a context token.")
+
+        dropped_local = torch.topk(
+            dropped_mask,
+            k=dropped_count,
+            dim=1,
+            largest=True,
+            sorted=False,
+        ).indices
+        dropped_weights = cls_attention.gather(1, dropped_local)
+        total_mass = dropped_weights.sum(dim=1, keepdim=True) + previous_mass
+        return context, dropped_local, dropped_weights, total_mass, previous_mass
+
     def _prune_patch_tokens(
         self,
         *,
@@ -8253,6 +8350,11 @@ class VisionTransformerWithRegisters(nn.Module):
         resolved_prefix_count = int(
             self.num_prefix_tokens if prefix_count is None else prefix_count
         )
+        context_count = resolved_prefix_count - int(self.num_prefix_tokens)
+        if context_count < 0:
+            raise ValueError("Resolved prefix count cannot be smaller than base prefixes.")
+        if self.inattentive_token_fusion_enabled and context_count not in {0, 1}:
+            raise ValueError("Inattentive fusion supports zero or one active context token.")
         patch_tokens = tokens[:, resolved_prefix_count:]
         current_patch_count = int(patch_tokens.size(1))
         target_patch_count = max(1, int(math.ceil(float(original_patch_count) * float(keep_rate))))
@@ -8283,13 +8385,61 @@ class VisionTransformerWithRegisters(nn.Module):
             selected_local.unsqueeze(-1).expand(-1, -1, patch_tokens.size(-1)),
         )
         selected_scores = score.gather(1, selected_local)
-        pruned_tokens = torch.cat(
-            (tokens[:, :resolved_prefix_count], selected_tokens), dim=1
-        )
         trace = {
             "kept_indices": selected_original,
             "scores": selected_scores,
         }
+        if self.inattentive_token_fusion_enabled:
+            cls_patch_attention = attention[
+                :, :, 0, resolved_prefix_count:
+            ].mean(dim=1)
+            previous_context = (
+                tokens[:, self.num_prefix_tokens : resolved_prefix_count]
+                if context_count == 1
+                else None
+            )
+            previous_context_attention = (
+                attention[
+                    :, :, 0, self.num_prefix_tokens : resolved_prefix_count
+                ].mean(dim=1)
+                if context_count == 1
+                else None
+            )
+            (
+                context_token,
+                dropped_local,
+                dropped_weights,
+                context_attention_mass,
+                previous_context_mass,
+            ) = self._fuse_inattentive_context(
+                patch_tokens=patch_tokens,
+                cls_attention=cls_patch_attention,
+                selected_local=selected_local,
+                previous_context=previous_context,
+                previous_context_attention=previous_context_attention,
+            )
+            dropped_original = patch_indices.gather(1, dropped_local)
+            pruned_tokens = torch.cat(
+                (
+                    tokens[:, : self.num_prefix_tokens],
+                    context_token,
+                    selected_tokens,
+                ),
+                dim=1,
+            )
+            trace.update(
+                {
+                    "dropped_indices": dropped_original,
+                    "fusion_weights": dropped_weights,
+                    "context_attention_mass": context_attention_mass,
+                    "previous_context_attention_mass": previous_context_mass,
+                    "context_token": context_token,
+                }
+            )
+        else:
+            pruned_tokens = torch.cat(
+                (tokens[:, :resolved_prefix_count], selected_tokens), dim=1
+            )
         return pruned_tokens, selected_original, trace
 
     def _early_mask_patch_tokens(
@@ -8483,6 +8633,7 @@ class VisionTransformerWithRegisters(nn.Module):
         }
         attention_maps = {}
         pruning_trace: List[Dict[str, Tensor]] = []
+        active_prefix_count = int(self.num_prefix_tokens)
         if pruning_enabled and self.early_token_mask_keep_rate < 1.0:
             before_count = int(tokens.size(1) - self.num_prefix_tokens)
             tokens, patch_indices, prune_info = self._early_mask_patch_tokens(
@@ -8503,7 +8654,7 @@ class VisionTransformerWithRegisters(nn.Module):
                 dtype=torch.long,
             )
             prune_info["after_count"] = torch.tensor(
-                int(tokens.size(1) - self.num_prefix_tokens),
+                int(patch_indices.size(1)),
                 device=tokens.device,
                 dtype=torch.long,
             )
@@ -8531,7 +8682,7 @@ class VisionTransformerWithRegisters(nn.Module):
             should_prune = pruning_enabled and block_index in self.token_prune_schedule
             should_collect_layer_tokens = block_index in layer_token_fusion_layer_set
             block_tokens = tokens
-            block_prefix_count = int(self.num_prefix_tokens)
+            block_prefix_count = int(active_prefix_count)
             if self.deep_class_prompt is not None:
                 block_tokens = self.deep_class_prompt.insert(
                     block_tokens,
@@ -8611,11 +8762,14 @@ class VisionTransformerWithRegisters(nn.Module):
                         dtype=torch.long,
                     )
                     prune_info["after_count"] = torch.tensor(
-                        int(block_tokens.size(1) - block_prefix_count),
+                        int(patch_indices.size(1)),
                         device=block_tokens.device,
                         dtype=torch.long,
                     )
                     pruning_trace.append(prune_info)
+                    active_prefix_count = int(
+                        block_tokens.size(1) - patch_indices.size(1)
+                    )
             else:
                 if self.gradient_checkpointing and self.training:
                     block_tokens = gradient_checkpoint(
@@ -8643,6 +8797,7 @@ class VisionTransformerWithRegisters(nn.Module):
                 deep_class_prompt_tokens.append(prompt_tokens)
             else:
                 tokens = block_tokens
+            active_prefix_count = int(tokens.size(1) - patch_indices.size(1))
             coupling = (
                 self.concurrent_local_couplings[layer_key]
                 if layer_key in self.concurrent_local_couplings
@@ -8654,7 +8809,7 @@ class VisionTransformerWithRegisters(nn.Module):
                         tokens,
                         concurrent_local_state,
                         grid_size=grid_size,
-                        prefix_count=self.num_prefix_tokens,
+                        prefix_count=active_prefix_count,
                         patch_indices=patch_indices,
                         return_trace=True,
                     )
@@ -8664,7 +8819,7 @@ class VisionTransformerWithRegisters(nn.Module):
                         tokens,
                         concurrent_local_state,
                         grid_size=grid_size,
-                        prefix_count=self.num_prefix_tokens,
+                        prefix_count=active_prefix_count,
                         patch_indices=patch_indices,
                     )
             if (
@@ -8677,7 +8832,7 @@ class VisionTransformerWithRegisters(nn.Module):
                 block_token_shapes.append(tuple(int(value) for value in tokens.shape))
                 block_patch_indices.append(patch_indices.detach().clone())
                 block_patch_norms.append(
-                    tokens[:, self.num_prefix_tokens :].detach().float().norm(dim=-1)
+                    tokens[:, active_prefix_count:].detach().float().norm(dim=-1)
                 )
             if layer_key in self.multi_granularity_aux_heads:
                 register_end_for_aux = 1 + self.num_registers
@@ -8731,6 +8886,22 @@ class VisionTransformerWithRegisters(nn.Module):
             late_member_tokens = self.late_member_norm(late_member_tokens)
         tokens = self.norm(tokens)
 
+        active_prefix_count = int(tokens.size(1) - patch_indices.size(1))
+        if active_prefix_count < int(self.num_prefix_tokens):
+            raise RuntimeError("Active prefix count is smaller than the base layout.")
+        context_out = tokens[:, self.num_prefix_tokens : active_prefix_count]
+        public_tokens = (
+            torch.cat(
+                (
+                    tokens[:, : self.num_prefix_tokens],
+                    tokens[:, active_prefix_count:],
+                ),
+                dim=1,
+            )
+            if active_prefix_count > int(self.num_prefix_tokens)
+            else tokens
+        )
+
         deep_class_prompt_logits = None
         if self.deep_class_prompt is not None:
             if len(deep_class_prompt_tokens) != len(self.blocks):
@@ -8739,12 +8910,12 @@ class VisionTransformerWithRegisters(nn.Module):
                 deep_class_prompt_tokens[-1]
             )
 
-        cls_out = tokens[:, 0]
+        cls_out = public_tokens[:, 0]
         register_end = 1 + self.num_registers
         branch_end = register_end + self.num_branch_tokens
-        reg_out = tokens[:, 1:register_end]
-        branch_out = tokens[:, register_end:branch_end]
-        patch_out = tokens[:, branch_end:]
+        reg_out = public_tokens[:, 1:register_end]
+        branch_out = public_tokens[:, register_end:branch_end]
+        patch_out = public_tokens[:, branch_end:]
         layer_token_fusion_feature = None
         if layer_token_fusion_features:
             layer_token_fusion_feature = torch.stack(layer_token_fusion_features, dim=1).mean(dim=1)
@@ -8753,11 +8924,13 @@ class VisionTransformerWithRegisters(nn.Module):
             "registers": reg_out,
             "branch_tokens": branch_out,
             "patches": patch_out,
-            "tokens": tokens,
+            "tokens": public_tokens,
             "grid_size": grid_size,
             "patch_indices": patch_indices,
             "pooled": self.pool_tokens_for_head(cls_out, reg_out, branch_out),
         }
+        if self.inattentive_token_fusion_enabled:
+            features["inattentive_context"] = context_out
         if deep_class_prompt_logits is not None:
             features["deep_class_prompt_logits"] = deep_class_prompt_logits
             features["deep_class_prompt_tokens"] = deep_class_prompt_tokens[-1]
@@ -9007,6 +9180,13 @@ class VisionTransformerWithRegisters(nn.Module):
                 "foreground_prior": foreground_prior,
                 "pruning": pruning_trace,
             }
+            if self.inattentive_token_fusion_enabled:
+                features["trace"]["inattentive_context"] = context_out
+                features["trace"]["active_prefix_count"] = torch.tensor(
+                    active_prefix_count,
+                    device=tokens.device,
+                    dtype=torch.long,
+                )
             if deep_class_prompt_logits is not None:
                 features["trace"]["deep_class_prompt_layers"] = torch.arange(
                     1,
@@ -11118,6 +11298,7 @@ class DETRVisionTransformerWithRegisters(VisionTransformerWithRegisters):
         token_prune_bbox_weight: float = 0.0,
         token_prune_bbox_margin_ratio: float = 0.04,
         early_token_mask_keep_rate: float = 1.0,
+        inattentive_token_fusion: bool = False,
         pairwise_margin_head: bool = False,
         pairwise_margin_pairs: str = "0-1,2-3,4-rest",
         pairwise_margin_logit_scale: float = 0.35,
@@ -11485,6 +11666,7 @@ class DETRVisionTransformerWithRegisters(VisionTransformerWithRegisters):
             token_prune_bbox_weight=token_prune_bbox_weight,
             token_prune_bbox_margin_ratio=token_prune_bbox_margin_ratio,
             early_token_mask_keep_rate=early_token_mask_keep_rate,
+            inattentive_token_fusion=inattentive_token_fusion,
             pairwise_margin_head=pairwise_margin_head,
             pairwise_margin_pairs=pairwise_margin_pairs,
             pairwise_margin_logit_scale=pairwise_margin_logit_scale,

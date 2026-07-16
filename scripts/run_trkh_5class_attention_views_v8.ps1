@@ -37,6 +37,7 @@ param(
     [double]$SourceContextAuxBboxMarginRatio = 0.04,
     [double]$SourceContextAuxAttentionTemperature = 0.20,
     [bool]$TokenPruning = $true,
+    [bool]$InattentiveTokenFusion = $false,
     [double]$TokenPruneBboxWeight = 0.0,
     [double]$TokenPruneBboxMarginRatio = 0.04,
     [ValidateSet("bbox", "crop_bbox")]
@@ -858,6 +859,15 @@ if ($SymmetricCeEpsilon -le 0.0 -or $SymmetricCeEpsilon -gt 1.0) {
 if ($EarlyTokenMaskKeepRate -le 0.0 -or $EarlyTokenMaskKeepRate -gt 1.0) {
     throw "EarlyTokenMaskKeepRate phai nam trong (0, 1]."
 }
+if ($InattentiveTokenFusion -and -not $TokenPruning) {
+    throw "InattentiveTokenFusion yeu cau TokenPruning=`$true."
+}
+if ($InattentiveTokenFusion -and $EarlyTokenMaskKeepRate -lt 1.0) {
+    throw "InattentiveTokenFusion yeu cau EarlyTokenMaskKeepRate=1.0."
+}
+if ($InattentiveTokenFusion -and ($DeepClassPrompt -or $ConcurrentLocalGlobalCoupling -or $LateMemberBranch)) {
+    throw "InattentiveTokenFusion xung dot voi dynamic-prefix route dang bat."
+}
 if ($MaskedReconstructionLossWeight -lt 0.0) {
     throw "MaskedReconstructionLossWeight phai >= 0."
 }
@@ -1641,6 +1651,7 @@ if ($PreflightOnly) {
         source_context_aux_bbox_margin_ratio = $SourceContextAuxBboxMarginRatio
         source_context_aux_attention_temperature = $SourceContextAuxAttentionTemperature
         token_pruning = [bool]$TokenPruning
+        inattentive_token_fusion = [bool]$InattentiveTokenFusion
         token_prune_bbox_weight = $TokenPruneBboxWeight
         token_prune_bbox_margin_ratio = $TokenPruneBboxMarginRatio
         bbox_token_prior_source = $BboxTokenPriorSource
@@ -3400,6 +3411,9 @@ if ($ClassIndependentHead) {
     if ($TokenPruning) {
         $TrainArgs += @("--token-pruning")
     }
+    if ($InattentiveTokenFusion) {
+        $TrainArgs += @("--inattentive-token-fusion")
+    }
     if ($VisualContrastAttention) {
         $TrainArgs += @(
             "--visual-contrast-attention",
@@ -3583,6 +3597,7 @@ if ($ClassIndependentHead) {
         source_context_aux_bbox_margin_ratio = $SourceContextAuxBboxMarginRatio
         source_context_aux_attention_temperature = $SourceContextAuxAttentionTemperature
         token_pruning = [bool]$TokenPruning
+        inattentive_token_fusion = [bool]$InattentiveTokenFusion
         token_prune_bbox_weight = $TokenPruneBboxWeight
         token_prune_bbox_margin_ratio = $TokenPruneBboxMarginRatio
         bbox_token_prior_source = $BboxTokenPriorSource
