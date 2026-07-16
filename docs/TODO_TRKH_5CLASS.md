@@ -3135,8 +3135,16 @@
   Retain the exact summary/manifest, exclude the 30.789 MB reproducible ONNX,
   verify cleanup manifest SHA `e7278182...a20ff9c`, and pass read-only retention
   over 712 directories with `blockers=[]` and 71.226 GB free.
-- [ ] Perform a new primary-source/no-repeat screen outside static local/global
-  attention competition. Prefer an accepted paper with licensed official code,
-  transparent equations, and a bounded scratch mechanism compatible with
-  `<=30e`; reject it before training unless a prospective train-only selectivity
-  and TP/precision gate is credible.
+- [x] Perform a new primary-source/no-repeat screen outside static local/global
+  attention competition. Select CVPR-2022 DAT from official Apache-2.0 tag
+  `CVPR2022` at `566a593...b6f4ff`; reject stock 29M/300e DAT and distinguish
+  continuous spatial K/V sampling from closed FAA and ViG.
+- [x] Lock one exact block-2 DAT A1 at protocol SHA
+  `6abbd94c...3f73cbc`: 2 groups, 5x5 offset kernel, stride 1, range 2,
+  continuous RPE, global prefix path, exact pruning proxy, source-disjoint
+  `7372/1843` scratch pair, precision/TP/condition/bbox-selectivity gates, and
+  no validation/test/sweep/command promotion.
+- [ ] Implement the locked module, config/trainer/PowerShell integration,
+  official-equation and bilinear-proxy preflight, deformable trace/audit, and
+  focused tests. Commit and push before the sole preflight; run the five-epoch
+  pair only if every engineering gate grants permission.

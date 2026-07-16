@@ -17225,3 +17225,33 @@ Date: 2026-07-02
   `e7278182...a20ff9c`; read-only retention passed over 712 directories with
   `blockers=[]`, 71.226 GB free, and summary SHA `7bb8b6db...f1a0b7e`.
   Final closure-document SHA is `3cb72200...070a896`.
+
+## Deformable Attention A1 Lock 2026-07-16 - Image-Conditioned Spatial Sampling
+
+- A fresh internet and local no-repeat screen used the accepted CVPR-2022 DAT
+  paper and official Apache-2.0 repository, not secondary reports. The official
+  repo had 938 stars when checked; the immutable authority is tag `CVPR2022`,
+  commit/tree `566a593...b6f4ff`/`4346f05...b82508`, attention-source SHA
+  `f7318527...b7470ea`, and local primary-paper SHA `92c3f6bb...cb8a60`.
+- Stock DAT is rejected before code: DAT-T is about 29M parameters and the
+  official recipe is 300 epochs. Paper ablation also shows that deformable
+  attention in early high-resolution stages can hurt. The sole A1 therefore
+  replaces only TRKH block 2, which still sees the complete `16x16` grid just
+  before pruning and is spatially closest to DAT's `14x14` stage 3.
+- The locked module uses 8 heads, 2 offset groups, a shared `5x5` depthwise
+  offset network, stride 1, range factor 2, bilinear sampling, continuous
+  deformable relative-position bias, standard global prefix attention, and an
+  explicitly labeled bilinear-scatter proxy for unchanged token pruning.
+- DAT is distinct from closed FAA and ViG: it predicts continuous spatial
+  key/value locations per image rather than competing over fixed local/pooled
+  routes or selecting feature-space kNN graph neighbors. It adds no bbox loss,
+  data view, router, threshold, teacher, or raw-data change.
+- Protocol SHA is `6abbd94c...3f73cbc`. It locks official equation/gradient,
+  RNG/common-state, BF16, proxy, ONNX/resource, and fold gates before training;
+  the sole formal pair is five scratch epochs on exact source-disjoint
+  `7372/1843` train-only rows. Promotion requires class1 precision/F1 deltas
+  `>=+0.025/+0.015`, TP/recall safety, illumination stability, and measured
+  movement of sampling points toward each row's audit-only bbox.
+- Validation/test, full train, command revision, bbox supervision, and all
+  nearby group/kernel/range/layer/training sweeps remain forbidden unless every
+  prospective A1 gate passes.
