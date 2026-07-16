@@ -8,14 +8,21 @@ from torch import nn
 
 from trkh.tools.audit_cropr_token_selector_pair import (
     EXPECTED_HOLDOUT_ROWS,
+    FAILED_AUDIT_DIR,
+    FAILED_AUDIT_HEAD,
+    LOCKED_FAILED_MANIFEST_SHA256,
+    LOCKED_FAILED_SUMMARY_SHA256,
+    LOCKED_FAILURE_RECORD_SHA256,
     LOCKED_PAIR_MANIFEST_SHA256,
     LOCKED_PREFLIGHT_SUMMARY_SHA256,
+    _compare_failed_artifacts,
+    _forward_trace,
     _maximum_tree_error,
     _perturbation_summary,
-    _forward_trace,
     _run_provenance,
     _selector_summary_with_expected,
     _set_jaccard,
+    _verify_failed_attempt,
     parse_args,
 )
 from trkh.tools.audit_foveal_aggregated_attention_pair import _sha256
@@ -75,6 +82,19 @@ def test_cropr_pair_locked_artifact_hashes_and_cli_defaults() -> None:
     assert EXPECTED_HOLDOUT_ROWS == 1843
 
 
+def test_cropr_failed_attempt_is_hash_locked_before_xai_correction() -> None:
+    failed = _verify_failed_attempt(
+        current_head=FAILED_AUDIT_HEAD,
+        require_correction_commit=False,
+    )
+    assert failed["all_checks_pass"], failed["failed_checks"]
+    assert failed["summary_sha256"] == LOCKED_FAILED_SUMMARY_SHA256
+    assert failed["failure_record_sha256"] == LOCKED_FAILURE_RECORD_SHA256
+    assert failed["artifact_manifest_sha256"] == LOCKED_FAILED_MANIFEST_SHA256
+    replay = _compare_failed_artifacts(failed, output_dir=FAILED_AUDIT_DIR)
+    assert replay["all_checks_pass"], replay["failed_checks"]
+
+
 def test_cropr_pair_provenance_passes_without_loading_holdout() -> None:
     provenance = _run_provenance(
         control_run=Path("runs/probe_cropr_a0_native_control_5e_20260716"),
@@ -95,8 +115,10 @@ def test_cropr_pair_provenance_passes_without_loading_holdout() -> None:
         protocol_path=Path(
             "docs/TRKH_5CLASS_CROPR_TOKEN_SELECTOR_READINESS_PROTOCOL_20260716.md"
         ),
+        require_clean_worktree=False,
     )
     assert provenance["all_checks_pass"], provenance["failed_checks"]
+    assert provenance["tracked_worktree_clean_required"] is False
     assert provenance["occurrence"]["control"]["epochs"] == provenance[
         "occurrence"
     ]["candidate"]["epochs"]
@@ -181,13 +203,22 @@ def test_cropr_pair_gate_and_wrapper_keep_locked_scope() -> None:
         "auxiliary_margin_auroc_clean_gte_0p65",
         "object_perturbation_more_causal_than_background",
         "xai_all_events_covered",
+        "failed_attempt_preserved",
+        "unaffected_artifact_replay_exact",
         '"official_validation_permission": False',
         '"test_permission": False',
     ):
         assert marker in source
-    assert source.index("provenance = _run_provenance(", source.index("def run_audit")) < source.index(
-        "all_rows = common._read_clean_train_rows", source.index("def run_audit")
+    run_start = source.index("def run_audit")
+    assert source.index("failed_attempt = _verify_failed_attempt", run_start) < source.index(
+        "all_rows = common._read_clean_train_rows", run_start
     )
+    xai_start = source.index("def _collect_xai_maps")
+    xai_end = source.index("def _bbox_overlay", xai_start)
+    xai_source = source[xai_start:xai_end]
+    standard_forward = xai_source.index("_forward_classification_with_metadata")
+    trace_forward = xai_source.index("_forward_trace")
+    assert standard_forward < trace_forward
     wrapper = Path(
         "scripts/run_trkh_cropr_token_selector_a0_audit.ps1"
     ).read_text(encoding="utf-8")
@@ -196,6 +227,7 @@ def test_cropr_pair_gate_and_wrapper_keep_locked_scope() -> None:
     assert "-FinalizePass" in wrapper
     assert "ExpectedSummarySha256" in wrapper
     assert "git status --short --untracked-files=no" in wrapper
+    assert "audit_cropr_token_selector_a0_pair_corrected_20260717" in wrapper
 
     command = (
         "$errors=$null; "

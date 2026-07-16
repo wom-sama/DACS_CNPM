@@ -71,6 +71,17 @@ LOCKED_CURRENT_COMMAND_SHA256 = (
 LOCKED_COMMAND_HISTORY_SHA256 = (
     "39bd2879ce66fddf36a953021ea1e40f8d9de6cb4334b9b825011b2b8dc98f53"
 )
+FAILED_AUDIT_HEAD = "347c25dac82867021863d8648fece48732a18c98"
+FAILED_AUDIT_DIR = Path("runs/audit_cropr_token_selector_a0_pair_20260717")
+LOCKED_FAILED_SUMMARY_SHA256 = (
+    "6404590b0a25049d41238b019bba6da0ef84aea35184f68c588d922f4c04f9cb"
+)
+LOCKED_FAILURE_RECORD_SHA256 = (
+    "5dc48089553d747656d6e014df71bcbc8ef0fd4c0adea53b5b61301f1a6c7311"
+)
+LOCKED_FAILED_MANIFEST_SHA256 = (
+    "af4ff08eebccd75d13ec5d7764fe4e0db0966ff44fffa5f0ae68b53f68fcbdc0"
+)
 RUNTIME_PATHS = (
     "trkh/models/cropr_token_selector.py",
     "trkh/models/model.py",
@@ -210,6 +221,159 @@ def _without_key(values: Mapping[str, object], key: str) -> Dict[str, object]:
     return result
 
 
+def _verify_failed_attempt(
+    *,
+    current_head: str,
+    require_correction_commit: bool = True,
+) -> Dict[str, object]:
+    output_dir = FAILED_AUDIT_DIR.resolve()
+    summary_path = output_dir / "summary.json"
+    failure_path = output_dir / "failure_record.json"
+    manifest_path = output_dir / "artifact_manifest.json"
+    checks: Dict[str, bool] = {
+        "failed_summary_sha256": summary_path.is_file()
+        and common._sha256(summary_path) == LOCKED_FAILED_SUMMARY_SHA256,
+        "failure_record_sha256": failure_path.is_file()
+        and common._sha256(failure_path) == LOCKED_FAILURE_RECORD_SHA256,
+        "failed_manifest_sha256": manifest_path.is_file()
+        and common._sha256(manifest_path) == LOCKED_FAILED_MANIFEST_SHA256,
+    }
+    if not all(checks.values()):
+        return {
+            "checks": checks,
+            "all_checks_pass": False,
+            "failed_checks": sorted(
+                name for name, passed in checks.items() if not passed
+            ),
+            "output_dir": str(output_dir),
+            "replay_artifacts": {},
+        }
+    failure = common._load_json(failure_path)
+    manifest = common._load_json(manifest_path)
+    manifest_rows = manifest.get("files")
+    failure_rows = failure.get("artifacts")
+    if not isinstance(manifest_rows, list) or not isinstance(failure_rows, list):
+        raise ValueError("Cropr failed-attempt manifests lack artifact rows.")
+    for row in manifest_rows:
+        if not isinstance(row, Mapping):
+            raise ValueError("Cropr failed artifact manifest row is invalid.")
+        relative = str(row.get("path", ""))
+        path = output_dir / relative
+        checks[f"manifest_{relative}_exists"] = path.is_file()
+        checks[f"manifest_{relative}_bytes"] = path.is_file() and int(
+            path.stat().st_size
+        ) == int(row.get("bytes", -1))
+        checks[f"manifest_{relative}_sha256"] = path.is_file() and common._sha256(
+            path
+        ) == str(row.get("sha256", ""))
+    replay_artifacts = {
+        str(row.get("name", "")): dict(row)
+        for row in failure_rows
+        if isinstance(row, Mapping)
+    }
+    replay_names = {
+        "predictions_all_conditions.csv",
+        "selector_rows_all_conditions.csv",
+        "perturbation_rows.csv",
+        "event_manifest.csv",
+    }
+    checks.update(
+        {
+            "failure_method": failure.get("method")
+            == "cropr_token_selector_a0_pair_failed_attempt",
+            "failure_status": failure.get("status")
+            == "preserved_before_xai_standard_forward_correction",
+            "failure_head": failure.get("audit_git_head") == FAILED_AUDIT_HEAD,
+            "failure_summary_sha256": failure.get("summary_sha256")
+            == LOCKED_FAILED_SUMMARY_SHA256,
+            "failure_scope_xai_only": failure.get("defect", {}).get("scope")
+            == "xai_only",
+            "replay_artifact_inventory": replay_names.issubset(replay_artifacts),
+            "failed_validation_unused": failure.get("official_validation_used")
+            is False,
+            "failed_test_unused": failure.get("test_data_used") is False,
+            "failed_raw_data_unmodified": failure.get("raw_data_modified") is False,
+            "failed_current_best_unchanged": failure.get(
+                "current_best_command_updated"
+            )
+            is False,
+        }
+    )
+    changed_paths = {
+        value.strip().replace("\\", "/")
+        for value in _git_value(
+            "diff", "--name-only", FAILED_AUDIT_HEAD, current_head
+        ).splitlines()
+        if value.strip()
+    }
+    if require_correction_commit:
+        allowed = {
+            "scripts/run_trkh_cropr_token_selector_a0_audit.ps1",
+            "tests/test_audit_cropr_token_selector_pair.py",
+            "trkh/tools/audit_cropr_token_selector_pair.py",
+        }
+        checks.update(
+            {
+                "correction_commit_is_new": current_head != FAILED_AUDIT_HEAD,
+                "correction_delta_nonempty": bool(changed_paths),
+                "correction_delta_scoped": changed_paths.issubset(allowed),
+            }
+        )
+    return {
+        "checks": checks,
+        "all_checks_pass": all(checks.values()),
+        "failed_checks": sorted(
+            name for name, passed in checks.items() if not passed
+        ),
+        "output_dir": str(output_dir),
+        "summary_sha256": common._sha256(summary_path),
+        "failure_record_sha256": common._sha256(failure_path),
+        "artifact_manifest_sha256": common._sha256(manifest_path),
+        "failed_audit_head": FAILED_AUDIT_HEAD,
+        "correction_audit_head": current_head,
+        "changed_paths": sorted(changed_paths),
+        "replay_artifacts": replay_artifacts,
+    }
+
+
+def _compare_failed_artifacts(
+    failed_attempt: Mapping[str, object], *, output_dir: Path
+) -> Dict[str, object]:
+    expected = failed_attempt.get("replay_artifacts")
+    if not isinstance(expected, Mapping):
+        raise ValueError("Cropr failed attempt lacks replay artifact metadata.")
+    names = (
+        "predictions_all_conditions.csv",
+        "selector_rows_all_conditions.csv",
+        "perturbation_rows.csv",
+        "event_manifest.csv",
+    )
+    checks: Dict[str, bool] = {}
+    observed: Dict[str, object] = {}
+    for name in names:
+        row = expected.get(name)
+        if not isinstance(row, Mapping):
+            raise ValueError(f"Cropr failed attempt lacks replay target {name}.")
+        path = Path(output_dir) / name
+        exists = path.is_file()
+        size = int(path.stat().st_size) if exists else -1
+        digest = common._sha256(path) if exists else ""
+        checks[f"replay_{name}_exists"] = exists
+        checks[f"replay_{name}_bytes_exact"] = size == int(row.get("bytes", -1))
+        checks[f"replay_{name}_sha256_exact"] = digest == str(
+            row.get("sha256", "")
+        )
+        observed[name] = {"bytes": size, "sha256": digest}
+    return {
+        "checks": checks,
+        "all_checks_pass": all(checks.values()),
+        "failed_checks": sorted(
+            name for name, passed in checks.items() if not passed
+        ),
+        "artifacts": observed,
+    }
+
+
 def _run_provenance(
     *,
     control_run: Path,
@@ -220,6 +384,7 @@ def _run_provenance(
     preflight_path: Path,
     fold_summary_path: Path,
     protocol_path: Path,
+    require_clean_worktree: bool = True,
 ) -> Dict[str, object]:
     pair_manifest = common._load_json(pair_manifest_path)
     preflight_summary = common._load_json(preflight_path)
@@ -294,7 +459,8 @@ def _run_provenance(
             "test_mirrors_holdout"
         )
         is True,
-        "tracked_worktree_clean": tracked_status == "",
+        "tracked_worktree_clean": tracked_status == ""
+        or not require_clean_worktree,
         "head_pushed": current_head == current_upstream,
         "runtime_files_unchanged_since_pair": runtime_diff.returncode == 0,
         "current_command_unchanged": common._sha256(
@@ -513,6 +679,8 @@ def _run_provenance(
         "audit_git_head": current_head,
         "audit_git_upstream": current_upstream,
         "runtime_paths": list(RUNTIME_PATHS),
+        "tracked_worktree_clean_required": bool(require_clean_worktree),
+        "tracked_worktree_clean_observed": tracked_status == "",
         "pair_manifest": pair_manifest,
         "pair_manifest_sha256": common._sha256(pair_manifest_path),
         "preflight_summary_sha256": common._sha256(preflight_path),
@@ -1218,6 +1386,7 @@ def _collect_xai_maps(
 ) -> Tuple[Dict[Tuple[str, int], Dict[str, object]], Dict[str, object]]:
     for parameter in model.parameters():
         parameter.requires_grad_(False)
+    model.eval()
     records: Dict[Tuple[str, int], Dict[str, object]] = {}
     loaders: Dict[str, object] = {}
     by_condition: Dict[str, list[int]] = defaultdict(list)
@@ -1285,7 +1454,9 @@ def _collect_xai_maps(
                     dtype=torch.bfloat16,
                     enabled=device.type == "cuda",
                 ):
-                    logits, features = _forward_trace(model, images, metadata)
+                    logits, _ = common._forward_classification_with_metadata(
+                        model, images, metadata, device=device
+                    )
                 logits[:, FOCUS_CLASS].float().sum().backward()
             finally:
                 for handle in handles:
@@ -1298,39 +1469,48 @@ def _collect_xai_maps(
                 for value in (stem, block2, block5)
             ):
                 raise RuntimeError("Cropr XAI gradients were not retained.")
-            pruning = features.get("trace", {}).get("pruning")
+            with torch.inference_mode(), torch.autocast(
+                device_type=device.type,
+                dtype=torch.bfloat16,
+                enabled=device.type == "cuda",
+            ):
+                trace_logits, trace_features = _forward_trace(
+                    model, images.detach(), metadata
+                )
+            pruning = trace_features.get("trace", {}).get("pruning")
             if not isinstance(pruning, list) or len(pruning) != 2:
                 raise ValueError("Cropr XAI lacks two pruning traces.")
             prefix_count = int(model.num_prefix_tokens)
             full_indices = torch.arange(
                 256, device=device, dtype=torch.long
             ).unsqueeze(0).expand(int(images.size(0)), -1)
-            stage1_indices = pruning[0]["kept_indices"].long()
-            stem_heat = _batched_gradcam(
-                stem,
-                stem.grad,
-                size=(int(images.size(-2)), int(images.size(-1))),
-            ).detach().cpu()
-            block2_heat = _sparse_token_gradcam(
-                block2,
-                block2.grad,
-                prefix_count=prefix_count,
-                patch_indices=full_indices,
-            ).detach().cpu()
-            block5_heat = _sparse_token_gradcam(
-                block5,
-                block5.grad,
-                prefix_count=prefix_count,
-                patch_indices=stage1_indices,
-            ).detach().cpu()
-            cropr2_raw = _scatter_active(
-                pruning[0]["attention"].float(), full_indices
-            ).reshape(-1, 16, 16)
-            cropr5_raw = _scatter_active(
-                pruning[1]["attention"].float(), stage1_indices
-            ).reshape(-1, 16, 16)
-            cropr2_heat = _normalize_maps(cropr2_raw).detach().cpu()
-            cropr5_heat = _normalize_maps(cropr5_raw).detach().cpu()
+            stage1_indices = pruning[0]["kept_indices"].long().clone()
+            with torch.no_grad():
+                stem_heat = _batched_gradcam(
+                    stem,
+                    stem.grad,
+                    size=(int(images.size(-2)), int(images.size(-1))),
+                ).cpu()
+                block2_heat = _sparse_token_gradcam(
+                    block2,
+                    block2.grad,
+                    prefix_count=prefix_count,
+                    patch_indices=full_indices,
+                ).cpu()
+                block5_heat = _sparse_token_gradcam(
+                    block5,
+                    block5.grad,
+                    prefix_count=prefix_count,
+                    patch_indices=stage1_indices,
+                ).cpu()
+                cropr2_raw = _scatter_active(
+                    pruning[0]["attention"].float(), full_indices
+                ).reshape(-1, 16, 16)
+                cropr5_raw = _scatter_active(
+                    pruning[1]["attention"].float(), stage1_indices
+                ).reshape(-1, 16, 16)
+                cropr2_heat = _normalize_maps(cropr2_raw).cpu()
+                cropr5_heat = _normalize_maps(cropr5_raw).cpu()
             foreground = {
                 "stem": common._bbox_foreground_mass(stem_heat, crop_bbox_cpu),
                 "block2": common._bbox_foreground_mass(block2_heat, crop_bbox_cpu),
@@ -1343,6 +1523,7 @@ def _collect_xai_maps(
                 ),
             }
             logits_cpu = logits.detach().float().cpu()
+            trace_logits_cpu = trace_logits.detach().float().cpu()
             for position, local_value in enumerate(sample_indices.tolist()):
                 local_index = int(local_value)
                 standard = standard_rows[(condition, local_index)]
@@ -1381,8 +1562,18 @@ def _collect_xai_maps(
                     "standard_logit_maximum_error": float(
                         (standard_logits - logits_cpu[position]).abs().amax().item()
                     ),
+                    "trace_standard_logit_maximum_error": float(
+                        (standard_logits - trace_logits_cpu[position])
+                        .abs()
+                        .amax()
+                        .item()
+                    ),
+                    "trace_standard_prediction_match": int(
+                        trace_logits_cpu[position].argmax().item()
+                    )
+                    == int(standard["prediction"]),
                 }
-            del features, logits, images
+            del trace_features, trace_logits, logits, images
             gc.collect()
             if device.type == "cuda":
                 torch.cuda.empty_cache()
@@ -1555,12 +1746,30 @@ def _xai_summary(
             float(candidate_maps[key]["standard_logit_maximum_error"])
             for key in keys
         ),
+        "control_trace_standard_prediction_matches": sum(
+            int(bool(control_maps[key]["trace_standard_prediction_match"]))
+            for key in keys
+        ),
+        "candidate_trace_standard_prediction_matches": sum(
+            int(bool(candidate_maps[key]["trace_standard_prediction_match"]))
+            for key in keys
+        ),
+        "control_trace_standard_logit_maximum_error": max(
+            float(control_maps[key]["trace_standard_logit_maximum_error"])
+            for key in keys
+        ),
+        "candidate_trace_standard_logit_maximum_error": max(
+            float(candidate_maps[key]["trace_standard_logit_maximum_error"])
+            for key in keys
+        ),
         "render": dict(render),
     }
 
 
 def _gate_checks(
     *,
+    failed_attempt: Mapping[str, object],
+    correction_replay: Mapping[str, object],
     provenance: Mapping[str, object],
     comparisons: Mapping[str, object],
     selector: Mapping[str, object],
@@ -1609,6 +1818,10 @@ def _gate_checks(
     total_selector_rows = 2 * len(common.CONDITIONS) * 2 * EXPECTED_HOLDOUT_ROWS
     total_xai_rows = int(xai["request_rows"])
     checks = {
+        "failed_attempt_preserved": bool(failed_attempt["all_checks_pass"]),
+        "unaffected_artifact_replay_exact": bool(
+            correction_replay["all_checks_pass"]
+        ),
         "provenance": bool(provenance["all_checks_pass"]),
         "prediction_replay_exact": bool(prediction_replay["metrics_exact"]),
         "selector_replay_exact": bool(selector["replay_exact"]),
@@ -1766,6 +1979,18 @@ def _gate_checks(
         )
         <= 1e-6
         and float(xai["candidate_standard_logit_maximum_error"]) <= 1e-6,
+        "xai_trace_standard_prediction_matches": int(
+            xai["control_trace_standard_prediction_matches"]
+        )
+        == total_xai_rows
+        and int(xai["candidate_trace_standard_prediction_matches"])
+        == total_xai_rows,
+        "xai_trace_standard_logit_parity": float(
+            xai["control_trace_standard_logit_maximum_error"]
+        )
+        <= 1e-6
+        and float(xai["candidate_trace_standard_logit_maximum_error"])
+        <= 1e-6,
     }
     return checks
 
@@ -1849,6 +2074,15 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
         raise ValueError("Cropr pair preflight summary hash differs.")
     if common._sha256(pair_manifest_path) != LOCKED_PAIR_MANIFEST_SHA256:
         raise ValueError("Cropr pair manifest hash differs.")
+    current_head = _git_value("rev-parse", "HEAD")
+    failed_attempt = _verify_failed_attempt(current_head=current_head)
+    if not bool(failed_attempt["all_checks_pass"]):
+        raise RuntimeError(
+            "Cropr failed-attempt preservation checks failed: "
+            + ", ".join(
+                str(value) for value in failed_attempt["failed_checks"]
+            )
+        )
     control_checkpoint_path = Path(args.control_checkpoint).resolve()
     candidate_checkpoint_path = Path(args.candidate_checkpoint).resolve()
     provenance = _run_provenance(
@@ -1965,6 +2199,16 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
     events = common._build_event_manifest(predictions)
     event_path = output_dir / "event_manifest.csv"
     common._write_event_manifest(event_path, events)
+    correction_replay = _compare_failed_artifacts(
+        failed_attempt, output_dir=output_dir
+    )
+    if not bool(correction_replay["all_checks_pass"]):
+        raise RuntimeError(
+            "Cropr unaffected-artifact replay failed before corrected XAI: "
+            + ", ".join(
+                str(value) for value in correction_replay["failed_checks"]
+            )
+        )
     representatives = _representative_requests(
         dataset=base_dataset,
         holdout_rows=holdout_rows,
@@ -2026,6 +2270,8 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
     xai["control_collection"] = control_xai
     xai["candidate_collection"] = candidate_xai
     checks = _gate_checks(
+        failed_attempt=failed_attempt,
+        correction_replay=correction_replay,
         provenance=provenance,
         comparisons=comparisons,
         selector=selector,
@@ -2052,6 +2298,8 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
             "protocol": str(protocol_path),
         },
         "dataset": dataset_summary,
+        "failed_attempt": failed_attempt,
+        "correction_replay": correction_replay,
         "provenance": provenance,
         "prediction_loaders": prediction_loaders,
         "comparisons": comparisons,
