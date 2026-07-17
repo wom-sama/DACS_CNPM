@@ -3603,8 +3603,21 @@
   7,372 rows matches within `1.11e-16`; compileall, pyflakes, PowerShell AST,
   focused `18/18`, full pytest `1442/1442`, and retention over 758 directories/
   48 manifests pass with `blockers=[]` at SHA `b036ff31...6d61`.
-- [ ] Screen the next accepted-primary, officially licensed, equation-distinct
-  precision route against the complete no-repeat record. Require a train-only
-  prospective gate that separates class-1 lesion morphology from chromatically
-  similar class 0/2/4 fruit under clean/dim/bright conditions before any image
-  epoch, trainer integration, validation, test, or current-command update.
+- [x] Screen the next accepted-primary, officially licensed, equation-distinct
+  precision route against the complete no-repeat record. Correct class 1 from
+  a pure lesion interpretation to a joint maturity/color/risk-surface grade.
+  Reject CBS before code because its 200-epoch, three-hyperparameter schedule
+  has no prospective class-1 signal under the 30-epoch ceiling.
+- [x] Select ICCV-2023 EfficientTrain from the paper-linked MIT source at
+  commit/tree `bdefd277...01350`/`5c1362c...ac61`. Prospectively lock one
+  train-only low-frequency information A0 at protocol SHA
+  `c632f920...1c7a2`: exact `176/224/256` FFT-cropped views, 607 source-fold
+  rows, four lighting conditions, OOF TP protection, object/outside residual,
+  equation/dynamic-geometry/resource/replay, and complete visual gates.
+- [ ] Implement and push the isolated EfficientTrain A0 auditor, focused tests,
+  independent replay, contact-sheet renderer, and VS Code-safe preflight/formal
+  launcher without modifying the production model, trainer, config, raw data,
+  validation/test access, or current-best commands.
+- [ ] Run exactly one formal EfficientTrain A0 after owned-process/GPU checks,
+  inspect all audit artifacts and contact-sheet pages, apply the all-or-nothing
+  stop rule, then close/retain/document the route before selecting another.

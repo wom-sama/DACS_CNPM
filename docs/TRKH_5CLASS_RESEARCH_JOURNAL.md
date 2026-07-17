@@ -18560,3 +18560,34 @@ Date: 2026-07-02
   `92f4b2ed8ecc039d84d290f946954ab877937c844fb51ef0e05ff21224546127`.
   The next route must be equation-distinct and prove lesion-morphology
   separation from chromatically similar class 0/2/4 fruit before training.
+
+## EfficientTrain A0 Lock 2026-07-17 - Low Frequency Before Surface Detail
+
+- Corrected the next-route wording: dataset class 1 is the subtle unripe,
+  slightly sour, at-risk grade, not a pure lesion class. A valid signal must
+  jointly preserve maturity/color/risk-surface evidence against classes
+  `0/2/4`; generic spots, lesions, edges, or foreground localization cannot
+  pass.
+- Screened Curriculum By Smoothing against the NeurIPS-2020 paper and official
+  MIT source at commit/tree `5f62e7d...1cc2e`/`d1e0fe9...77e5`. Reject CBS
+  before implementation: its mechanism targets random-initialization noise,
+  not class-1 precision, and the official README requires tuning three schedule
+  parameters under a 200-epoch recipe. Compressing it into the locked 30-epoch
+  ceiling would be an arbitrary sweep. Do not reopen CBS sigma/decay/layer/
+  schedule variants on this keeper.
+- Select ICCV-2023 EfficientTrain from the paper-linked MIT repository at the
+  exact ICCV implementation commit/tree `bdefd277...01350`/
+  `5c1362c...ac61`. The current GitHub page reports 230 stars and nine forks.
+  The accepted paper and source agree on exact four-corner FFT cropping,
+  energy scaling, IFFT, detached transformed input, five equal stages, and a
+  final native-resolution stage; no pretrained weights are used.
+- Prospectively lock only a train-only information A0 at protocol SHA
+  `c632f92074dd394528830ebeaa5713d47a36e3968d3aa0621008819ac5c1c7a2`.
+  Use the established 607-row source-fold cohort, exact `176/224/256` views,
+  clean/dim/bright/low-contrast conditions, OOF 97%-TP suppression thresholds,
+  object-versus-outside high-frequency residual controls, equation/dynamic-
+  geometry/replay/resource checks, and complete contact-sheet review.
+- No candidate behavior has been measured. Validation, test, fold-0 holdout,
+  trainer integration, image epochs, raw-data edits, checkpoints, engines, and
+  current-best command/history changes remain forbidden. A conjunctive A0 pass
+  can authorize only a separately locked matched scratch protocol.
