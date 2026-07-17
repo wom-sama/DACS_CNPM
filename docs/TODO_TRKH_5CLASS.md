@@ -3557,11 +3557,23 @@
   first formal invocation stopped before equation/resource/data measurement on
   a candidate-introspection assertion; its verified empty output was removed
   and a regression test added, so no formal evidence exists yet.
-- [ ] Commit/push the implementation and pass a clean no-output preflight after
+- [x] Commit/push the implementation and pass a clean no-output preflight after
   confirming no conflicting Python/TensorRT/ffmpeg process and recording the
   GPU snapshot.
-- [ ] Run the sole formal push-pull A0, independently replay every metric,
+- [x] Run the sole formal push-pull A0, independently replay every metric,
   inspect all four contact sheets, and apply the locked stop rule. Only a full
   automatic plus manual-visual pass may authorize a separately locked matched
   five-epoch scratch pair; otherwise close nearby scale/alpha/depth/rescaling/
   activation/normalization variants and leave current-best commands unchanged.
+- [x] Reject push-pull before training. Clean object AUROC changes
+  `0.606365 -> 0.601946`; dim falls `-0.026307`; bright FP rejection gains
+  `+0.086022` while TP retention falls `0.912114 -> 0.881235`. FP-minus-TP
+  pull ratios stay between `-0.000385` and `0.001915`, memory is `1.908909x`,
+  and strict ONNX error is `1.049e-5`. Preserve summary/manifest/closure SHAs
+  `e1d3a7ad...a19e`/`c272289e...4c10`/`1f0371ed...08690`; no pair or command
+  update.
+- [ ] Screen the next accepted-primary, officially licensed, equation-distinct
+  precision route. Require a prospective train-only gate that directly
+  separates restricted FP from class-1 TP under dim and bright illumination,
+  uses standard deployment inference, and cannot pass from generic foreground
+  or boundary energy alone.

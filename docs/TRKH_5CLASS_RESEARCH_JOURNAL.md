@@ -18450,3 +18450,35 @@ Date: 2026-07-02
   test now covers candidate introspection. This interruption is not formal
   evidence. No image epoch, validation, test, production XAI, full train,
   checkpoint, or current-best command/history update has occurred at lock time.
+
+## Push-Pull Illumination Support A0 Closure 2026-07-17 - Foreground Active, Class Signal Absent
+
+- Clean preflight passed from pushed commit `5a8a702`; the sole formal run used
+  exactly 421 keeper class1 TP and 186 restricted FP from `yolo_f/train`, with
+  four source-fold OOF readouts fitted on clean descriptors only. No holdout,
+  validation, test, image training, or raw-data change occurred.
+- Reject push-pull before a five-epoch pair. Native/candidate object AUROC is
+  `0.606365/0.601946` on clean, `0.581386/0.555079` on dim,
+  `0.592534/0.583812` on bright, and `0.588805/0.590683` on low contrast.
+  Clean FP rejection gains only `+0.021505`. Bright gains `+0.086022`, but TP
+  retention falls `0.912114 -> 0.881235`; dim rejects zero FP.
+- The mechanism is active but not class-specific. Object energy exceeds
+  outside energy for TP and FP in every condition, while FP-minus-TP pull/push
+  gaps are only `0.001364/0.001915/-0.000385/0.001451`. Manual review of all
+  64 locked contact-sheet rows shows strong fruit and background-edge response
+  with visually near-identical pull/inhibited maps across TP and FP.
+- Official/oracle/gradient and exact `h=1` identity checks pass; finite-
+  difference/BF16 errors are `1.02e-11/0.013557`. Runtime passes at
+  `1.133776x`, but memory is `1.908909x`; ONNX/TensorRT build passes while
+  strict ORT error is `1.049e-5 > 1e-5`. Native declaration replay is also not
+  exact. Information fails 13 checks and structure fails three.
+- Preserve the `13,482,897`-byte seven-file payload. Summary/manifest/retention
+  SHAs are `e1d3a7ad...a19e`/`c272289e...4c10`/
+  `b9a09fad...e76b`; retention passes over 755 directories/all 48 manifests,
+  verifies 210/210 compacted originals absent, and reports `102.792 GiB` free.
+- Do not sweep scale/alpha/depth/insertion/rescaling/activation/normalization/
+  schedule/threshold/export variants or combine this route with closed
+  suppression families. Full closure is
+  `TRKH_5CLASS_PUSH_PULL_ILLUMINATION_SUPPORT_A0_CLOSURE_20260717.md` at SHA
+  `1f0371ed3c29c0eb298b3153ec3238c1796bc6adbba4e03570cd7e1781008690`.
+  Current-best commands remain three revisions/two actual updates.
