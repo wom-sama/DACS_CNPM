@@ -3532,8 +3532,34 @@
   `1413/1413`, and all-manifest retention over 753 directories pass. Preserve
   closure/retention SHAs `8edadb0d...8659`/`852ba382...ca22`; leave current-
   best commands at three revisions/two updates.
-- [ ] Screen the next accepted-primary, licensed, equation-distinct route for
+- [x] Screen the next accepted-primary, licensed, equation-distinct route for
   **positive-support preservation under dim/bright illumination**. It must
   retain the observed FP rejection while prospectively preventing class-1 TP
   contraction; exclude closed worst-augmentation, consistency, pooling,
   routing, loss-reweighting, threshold, and post-hoc families before code.
+- [x] Select the 2020 peer-reviewed push-pull inhibition layer from the
+  authors' MIT repository at commit/tree `c340f329...9d29f`/
+  `e9c984b6...e5b7`. Lock only first-layer `h=2, alpha=1`; use `h=1` as the
+  exact identity control. Disclose the source-code dimension bug, low 24-star
+  popularity, mixed brightness/contrast results, and 200-350-epoch source
+  schedule rather than treating the paper as proof for TRKH.
+- [x] Prospectively lock the 607-row fit-only push-pull illumination-support A0
+  at corrected protocol SHA `111e648a...c7ae`. Freeze four-fold clean-fitted
+  OOF, per-role 3% TP protection thresholds, dim/bright/low-contrast TP/FP
+  gates, object-vs-context and FP-specific inhibition checks, official/oracle/
+  gradient/BF16, h1 full-logit identity, ONNX/TensorRT, BF16 full-forward
+  runtime/memory, replay, and four contact sheets. Validation/test/training and
+  current-command updates remain forbidden.
+- [x] Implement the isolated auditor, ten focused tests, and VS Code-safe
+  three-phase PowerShell launcher without modifying production model, trainer,
+  config, or full-train commands. Compile, pyflakes, PowerShell AST, focused
+  `10/10`, related integration `22/22`, and full pytest `1423/1423` pass; no
+  formal measurement exists yet.
+- [ ] Commit/push the implementation and pass a clean no-output preflight after
+  confirming no conflicting Python/TensorRT/ffmpeg process and recording the
+  GPU snapshot.
+- [ ] Run the sole formal push-pull A0, independently replay every metric,
+  inspect all four contact sheets, and apply the locked stop rule. Only a full
+  automatic plus manual-visual pass may authorize a separately locked matched
+  five-epoch scratch pair; otherwise close nearby scale/alpha/depth/rescaling/
+  activation/normalization variants and leave current-best commands unchanged.

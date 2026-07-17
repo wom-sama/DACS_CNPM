@@ -18401,3 +18401,48 @@ Date: 2026-07-02
   `852ba382...ca22`. Full closure SHA is
   `8edadb0d514c0771464ca938b5a8d5789c5b3b8bcd268ebb33050545fdf98659`.
   Current-best commands remain three revisions/two updates.
+
+## Push-Pull Illumination Support A0 Lock 2026-07-17 - Positive-Support Gate
+
+- Re-screened accepted primary work and official licensed source after closing
+  spatial worst-shift optimization. Select Strisciuglio, Lopez-Antequera, and
+  Petkov, *Enhanced robustness of convolutional networks with a push-pull
+  inhibition layer*, Neural Computing and Applications 2020, and the authors'
+  MIT repository at commit/tree `c340f329...9d29f`/
+  `e9c984b6...e5b7`. Repository popularity is only 24 stars and 2 forks; the
+  peer-reviewed article, exact equation, source hashes, and direct TRKH gate
+  control the decision.
+- The selected equation subtracts a half-wave rectified, inverted, bilinearly
+  enlarged pull response from the half-wave rectified push response. Lock only
+  the paper's first-layer `h=2, alpha=1` configuration: TRKH's RGB `3x3` push
+  produces a `7x7` pull. The `h=1` equation is the causal identity control
+  because `ReLU(z)-ReLU(-z)=z`.
+- The source has a latent implementation defect: it reads the push size from
+  input-channel dimension 1. That still gives the correct value 3 for this
+  exact RGB `3x3` TRKH layer, but the local equation derives spatial size
+  correctly and must match both source and an independent oracle. No source
+  code is copied into the production model.
+- Evidence is mixed, not assumed favorable. The article's CIFAR-C table shows
+  brightness and contrast improve for some architectures and worsen for
+  others. It trains deeper models for 200-350 epochs and reports slower,
+  harder optimization when `alpha` is learned. TRKH therefore does not learn
+  or sweep `alpha`, does not adopt the long schedule, and retains its 30-epoch
+  ceiling.
+- Corrected prospective protocol
+  `TRKH_5CLASS_PUSH_PULL_ILLUMINATION_SUPPORT_A0_PROTOCOL_20260717.md` has SHA
+  `111e648ad6c4a37e8839794a61f18055890ca512bd2ec42d5813a9d87ed8c7ae`.
+  It uses only the established 607 fit rows (`421` keeper class1 TP, `186`
+  restricted FP), four source-fold OOF models fitted on clean descriptors,
+  per-role lower-3% TP thresholds, three fixed lighting shifts, strict TP/
+  restricted-FP gates, and object/context plus mechanism controls.
+- The isolated auditor, ten unit tests, and direct-argument PowerShell launcher
+  are implemented without touching model/trainer/config/full-train commands.
+  It locks official/oracle/gradient/finite-difference/BF16 equations, exact h1
+  full-logit identity, non-mutating h2 diagnostics, first-block ONNX/TensorRT,
+  metadata-aware BF16 full-forward timing, independent CSV replay, and four
+  aligned push/pull/inhibited contact sheets. Manual visual review remains
+  mandatory before any matched five-epoch pair.
+- Compile, pyflakes, PowerShell AST, focused `10/10`, related integration
+  `22/22`, and full pytest `1423/1423` pass. No formal run, image epoch,
+  validation, test, production XAI, full train, checkpoint, or current-best
+  command/history update has occurred at lock time.
