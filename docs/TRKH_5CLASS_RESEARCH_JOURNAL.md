@@ -18204,3 +18204,8 @@ Date: 2026-07-02
   CIDT prediction SHA `...429bfefe1...`. Preserve initial protocol SHA
   `a9b2bd96...a11e55` as the rejected lock. Corrected protocol SHA is
   `4887d71f...c47fa8`; no cohort, gate, result, or formal measurement changed.
+- Corrected preflight passes from pushed commit `9797fd6` without creating the
+  formal output directory. It verifies every paper/source/license/input/current-
+  command hash, official commit/tree and clean worktree, pushed implementation,
+  exact `1024/256/1843` update/probe/holdout rows, proportional class quotas,
+  ordered-index hashes, and zero source overlap. Formal remains unrun.

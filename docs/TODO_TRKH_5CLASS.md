@@ -3500,7 +3500,7 @@
 - [x] Implement the isolated DART A0 auditor, focused tests, and VS Code-safe
   preflight/formal wrapper without modifying the production model, trainer,
   config, full-train command, validation, test, or raw dataset.
-- [ ] Run compile/static/focused/full tests and a clean preflight; commit and
+- [x] Run compile/static/focused/full tests and a clean preflight; commit and
   push the complete implementation before the sole formal A0 execution.
 - [ ] Run one isolated formal DART A0, inspect every nonvisual audit artifact,
   independently replay CSV metrics, and apply the locked stop rule. Produce a
