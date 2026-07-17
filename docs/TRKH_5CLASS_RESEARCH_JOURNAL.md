@@ -18216,3 +18216,38 @@ Date: 2026-07-02
   before launch. Correct the snapshot to own only the current auditor plus its
   exact ancestor chain; continue rejecting every other Python/TensorRT PID.
   This is a pre-measurement engineering correction, not a DART result or rerun.
+
+## DART Recurrent Aggregation A0 Closure 2026-07-17 - Recall Expansion, No Repeat Benefit
+
+- The sole completed formal run at pushed commit `76252ef` used exact
+  `1024/256/1843` update/probe/holdout cohorts and 32 byte/RNG-identical logical
+  updates per variant. All gradients, parameter movement, optimizer-state,
+  nonfloating-buffer, broadcast, source, replay, ONNX, runtime, memory, and
+  schema checks pass. Training peak is `3.914190 GiB`; inference runtime/memory
+  ratios are `0.971363/1.0`; ONNX error is `3.66e-7`.
+- Reject DART. Versus mixed control, clean macro/class1 F1 improve
+  `+0.007222/+0.014701` by moving class1 recall `0.798165 -> 0.944954`, but
+  precision collapses `0.878788 -> 0.774436` and restricted FP widen
+  `12 -> 30`. Dim/bright/low-contrast precision deltas are
+  `-0.087121/-0.168595/-0.134773`, with restricted FP worsening by
+  `+19/+35/+26`.
+- Recurrent DART and the matched final-only average change zero decisions on
+  every clean/lighting row. Clean maximum probability difference is only
+  `0.001123`; final-only and recurrent class1 F1 are both `0.851240`. Final
+  recurrent barrier `-0.000556454` is also strictly above final-only
+  `-0.000572160`. The evidence cannot support a `Repeat` claim.
+- Independent CSV replay is exact across `7,372` rows. Formal summary/manifest
+  SHAs are `418f82d3...fe8e4`/`20ef9c41...ab925`. No checkpoint/ONNX remains,
+  XAI is forbidden by the failed nonvisual gates, and no validation/test/full
+  train/current-command update ran.
+- Preserve the compact 3.15-MB no-repeat payload. Do not sweep branch/domain/
+  interval/cycle/LR/optimizer/loss/seed/budget/averaging or combine DART with
+  DropKey/SWAD/EMA/SAM/distillation/routing/closed architectures on this keeper.
+  Full closure is in
+  `TRKH_5CLASS_DART_RECURRENT_AGGREGATION_A0_CLOSURE_20260717.md` at SHA
+  `78017eff4e920e450f0201bf650001d963919fc5f19c1e89ae635d60a43b7122`.
+- Compile, pyflakes, PowerShell AST, focused `12/12`, and full pytest
+  `1395/1395` pass. Retention passes over 749 directories/all 48 manifests,
+  verifies 210/210 compacted originals absent, and returns `blockers=[]` at SHA
+  `87511276...3442e`; free space is `103.05 GiB`. Current-best remains three
+  revisions/two updates with command/history hashes unchanged.

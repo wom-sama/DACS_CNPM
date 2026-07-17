@@ -3502,7 +3502,7 @@
   config, full-train command, validation, test, or raw dataset.
 - [x] Run compile/static/focused/full tests and a clean preflight; commit and
   push the complete implementation before the sole formal A0 execution.
-- [ ] Run one isolated formal DART A0, inspect every nonvisual audit artifact,
+- [x] Run one isolated formal DART A0, inspect every nonvisual audit artifact,
   independently replay CSV metrics, and apply the locked stop rule. Produce a
   closure, retention audit, journal/TODO/skill update, and leave current-best
   commands unchanged unless a later separately locked validation candidate
