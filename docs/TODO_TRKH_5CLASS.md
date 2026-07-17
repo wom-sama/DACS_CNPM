@@ -3343,7 +3343,7 @@
   preserve formal manifest SHA `a1528f42...bd73` and closure SHA
   `a62b4329...a8e78`. Compileall, six PowerShell parses, focused `5/5`, and
   full pytest `1337/1337` pass.
-- [ ] Screen the next distinct precision-first route from an accepted paper
+- [x] Screen the next distinct precision-first route from an accepted paper
   and licensed official repository. Exclude every closed loss/sample-selection/
   hierarchy/token-routing family, and require a cheap prospective gate that
   proves an active class-1 boundary signal before any trainer integration.
@@ -3390,8 +3390,27 @@
   sweeps. Closure SHA is `41d84672...ed552`; compileall, pyflakes, six
   PowerShell parses, focused `8/8`, full pytest `1353/1353`, and retention all
   pass. Current-best commands remain three revisions/two updates.
-- [ ] Screen the next distinct accepted primary-source route. Exclude all
+- [x] Screen the next distinct accepted primary-source route. Exclude all
   closed activation, edge, static/dynamic local-mixing, token-routing, loss,
   distillation, and post-hoc families. Require licensed official code plus a
   source-disjoint pre-training gate that directly protects class-1 TP while
   rejecting restricted false positives under illumination shifts.
+- [x] Complete the primary-source/no-repeat screen. Reject NeurIPS-2022
+  GhostNetV2 DFC because its paper-linked implementation is an average-pooled
+  axis-factorized local mixer, reject unlicensed/batch-dependent BatchFormer,
+  and reject CrossNorm/SelfNorm as overlap with closed style-normalization
+  routes. Select only the CVPR-2023 GRN equation from official commit/tree
+  `2553895...58a42b9`/`0b23579...a80799`; do not use ConvNeXt/FCMAE weights.
+- [x] Prospectively lock one block-2 FFN GRN fit-only signal gate at protocol
+  SHA `912a8f10...1d86cf`: official zero-init equation, normal deployment hook,
+  607-row source-fold OOF, full/object/outside response controls, clean/dim/
+  bright/low-contrast precision/TP gates, standard ONNX/TensorRT/resource
+  checks, and no holdout/validation/test/trainer/epoch/command update. Require
+  exactly the previously locked sample-3657 near-tie and no new replay mismatch.
+- [ ] Implement the isolated GRN A0 auditor, focused tests, independent replay,
+  fixed contact-sheet renderer, and VS Code-safe preflight/formal wrapper.
+  Commit and push reviewed implementation before the first formal data run.
+- [ ] Run the sole locked GRN A0. Apply its stop rule before trainer integration;
+  preserve compact evidence, inspect every audit page, update journal/TODO/
+  skill, rerun retention, and leave current-best commands unchanged unless a
+  later source-disjoint pair and validation promotion gate both win.

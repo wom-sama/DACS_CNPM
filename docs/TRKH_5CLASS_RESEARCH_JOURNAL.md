@@ -17897,3 +17897,46 @@ Date: 2026-07-02
   keeper; select a distinct accepted source with direct TP/FP selectivity.
   Compileall, pyflakes, six PowerShell parses, focused `8/8`, and full pytest
   `1353/1353` passed; closure SHA is `41d84672...ed552`.
+
+## Global Response Normalization Signal A0 Lock 2026-07-17 - Channel Competition Before Training
+
+- Re-screened accepted work and official repositories with the user-supplied
+  reports treated only as hypothesis sources. GhostNetV2 DFC was rejected after
+  direct code review: the deployable path is average pooling followed by
+  depthwise `1x5`/`5x1` convolutions, sigmoid, and upsampling, so it reopens the
+  closed axis-local/large-kernel spatial-gate family rather than adding a new
+  global signal.
+- BatchFormer's CVPR-2022 repository had `253` stars but no declared license and
+  introduces batch-composition dependence. Apache-2.0 CrossNorm/SelfNorm is
+  credible ICCV-2021 work, but its channel-statistic exchange/recalibration
+  overlaps failed MixStyle/SRM/illumination normalization and risks removing the
+  object-color evidence that currently dominates background perturbations.
+- Selected only GRN from the CVPR-2023 ConvNeXt V2 paper and official repository
+  at commit/tree `2553895...58a42b9`/`0b23579...a80799` (`2,063` stars,
+  `174` forks). Software source is MIT; no CC BY-NC pretrained weight, FCMAE
+  checkpoint, or stock ConvNeXt model is used. Accepted-paper/source/license
+  SHAs are locked in the protocol.
+- Paper ablations constrain the claim: GRN gave a modest supervised gain, was
+  strongest with FCMAE, and failed when newly added only at fine-tuning. A0
+  therefore forbids post-hoc keeper insertion and tests only whether the
+  official L2 channel-response statistic contains a class-conditional signal
+  worth integrating from scratch.
+- Protocol
+  `TRKH_5CLASS_GLOBAL_RESPONSE_NORMALIZATION_SIGNAL_PROTOCOL_20260717.md` at
+  SHA `912a8f101dd41545439a8a235690c3eca29d0d89c5ea7a8a6c65bf92141d86cf`
+  locks the block-2 expansion-MLP activation before first pruning: seven
+  prefixes excluded, `256x1024` patch hidden values, official zero-init
+  `gamma/beta`, and object-mean readout.
+- The only authorized measurement is four-fold OOF over the existing 607
+  fit-only rows (`421` class1 TP, `186` restricted FP), using normal deployment
+  forward under clean/dim/bright/low-contrast. Full/object/outside response
+  controls must prove TP protection and object-derived FP rejection; equation,
+  BF16, activity, hook parity, ONNX, TensorRT, resource, independent replay, and
+  fixed visual gates precede any five-epoch pair.
+- Protocol self-review incorporated the already established sample-`3657`
+  batch-64 near-tie before commit or measurement: require that exact exception,
+  no new replay mismatch, and a no-refit exclusion sensitivity that cannot
+  rescue a failed full-cohort gate.
+- No dataset loader, feature extraction, model/trainer edit, image epoch,
+  holdout, validation, test, full train, or current-command update ran at lock
+  time. Current-best commands remain three revisions/two updates.
