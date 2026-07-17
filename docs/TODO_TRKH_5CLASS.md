@@ -3507,3 +3507,33 @@
   closure, retention audit, journal/TODO/skill update, and leave current-best
   commands unchanged unless a later separately locked validation candidate
   actually wins promotion.
+- [x] Close NeurIPS-2022 LPD before an image epoch while preserving its useful
+  one-pixel signal: 46/606 class-1 cohort rows exit under a shift, including
+  35 restricted FP and 11 TP. Reject the implementation for runtime/memory
+  `1.405570x/2.633510x`, ONNX error `0.530902`, and hard phase mismatch; do not
+  sweep LPD/APS/BlurPool variants.
+- [x] Screen and lock the next equation-distinct train-time shift route from
+  Engstrom et al., ICML 2019, using the paper-linked MIT source. Freeze exact
+  nine-shift semantics, whole-source `1024/256/1843` cohorts, matched random
+  control, 32 updates, precision/TP/FP/lighting/resource gates, and no
+  validation/test/current-command update at protocol SHA `eec9e20c...ca0a54`.
+- [x] Implement and push the isolated spatial worst-shift auditor, focused
+  tests, independent 199,044-row replay, and VS Code-safe preflight/formal
+  launcher at commit `d67f306`. Clean preflight and a one-row CPU integration
+  smoke pass without creating a formal artifact or touching raw data.
+- [x] Run the sole isolated spatial A0 formal and apply the locked stop rule.
+  Candidate versus random changes one clean decision, improves class-1
+  precision/F1 only `+0.007699/+0.003902`, leaves TP at 94 and restricted FP
+  `17 -> 16`, then loses official-worst TP/F1 and illumination safety. Reject
+  before XAI/validation/test/pair/full train; preserve summary/manifest SHAs
+  `0e9c8082...f984`/`fe65a924...3a56`.
+- [x] Complete spatial A0 closure verification: compileall, pyflakes,
+  PowerShell AST, focused `10/10`, integration `46/46`, full pytest
+  `1413/1413`, and all-manifest retention over 753 directories pass. Preserve
+  closure/retention SHAs `8edadb0d...8659`/`852ba382...ca22`; leave current-
+  best commands at three revisions/two updates.
+- [ ] Screen the next accepted-primary, licensed, equation-distinct route for
+  **positive-support preservation under dim/bright illumination**. It must
+  retain the observed FP rejection while prospectively preventing class-1 TP
+  contraction; exclude closed worst-augmentation, consistency, pooling,
+  routing, loss-reweighting, threshold, and post-hoc families before code.

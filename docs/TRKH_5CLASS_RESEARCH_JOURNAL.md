@@ -18331,3 +18331,73 @@ Date: 2026-07-02
   SHA `24945ef2...a96a871`. No validation, test, full train, current-best
   command/history update, raw-data edit, or production model/trainer/config
   change occurred.
+
+## Spatial Worst-Shift Robust Optimization A0 Lock 2026-07-17 - Train-Time Shift Selection
+
+- Re-screened accepted primary work and paper-linked licensed source after LPD
+  closure. Select Engstrom et al., ICML-2019 *Exploring the Landscape of
+  Spatial Robustness* and the official MIT repository at commit/tree
+  `a1c9e36...ad2ff9`/`60fe12b...26cf3`. No pretrained weight or TensorFlow
+  model/dataset code is copied.
+- This route is equation-distinct from closed LPD/pooling/SPT and consistency/
+  AugMix families: run all nine one-pixel translations in eval mode, select
+  the target-aware worst transform per sample, and perform one supervised CE
+  update on only that transform. Standard inference remains unchanged.
+- Protocol
+  `TRKH_5CLASS_SPATIAL_WORST_SHIFT_ROBUST_OPTIMIZATION_A0_PROTOCOL_20260717.md`
+  at SHA `eec9e20c...ca0a54` locks exact `1024/256/1843` source-disjoint
+  update/probe/holdout cohorts, a SHA-selected random-shift control, 32 equal
+  AdamW updates per variant, clean/all-shift/three-lighting evaluation, class-1
+  precision/TP/restricted-FP gates, ONNX/resource checks, and independent CSV
+  replay. Validation/test/XAI/current-command updates are forbidden at A0.
+- Auditor, focused tests, and a direct-argument VS Code-safe PowerShell launcher
+  were pushed at commit `d67f306`. Clean preflight passed every hash/cohort/
+  origin check without creating output. A one-row CPU integration smoke then
+  verified the real `yolo_f/train` decode, metadata, nine shift forwards, and
+  finite `(9,1,5)` probabilities without optimizer work or an artifact.
+
+## Spatial Worst-Shift Robust Optimization A0 Closure 2026-07-17 - One Clean Correction, Recall Unsafe
+
+- The sole completed formal run started with no unrelated Python/TensorRT
+  process and GPU `1% / 1845 MiB`, `57 C`. A known Geometry Dash GUI holding
+  `22-39%` GPU was first minimized and then closed gracefully through its main
+  window; no unknown process was force-terminated.
+- Probe and optimization integrity pass. The probe selects non-clean on
+  `239/256` rows and exposes all 16 class-1 TP plus nine restricted-FP loss
+  spans. Both variants execute exactly 32 updates/320 forwards, every parameter
+  group receives finite gradients and moves, and candidate/random selection
+  differs on `905/1024` rows. Peaks are both `3.904689 GiB`; wall ratio is
+  `0.972809`.
+- Reject worst-shift optimization. On clean holdout, keeper/random/candidate
+  macro F1 are `0.949323/0.944997/0.946049`; class-1 P/R/F1 are
+  `0.748252/0.981651/0.849206`, `0.846847/0.862385/0.854545`, and
+  `0.854545/0.862385/0.858447`; TP/restricted FP are `107/36`, `94/17`, and
+  `94/16`.
+- Relative to matched random, candidate changes exactly one clean decision:
+  one restricted FP becomes correct, no harm occurs, precision/F1 improve only
+  `+0.007699/+0.003902`, and macro improves `+0.001053`. Relative to keeper it
+  removes 20 restricted FP but breaks 13 TP, with corrections/harms `20/28`.
+  This is support contraction, not a precision-safe win.
+- Under official-worst shifts, candidate versus random moves TP `91 -> 90`,
+  keeps restricted FP at 20, and lowers class-1 F1 `0.827273 -> 0.821918`.
+  Shift consistency rises slightly to `0.988063`, but dim/bright/low-contrast
+  gates expose the same recall loss. Bright precision/FP and low-contrast clean
+  metrics contain local gains that cannot override dim and official-worst
+  safety failures.
+- Independent replay is exact over `199,044` rows. Runtime and ONNX pass
+  (`0.992474x`, error `1.49e-7`, exact argmax); dynamic peak inference memory
+  is `1.043394x > 1.02`. No checkpoint/ONNX/engine/XAI/validation/test artifact
+  is retained. Formal summary/manifest SHAs are
+  `0e9c8082...f984`/`fe65a924...3a56`.
+- Preserve the 40,406,579-byte no-repeat payload. Do not sweep shifts/padding/
+  control/LR/update count/optimizer/seed/batch/class weighting/loss blends/TTA
+  or combine this route with closed shift/consistency/routing families. A new
+  method must protect class-1 TP and illumination recall while retaining FP
+  rejection; random-shift adaptation itself has no validation authority.
+- Compileall, pyflakes, PowerShell AST, focused `10/10`, integration `46/46`,
+  and full pytest `1413/1413` pass. Retention over 753 directories/all 48
+  object manifests verifies 210/210 compacted originals absent with
+  `blockers=[]`, no deletion/raw-data touch, and `102.994 GiB` free at SHA
+  `852ba382...ca22`. Full closure SHA is
+  `8edadb0d514c0771464ca938b5a8d5789c5b3b8bcd268ebb33050545fdf98659`.
+  Current-best commands remain three revisions/two updates.
