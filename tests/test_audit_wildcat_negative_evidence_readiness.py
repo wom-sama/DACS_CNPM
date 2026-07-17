@@ -27,10 +27,13 @@ from trkh.tools.audit_wildcat_negative_evidence_readiness import (
     _independent_pool_oracle,
     _official_source_classes,
     _prepare_export_inputs,
+    _replay_interrupted_pre_xai,
+    _saliency_repeat_diagnostics,
     _signed_overlay,
     _source_paths,
     _summarize_mechanism_rows,
     _train_heads,
+    _verify_interrupted_reference,
     _xai_selection,
     assess_stage_a,
     class_wise_pool,
@@ -52,6 +55,22 @@ def test_protocol_defaults_match_locked_recipe() -> None:
     assert args.k_fraction == K_FRACTION == 0.2
     assert args.alpha == ALPHA == 0.7
     assert SELECTED_CELLS == 51
+    assert args.erratum.name.endswith("IMPLEMENTATION_ERRATUM_20260717.md")
+    assert "interrupted_xai_determinism" in args.interrupted_reference.name
+
+
+def test_interrupted_reference_matches_locked_erratum_hashes() -> None:
+    paths = _source_paths(parse_args([]))
+    reference = _verify_interrupted_reference(paths)
+    assert reference["artifact_count"] == 5
+    assert reference["contains_summary"] is False
+    assert reference["contains_xai"] is False
+    assert reference["forbidden_checkpoint_count"] == 0
+    replay = _replay_interrupted_pre_xai(
+        output_dir=paths["interrupted_reference"],
+        reference_dir=paths["interrupted_reference"],
+    )
+    assert replay["all_exact"] is True
 
 
 def test_positive_k_matches_official_rounding_contract() -> None:
@@ -360,6 +379,38 @@ def test_signed_overlay_preserves_shape_and_distinguishes_sign() -> None:
     assert not np.array_equal(overlay[0, 0], overlay[-1, -1])
 
 
+def test_saliency_repeat_diagnostics_enforces_erratum_thresholds() -> None:
+    saliency = torch.linspace(0.0, 1.0, 64).reshape(1, 8, 8)
+    class_maps = torch.randn(1, 5, 16, 16)
+    top_indices = torch.arange(51).reshape(1, 1, 51).expand(1, 5, 51)
+    bottom_indices = torch.arange(205, 256).reshape(1, 1, 51).expand(1, 5, 51)
+    exact = _saliency_repeat_diagnostics(
+        first_saliency=saliency,
+        second_saliency=saliency.clone(),
+        first_class_maps=class_maps,
+        second_class_maps=class_maps.clone(),
+        first_top_indices=top_indices,
+        second_top_indices=top_indices.clone(),
+        first_bottom_indices=bottom_indices,
+        second_bottom_indices=bottom_indices.clone(),
+    )
+    assert exact["passed"] is True
+    changed = saliency.clone()
+    changed[0, 0, 0] += 1e-4
+    rejected = _saliency_repeat_diagnostics(
+        first_saliency=saliency,
+        second_saliency=changed,
+        first_class_maps=class_maps,
+        second_class_maps=class_maps.clone(),
+        first_top_indices=top_indices,
+        second_top_indices=top_indices.clone(),
+        first_bottom_indices=bottom_indices,
+        second_bottom_indices=bottom_indices.clone(),
+    )
+    assert rejected["passed"] is False
+    assert rejected["saliency_max_abs_error"] > 1e-9
+
+
 def _comparison() -> dict[str, object]:
     metrics = {
         "macro_f1": 0.91,
@@ -451,6 +502,14 @@ def _passing_gate_inputs():
         "npz_replay_finite": True,
         "npz_key_count": 80,
         "npz_replay_max_abs_error": 0.0,
+        "saliency_repeat": {"passed": True},
+        "saliency_backward_determinism_scope": "warn_only",
+        "saliency_repeats_per_batch": 2,
+        "hook_calls": 8,
+        "expected_hook_calls": 8,
+        "strict_determinism_before_scope": True,
+        "warn_only_before_scope": False,
+        "strict_determinism_state_restored": True,
     }
     return comparisons, mechanism, resources, exports, xai
 

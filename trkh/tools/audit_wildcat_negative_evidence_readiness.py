@@ -95,6 +95,9 @@ MAX_ONNX_ERROR = 1e-5
 MAX_TRT_ERROR = 2e-3
 MAX_RUNTIME_RATIO = 1.10
 MAX_EXTRA_VRAM_GIB = 0.25
+MAX_XAI_SALIENCY_REPEAT_ERROR = 1e-9
+MAX_XAI_NORMALIZED_REPEAT_ERROR = 1e-6
+MIN_XAI_SALIENCY_REPEAT_COSINE = 0.999999
 
 LOCKED_KEEPER_SHA256 = (
     "1f49d577240c69dc63c30af70db52ec2aa9da65a17aef1c4b1c09ece6c482677"
@@ -110,6 +113,9 @@ LOCKED_CIDT_PREDICTIONS_SHA256 = (
 )
 LOCKED_PROTOCOL_SHA256 = (
     "0914b04beb8b27496cf980d08a753e74be330e8b25210278f7eb23187433fb0c"
+)
+LOCKED_ERRATUM_SHA256 = (
+    "c5f441c8698ab263e8b540617ef2c3aa4d7432902ecf58058a41aed55e51c02a"
 )
 LOCKED_PAPER_SHA256 = (
     "2209957a67f669aef37911294ea8bcf52da5c93fbecdaac20798af8297323995"
@@ -143,6 +149,26 @@ LOCKED_HOLDOUT_INDEX_SHA256 = (
 LOCKED_TRAIN_ORDER_SHA256 = (
     "bc02b9a8e0a36c96a7d407b654208a87d558beb907a8c7fa48174d1b5b2a7cb5"
 )
+LOCKED_INTERRUPTED_MANIFEST_SHA256 = (
+    "4cf7cc1805bae15d6f2766d392752fbb7ca01685ad2a85404f82e01f4772f845"
+)
+LOCKED_PRE_XAI_ARTIFACT_SHA256 = {
+    "training_curve.csv": (
+        "ccbe8431f6f3ca378e25b141728d7b32fbe64f67481950e1f73355fd6632e977"
+    ),
+    "predictions_all_conditions.csv": (
+        "15daa1f74d6317af13684550b06b6a821868d62c9e7ddc34868145b6fe121e6c"
+    ),
+    "mechanism_all_conditions.csv": (
+        "998539c9a6d7ce204693b1619e2644e6931df32526b9a411e7d677f157ab05ad"
+    ),
+    "wildcat_head.onnx": (
+        "380c0f094916270f2af9446c6798e938479a026284f7dbffadd78fee4c19c3eb"
+    ),
+    "wildcat_full_wrapper.onnx": (
+        "73481247dd4428b8e5f4b229d6d7ed353b9d9ff9906e1ace6ac1ea34cec178fc"
+    ),
+}
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
@@ -191,6 +217,22 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         type=Path,
         default=Path(
             r"D:\DataAI\external_sources\papers\Durand_WILDCAT_CVPR_2017.pdf"
+        ),
+    )
+    parser.add_argument(
+        "--erratum",
+        type=Path,
+        default=Path(
+            "docs/TRKH_5CLASS_WILDCAT_NEGATIVE_EVIDENCE_IMPLEMENTATION_"
+            "ERRATUM_20260717.md"
+        ),
+    )
+    parser.add_argument(
+        "--interrupted-reference",
+        type=Path,
+        default=Path(
+            "runs/audit_wildcat_negative_evidence_a0_interrupted_"
+            "xai_determinism_20260717"
         ),
     )
     parser.add_argument(
@@ -246,13 +288,17 @@ def _locked_args_exact(args: argparse.Namespace) -> bool:
 
 def _source_paths(args: argparse.Namespace) -> Dict[str, Path]:
     official = Path(args.official_root).resolve()
+    interrupted = Path(args.interrupted_reference).resolve()
     return {
         "checkpoint": Path(args.checkpoint).resolve(),
         "data": Path(args.data).resolve(),
         "fold_summary": Path(args.fold_summary).resolve(),
         "cidt_predictions": Path(args.cidt_predictions).resolve(),
         "protocol": Path(args.protocol).resolve(),
+        "erratum": Path(args.erratum).resolve(),
         "paper": Path(args.paper).resolve(),
+        "interrupted_reference": interrupted,
+        "interrupted_manifest": interrupted / "artifact_manifest.json",
         "official_root": official,
         "official_pooling": official / "wildcat" / "pooling.py",
         "official_models": official / "wildcat" / "models.py",
@@ -343,6 +389,53 @@ def _verify_committed_implementation(root: Path) -> Dict[str, object]:
     }
 
 
+def _verify_interrupted_reference(paths: Mapping[str, Path]) -> Dict[str, object]:
+    root = paths["interrupted_reference"]
+    manifest_path = paths["interrupted_manifest"]
+    if not root.is_dir():
+        raise FileNotFoundError(f"Interrupted WILDCAT reference is missing: {root}")
+    manifest_sha = _verify_sha256(
+        manifest_path,
+        LOCKED_INTERRUPTED_MANIFEST_SHA256,
+        "interrupted WILDCAT manifest",
+    )
+    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    artifact_rows = payload.get("artifacts")
+    if not isinstance(artifact_rows, list):
+        raise ValueError("Interrupted WILDCAT manifest artifacts are invalid.")
+    manifest_hashes = {
+        str(row["path"]): str(row["sha256"]).casefold() for row in artifact_rows
+    }
+    if manifest_hashes != LOCKED_PRE_XAI_ARTIFACT_SHA256:
+        raise ValueError("Interrupted WILDCAT manifest hashes differ from the erratum.")
+    if (
+        int(payload.get("artifact_count", -1)) != len(LOCKED_PRE_XAI_ARTIFACT_SHA256)
+        or int(payload.get("forbidden_checkpoint_count", -1)) != 0
+        or int(payload.get("temporary_feature_cache_count", -1)) != 0
+    ):
+        raise ValueError("Interrupted WILDCAT manifest contract differs.")
+    observed_files = {path.name for path in root.iterdir()}
+    expected_files = {*LOCKED_PRE_XAI_ARTIFACT_SHA256, "artifact_manifest.json"}
+    if observed_files != expected_files:
+        raise ValueError("Interrupted WILDCAT reference contains unexpected files.")
+    actual_hashes = {
+        name: _verify_sha256(root / name, expected, f"interrupted {name}")
+        for name, expected in LOCKED_PRE_XAI_ARTIFACT_SHA256.items()
+    }
+    return {
+        "path": str(root),
+        "manifest_sha256": manifest_sha,
+        "artifact_sha256": actual_hashes,
+        "artifact_count": len(actual_hashes),
+        "contains_summary": (root / "summary.json").exists(),
+        "contains_xai": any("xai" in name.casefold() for name in observed_files),
+        "forbidden_checkpoint_count": int(payload["forbidden_checkpoint_count"]),
+        "temporary_feature_cache_count": int(
+            payload["temporary_feature_cache_count"]
+        ),
+    }
+
+
 def _load_locked_inputs(
     args: argparse.Namespace,
 ) -> tuple[Dict[str, object], list[CleanTrainRow], Dict[str, object], list[int]]:
@@ -364,6 +457,9 @@ def _load_locked_inputs(
         ),
         "protocol": _verify_sha256(
             paths["protocol"], LOCKED_PROTOCOL_SHA256, "WILDCAT protocol"
+        ),
+        "erratum": _verify_sha256(
+            paths["erratum"], LOCKED_ERRATUM_SHA256, "WILDCAT XAI erratum"
         ),
         "paper": _verify_sha256(paths["paper"], LOCKED_PAPER_SHA256, "paper"),
         "official_pooling": _verify_sha256(
@@ -398,6 +494,7 @@ def _load_locked_inputs(
         raise ValueError("Official WILDCAT commit/tree differs from the protocol.")
     if not official_clean:
         raise ValueError("Official WILDCAT worktree is not clean.")
+    interrupted_reference = _verify_interrupted_reference(paths)
     fold_summary = json.loads(paths["fold_summary"].read_text(encoding="utf-8"))
     if int(fold_summary.get("held_out_fold", -1)) != FOLD:
         raise ValueError("Fold summary does not describe the locked fold zero.")
@@ -441,6 +538,7 @@ def _load_locked_inputs(
             "tracked_trkh_worktree_clean": True,
             "implementation_committed_clean": True,
             "implementation": implementation,
+            "interrupted_reference": interrupted_reference,
             "repository_commit": repository_commit,
             "repository_tree": repository_tree,
             "upstream_commit": upstream_commit,
@@ -2089,6 +2187,31 @@ def _export_diagnostics(
     return {"isolated_onnx": isolated, "full_onnx": full, "tensorrt": tensorrt}
 
 
+def _replay_interrupted_pre_xai(
+    *, output_dir: Path, reference_dir: Path
+) -> Dict[str, object]:
+    rows = {}
+    for name, locked_sha in LOCKED_PRE_XAI_ARTIFACT_SHA256.items():
+        observed_path = output_dir / name
+        reference_path = reference_dir / name
+        if not observed_path.is_file() or not reference_path.is_file():
+            raise FileNotFoundError(f"Pre-XAI replay artifact is missing: {name}")
+        observed_sha = _sha256(observed_path)
+        reference_sha = _sha256(reference_path)
+        rows[name] = {
+            "locked_sha256": locked_sha,
+            "reference_sha256": reference_sha,
+            "observed_sha256": observed_sha,
+            "exact": observed_sha == reference_sha == locked_sha,
+        }
+    return {
+        "artifacts": rows,
+        "artifact_count": len(rows),
+        "all_exact": all(bool(row["exact"]) for row in rows.values()),
+        "behavioral_metrics_exposed_before_replay": False,
+    }
+
+
 def _xai_selection(
     predictions: Mapping[str, Mapping[str, Sequence[Mapping[str, object]]]],
 ) -> tuple[list[int], Dict[int, list[str]], list[int]]:
@@ -2163,6 +2286,83 @@ def _normalize_map(value: np.ndarray) -> np.ndarray:
     return (array - minimum) / (maximum - minimum)
 
 
+def _normalize_tensor_maps(value: Tensor) -> Tensor:
+    flat = value.detach().float().flatten(1)
+    minimum = flat.min(dim=1).values[:, None, None]
+    maximum = flat.max(dim=1).values[:, None, None]
+    return (value.detach().float() - minimum) / (maximum - minimum).clamp_min(
+        1e-12
+    )
+
+
+def _saliency_repeat_diagnostics(
+    *,
+    first_saliency: Tensor,
+    second_saliency: Tensor,
+    first_class_maps: Tensor,
+    second_class_maps: Tensor,
+    first_top_indices: Tensor,
+    second_top_indices: Tensor,
+    first_bottom_indices: Tensor,
+    second_bottom_indices: Tensor,
+) -> Dict[str, object]:
+    first = first_saliency.detach().float()
+    second = second_saliency.detach().float()
+    difference = (first - second).abs()
+    normalized_error = float(
+        (_normalize_tensor_maps(first) - _normalize_tensor_maps(second))
+        .abs()
+        .amax()
+        .item()
+    )
+    cosine = F.cosine_similarity(first.flatten(1), second.flatten(1), dim=1)
+    maximum_error = float(difference.amax().item())
+    class_map_error = float(
+        (first_class_maps.detach().float() - second_class_maps.detach().float())
+        .abs()
+        .amax()
+        .item()
+    )
+    top_exact = torch.equal(first_top_indices, second_top_indices)
+    bottom_exact = torch.equal(first_bottom_indices, second_bottom_indices)
+    argmax_mismatches = int(
+        (
+            first.flatten(1).argmax(dim=1)
+            != second.flatten(1).argmax(dim=1)
+        )
+        .sum()
+        .item()
+    )
+    minimum_cosine = float(cosine.min().item())
+    all_finite = bool(
+        torch.isfinite(first).all()
+        and torch.isfinite(second).all()
+        and torch.isfinite(cosine).all()
+    )
+    passed = bool(
+        all_finite
+        and class_map_error == 0.0
+        and top_exact
+        and bottom_exact
+        and maximum_error <= MAX_XAI_SALIENCY_REPEAT_ERROR
+        and normalized_error <= MAX_XAI_NORMALIZED_REPEAT_ERROR
+        and minimum_cosine >= MIN_XAI_SALIENCY_REPEAT_COSINE
+        and argmax_mismatches == 0
+    )
+    return {
+        "class_map_max_abs_error": class_map_error,
+        "top_indices_exact": top_exact,
+        "bottom_indices_exact": bottom_exact,
+        "saliency_max_abs_error": maximum_error,
+        "saliency_mean_abs_error": float(difference.mean().item()),
+        "saliency_normalized_max_abs_error": normalized_error,
+        "saliency_minimum_cosine": minimum_cosine,
+        "saliency_argmax_mismatches": argmax_mismatches,
+        "all_finite": all_finite,
+        "passed": passed,
+    }
+
+
 def _signed_overlay(
     rgb: np.ndarray, signed_map: np.ndarray, *, alpha: float = 0.58
 ) -> Image.Image:
@@ -2222,54 +2422,160 @@ def _xai_audit(
     mean, std = checkpoint_input_normalization(checkpoint)
     keeper = keeper.to(device).eval()
     candidate = copy.deepcopy(head).to(device).eval()
-    for parameter in candidate.parameters():
-        parameter.requires_grad_(False)
+    for module in (keeper, candidate):
+        for parameter in module.parameters():
+            parameter.requires_grad_(False)
     maps: Dict[int, Dict[str, object]] = {}
-    with DenseBlock2Capture(keeper) as capture:
-        for images_cpu, _targets_cpu, metadata_cpu in loader:
-            images = images_cpu.to(device=device, dtype=torch.float32).requires_grad_(True)
-            keeper.zero_grad(set_to_none=True)
-            candidate.zero_grad(set_to_none=True)
-            _raw_logits, _ = _forward_classification_with_metadata(
-                keeper, images, metadata_cpu, device=device
-            )
-            dense = capture.take().float()
-            components = candidate.components(dense)
-            saliency = torch.autograd.grad(
-                components["logits"][:, FOCUS_CLASS].sum(), images
-            )[0].detach().abs().mean(dim=1)
-            sample_tensor = metadata_cpu.get("sample_index")
-            bbox_cpu = metadata_cpu.get("crop_bbox")
-            if not torch.is_tensor(bbox_cpu):
-                bbox_cpu = metadata_cpu.get("bbox")
-            if not torch.is_tensor(sample_tensor) or not torch.is_tensor(bbox_cpu):
-                raise ValueError("XAI metadata lacks sample_index or bbox.")
-            class1_maps = components["class_maps"][:, FOCUS_CLASS].detach()
-            top_indices = components["top_indices"][:, FOCUS_CLASS].detach()
-            bottom_indices = components["bottom_indices"][:, FOCUS_CLASS].detach()
-            top_masks = torch.zeros_like(class1_maps.flatten(1))
-            bottom_masks = torch.zeros_like(top_masks)
-            top_masks.scatter_(1, top_indices, 1.0)
-            bottom_masks.scatter_(1, bottom_indices, 1.0)
-            top_masks = top_masks.reshape_as(class1_maps)
-            bottom_masks = bottom_masks.reshape_as(class1_maps)
-            bottom_contribution = (
-                class1_maps * bottom_masks * (ALPHA / (2.0 * SELECTED_CELLS))
-            )
-            for local, sample_index in enumerate(sample_tensor.tolist()):
-                index = int(sample_index)
-                maps[index] = {
-                    "rgb": _rgb_from_tensor(images_cpu[local], mean=mean, std=std),
-                    "bbox": bbox_cpu[local].detach().float().tolist(),
-                    "class1_map": class1_maps[local].float().cpu().numpy(),
-                    "top_mask": top_masks[local].float().cpu().numpy(),
-                    "bottom_mask": bottom_masks[local].float().cpu().numpy(),
-                    "bottom_contribution": bottom_contribution[local]
-                    .float()
-                    .cpu()
-                    .numpy(),
-                    "saliency": saliency[local].float().cpu().numpy(),
-                }
+
+    def run_saliency_pass(
+        images_cpu: Tensor, metadata_cpu: Mapping[str, object]
+    ) -> Dict[str, Tensor]:
+        images = (
+            images_cpu.to(device=device, dtype=torch.float32)
+            .clone()
+            .requires_grad_(True)
+        )
+        keeper.zero_grad(set_to_none=True)
+        candidate.zero_grad(set_to_none=True)
+        _raw_logits, _ = _forward_classification_with_metadata(
+            keeper, images, metadata_cpu, device=device
+        )
+        dense = capture.take().float()
+        components = candidate.components(dense)
+        saliency = torch.autograd.grad(
+            components["logits"][:, FOCUS_CLASS].sum(), images
+        )[0].detach().abs().mean(dim=1)
+        return {
+            "class_maps": components["class_maps"].detach(),
+            "top_indices": components["top_indices"].detach(),
+            "bottom_indices": components["bottom_indices"].detach(),
+            "saliency": saliency,
+        }
+
+    repeat_summary: Dict[str, object] = {
+        "batches": 0,
+        "class_map_max_abs_error": 0.0,
+        "top_indices_exact": True,
+        "bottom_indices_exact": True,
+        "saliency_max_abs_error": 0.0,
+        "saliency_mean_abs_error_max": 0.0,
+        "saliency_normalized_max_abs_error": 0.0,
+        "saliency_minimum_cosine": 1.0,
+        "saliency_argmax_mismatches": 0,
+        "all_finite": True,
+    }
+    deterministic_before = torch.are_deterministic_algorithms_enabled()
+    warn_only_before = torch.is_deterministic_algorithms_warn_only_enabled()
+    if not deterministic_before or warn_only_before:
+        raise RuntimeError("WILDCAT XAI requires strict determinism before its scope.")
+    capture = DenseBlock2Capture(keeper)
+    try:
+        torch.use_deterministic_algorithms(True, warn_only=True)
+        with capture:
+            for images_cpu, _targets_cpu, metadata_cpu in loader:
+                first = run_saliency_pass(images_cpu, metadata_cpu)
+                second = run_saliency_pass(images_cpu, metadata_cpu)
+                diagnostics = _saliency_repeat_diagnostics(
+                    first_saliency=first["saliency"],
+                    second_saliency=second["saliency"],
+                    first_class_maps=first["class_maps"],
+                    second_class_maps=second["class_maps"],
+                    first_top_indices=first["top_indices"],
+                    second_top_indices=second["top_indices"],
+                    first_bottom_indices=first["bottom_indices"],
+                    second_bottom_indices=second["bottom_indices"],
+                )
+                repeat_summary["batches"] = int(repeat_summary["batches"]) + 1
+                for key in (
+                    "class_map_max_abs_error",
+                    "saliency_max_abs_error",
+                    "saliency_normalized_max_abs_error",
+                ):
+                    repeat_summary[key] = max(
+                        float(repeat_summary[key]), float(diagnostics[key])
+                    )
+                repeat_summary["saliency_mean_abs_error_max"] = max(
+                    float(repeat_summary["saliency_mean_abs_error_max"]),
+                    float(diagnostics["saliency_mean_abs_error"]),
+                )
+                repeat_summary["saliency_minimum_cosine"] = min(
+                    float(repeat_summary["saliency_minimum_cosine"]),
+                    float(diagnostics["saliency_minimum_cosine"]),
+                )
+                repeat_summary["saliency_argmax_mismatches"] = int(
+                    repeat_summary["saliency_argmax_mismatches"]
+                ) + int(diagnostics["saliency_argmax_mismatches"])
+                for key in (
+                    "top_indices_exact",
+                    "bottom_indices_exact",
+                    "all_finite",
+                ):
+                    repeat_summary[key] = bool(
+                        repeat_summary[key] and diagnostics[key]
+                    )
+                saliency = (first["saliency"] + second["saliency"]) / 2.0
+                sample_tensor = metadata_cpu.get("sample_index")
+                bbox_cpu = metadata_cpu.get("crop_bbox")
+                if not torch.is_tensor(bbox_cpu):
+                    bbox_cpu = metadata_cpu.get("bbox")
+                if not torch.is_tensor(sample_tensor) or not torch.is_tensor(
+                    bbox_cpu
+                ):
+                    raise ValueError("XAI metadata lacks sample_index or bbox.")
+                class1_maps = first["class_maps"][:, FOCUS_CLASS]
+                top_indices = first["top_indices"][:, FOCUS_CLASS]
+                bottom_indices = first["bottom_indices"][:, FOCUS_CLASS]
+                top_masks = torch.zeros_like(class1_maps.flatten(1))
+                bottom_masks = torch.zeros_like(top_masks)
+                top_masks.scatter_(1, top_indices, 1.0)
+                bottom_masks.scatter_(1, bottom_indices, 1.0)
+                top_masks = top_masks.reshape_as(class1_maps)
+                bottom_masks = bottom_masks.reshape_as(class1_maps)
+                bottom_contribution = (
+                    class1_maps
+                    * bottom_masks
+                    * (ALPHA / (2.0 * SELECTED_CELLS))
+                )
+                for local, sample_index in enumerate(sample_tensor.tolist()):
+                    index = int(sample_index)
+                    maps[index] = {
+                        "rgb": _rgb_from_tensor(
+                            images_cpu[local], mean=mean, std=std
+                        ),
+                        "bbox": bbox_cpu[local].detach().float().tolist(),
+                        "class1_map": class1_maps[local].float().cpu().numpy(),
+                        "top_mask": top_masks[local].float().cpu().numpy(),
+                        "bottom_mask": bottom_masks[local].float().cpu().numpy(),
+                        "bottom_contribution": bottom_contribution[local]
+                        .float()
+                        .cpu()
+                        .numpy(),
+                        "saliency": saliency[local].float().cpu().numpy(),
+                    }
+    finally:
+        torch.use_deterministic_algorithms(
+            deterministic_before, warn_only=warn_only_before
+        )
+    strict_state_restored = bool(
+        torch.are_deterministic_algorithms_enabled() == deterministic_before
+        and torch.is_deterministic_algorithms_warn_only_enabled()
+        == warn_only_before
+    )
+    if not strict_state_restored:
+        raise RuntimeError("WILDCAT XAI failed to restore strict determinism.")
+    repeat_summary["passed"] = bool(
+        repeat_summary["all_finite"]
+        and float(repeat_summary["class_map_max_abs_error"]) == 0.0
+        and bool(repeat_summary["top_indices_exact"])
+        and bool(repeat_summary["bottom_indices_exact"])
+        and float(repeat_summary["saliency_max_abs_error"])
+        <= MAX_XAI_SALIENCY_REPEAT_ERROR
+        and float(repeat_summary["saliency_normalized_max_abs_error"])
+        <= MAX_XAI_NORMALIZED_REPEAT_ERROR
+        and float(repeat_summary["saliency_minimum_cosine"])
+        >= MIN_XAI_SALIENCY_REPEAT_COSINE
+        and int(repeat_summary["saliency_argmax_mismatches"]) == 0
+    )
     expected = selected
     if list(maps) != expected:
         raise ValueError("XAI selected sample order differs.")
@@ -2417,6 +2723,15 @@ def _xai_audit(
         "npz_replay_max_abs_error": float(npz_replay_max_abs_error),
         "loader": loader_summary,
         "hook_calls": capture.call_count,
+        "expected_hook_calls": 2
+        * math.ceil(len(selected) / int(args.xai_batch_size)),
+        "saliency_backward_determinism_scope": "warn_only",
+        "saliency_repeats_per_batch": 2,
+        "saliency_aggregation": "arithmetic_mean_absolute_input_gradient",
+        "saliency_repeat": repeat_summary,
+        "strict_determinism_before_scope": deterministic_before,
+        "warn_only_before_scope": warn_only_before,
+        "strict_determinism_state_restored": strict_state_restored,
         "selection_order_exact": list(maps) == selected,
         "all_finite": bool(finite),
         "defined_maps_nonzero": bool(nonzero),
@@ -2427,7 +2742,6 @@ def _xai_audit(
         json.dumps(manifest, indent=2, sort_keys=True, ensure_ascii=True) + "\n",
         encoding="utf-8",
     )
-    del candidate
     gc.collect()
     torch.cuda.empty_cache()
     return {**manifest, "manifest_sha256": _sha256(manifest_path)}
@@ -2636,6 +2950,15 @@ def assess_stage_a(
         and bool(xai["npz_replay_finite"])
         and int(xai["npz_key_count"]) == 5 * int(xai["selected_rows"])
         and float(xai["npz_replay_max_abs_error"]) == 0.0,
+        "xai_saliency_repeatability_erratum_pass": bool(
+            xai["saliency_repeat"]["passed"]
+        )
+        and str(xai["saliency_backward_determinism_scope"]) == "warn_only"
+        and int(xai["saliency_repeats_per_batch"]) == 2
+        and int(xai["hook_calls"]) == int(xai["expected_hook_calls"])
+        and bool(xai["strict_determinism_before_scope"])
+        and not bool(xai["warn_only_before_scope"])
+        and bool(xai["strict_determinism_state_restored"]),
         "xai_at_least_16_rows": int(xai["selected_rows"]) >= 16,
         "xai_pages_cover_all_rows": int(xai["page_count"])
         == math.ceil(int(xai["selected_rows"]) / 8)
@@ -2705,6 +3028,8 @@ def _write_report(path: Path, summary: Mapping[str, object]) -> None:
         f"{format_optional(mechanism['direction_auroc']['wildcat'])}`",
         f"- Bottom-margin AUROC: `{format_optional(mechanism['bottom_margin_auroc'])}`",
         f"- Runtime / peak-memory ratio: `{summary['resources']['runtime_ratio']:.6f}/{summary['resources']['peak_vram_ratio']:.6f}`",
+        f"- Interrupted pre-XAI replay exact: `{summary['interrupted_pre_xai_replay']['all_exact']}`",
+        f"- XAI saliency repeat passed: `{summary['xai']['saliency_repeat']['passed']}`",
         f"- XAI selected/pages: `{summary['xai']['selected_rows']}/{summary['xai']['page_count']}`",
         "- Validation/test/raw-data modification: `false/false/false`",
         "",
@@ -2757,6 +3082,7 @@ def _formal_structural_checks(
     training: Mapping[str, object],
     evaluation: Mapping[str, object],
     replay: Mapping[str, object],
+    interrupted_pre_xai_replay: Mapping[str, object],
     keeper_state_unchanged: bool,
     paths: Mapping[str, Path],
 ) -> Dict[str, bool]:
@@ -2933,11 +3259,33 @@ def _formal_structural_checks(
         == {condition: 1843 for condition in CONDITIONS},
         "mechanism_replay_exact": bool(replay["mechanism"]["exact_within_1e12"])
         and int(replay["mechanism"]["rows"]) == 4 * 1843,
+        "interrupted_pre_xai_replay_bit_exact": bool(
+            interrupted_pre_xai_replay["all_exact"]
+        )
+        and int(interrupted_pre_xai_replay["artifact_count"])
+        == len(LOCKED_PRE_XAI_ARTIFACT_SHA256)
+        and not bool(
+            interrupted_pre_xai_replay["behavioral_metrics_exposed_before_replay"]
+        )
+        and all(
+            bool(value["exact"])
+            for value in interrupted_pre_xai_replay["artifacts"].values()
+        ),
         "current_commands_unchanged_at_end": _sha256(paths["current_commands"])
         == LOCKED_CURRENT_COMMAND_SHA256
         and _sha256(paths["command_history"]) == LOCKED_COMMAND_HISTORY_SHA256,
         "raw_data_yaml_unchanged_at_end": _sha256(paths["data"])
         == LOCKED_DATA_SHA256,
+        "erratum_and_interrupted_reference_unchanged_at_end": _sha256(
+            paths["erratum"]
+        )
+        == LOCKED_ERRATUM_SHA256
+        and _sha256(paths["interrupted_manifest"])
+        == LOCKED_INTERRUPTED_MANIFEST_SHA256
+        and all(
+            _sha256(paths["interrupted_reference"] / name) == expected
+            for name, expected in LOCKED_PRE_XAI_ARTIFACT_SHA256.items()
+        ),
         "repository_and_implementation_unchanged_at_end": _tracked_worktree_clean(
             repository_root
         )
@@ -3085,6 +3433,14 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
         resource_batch=resource_batch,
         output_dir=output_dir,
     )
+    interrupted_pre_xai_replay = _replay_interrupted_pre_xai(
+        output_dir=output_dir,
+        reference_dir=paths["interrupted_reference"],
+    )
+    if not bool(interrupted_pre_xai_replay["all_exact"]):
+        raise RuntimeError(
+            "Corrected WILDCAT run differs from interrupted pre-XAI evidence."
+        )
     xai = _xai_audit(
         keeper=keeper,
         head=trained["wildcat"],
@@ -3109,6 +3465,7 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
         training=training,
         evaluation=evaluation,
         replay=replay,
+        interrupted_pre_xai_replay=interrupted_pre_xai_replay,
         keeper_state_unchanged=keeper_state_before == keeper_state_after,
         paths=paths,
     )
@@ -3139,6 +3496,7 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
         "evaluation": evaluation,
         "comparisons": comparisons,
         "replay": replay,
+        "interrupted_pre_xai_replay": interrupted_pre_xai_replay,
         "resources": resources,
         "exports": exports,
         "xai": xai,
@@ -3208,6 +3566,9 @@ def _finalize_visual_review(args: argparse.Namespace) -> Dict[str, object]:
                 f"{implementation_path}"
             )
     locked_paths = _source_paths(args)
+    if _sha256(locked_paths["erratum"]) != LOCKED_ERRATUM_SHA256:
+        raise ValueError("WILDCAT XAI erratum changed before finalization.")
+    _verify_interrupted_reference(locked_paths)
     if _sha256(locked_paths["data"]) != LOCKED_DATA_SHA256:
         raise ValueError("Raw-data YAML changed before visual finalization.")
     if (
