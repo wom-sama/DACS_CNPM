@@ -22,6 +22,7 @@ from trkh.tools.audit_push_pull_illumination_support_a0 import (
     _finite_difference_error,
     _mechanism_summary,
     _replace_first_conv,
+    _structure_audit,
     activation_descriptors,
     assess_information_gate,
     independent_push_pull_oracle,
@@ -158,6 +159,16 @@ def test_first_conv_replacement_keeps_parameter_count_and_source_untouched() -> 
     assert sum(value.numel() for value in source.parameters()) == sum(
         value.numel() for value in candidate.parameters()
     )
+
+
+def test_structure_audit_inspects_replaced_operator_without_revalidating_as_conv() -> None:
+    source = _DummyModel().eval()
+    first_block, identity, candidate, summary = _structure_audit(source)
+    assert first_block is source.stem.blocks[0]
+    assert isinstance(identity.stem.blocks[0].block.conv, PushPullConv2d)
+    assert isinstance(candidate.stem.blocks[0].block.conv, PushPullConv2d)
+    assert summary["parameter_counts_equal"] is True
+    assert summary["candidate_pull_size"] == 7
 
 
 def _condition_metrics(

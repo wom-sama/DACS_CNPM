@@ -18442,7 +18442,11 @@ Date: 2026-07-02
   metadata-aware BF16 full-forward timing, independent CSV replay, and four
   aligned push/pull/inhibited contact sheets. Manual visual review remains
   mandatory before any matched five-epoch pair.
-- Compile, pyflakes, PowerShell AST, focused `10/10`, related integration
-  `22/22`, and full pytest `1423/1423` pass. No formal run, image epoch,
-  validation, test, production XAI, full train, checkpoint, or current-best
-  command/history update has occurred at lock time.
+- Compile, pyflakes, PowerShell AST, focused `11/11`, related integration
+  `23/23`, and full pytest `1424/1424` pass. The first formal invocation stopped
+  before equation/resource/dataset measurement because structure introspection
+  incorrectly reapplied a Conv2d-only validator after replacement. The output
+  directory contained zero items and was safely removed; a direct regression
+  test now covers candidate introspection. This interruption is not formal
+  evidence. No image epoch, validation, test, production XAI, full train,
+  checkpoint, or current-best command/history update has occurred at lock time.

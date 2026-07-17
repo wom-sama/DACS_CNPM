@@ -999,7 +999,13 @@ def _structure_audit(
     candidate_parameters = sum(
         int(value.numel()) for value in candidate_model.parameters()
     )
-    candidate_operator = _first_block(candidate_model).block.conv
+    candidate_stem = getattr(candidate_model, "stem", None)
+    if not isinstance(candidate_stem, HybridConvStem):
+        raise TypeError("Candidate does not preserve HybridConvStem.")
+    candidate_block = candidate_stem.blocks[0]
+    if not isinstance(candidate_block, ConvStemBlock):
+        raise TypeError("Candidate does not preserve its first ConvStemBlock.")
+    candidate_operator = candidate_block.block.conv
     if not isinstance(candidate_operator, PushPullConv2d):
         raise TypeError("Candidate first operator is not PushPullConv2d.")
     return first_block, identity_model, candidate_model, {
