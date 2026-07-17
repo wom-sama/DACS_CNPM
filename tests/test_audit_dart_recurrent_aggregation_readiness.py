@@ -14,6 +14,7 @@ from trkh.tools.audit_dart_recurrent_aggregation_readiness import (
     _logical_seed,
     _maximum_numeric_difference,
     _pairwise_delta_diagnostics,
+    _process_snapshot,
     _protocol_index_sha256,
     _role_transform_config,
     _select_grouped_rows,
@@ -219,3 +220,13 @@ def test_role_configs_keep_domains_distinct_without_mix_families() -> None:
     assert occlusion["obstacle_probability"] == 0.12
     assert keeper["brightness"] == 0.04
     assert keeper["background_suppression_probability"] == 0.80
+
+
+def test_process_snapshot_marks_current_windows_python_chain_as_owned() -> None:
+    snapshot = _process_snapshot()
+    current = [
+        row for row in snapshot["processes"] if row["pid"] == snapshot["current_pid"]
+    ]
+    assert len(current) == 1
+    assert current[0]["current_auditor"] is True
+    assert current[0]["current_auditor_chain"] is True

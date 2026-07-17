@@ -18209,3 +18209,10 @@ Date: 2026-07-02
   command hash, official commit/tree and clean worktree, pushed implementation,
   exact `1024/256/1843` update/probe/holdout rows, proportional class quotas,
   ordered-index hashes, and zero source overlap. Formal remains unrun.
+- The first formal launcher invocation also stopped before output/model loading.
+  Its outer process/GPU gate passed at `5%`, `1629/8188 MiB`, `55 C`, but the
+  in-process snapshot treated the Windows venv launcher parent as an unrelated
+  Python workload. The wrapper had observed zero Python/TensorRT immediately
+  before launch. Correct the snapshot to own only the current auditor plus its
+  exact ancestor chain; continue rejecting every other Python/TensorRT PID.
+  This is a pre-measurement engineering correction, not a DART result or rerun.

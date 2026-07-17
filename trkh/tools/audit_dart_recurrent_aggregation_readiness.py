@@ -1650,6 +1650,11 @@ def _state_schema(model: nn.Module) -> list[tuple[str, tuple[int, ...], str]]:
 
 def _process_snapshot() -> Dict[str, object]:
     current_pid = os.getpid()
+    auditor_chain = {current_pid}
+    try:
+        auditor_chain.update(parent.pid for parent in psutil.Process(current_pid).parents())
+    except (psutil.AccessDenied, psutil.NoSuchProcess):
+        pass
     rows = []
     for process in psutil.process_iter(
         attrs=("pid", "name", "create_time", "cmdline")
@@ -1665,14 +1670,19 @@ def _process_snapshot() -> Dict[str, object]:
                     "create_time": float(process.info.get("create_time") or 0.0),
                     "command_line": " ".join(process.info.get("cmdline") or []),
                     "current_auditor": int(process.info["pid"]) == current_pid,
+                    "current_auditor_chain": int(process.info["pid"])
+                    in auditor_chain,
                 }
             )
         except (psutil.AccessDenied, psutil.NoSuchProcess):
             continue
     return {
         "current_pid": current_pid,
+        "auditor_chain_pids": sorted(auditor_chain),
         "processes": rows,
-        "unexpected_processes": [row for row in rows if not row["current_auditor"]],
+        "unexpected_processes": [
+            row for row in rows if not row["current_auditor_chain"]
+        ],
     }
 
 
