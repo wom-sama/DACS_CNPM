@@ -3492,7 +3492,8 @@
 - [x] Select CVPR-2023 DART from the authors' MIT commit/tree
   `62274e8...de9361`/`83d56be...3e014d` and prospectively lock one train-only
   equal-update recurrent-aggregation A0 at protocol SHA
-  `a9b2bd96...a11e55`. Freeze natural class-proportional whole-source cohorts,
+  `4887d71f...c47fa8` after a pre-CUDA CIDT-hash transcription erratum. Freeze
+  natural class-proportional whole-source cohorts,
   immutable augmentation batches, per-logical-update RNG, mixed/final-only
   controls, two broadcasts, barrier/diversity, precision/TP/FP/lighting,
   export/resource, and independent-replay gates.

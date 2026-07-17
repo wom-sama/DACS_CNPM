@@ -18166,7 +18166,7 @@ Date: 2026-07-02
   closed final checkpoint soup. Official code averages four model states every
   interval and preserves separate optimizer states; no external weight is used.
 - Protocol `TRKH_5CLASS_DART_RECURRENT_AGGREGATION_A0_PROTOCOL_20260717.md`
-  at SHA `a9b2bd96a257bd00aa2a228d22b3072c22a044225c29b6adbc44e5c663a11e55`
+  at corrected SHA `4887d71f8be119569ba963581d3e87eb1b62d303872f412ada07b33738c47fa8`
   locks a train-only equal-update comparison: one interleaved mixed model, four
   branches averaged only at the end, and four branches averaged/broadcast after
   update 4 and update 8. DART must beat both controls, especially class-1
@@ -18199,3 +18199,8 @@ Date: 2026-07-02
   cohorts. Compile, pyflakes, PowerShell AST, focused `11/11`, and full pytest
   `1394/1394` pass. Formal/preflight evidence remains unrun until the complete
   implementation commit is pushed.
+- The first pushed clean preflight then failed before CUDA/output because the
+  initial protocol/auditor transcription omitted the second `fe` in the actual
+  CIDT prediction SHA `...429bfefe1...`. Preserve initial protocol SHA
+  `a9b2bd96...a11e55` as the rejected lock. Corrected protocol SHA is
+  `4887d71f...c47fa8`; no cohort, gate, result, or formal measurement changed.

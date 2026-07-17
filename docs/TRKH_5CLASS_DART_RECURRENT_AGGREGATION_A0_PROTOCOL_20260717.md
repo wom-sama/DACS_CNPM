@@ -102,7 +102,7 @@ the official optimizer-state behavior.
   `runs/audit_cidt_readiness_full_train_20260714/predictions_all_conditions.csv`.
 - CIDT summary/prediction SHAs:
   `d4891edf2963ab12385b7ce5bdc812ec3e19c5c098acd25c66eb557af541d7ad` /
-  `2e0993752d58d99ea429bfe1e2bfe6fa949e45aea1a26cc4bdfee97d4db21c`.
+  `2e0993752d58d99ea429bfefe1e2bfe6fa949e45aea1a26cc4bdfee97d4db21c`.
 - Fold 0 is the untouched source-disjoint holdout: 1,843 rows.
 - Folds 1, 2, 3, and 4 supply the four fit branches. No source stem may occur
   in more than one branch or in holdout.
@@ -297,3 +297,13 @@ before trainer or launcher integration. Current-best command/history lock-time
 SHAs remain
 `36b9aa1a21b765829acf4c8321be147bd76297de4ccdb8a40e6dee8e37940faf` /
 `39bd2879ce66fddf36a953021ea1e40f8d9de6cb4334b9b825011b2b8dc98f53`.
+
+## Preflight erratum
+
+The first clean preflight rejected the initial protocol SHA
+`a9b2bd96a257bd00aa2a228d22b3072c22a044225c29b6adbc44e5c663a11e55`
+before CUDA or output creation. The CIDT prediction SHA transcription omitted
+the second `fe` in `...429bfefe1...`. The corrected value above matches the
+existing file and all earlier authoritative CIDT auditors. No cohort, row,
+augmentation, optimization, aggregation, metric, threshold, or stop rule
+changed, and no formal measurement was observed before this erratum.
