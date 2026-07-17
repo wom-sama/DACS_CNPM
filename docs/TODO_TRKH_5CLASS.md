@@ -3407,10 +3407,24 @@
   bright/low-contrast precision/TP gates, standard ONNX/TensorRT/resource
   checks, and no holdout/validation/test/trainer/epoch/command update. Require
   exactly the previously locked sample-3657 near-tie and no new replay mismatch.
-- [ ] Implement the isolated GRN A0 auditor, focused tests, independent replay,
-  fixed contact-sheet renderer, and VS Code-safe preflight/formal wrapper.
-  Commit and push reviewed implementation before the first formal data run.
-- [ ] Run the sole locked GRN A0. Apply its stop rule before trainer integration;
-  preserve compact evidence, inspect every audit page, update journal/TODO/
-  skill, rerun retention, and leave current-best commands unchanged unless a
-  later source-disjoint pair and validation promotion gate both win.
+- [x] Implement the isolated GRN A0 auditor, focused tests, independent replay,
+  fixed contact-sheet renderer, and VS Code-safe preflight/formal wrapper at
+  pushed commit `ed5c15e`. Focused `10/10` and full pytest `1363/1363` passed
+  before formal execution; no trainer/model/config file was changed.
+- [x] Apply the sole locked GRN A0 stop rule before OOF. Preserve the first
+  empty interrupted attempt and a hash-locked recovery replay at commit
+  `81b1605`: `13/607` rows have no outside patch under the fixed intersection
+  mask and active FFN runtime is `1.353753x > 1.15x`. Retain manifest SHA
+  `05251283...8811`; deny OOF/readout fitting, XAI, pair, validation, test,
+  full train, mask/runtime sweeps, and current-command update.
+- [x] Complete GRN closure verification: remove only the recorded empty attempt
+  directory at cleanup-manifest SHA `675b6c16...46ba`; pass compileall,
+  pyflakes, five PowerShell parses, focused `11/11`, full pytest `1364/1364`,
+  and retention over 742 directories/48 manifests with all 210 compacted
+  originals absent and `blockers=[]` at summary SHA `7f36d1f8...a839`.
+  Update the TRKH skill, preserve closure SHA `e0014134...9e43`, and leave
+  current-best commands at three revisions/two updates.
+- [ ] Screen a new distinct precision-first route from an accepted paper and
+  licensed official repository. Preflight every spatial-region nonemptiness
+  assumption over the exact locked cohort before model inference, and require
+  a cheap TP-preserving/restricted-FP signal plus deployment gate.

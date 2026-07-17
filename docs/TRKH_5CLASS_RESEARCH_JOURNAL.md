@@ -17940,3 +17940,43 @@ Date: 2026-07-02
 - No dataset loader, feature extraction, model/trainer edit, image epoch,
   holdout, validation, test, full train, or current-command update ran at lock
   time. Current-best commands remain three revisions/two updates.
+
+## Global Response Normalization A0 Closure 2026-07-17 - Invalid Outside Control And Runtime Rejection
+
+- Implemented the source-grounded isolated GRN equation/readout/FFN auditor,
+  tests, and VS Code-safe three-phase wrapper at pushed commit `ed5c15e`.
+  Official/oracle/gradient/finite-difference errors were
+  `0/4.44e-16/7.11e-15/2.35e-10`; zero-init identity was exact and BF16 error
+  was `0.003837`. Standard ONNX error was `2.98e-7`, and TensorRT parse/build
+  passed without retaining binaries.
+- A single pre-formal implementation correction replaced a full tensor concat
+  with the same in-place inference equation on the disposable GELU output.
+  It reduced development runtime/memory from `2.998x/1.300x` to formal
+  `1.353753x/1.000037x`. Runtime still failed the prospective `1.15x` gate;
+  no compile/custom-kernel/gate rescue is allowed.
+- The first formal attempt stopped before artifact writing because the locked
+  patch-cell-intersection mask left no outside cell for a large transformed
+  bbox. Read-only all-row replay confirmed `13/607` such rows: `12` class1 TP,
+  one restricted class0 FP, fold counts `3/2/5/3`, ordered index SHA
+  `0a9f70dd...46b`. Object support spans `64..256` cells and `16` rows have at
+  least 240 cells.
+- Commit `81b1605` added only fail-safe geometry pre-scan/evidence writing. It
+  did not change the mask, cohort, data, or gates. Recovery summary/mask/report/
+  manifest SHAs are `c49274b5...cbfa`/`087f1a99...2caf`/
+  `77afb611...aeda`/`05251283...8811` under
+  `runs/evidence_grn_a0_mask_structural_failure_20260717`.
+- Reject GRN A0 before OOF readout fitting and XAI. The outside-response causal
+  control is undefined for 13 fixed rows, and changing to center masks, erosion,
+  imputation, or row exclusion after seeing this would be a forbidden mask
+  sweep. No five-epoch pair, validation, test, full train, command update, or
+  nearby GRN/LayerScale/FCMAE variant is authorized.
+- Future protocols that depend on bbox partitions must scan nonemptiness on the
+  exact cohort before model inference. Full details and no-repeat boundaries
+  are in `TRKH_5CLASS_GLOBAL_RESPONSE_NORMALIZATION_A0_CLOSURE_20260717.md`.
+- Cleanup removed only the recorded zero-file attempt directory at manifest SHA
+  `675b6c16...46ba`. Compileall, pyflakes, five PowerShell parses, focused
+  `11/11`, and full pytest `1364/1364` passed. Read-only retention covered 742
+  directories/48 manifests, found all 210 compacted originals absent and
+  `blockers=[]`, and retained `70.272 GB` free at summary SHA
+  `7f36d1f8...a839`. Closure document SHA is `e0014134...9e43`; current-best
+  commands remain three revisions/two updates.

@@ -61,8 +61,15 @@ if ($Phase -eq "Formal") {
         throw "Formal GRN A0 khong tao summary: $SummaryPath"
     }
     $SummarySha = (Get-FileHash -Algorithm SHA256 -LiteralPath $SummaryPath).Hash.ToLowerInvariant()
-    Write-Host "GRN automated audit completed. Review all grn_signal_contact_sheet_*.png."
-    Write-Host "Locked pre-review summary SHA-256: $SummarySha"
+    $Summary = Get-Content -Raw -LiteralPath $SummaryPath | ConvertFrom-Json
+    if ($Summary.status -eq "awaiting_visual_review") {
+        Write-Host "GRN automated audit completed. Review all grn_signal_contact_sheet_*.png."
+        Write-Host "Locked pre-review summary SHA-256: $SummarySha"
+    }
+    else {
+        Write-Host "GRN formal audit completed with terminal status: $($Summary.status)"
+        Write-Host "Summary SHA-256: $SummarySha"
+    }
     exit 0
 }
 
@@ -74,6 +81,10 @@ if (-not (Test-Path -LiteralPath $SummaryPath -PathType Leaf)) {
     throw "Khong tim thay formal summary: $SummaryPath"
 }
 $SummarySha = (Get-FileHash -Algorithm SHA256 -LiteralPath $SummaryPath).Hash.ToLowerInvariant()
+$Summary = Get-Content -Raw -LiteralPath $SummaryPath | ConvertFrom-Json
+if ($Summary.status -ne "awaiting_visual_review") {
+    throw "Formal status khong yeu cau visual review: $($Summary.status)"
+}
 Invoke-LockedPython -Arguments @(
     "-m", "trkh.tools.audit_global_response_normalization_signal",
     "--output-dir", $OutputDir,
