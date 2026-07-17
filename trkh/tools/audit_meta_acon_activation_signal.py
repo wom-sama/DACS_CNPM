@@ -5,7 +5,6 @@ import copy
 import csv
 import gc
 import hashlib
-import importlib.util
 import json
 import math
 import os
@@ -14,6 +13,7 @@ import statistics
 import subprocess
 import tempfile
 import time
+import types
 from typing import Dict, Mapping, Optional, Sequence
 
 import numpy as np
@@ -508,11 +508,11 @@ class ObjectActivationReadout(nn.Module):
 
 
 def _load_module(path: Path):
-    spec = importlib.util.spec_from_file_location("locked_official_acon", str(path))
-    if spec is None or spec.loader is None:
-        raise ImportError(f"Cannot load official ACON source: {path}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    resolved = Path(path).resolve()
+    source = resolved.read_text(encoding="utf-8")
+    module = types.ModuleType("locked_official_acon")
+    module.__file__ = str(resolved)
+    exec(compile(source, str(resolved), "exec"), module.__dict__)
     return module
 
 

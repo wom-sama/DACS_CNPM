@@ -19,6 +19,7 @@ from trkh.tools.audit_meta_acon_activation_signal import (
     MetaAconC,
     ObjectActivationReadout,
     _independent_meta_acon,
+    _load_module,
     assess_information_gate,
     object_mask_from_bbox,
     parse_args,
@@ -55,6 +56,14 @@ def test_paper_initialization_and_independent_equation_match() -> None:
     delta = static.p1 * x - static.p2 * x
     expected_static = delta * torch.sigmoid(static.beta * delta) + static.p2 * x
     assert torch.allclose(static(x), expected_static, atol=1e-12, rtol=0.0)
+
+
+def test_official_source_loader_does_not_write_bytecode(tmp_path) -> None:
+    source = tmp_path / "source.py"
+    source.write_text("VALUE = 7\n", encoding="utf-8")
+    module = _load_module(source)
+    assert module.VALUE == 7
+    assert not (tmp_path / "__pycache__").exists()
 
 
 def test_object_mask_and_identity_readout_ignore_outside_pixels() -> None:
