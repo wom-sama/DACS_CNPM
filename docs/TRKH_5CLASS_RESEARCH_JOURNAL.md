@@ -18070,3 +18070,46 @@ Date: 2026-07-02
   and returns `blockers=[]` at SHA `b93c0adc...85d55`; free space is
   `103.339 GB`. Current-best command/history hashes remain exact and stay at
   three revisions/two updates.
+
+## DOLG Orthogonal Local-Global Signal A0 Lock 2026-07-17 - Subtractive Fusion Before Training
+
+- Re-screened accepted primary work and licensed author code after FcaNet
+  closure. DeepEMD/DN4/Sinkhorn patch matching overlaps closed patch-prototype
+  routes and adds unfavorable deployment/runtime risk; ECA/SimAM cannot supply
+  a clearly new signal beyond the closed GAP/channel-statistic/spatial-energy
+  families. DOLG was the first screened route with no local orthogonal-fusion
+  implementation or experiment in TRKH.
+- Authority is the accepted ICCV-2021 CVF paper and the author's MIT repository
+  at commit/tree `63b117d...f4bcc8`/`c7639a4...d346a6` (`66` stars, `12`
+  forks, not archived on 2026-07-17). Paper/source/license SHAs are
+  `3ca7070e...fb679`/`83b1984d...6dd54`/`4a958972...450d4`. No pretrained
+  weight, retrieval checkpoint, or secondary implementation is used.
+- The source-grounded distinction is one late first-order subtraction:
+  `l_orth = l - (l dot g)g/||g||^2`. It does not repeat the failed eight-layer
+  bidirectional CNN-token coupling, existing additive CNN-logit fusion, source-
+  context/paired-view fusion, fine-grained pooling, or bilinear covariance.
+  The paper's direct-concat ablation becomes a mandatory matched control rather
+  than efficacy evidence for this dataset.
+- Protocol
+  `TRKH_5CLASS_DOLG_ORTHOGONAL_LOCAL_GLOBAL_SIGNAL_PROTOCOL_20260717.md`
+  at SHA `51b52aaeb2810ea4172ccd93c6238add378fd845149808fa4dea1cfc694e150d`
+  locks the standard-forward `16x16x256` patch embedding as CNN-local features
+  and the actual 256D main-head input as the global Transformer feature. Per-
+  token L2 normalization follows the official local branch, while a fixed bbox
+  cell-center mean supplies object conditioning and the unchanged full input
+  supplies global context. No projector or learned DOLG attention is added.
+- The only authorized measurement is four-fold source-disjoint OOF on the
+  existing 607 fit rows (`421` class1 TP, `186` restricted FP), with clean-fit
+  readouts frozen under dim/bright/low-contrast. The object-orthogonal candidate
+  must beat global, matched object concat, full-map orthogonal, and bbox controls
+  while reaching class1 TP retention `>=0.90`, FP rejection `>=0.25`, and
+  precision `>=0.74`.
+- Exact official/oracle/gradient/pooling equivalence, standard-forward hook and
+  logit parity, BF16, ONNX, TensorRT, runtime/memory, independent CSV replay,
+  and four eight-row visual sheets are conjunctive. Formal timing is forbidden
+  while unrelated GUI load makes the GPU non-isolated; unknown processes must
+  not be terminated to satisfy a gate.
+- No feature inference, image epoch, validation, test, model/trainer/config
+  edit, full train, or current-command update ran at protocol lock time. A
+  failure closes projector/layer/mask/attention/readout rescues; a complete
+  pass can authorize only one separately locked short pair.

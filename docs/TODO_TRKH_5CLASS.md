@@ -3456,9 +3456,28 @@
   compacted originals absent and `blockers=[]` at SHA `b93c0adc...85d55`.
   Closure SHA is `e1345a60...3add1`; current-best commands remain three
   revisions/two updates.
-- [ ] Screen the next genuinely distinct accepted primary-source route with
+- [x] Screen the next genuinely distinct accepted primary-source route with
   licensed official code. Exclude all closed frequency/texture, activation,
   normalization, localization, local/large-kernel mixing, routing, loss,
   distillation, hierarchy, and post-hoc families. Require a cheap prospective
   gate that improves restricted-FP rejection without sacrificing class1 TP
   under dim/bright/low-contrast before any trainer integration.
+- [x] Screen ICCV-2021 DOLG against the accepted CVF paper and the author's MIT
+  source at commit/tree `63b117d...f4bcc8`/`c7639a4...d346a6`. Select only its
+  late first-order orthogonal fusion equation, which is distinct from the
+  closed persistent local-global coupling, additive CNN logits, and second-
+  order pooling families. No pretrained weight or retrieval recipe is allowed.
+- [x] Prospectively lock DOLG A0 before feature inference. Use the standard-
+  forward patch embedding as 16x16 CNN-local features and the actual main-head
+  input as the global Transformer descriptor. Compare global, local, matched
+  concat, full orthogonal, object-conditioned orthogonal, and bbox controls on
+  the exact 607-row train-only OOF cohort under four lighting conditions.
+  Protocol SHA is `51b52aae...e150d`.
+- [ ] Implement the isolated DOLG A0 auditor, tests, and three-phase VS Code-
+  safe wrapper. Require exact official/oracle/gradient/pooling equations,
+  standard-forward hook/logit parity, BF16, ONNX/TensorRT, runtime/memory,
+  source-fold OOF, independent replay, and four locked contact sheets.
+- [ ] Run exactly one formal DOLG A0 gate only after owned-process and GPU-load
+  checks permit defensible timing. Review all 32 rows, preserve/hash evidence,
+  then either close all nearby DOLG projector/layer/mask/attention/readout
+  variants or authorize one separately locked five-epoch pair.
