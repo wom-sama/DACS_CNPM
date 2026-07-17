@@ -495,10 +495,9 @@ class GlobalResponseReadout(nn.Module):
         return logits, transformed, delta
 
 
-def object_patch_mask(
+def _object_patch_intersections(
     bboxes: Tensor, height: int = GRID_HEIGHT, width: int = GRID_WIDTH
 ) -> tuple[Tensor, Tensor]:
-    """Return cells whose area intersects normalized xywh boxes and the complement."""
     if bboxes.ndim != 2 or int(bboxes.size(1)) != 4:
         raise ValueError("Bboxes must be normalized xywh tensors [B,4].")
     boxes = bboxes.to(dtype=torch.float32).clamp(0.0, 1.0)
@@ -522,11 +521,19 @@ def object_patch_mask(
         & (cell_y1 < y2[:, None, None])
     )
     outside = ~intersects
+    return intersects.flatten(1), outside.flatten(1)
+
+
+def object_patch_mask(
+    bboxes: Tensor, height: int = GRID_HEIGHT, width: int = GRID_WIDTH
+) -> tuple[Tensor, Tensor]:
+    """Return cells whose area intersects normalized xywh boxes and the complement."""
+    intersects, outside = _object_patch_intersections(bboxes, height, width)
     if not bool(intersects.flatten(1).any(1).all()):
         raise ValueError("Every bbox must intersect at least one patch cell.")
     if not bool(outside.flatten(1).any(1).all()):
         raise ValueError("Every bbox must leave at least one outside patch cell.")
-    return intersects.flatten(1), outside.flatten(1)
+    return intersects, outside
 
 
 def _load_official_grn_class(path: Path):
@@ -762,6 +769,103 @@ def assess_declaration_replay(
         ),
         "passed": bool(not structural_errors and locked_exception_exact),
         "batch_size": BATCH_SIZE,
+    }
+
+
+def _audit_mask_geometry(
+    *,
+    base_dataset,
+    transform,
+    cohort: Sequence[CleanTrainRow],
+    args: argparse.Namespace,
+) -> Dict[str, object]:
+    indices = [row.sample_index for row in cohort]
+    expected_targets = [row.target for row in cohort]
+    by_index = {row.sample_index: row for row in cohort}
+    loader, loader_summary = _make_condition_loader(
+        base_dataset=base_dataset,
+        transform=transform,
+        indices=indices,
+        brightness=1.0,
+        contrast=1.0,
+        batch_size=int(args.batch_size),
+        num_workers=int(args.num_workers),
+        context="grn_a0_mask_geometry_pre_oof",
+    )
+    observed_indices: list[int] = []
+    observed_targets: list[int] = []
+    object_cell_counts: list[int] = []
+    invalid_rows: list[Dict[str, object]] = []
+    for _images, targets, metadata in loader:
+        sample_indices = metadata.get("sample_index")
+        crop_bboxes = metadata.get("crop_bbox")
+        original_bboxes = metadata.get("bbox")
+        if not torch.is_tensor(sample_indices):
+            raise ValueError("GRN mask pre-scan lacks sample_index metadata.")
+        if not torch.is_tensor(crop_bboxes) or not torch.is_tensor(original_bboxes):
+            raise ValueError("GRN mask pre-scan lacks bbox metadata.")
+        object_mask, outside_mask = _object_patch_intersections(crop_bboxes)
+        counts = object_mask.sum(1)
+        for local_index, sample_index_value in enumerate(sample_indices.tolist()):
+            sample_index = int(sample_index_value)
+            target = int(targets[local_index])
+            observed_indices.append(sample_index)
+            observed_targets.append(target)
+            object_cells = int(counts[local_index])
+            object_cell_counts.append(object_cells)
+            if not bool(outside_mask[local_index].any()):
+                row = by_index[sample_index]
+                invalid_rows.append(
+                    {
+                        "sample_index": sample_index,
+                        "fold": int(row.fold),
+                        "target": int(row.target),
+                        "cohort": str(_cohort_label(row)),
+                        "source_stem": row.source_stem,
+                        "image_path": str(row.image_path),
+                        "crop_bbox_xywh": [
+                            float(value) for value in crop_bboxes[local_index].tolist()
+                        ],
+                        "original_bbox_xywh": [
+                            float(value)
+                            for value in original_bboxes[local_index].tolist()
+                        ],
+                        "object_patch_cells": object_cells,
+                        "outside_patch_cells": int(
+                            outside_mask[local_index].sum().item()
+                        ),
+                    }
+                )
+    if observed_indices != indices or observed_targets != expected_targets:
+        raise ValueError("GRN mask pre-scan cohort order differs.")
+    invalid_indices = [int(row["sample_index"]) for row in invalid_rows]
+    return {
+        "rows": len(object_cell_counts),
+        "condition": "clean",
+        "lighting_conditions_share_identical_geometry": True,
+        "grid": [GRID_HEIGHT, GRID_WIDTH],
+        "mask_definition": "every_patch_cell_intersecting_transformed_bbox",
+        "minimum_object_patch_cells": min(object_cell_counts),
+        "maximum_object_patch_cells": max(object_cell_counts),
+        "rows_with_at_least_240_object_cells": sum(
+            value >= 240 for value in object_cell_counts
+        ),
+        "rows_without_outside_patch": len(invalid_rows),
+        "invalid_tp_rows": sum(row["cohort"] == "tp" for row in invalid_rows),
+        "invalid_fp_rows": sum(row["cohort"] == "fp" for row in invalid_rows),
+        "invalid_fold_counts": {
+            str(fold): sum(int(row["fold"]) == fold for row in invalid_rows)
+            for fold in FIT_FOLDS
+        },
+        "invalid_ordered_index_sha256": (
+            _ordered_index_sha256(invalid_indices) if invalid_indices else None
+        ),
+        "invalid_rows": invalid_rows,
+        "object_nonempty_all": min(object_cell_counts) > 0,
+        "outside_nonempty_all": not invalid_rows,
+        "passed": bool(min(object_cell_counts) > 0 and not invalid_rows),
+        "loader": loader_summary,
+        "raw_dataset_touched": False,
     }
 
 
@@ -2405,6 +2509,154 @@ def _finalize_visual_review(args: argparse.Namespace) -> Dict[str, object]:
     }
 
 
+def _write_pre_oof_mask_rejection(
+    *,
+    output_dir: Path,
+    args: argparse.Namespace,
+    provenance: Mapping[str, object],
+    equation: Mapping[str, object],
+    dataset_mapping: Mapping[str, object],
+    mask_geometry: Mapping[str, object],
+    resource: Mapping[str, object],
+    onnx_audit: Mapping[str, object],
+    started: float,
+) -> Dict[str, object]:
+    checks = {
+        "locked_arguments_exact": _locked_args_exact(args),
+        "official_commit_tree_hashes_and_license_exact": True,
+        "official_and_trkh_worktrees_clean": bool(
+            provenance["official_worktree_clean"]
+            and provenance["tracked_worktree_clean"]
+        ),
+        "repository_commit_pushed": provenance["repository_commit"]
+        == provenance["upstream_commit"],
+        "cohort_count_fold_and_order_exact": bool(
+            provenance["cohort_rows"] == EXPECTED_COHORT_ROWS
+            and provenance["ordered_cohort_index_sha256"]
+            == EXPECTED_ORDERED_INDEX_SHA256
+        ),
+        "dataset_mapping_train_only_exact": bool(
+            dataset_mapping["paths_exact"] and dataset_mapping["train_paths_only"]
+        ),
+        "official_and_oracle_equation_pass": bool(
+            max(
+                float(equation["official_output_max_abs_error"]),
+                float(equation["oracle_output_max_abs_error"]),
+            )
+            <= MAX_EQUATION_ERROR
+            and float(equation["maximum_gradient_error"]) <= MAX_GRADIENT_ERROR
+            and float(equation["finite_difference_error"])
+            <= MAX_FINITE_DIFFERENCE_ERROR
+            and float(equation["bf16_max_abs_error"]) <= MAX_BF16_ERROR
+        ),
+        "object_patch_nonempty_all_rows": bool(mask_geometry["object_nonempty_all"]),
+        "outside_patch_nonempty_all_rows": bool(mask_geometry["outside_nonempty_all"]),
+        "runtime_ratio_lte_1p15": float(resource["runtime_ratio"])
+        <= MAX_RUNTIME_RATIO,
+        "memory_ratio_lte_1p10": float(resource["peak_memory_ratio"])
+        <= MAX_MEMORY_RATIO,
+        "onnx_standard_shape_error_pass": bool(
+            onnx_audit["standard_domains_only"]
+            and onnx_audit["output_shape_match"]
+            and float(onnx_audit["max_abs_error"]) <= MAX_ONNX_ERROR
+        ),
+        "tensorrt_parse_and_build_pass": bool(
+            onnx_audit["tensorrt_parse"]
+            and onnx_audit["tensorrt_engine_build"]
+        ),
+        "no_validation_test_or_image_model_training": bool(
+            not provenance["validation_data_used"]
+            and not provenance["test_data_used"]
+            and not provenance["image_model_training_used"]
+        ),
+    }
+    gate = {
+        "checks": checks,
+        "failed_checks": [name for name, passed in checks.items() if not passed],
+        "passed": all(checks.values()),
+    }
+    prior_path = Path(
+        "runs/audit_global_response_normalization_signal_a0_20260717"
+    ).resolve()
+    prior_files = (
+        [path for path in prior_path.rglob("*") if path.is_file()]
+        if prior_path.exists() and prior_path != output_dir
+        else []
+    )
+    prior_attempt = {
+        "path": str(prior_path),
+        "exists": prior_path.exists(),
+        "file_count": len(prior_files),
+        "empty_output_directory": bool(prior_path.exists() and not prior_files),
+        "implementation_commit": "ed5c15e512b8af3231f2b160f7471e47a8df05e4",
+        "failure": (
+            "ValueError: Every bbox must leave at least one outside patch cell."
+        ),
+        "failure_stage": "first clean descriptor batch before any artifact write",
+        "overwritten": False,
+    }
+    summary: Dict[str, object] = {
+        "method": METHOD,
+        "status": "rejected_pre_oof_mask_geometry",
+        "matched_5e_pair_authorized": False,
+        "provenance": provenance,
+        "equation_audit": equation,
+        "dataset_mapping": dataset_mapping,
+        "mask_geometry_audit": mask_geometry,
+        "resource_audit": resource,
+        "onnx_audit": onnx_audit,
+        "structural_gate": gate,
+        "information_gate": {
+            "status": "not_run",
+            "reason": "outside-response control undefined for 13 locked cohort rows",
+            "passed": False,
+            "cannot_rescue_structural_failure": True,
+        },
+        "contact_sheet_audit": {
+            "status": "not_run",
+            "reason": "protocol stops before OOF/XAI after material structural failure",
+        },
+        "prior_interrupted_attempt": prior_attempt,
+        "recovery_replay": True,
+        "mask_definition_changed": False,
+        "rows_excluded": 0,
+        "threshold_or_hyperparameter_sweep": False,
+        "validation_data_used": False,
+        "test_data_used": False,
+        "image_model_training_used": False,
+        "readout_training_used": False,
+        "raw_dataset_touched": False,
+        "elapsed_seconds": float(time.perf_counter() - started),
+    }
+    _write_json(output_dir / "mask_geometry.json", mask_geometry)
+    summary_path = output_dir / "summary.json"
+    _write_json(summary_path, summary)
+    report_lines = [
+        "# Global Response Normalization A0 Pre-OOF Rejection",
+        "",
+        "- Status: `rejected_pre_oof_mask_geometry`",
+        "- Matched 5e pair authorized: `false`",
+        f"- Locked cohort rows: `{mask_geometry['rows']}`",
+        f"- Rows with no outside patch: `{mask_geometry['rows_without_outside_patch']}`",
+        f"- Invalid TP/FP rows: `{mask_geometry['invalid_tp_rows']}/{mask_geometry['invalid_fp_rows']}`",
+        f"- Object-cell range: `{mask_geometry['minimum_object_patch_cells']}..{mask_geometry['maximum_object_patch_cells']}` of 256",
+        f"- Runtime/memory ratio: `{resource['runtime_ratio']:.6f}/{resource['peak_memory_ratio']:.6f}`",
+        f"- Failed structural checks: `{', '.join(gate['failed_checks'])}`",
+        "",
+        "The locked cell-intersection mask, cohort, and thresholds were not changed. OOF readouts, contact sheets, validation, test, and image-model training were not run. The stop rule closes this route before trainer integration.",
+    ]
+    (output_dir / "report.md").write_text(
+        "\n".join(report_lines) + "\n", encoding="utf-8"
+    )
+    manifest = _write_manifest(output_dir)
+    return {
+        **summary,
+        "summary_path": str(summary_path.resolve()),
+        "summary_sha256": _sha256(summary_path),
+        "artifact_manifest": manifest,
+    }
+
+
 def run_audit(args: argparse.Namespace) -> Dict[str, object]:
     if bool(args.finalize_visual_review):
         if bool(args.preflight_only):
@@ -2446,6 +2698,27 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
     base_dataset, transform, dataset_mapping = _build_dataset(
         checkpoint, rows, Path(provenance["paths"]["data"])
     )
+    mask_geometry = _audit_mask_geometry(
+        base_dataset=base_dataset,
+        transform=transform,
+        cohort=cohort,
+        args=args,
+    )
+    if not bool(mask_geometry["passed"]):
+        del model
+        gc.collect()
+        torch.cuda.empty_cache()
+        return _write_pre_oof_mask_rejection(
+            output_dir=output_dir,
+            args=args,
+            provenance=provenance,
+            equation=equation,
+            dataset_mapping=dataset_mapping,
+            mask_geometry=mask_geometry,
+            resource=resource,
+            onnx_audit=onnx_audit,
+            started=started,
+        )
     features, bboxes, declaration, extraction = _extract_descriptors(
         model=model,
         base_dataset=base_dataset,
@@ -2537,6 +2810,7 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
         "provenance": provenance,
         "equation_audit": equation,
         "dataset_mapping": dataset_mapping,
+        "mask_geometry_audit": mask_geometry,
         "declaration_replay": declaration,
         "extraction_audit": extraction,
         "oof_metrics": metrics,

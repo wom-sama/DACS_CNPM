@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 
 import numpy as np
+import pytest
 import torch
 from torch import nn
 
@@ -24,6 +25,7 @@ from trkh.tools.audit_global_response_normalization_signal import (
     GlobalResponseReadout,
     MatchedBlock2FFN,
     PatchGlobalResponseNormalization,
+    _object_patch_intersections,
     _independent_grn,
     _load_official_grn_class,
     assess_declaration_replay,
@@ -142,6 +144,17 @@ def test_bbox_intersection_masks_and_region_responses_are_distinct() -> None:
     outside_response = normalized_l2_response(patches, outside_mask)
     assert object_response.shape == outside_response.shape == (2, 1, 4)
     assert not torch.equal(object_response[0], outside_response[0])
+
+
+def test_full_grid_bbox_is_preserved_as_structural_failure() -> None:
+    boxes = torch.tensor([[0.5, 0.5, 0.91, 0.91]], dtype=torch.float32)
+    object_mask, outside_mask = _object_patch_intersections(boxes)
+    assert int(object_mask.sum()) == 256
+    assert int(outside_mask.sum()) == 0
+    with pytest.raises(
+        ValueError, match="Every bbox must leave at least one outside patch cell"
+    ):
+        object_patch_mask(boxes)
 
 
 def test_readout_zero_init_matches_identity_then_has_live_grn_gradients() -> None:
