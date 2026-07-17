@@ -3373,7 +3373,25 @@
   SHA `39988fc3...7b0d05`; compileall, six PowerShell parses, focused `8/8`,
   full pytest `1345/1345`, and retention all pass. Do not run the five-epoch
   pair or nearby PDC sweeps.
-- [ ] Screen the next distinct accepted primary-source route with a cheap
-  class-conditional pre-training gate. Exclude PDC/edge-magnitude variants and
-  every existing closed family; prioritize a mechanism that can distinguish
-  class-1 TP from restricted FP while preserving high class-1 precision.
+- [x] Screen the next distinct accepted primary-source route with a cheap
+  class-conditional pre-training gate. Reject official Involution at actual
+  stem geometry for `3.64x-7.43x` runtime and `7.44x-8.20x` memory, retain
+  CVPR-2021 Meta-ACON from the official MIT source, and prospectively lock one
+  post-stem fit-only activation-readout protocol at corrected SHA
+  `c1fb84b3...2e436`. No validation, test, image epoch, or raw-data edit.
+- [x] Implement and run the sole locked Meta-ACON A0 at pushed implementation
+  commit `6e13f75` plus bytecode-free source-loader fix `bdd4e3a`. Reject before
+  trainer integration: clean AUROC `0.628292` is only `+0.015031` over static
+  ACON, fold deltas are `-0.005357/-0.020625/+0.042079/+0.026649`, clean TP
+  retention/FP rejection are `0.883610/0.161290`, and object-beta gain is only
+  `+0.010459`. Preserve manifest SHA `683b5cbb...cc20`; the sample-3657 near-tie
+  is a strict structural failure but read-only sensitivity cannot rescue the
+  information result. Do not run the five-epoch pair or nearby activation
+  sweeps. Closure SHA is `41d84672...ed552`; compileall, pyflakes, six
+  PowerShell parses, focused `8/8`, full pytest `1353/1353`, and retention all
+  pass. Current-best commands remain three revisions/two updates.
+- [ ] Screen the next distinct accepted primary-source route. Exclude all
+  closed activation, edge, static/dynamic local-mixing, token-routing, loss,
+  distillation, and post-hoc families. Require licensed official code plus a
+  source-disjoint pre-training gate that directly protects class-1 TP while
+  rejecting restricted false positives under illumination shifts.

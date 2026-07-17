@@ -17860,3 +17860,40 @@ Date: 2026-07-02
   Compileall, `pyflakes`, six PowerShell parses, focused `8/8`, and full pytest
   `1345/1345` passed. Closure SHA is `a74c5744...ba00fd`; current-best command/
   history hashes remain unchanged.
+
+## Meta-ACON Activation Signal A0 Closure 2026-07-17 - Active But Not Selective Enough
+
+- Cross-checked CVPR-2021 Meta-ACON against the official MIT repository at
+  commit/tree `99fd679...c756f5`/`f269fee...59175837`; user reports remained
+  hypothesis sources only. The paper/source initialization discrepancy was
+  disclosed, and a pre-measurement erratum removed an incorrect beta-path ReLU.
+  Corrected protocol SHA is `c1fb84b3...2e436`.
+- Rejected official Involution before selection at actual third-stem geometry:
+  batch `1/4/8` runtime was `3.640968x/7.428328x/7.145325x` and memory was
+  `7.436997x/8.082161x/8.201651x`; its fast path also requires CuPy/custom CUDA.
+  ODConv/API-Net were already closed, Focal Modulation overlaps closed local-
+  global families, and no suitable author-licensed Dynamic ReLU source was
+  found.
+- Meta-ACON engineering passed: official/oracle/gradient/finite-difference
+  errors were at most `4.44e-16/0/3.66e-15/7.27e-11`; BF16 error was
+  `0.015097`; runtime/memory were `1.082251x/1.000037x`; standard ONNX, ORT,
+  TensorRT parse/build, and activity checks passed. Added parameters were 9,520.
+- The four-fold source-disjoint fit-only result rejected the route. Clean
+  identity/static/meta AUROC was `0.613478/0.613261/0.628292`; Meta clean
+  precision/F1 was `0.704545/0.783983`, but TP retention/FP rejection was only
+  `0.883610/0.161290`. Fold deltas versus static were
+  `-0.005357/-0.020625/+0.042079/+0.026649`; dim TP retention fell to
+  `0.755344`; object-only beta gained only `+0.010459` AUROC over static.
+- Keeper declaration replay differed only on known near-tie sample `3657`
+  (`p1-p2=0.00017741`). Excluding it read-only changed Meta clean AUROC to
+  `0.628183` and FP rejection to `0.162162`, so it cannot rescue the decision.
+  Independent replay of all 2,428 CSV rows matched every metric and fold delta
+  exactly (`max_abs_diff=0`).
+- Preserve compact formal manifest SHA `683b5cbb...cc20`. Post-route retention
+  passed over 740 directories with `blockers=[]`, no deletion/raw-data touch,
+  and summary SHA `8d48a3fc...2b4c4`. No trainer integration, five-epoch pair,
+  validation, test, full train, or current-best command update is authorized.
+  Do not sweep Meta-ACON/ACON/Dynamic-ReLU-like activation variants on this
+  keeper; select a distinct accepted source with direct TP/FP selectivity.
+  Compileall, pyflakes, six PowerShell parses, focused `8/8`, and full pytest
+  `1353/1353` passed; closure SHA is `41d84672...ed552`.
