@@ -3438,8 +3438,27 @@
   four lighting conditions, TP/restricted-FP, equation, ONNX/TensorRT,
   runtime/memory, and visual gates at protocol SHA `b28f4330...26283`. No
   validation/test/trainer/command update.
-- [ ] Implement the isolated FcaNet A0 auditor, focused tests, and VS Code-safe
-  wrapper without changing model/trainer/config files.
-- [ ] Run the sole formal gate, review every quantitative/deployment/visual
-  audit, then close the route or prospectively authorize exactly one matched
-  short train-only pair.
+- [x] Implement the isolated FcaNet A0 auditor, focused tests, and VS Code-safe
+  three-phase wrapper at pushed commit `8aea4f7` without changing model,
+  trainer, or config files. Correct source-order DCT construction, preserve
+  FP32 bbox/grid/accumulation around BF16 activations, and use the established
+  metadata-aware normal evaluator. Official/oracle/gradient, ONNX/TensorRT,
+  resource, and exact normal-logit parity checks pass.
+- [x] Run the sole formal FcaNet A0 gate and review all four contact sheets.
+  Reject before trainer integration: clean object-top16 AUROC is `0.578896`
+  versus object GAP `0.629377`, TP retention is `0.726841`, only fold 4
+  improves, and all lighting deltas are negative. FP rejection rises but
+  rejects 53 additional class1 TP and barely changes precision. Final summary
+  SHA is `54330c3d...15b62`; no short pair is authorized.
+- [x] Complete FcaNet closure verification. Preserve the full `3,807,872`-byte
+  compact payload and all 32 reviewed rows, pass focused `8/8`, full pytest
+  `1372/1372`, and all-manifest retention over 745 directories with all 210
+  compacted originals absent and `blockers=[]` at SHA `b93c0adc...85d55`.
+  Closure SHA is `e1345a60...3add1`; current-best commands remain three
+  revisions/two updates.
+- [ ] Screen the next genuinely distinct accepted primary-source route with
+  licensed official code. Exclude all closed frequency/texture, activation,
+  normalization, localization, local/large-kernel mixing, routing, loss,
+  distillation, hierarchy, and post-hoc families. Require a cheap prospective
+  gate that improves restricted-FP rejection without sacrificing class1 TP
+  under dim/bright/low-contrast before any trainer integration.

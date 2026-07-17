@@ -18024,3 +18024,49 @@ Date: 2026-07-02
 - No feature inference, OOF readout, validation, test, image epoch, model/
   trainer/config edit, or current-best command update ran at lock time. Current
   commands remain three revisions/two updates.
+
+## FcaNet Object-Frequency Signal A0 Closure 2026-07-17 - Precision Gain Is Broad TP Suppression
+
+- Implemented the isolated official-top16 object-aligned descriptor auditor,
+  eight focused tests, independent OOF replay, four deterministic contact
+  sheets, and a VS Code-safe three-phase PowerShell wrapper at pushed commit
+  `8aea4f7`. No model/trainer/config path was integrated.
+- Development equation/resource checks caught real auditor defects before the
+  sole formal run: FP32 basis construction had to preserve the official scalar
+  multiplication order; BF16 bbox quantization moved high-frequency sampling
+  coordinates; and the full benchmark had to use the established metadata-
+  aware normal evaluator rather than a nonexistent keeper-forward signature.
+  The final FP32 descriptor island keeps BF16 error at `0.019581` while bbox
+  coordinates remain FP32.
+- All structural gates pass. Official weight/output/gradient errors are `0`,
+  independent output error is `8.88e-16`, finite-difference error is
+  `1.87e-11`, GAP and bbox-control parity errors are `0`, ONNX Runtime error is
+  `3.58e-7`, TensorRT parse/build passes, and normal logits/predictions are
+  exact. Formal runtime/memory ratios are `1.114320x/1.000726x`.
+- Reject the information signal. Clean object-top16 AUROC is `0.578896` versus
+  object GAP `0.629377` and full top16 `0.597745`; fold deltas versus object
+  GAP are `-0.109325/-0.081250/-0.056169/+0.034779`. Clean TP retention falls
+  `0.852732 -> 0.726841`, while restricted-FP rejection rises
+  `0.263441 -> 0.376344`; 53 additional class1 TP are lost and precision moves
+  only `0.723790 -> 0.725118`. Dim/bright/low-contrast AUROC deltas are all
+  negative and TP retention reaches only `0.679335/0.812352/0.593824`.
+- Independent CSV replay is exact over `2,428` rows. Manual review covered all
+  four pages and 32 rows; every selected row's strongest raw DCT group is the
+  DC `(0,0)` group, positive TP/FP pages share green/spotted/bright patterns,
+  and valid yellow/smooth TP are strongly suppressed. Finalize visual review
+  as fail from pre-review summary SHA `21b11ed9...31cf`.
+- Preserve final summary/OOF/selection/manifest SHAs
+  `54330c3d...15b62`/`135c7f18...fae6`/`34159657...ced2`/
+  `e7cc278b...bdc84`. The payload is only `3,807,872` bytes and contains no
+  checkpoint/cache/ONNX/engine/raw-image copy, so no formal evidence was
+  deleted. No validation, test, fold 0, image epoch, or raw-data edit occurred.
+- Do not sweep FcaNet frequency count/family/group/layer/alignment/readout,
+  remove DC after seeing the result, or integrate FcaNet attention hoping
+  end-to-end training rescues the failed gate. Full closure is in
+  `TRKH_5CLASS_FCANET_OBJECT_FREQUENCY_SIGNAL_A0_CLOSURE_20260717.md` at SHA
+  `e1345a609e4668962307c40d2bbbab7c99e5047c95d8e74f04d41becf023add1`.
+- Focused `8/8` and full pytest `1372/1372` pass. All-manifest retention covers
+  745 directories/48 manifests, verifies all 210 compacted originals absent,
+  and returns `blockers=[]` at SHA `b93c0adc...85d55`; free space is
+  `103.339 GB`. Current-best command/history hashes remain exact and stay at
+  three revisions/two updates.
