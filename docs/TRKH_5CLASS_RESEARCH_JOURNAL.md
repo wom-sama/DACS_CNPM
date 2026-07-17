@@ -17980,3 +17980,47 @@ Date: 2026-07-02
   `blockers=[]`, and retained `70.272 GB` free at summary SHA
   `7f36d1f8...a839`. Closure document SHA is `e0014134...9e43`; current-best
   commands remain three revisions/two updates.
+
+## FcaNet Object-Frequency Signal A0 Lock 2026-07-17 - Object DCT With Full Context Preserved
+
+- Re-screened accepted primary work and official licensed repositories instead
+  of treating user-supplied research reports as authority. Coordinate Attention
+  and Triplet Attention were rejected as spatial-localization overlap: current
+  Grad-CAM/attention already isolates fruit and repeated background
+  perturbations are nearly inert.
+- Selected ICCV-2021 FcaNet from the official MIT repository at commit/tree
+  `aa5fb63...ada33`/`85aa798...53a8d`. The accepted-paper/source/license SHAs
+  are `13c707b5...9d55`/`9b433755...200e`/`31e61e16...4cf1`; the GitHub API
+  reported `602` stars and `105` forks on 2026-07-17. No official or other
+  pretrained weight is allowed.
+- FcaNet is distinct from the rejected V15 frequency route. V15 FFTs each patch
+  token along its embedding axis and selects spatial tokens; FcaNet uses fixed
+  two-dimensional DCT bases to preserve non-DC channel-map information. The
+  paper's two-step ablation selects top16, so A0 locks that one setting and
+  forbids frequency/count/layer sweeps.
+- Before writing the protocol or loading a model onto CUDA, replayed the exact
+  607-row transformed cohort on CPU. Bboxes were finite with byte SHA
+  `e9b2143c...92f6b`; at the exact `16x16` dense patch grid, center-based object
+  and context supports were `28..210` and `46..228` cells with zero empty rows.
+  The `32x32` check also passed at `116..900` and `124..908` cells.
+- The locked adaptation keeps the original full patch map and Transformer path
+  unchanged, while bilinearly aligning the bbox feature region to a fixed
+  `16x16` object map for the candidate descriptor. This tests the requested
+  object-versus-context combination without writing crops or changing raw data;
+  fixed alignment also prevents bbox area alone from masquerading as texture.
+- Protocol
+  `TRKH_5CLASS_FCANET_OBJECT_FREQUENCY_SIGNAL_PROTOCOL_20260717.md` at SHA
+  `b28f4330c3cbaddf82cca9c0da222103a4199b7083b0cfde914b4607cc726283`
+  locks full/object GAP, full/object top16, and bbox-geometry controls under
+  four source-fold OOF readouts and four lighting conditions. The sole
+  candidate must improve object GAP, full top16, and bbox geometry while
+  retaining TP and rejecting restricted FP.
+- Official/oracle/gradient/BF16, GAP proportionality, standard ONNX, TensorRT,
+  runtime/memory, normal-forward parity, independent CSV replay, and fixed
+  contact-sheet gates are conjunctive. A failure denies trainer/model/config
+  integration, validation, test, full train, nearby sweeps, and command updates;
+  a complete pass can authorize only a separately locked matched train-only
+  short pair.
+- No feature inference, OOF readout, validation, test, image epoch, model/
+  trainer/config edit, or current-best command update ran at lock time. Current
+  commands remain three revisions/two updates.

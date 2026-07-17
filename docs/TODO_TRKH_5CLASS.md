@@ -3424,7 +3424,22 @@
   originals absent and `blockers=[]` at summary SHA `7f36d1f8...a839`.
   Update the TRKH skill, preserve closure SHA `e0014134...9e43`, and leave
   current-best commands at three revisions/two updates.
-- [ ] Screen a new distinct precision-first route from an accepted paper and
-  licensed official repository. Preflight every spatial-region nonemptiness
-  assumption over the exact locked cohort before model inference, and require
-  a cheap TP-preserving/restricted-FP signal plus deployment gate.
+- [x] Screen a new distinct precision-first route from an accepted paper and
+  licensed official repository. Reject Coordinate/Triplet Attention as
+  localization overlap; select ICCV-2021 FcaNet from the official MIT source
+  at commit/tree `aa5fb63...ada33`/`85aa798...53a8d` without pretrained
+  weights.
+- [x] Preflight the exact 607-row transformed geometry on CPU before model
+  inference. At `16x16`, object/context center masks contain `28..210` and
+  `46..228` cells with zero empty rows; bbox bytes SHA is
+  `e9b2143c...92f6b`.
+- [x] Prospectively lock one fit-only object-aligned FcaNet top16 signal gate:
+  full/object GAP, full/object top16, bbox-geometry controls, four-fold OOF,
+  four lighting conditions, TP/restricted-FP, equation, ONNX/TensorRT,
+  runtime/memory, and visual gates at protocol SHA `b28f4330...26283`. No
+  validation/test/trainer/command update.
+- [ ] Implement the isolated FcaNet A0 auditor, focused tests, and VS Code-safe
+  wrapper without changing model/trainer/config files.
+- [ ] Run the sole formal gate, review every quantitative/deployment/visual
+  audit, then close the route or prospectively authorize exactly one matched
+  short train-only pair.
