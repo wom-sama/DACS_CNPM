@@ -18119,5 +18119,12 @@ Date: 2026-07-02
   refuses any live `python.exe`/`trtexec.exe` or GPU use above the locked
   isolation limits, without stopping user processes. Finalization requires the
   exact pre-review summary SHA printed by formal. Python compile, pyflakes,
-  focused `9/9`, full pytest `1381/1381`, and PowerShell AST parse pass;
+  focused `11/11`, full pytest `1383/1383`, and PowerShell AST parse pass;
   formal remains unrun.
+- Pushed implementation commit `7df3a45`; the first clean preflight passed all
+  source/cohort/hash checks without creating an output directory. Read-only CPU
+  development replays also verified all 607 bbox rows at hash `e9b2143c...92f6b`,
+  nonempty `28..210` object and `46..228` context cells, official/oracle errors
+  at most `4.45e-16`, finite-difference error `1.73e-11`, and actual-keeper
+  standard-forward logits exactly unchanged with one patch/head hook and a
+  `[1,512]` sidecar descriptor. These checks are not formal GPU evidence.

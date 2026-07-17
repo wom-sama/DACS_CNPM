@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import copy
 import os
 from pathlib import Path
 
 import numpy as np
 import pytest
 import torch
+from torch import nn
 
 from trkh.tools.audit_dolg_orthogonal_local_global_signal import (
     BATCH_SIZE,
@@ -16,9 +18,11 @@ from trkh.tools.audit_dolg_orthogonal_local_global_signal import (
     FIT_FOLDS,
     GRID_SIZE,
     PATCH_TOKENS,
+    _FullModelBenchmarkWrapper,
     _independent_orthogonal,
     _load_official_orthogonal_function,
     assess_signal_gate,
+    assess_structural_gate,
     descriptor_roles,
     object_center_mask,
     orthogonal_component,
@@ -202,3 +206,110 @@ def test_three_phase_launcher_is_vscode_native_command_safe() -> None:
     assert "--query-gpu=utilization.gpu,memory.used" in text
     assert "ExpectedSummarySha256" in text
     assert "--expected-summary-sha256" in text
+
+
+class _FakeTRKH(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.num_registers = 0
+        self.patch_embed = nn.Linear(3, CHANNELS, bias=False)
+        self.head = nn.Linear(CHANNELS, 5)
+
+    def forward_features(
+        self,
+        images: torch.Tensor,
+        *,
+        image_valid_mask: torch.Tensor | None = None,
+        bbox_token_prior: torch.Tensor | None = None,
+    ) -> dict[str, torch.Tensor]:
+        del image_valid_mask, bbox_token_prior
+        tokens = images.permute(0, 2, 3, 1).reshape(images.size(0), -1, 3)
+        tokens = self.patch_embed(tokens)
+        return {"tokens": tokens, "global_feature": tokens.mean(dim=1)}
+
+    def forward_heads(self, features: dict[str, torch.Tensor]) -> torch.Tensor:
+        return self.head(features["global_feature"])
+
+
+def test_full_model_sidecar_preserves_normal_forward_logits() -> None:
+    torch.manual_seed(41)
+    base = _FakeTRKH().eval()
+    native = _FullModelBenchmarkWrapper(
+        copy.deepcopy(base), with_descriptor=False
+    ).eval()
+    candidate = _FullModelBenchmarkWrapper(
+        copy.deepcopy(base), with_descriptor=True
+    ).eval()
+    images = torch.randn(2, 3, GRID_SIZE, GRID_SIZE)
+    image_mask = torch.ones(2, GRID_SIZE, GRID_SIZE, dtype=torch.bool)
+    bbox = torch.tensor([[0.5, 0.5, 0.8, 0.8]]).expand(2, -1).contiguous()
+    crop_bbox = torch.tensor([[0.5, 0.5, 0.6, 0.7]]).expand(2, -1).contiguous()
+    with torch.inference_mode():
+        native_logits = native(images, image_mask, bbox, crop_bbox)
+        candidate_logits = candidate(images, image_mask, bbox, crop_bbox)
+    assert torch.equal(native_logits, candidate_logits)
+    assert candidate.patch_capture is not None
+    assert candidate.head_sidecar is not None
+    assert candidate.patch_capture.call_count == 1
+    assert candidate.head_sidecar.call_count == 1
+    assert candidate.head_sidecar.last_descriptor is not None
+    assert tuple(candidate.head_sidecar.last_descriptor.shape) == (2, 512)
+    assert bool(torch.isfinite(candidate.head_sidecar.last_descriptor).all())
+
+
+def test_structural_gate_is_conjunctive_and_runtime_fails_closed() -> None:
+    geometry = {"status": "passed", "model_inference_used": False}
+    equation = {
+        "official_assignments_exact": True,
+        "official_output_max_abs_error": 0.0,
+        "oracle_output_max_abs_error": 0.0,
+        "local_gradient_max_abs_error": 0.0,
+        "global_gradient_max_abs_error": 0.0,
+        "pooling_equivalence_max_abs_error": 0.0,
+        "orthogonality_relative_error": 0.0,
+        "finite_difference_error": 0.0,
+        "bf16_supported": True,
+        "bf16_max_abs_error": 0.0,
+        "bf16_gradient_finite": True,
+        "bf16_gradient_nonzero": True,
+        "object_mask_repeat_exact": True,
+        "all_outputs_finite": True,
+    }
+    declaration = {"passed": True}
+    resource = {
+        "runtime_ratio": 1.0,
+        "peak_memory_ratio": 1.0,
+        "normal_forward_logit_max_abs_error": 0.0,
+        "normal_forward_prediction_mismatches": 0,
+        "descriptor_executed": True,
+        "capture_counts_exact": True,
+        "trace_path_used": False,
+        "added_trainable_parameters": 0,
+    }
+    onnx = {
+        "standard_domains_only": True,
+        "output_shape_match": True,
+        "max_abs_error": 0.0,
+        "all_outputs_finite": True,
+        "tensorrt_parse": True,
+        "tensorrt_engine_build": True,
+    }
+    passed = assess_structural_gate(
+        geometry=geometry,
+        equation=equation,
+        declaration=declaration,
+        resource=resource,
+        onnx=onnx,
+    )
+    assert passed["passed"] is True
+
+    resource["runtime_ratio"] = 1.100001
+    failed = assess_structural_gate(
+        geometry=geometry,
+        equation=equation,
+        declaration=declaration,
+        resource=resource,
+        onnx=onnx,
+    )
+    assert failed["passed"] is False
+    assert failed["checks"]["runtime_ratio_within_limit"] is False
