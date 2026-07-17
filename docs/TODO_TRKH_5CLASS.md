@@ -3485,3 +3485,24 @@
 - [x] Close DOLG projector/layer/mask/attention/readout and runtime-rescue
   variants on the current keeper. Do not rerun timing, relax the gate, run a
   five-epoch pair, touch validation/test, or update current-best commands.
+- [x] Screen the next distinct accepted-primary-paper route against official
+  licensed source and local no-repeat evidence. Reject DropKey ahead of DART
+  because smoother/global attention conflicts with the current precision-first
+  evidence; reject SOAP/AP and SimAM as closed-objective/signal overlap.
+- [x] Select CVPR-2023 DART from the authors' MIT commit/tree
+  `62274e8...de9361`/`83d56be...3e014d` and prospectively lock one train-only
+  equal-update recurrent-aggregation A0 at protocol SHA
+  `a9b2bd96...a11e55`. Freeze natural class-proportional whole-source cohorts,
+  immutable augmentation batches, per-logical-update RNG, mixed/final-only
+  controls, two broadcasts, barrier/diversity, precision/TP/FP/lighting,
+  export/resource, and independent-replay gates.
+- [ ] Implement the isolated DART A0 auditor, focused tests, and VS Code-safe
+  preflight/formal wrapper without modifying the production model, trainer,
+  config, full-train command, validation, test, or raw dataset.
+- [ ] Run compile/static/focused/full tests and a clean preflight; commit and
+  push the complete implementation before the sole formal A0 execution.
+- [ ] Run one isolated formal DART A0, inspect every nonvisual audit artifact,
+  independently replay CSV metrics, and apply the locked stop rule. Produce a
+  closure, retention audit, journal/TODO/skill update, and leave current-best
+  commands unchanged unless a later separately locked validation candidate
+  actually wins promotion.

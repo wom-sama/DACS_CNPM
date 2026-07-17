@@ -18151,3 +18151,37 @@ Date: 2026-07-02
   SHA is `062c4f22...8757f`. Current-best commands remain at three revisions/
   two updates with hashes unchanged. Closure document SHA is
   `4a89297fa00e4cd6ce906ff40a95f08ba7062e4a4f672c287829c9f8ca2858e5`.
+
+## DART Recurrent Aggregation A0 Lock 2026-07-17 - Same-Basin Repeat Before Integration
+
+- Re-screened accepted primary work and official licensed source after DOLG.
+  DropKey is distinct at the attention-logit equation but deliberately smooths
+  and globalizes attention, which is poorly aligned with the current excess
+  class-1 false positives and repeated evidence that far background is not the
+  bottleneck. SOAP/AP optimization repeats rejected global ranking objectives;
+  SimAM repeats closed channel/spatial-energy evidence. None is selected.
+- Select CVPR-2023 DART from the accepted CVF paper and authors' MIT repository
+  at commit/tree `62274e8...de9361`/`83d56be...3e014d`. The paper's repeated
+  branch averaging and broadcast is equation- and schedule-distinct from the
+  closed final checkpoint soup. Official code averages four model states every
+  interval and preserves separate optimizer states; no external weight is used.
+- Protocol `TRKH_5CLASS_DART_RECURRENT_AGGREGATION_A0_PROTOCOL_20260717.md`
+  at SHA `a9b2bd96a257bd00aa2a228d22b3072c22a044225c29b6adbc44e5c663a11e55`
+  locks a train-only equal-update comparison: one interleaved mixed model, four
+  branches averaged only at the end, and four branches averaged/broadcast after
+  update 4 and update 8. DART must beat both controls, especially class-1
+  precision, to support a recurrence claim.
+- Source-fold 0 is an untouched 1,843-row train holdout. Folds 1-4 provide four
+  256-row branches with context/geometry, illumination/surface, occlusion/parts,
+  and exact-keeper augmentation roles. Proportional largest-remainder quotas
+  preserve each fold's natural class distribution without oversampling; whole
+  source groups are hash-ordered and never split. Update/probe hashes are
+  `2279a58a...72bb7`/`6490523a...c5bd`, with zero source overlap.
+- Transform tensors are materialized once and replayed byte-identically. RNG is
+  locked per logical role/update so dropout and drop-path cannot confound the
+  comparison. Barrier, branch-diversity, clean/lighting precision and TP/FP,
+  ONNX, runtime/memory, process-isolation, and independent replay gates are all
+  conjunctive. XAI is deferred until every nonvisual gate passes.
+- No auditor output, model/trainer/config integration, image epoch, validation,
+  test, full train, or current-best command update exists at protocol lock.
+  Current-best remains three revisions/two actual updates.
