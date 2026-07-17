@@ -3496,7 +3496,7 @@
   immutable augmentation batches, per-logical-update RNG, mixed/final-only
   controls, two broadcasts, barrier/diversity, precision/TP/FP/lighting,
   export/resource, and independent-replay gates.
-- [ ] Implement the isolated DART A0 auditor, focused tests, and VS Code-safe
+- [x] Implement the isolated DART A0 auditor, focused tests, and VS Code-safe
   preflight/formal wrapper without modifying the production model, trainer,
   config, full-train command, validation, test, or raw dataset.
 - [ ] Run compile/static/focused/full tests and a clean preflight; commit and

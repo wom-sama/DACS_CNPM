@@ -18185,3 +18185,17 @@ Date: 2026-07-02
 - No auditor output, model/trainer/config integration, image epoch, validation,
   test, full train, or current-best command update exists at protocol lock.
   Current-best remains three revisions/two actual updates.
+- The isolated auditor, eleven focused tests, and VS Code-safe preflight/formal
+  wrapper are now implemented without touching production model/trainer/config
+  paths. Whole-source hashes were replayed on the real CIDT CSV; a canonical
+  trailing-newline mismatch was caught and corrected before any formal output.
+  One synthetic batch-32 GPU step moved every parameter group with finite
+  gradients, preserved AdamW state while returning the model to CPU, and used
+  `3.862 GiB`, below the `4.5 GiB` gate.
+- Fit-probe tensors are materialized once instead of decoded for every branch/
+  aggregation. After training tensors are released, a bounded 2.25-GiB source-
+  image cache can hold the measured 1,612 fold-0 images (`1.930 GiB` RGB) for
+  all three models and lighting conditions without caching four full resized
+  cohorts. Compile, pyflakes, PowerShell AST, focused `11/11`, and full pytest
+  `1394/1394` pass. Formal/preflight evidence remains unrun until the complete
+  implementation commit is pushed.
