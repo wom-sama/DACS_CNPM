@@ -3583,10 +3583,28 @@
   20 fixed head-only epochs, precision/TP/FP/illumination/mechanism/XAI/export
   gates, and no validation/test/current-command access. Protocol SHA is
   `0914b04b...3fb0c`.
-- [ ] Implement the isolated WILDCAT auditor, focused tests, and VS Code-safe
+- [x] Implement the isolated WILDCAT auditor, focused tests, and VS Code-safe
   preflight/formal/finalize launcher without changing shared model/trainer,
   raw data, or current-best commands. Commit and push before the sole formal
   A0 run.
-- [ ] Run one formal WILDCAT A0 after owned-process/GPU checks, independently
+- [x] Run one formal WILDCAT A0 after owned-process/GPU checks, independently
   replay all artifacts, inspect every contact sheet, apply the all-or-nothing
   stop rule, then close/retain/document the route before selecting another.
+- [x] Preserve the first pre-XAI determinism interruption without reading its
+  metrics, push erratum SHA `c5f441c8...02a`, and use its five artifact hashes
+  as a mandatory bit-exact gate for the single corrected formal. Corrected
+  replay is exact and scoped two-pass XAI restores strict determinism.
+- [x] Reject WILDCAT before Stage B. Clean class1 P/R/F1 is
+  `0.561644/0.376147/0.450549`, class1-F1 delta is `-0.063417` versus GAP and
+  `+0.174687` versus top-only, and same-weight bottom evidence creates nine
+  net restricted FP. All nine XAI pages fail semantic review; TensorRT parity
+  also fails at `0.00333977`. Leave current-best commands unchanged.
+- [x] Close WILDCAT at closure SHA `92f4b2ed...6127`. Independent replay over
+  7,372 rows matches within `1.11e-16`; compileall, pyflakes, PowerShell AST,
+  focused `18/18`, full pytest `1442/1442`, and retention over 758 directories/
+  48 manifests pass with `blockers=[]` at SHA `b036ff31...6d61`.
+- [ ] Screen the next accepted-primary, officially licensed, equation-distinct
+  precision route against the complete no-repeat record. Require a train-only
+  prospective gate that separates class-1 lesion morphology from chromatically
+  similar class 0/2/4 fruit under clean/dim/bright conditions before any image
+  epoch, trainer integration, validation, test, or current-command update.

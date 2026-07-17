@@ -18517,3 +18517,46 @@ Date: 2026-07-02
 - Current-best train/deployment commands and history remain unchanged. A full
   A0 pass can authorize only a separately locked matched scratch auxiliary-
   head pair; any failure closes nearby WILDCAT parameter/layer/fusion sweeps.
+
+## WILDCAT Negative-Evidence A0 Closure 2026-07-17 - Active Bottom Term, Precision Reject
+
+- The first formal invocation completed every pre-XAI operation and then
+  stopped on CUDA adaptive-average-pool backward determinism. No summary
+  existed and no behavioral metric was read. Before metric access, preserve
+  its five-file/38,271,153-byte reference at manifest SHA
+  `4cf7cc18...f845` and push erratum SHA `c5f441c8...02a`.
+- The single erratum-authorized corrected run at commit `c106aae` reproduced
+  all five training/prediction/mechanism/ONNX artifacts byte-for-byte before
+  entering two-pass scoped `warn_only` XAI. Strict determinism was restored;
+  XAI repeat passes with zero class-map error, exact top/bottom cells, maximum
+  raw saliency error `7.276e-12`, and minimum cosine `0.999999762`.
+- Reject WILDCAT before Stage B. Clean macro/class1 F1 is
+  `0.826386/0.450549`, with class1 P/R `0.561644/0.376147`. Class1 F1 changes
+  `-0.063417` versus matched GAP and `+0.174687` versus top-only. Candidate
+  corrections/harms versus GAP are `20/34`, and it creates eight net
+  restricted FP rather than removing them.
+- Illumination does not rescue the route. Dim/bright/low-contrast class1 F1 is
+  `0.371542/0.431034/0.367713`; restricted-FP reductions versus GAP are
+  `-3/-30/-29`. The same-weight bottom term is active but expands support:
+  clean/dim/bright/low-contrast net FP reductions are `-9/-81/-29/-54`.
+- Clean GAP/top/WILDCAT direction AUROC is
+  `0.928975/0.903778/0.917267`; bottom-margin AUROC is `0.784748`. All nine
+  contact sheets/68 rows fail manual review because class maps follow broad
+  yellow/green fruit regions, bottom maps alternate between background and
+  valid fruit tissue, and saliency is diffuse rather than lesion-specific.
+- Equation, BF16, runtime/memory, and ONNX checks pass. TensorRT parses/builds
+  with exact argmax but strict parity fails at maximum error `0.00333977`.
+  Final status is `rejected`, with summary/manifest SHAs
+  `a7543a9c...800b`/`ff0bf89d...41d0`; no checkpoint, engine, validation,
+  test, image epoch, full train, or command update occurred.
+- Independent PowerShell replay matches 12 metric sets over 7,372 rows within
+  `1.11e-16`. Compileall, pyflakes, PowerShell AST, focused `18/18`, full
+  pytest `1442/1442`, and diff checks pass. Retention over 758 directories/all
+  48 manifests returns `blockers=[]` and 102.692 GiB free at SHA
+  `b036ff31...6d61`.
+- Preserve the 63,751,425-byte formal payload and the interrupted reference.
+  Do not sweep WILDCAT `M/k/alpha`, layer, head, optimizer, schedule, seed,
+  fold, bbox rule, fusion, or export tolerance. Closure SHA is
+  `92f4b2ed8ecc039d84d290f946954ab877937c844fb51ef0e05ff21224546127`.
+  The next route must be equation-distinct and prove lesion-morphology
+  separation from chromatically similar class 0/2/4 fruit before training.
