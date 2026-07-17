@@ -3477,7 +3477,11 @@
   safe wrapper. Require exact official/oracle/gradient/pooling equations,
   standard-forward hook/logit parity, BF16, ONNX/TensorRT, runtime/memory,
   source-fold OOF, independent replay, and four locked contact sheets.
-- [ ] Run exactly one formal DOLG A0 gate only after owned-process and GPU-load
-  checks permit defensible timing. Review all 32 rows, preserve/hash evidence,
-  then either close all nearby DOLG projector/layer/mask/attention/readout
-  variants or authorize one separately locked five-epoch pair.
+- [x] Run exactly one formal DOLG A0 gate after owned-process and GPU-load
+  checks permit defensible timing. Structural checks pass `29/30`, but full-
+  forward runtime is `1.157886x > 1.10x`; memory is `1.002584x`, normal logits
+  are exact, and equation/BF16/ONNX/TensorRT checks pass. The route is rejected
+  before OOF/visuals/training; preserve summary SHA `d6f0d371...35e59d`.
+- [x] Close DOLG projector/layer/mask/attention/readout and runtime-rescue
+  variants on the current keeper. Do not rerun timing, relax the gate, run a
+  five-epoch pair, touch validation/test, or update current-best commands.

@@ -18128,3 +18128,26 @@ Date: 2026-07-02
   at most `4.45e-16`, finite-difference error `1.73e-11`, and actual-keeper
   standard-forward logits exactly unchanged with one patch/head hook and a
   `[1,512]` sidecar descriptor. These checks are not formal GPU evidence.
+
+## DOLG Orthogonal Local-Global Signal A0 Closure 2026-07-17 - Runtime Reject Before OOF
+
+- The sole formal run started only after the wrapper observed no Python/
+  TensorRT process and an isolated GPU at `0%`, `1712 MiB`, `58 C`. It passed
+  `29/30` structural checks. Exact official/oracle/gradient/pooling equations,
+  BF16 (`0.007287` error), ONNX (`6.98e-9`), TensorRT, geometry, declaration,
+  hook execution, memory (`1.002584x`), and unchanged logits/predictions pass.
+- Full-forward native/DOLG medians were `57.028606/66.032639 ms`, so runtime
+  is `1.157886x > 1.10x`. The auditor fail-closed before feature extraction,
+  OOF readout, contact sheets, trainer integration, validation, test, or an
+  image epoch. No visual finalization is applicable.
+- Preserve compact evidence summary/report/manifest SHAs
+  `d6f0d371...35e59d`/`5535da61...a0766`/`b076914e...093a`. The payload is
+  only `13,554` bytes with no binary artifact, so no cleanup is warranted.
+  Do not rerun or rescue via timing/batch/precision/compiler/kernel/threshold,
+  projector/layer/mask/attention/readout, ASPP/GeM/ArcFace, CFCD, or GLAM.
+- Read-only retention passed over `747` directories and all `48` compaction
+  manifests: all `210` compacted originals remain absent, `blockers=[]`, no
+  deletion/raw-data touch occurred, free space is `103.074 GB`, and retention
+  SHA is `062c4f22...8757f`. Current-best commands remain at three revisions/
+  two updates with hashes unchanged. Closure document SHA is
+  `4a89297fa00e4cd6ce906ff40a95f08ba7062e4a4f672c287829c9f8ca2858e5`.
