@@ -3572,8 +3572,21 @@
   and strict ONNX error is `1.049e-5`. Preserve summary/manifest/closure SHAs
   `e1d3a7ad...a19e`/`c272289e...4c10`/`1f0371ed...08690`; no pair or command
   update.
-- [ ] Screen the next accepted-primary, officially licensed, equation-distinct
-  precision route. Require a prospective train-only gate that directly
-  separates restricted FP from class-1 TP under dim and bright illumination,
-  uses standard deployment inference, and cannot pass from generic foreground
-  or boundary energy alone.
+- [x] Screen the next accepted-primary, officially licensed, equation-distinct
+  precision route. Select CVPR-2017 WILDCAT from the authors' MIT repository
+  at commit/tree `c7d3550...bd3825`/`2b777ae...b127a`; distinguish its signed
+  class-specific top-plus-bottom equation from the rejected sparse final-patch
+  MCL diversity adapter and all generic foreground/suppression routes.
+- [x] Prospectively lock the train-only WILDCAT negative-evidence A0. Use the
+  exact source-disjoint `7372/1843` split, dense `16x16` block-2 map before
+  pruning, matched GAP/top-only/WILDCAT `M=4` heads, `k=0.2`, `alpha=0.7`,
+  20 fixed head-only epochs, precision/TP/FP/illumination/mechanism/XAI/export
+  gates, and no validation/test/current-command access. Protocol SHA is
+  `0914b04b...3fb0c`.
+- [ ] Implement the isolated WILDCAT auditor, focused tests, and VS Code-safe
+  preflight/formal/finalize launcher without changing shared model/trainer,
+  raw data, or current-best commands. Commit and push before the sole formal
+  A0 run.
+- [ ] Run one formal WILDCAT A0 after owned-process/GPU checks, independently
+  replay all artifacts, inspect every contact sheet, apply the all-or-nothing
+  stop rule, then close/retain/document the route before selecting another.

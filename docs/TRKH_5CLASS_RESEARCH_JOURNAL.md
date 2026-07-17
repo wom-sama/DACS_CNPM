@@ -18482,3 +18482,38 @@ Date: 2026-07-02
   `TRKH_5CLASS_PUSH_PULL_ILLUMINATION_SUPPORT_A0_CLOSURE_20260717.md` at SHA
   `1f0371ed3c29c0eb298b3153ec3238c1796bc6adbba4e03570cd7e1781008690`.
   Current-best commands remain three revisions/two actual updates.
+
+## WILDCAT Negative-Evidence A0 Lock 2026-07-17 - Dense Class-Specific Context
+
+- Screened accepted primary work and official licensed source after closing
+  push-pull. Select Durand et al., *WILDCAT*, CVPR 2017, and the authors' MIT
+  repository at commit/tree `c7d3550...bd3825`/`2b777ae...b127a`; the current
+  GitHub page reports 269 stars and 60 forks. The paper, source, README, and
+  license are locally hash-locked.
+- WILDCAT averages class-specific maps, then combines the largest spatial
+  responses with `alpha`-weighted smallest responses. The paper reports that
+  negative evidence beats top-only pooling and that `M>1` helps before excess
+  maps overfit. Lock one non-swept transfer: `M=4`, `k+=k-=0.2` (51 of 256
+  cells), `alpha=0.7`, and the official combined `/2` scaling.
+- This is not the rejected MCL adapter. MCL used channel dropout/diversity on
+  167 sparse final tokens and caused unsafe class-1 support contraction;
+  WILDCAT uses no MCL loss and captures the dense block-2 output before the
+  first prune. Synthetic replay confirms `[1,263,256]`, seven prefix tokens,
+  and a dense `[1,256,256]` patch suffix from the unchanged 7,245,590-parameter
+  keeper.
+- The immutable train-only protocol uses source-disjoint `7372/1843` fit/
+  holdout rows and a fixed 20-epoch head order SHA
+  `bc02b9a8...b2a7cb5`. Matched 5,140-parameter GAP, top-only, and WILDCAT
+  heads receive identical initialization/order/SGD settings; the backbone is
+  frozen, no image epoch runs, and validation/test remain forbidden.
+- Protocol `TRKH_5CLASS_WILDCAT_NEGATIVE_EVIDENCE_READINESS_PROTOCOL_20260717.md`
+  is locked at SHA
+  `0914b04beb8b27496cf980d08a753e74be330e8b25210278f7eb23187433fb0c`.
+- Advancement requires class-1 precision/F1 and restricted-FP gains over both
+  controls with bounded recall, direct same-weight proof that the bottom term
+  removes FP without breaking TP, lighting stability, source/oracle/gradient
+  checks, standard export/resource bounds, independent replay, and complete
+  XAI review. Generic foreground or boundary localization cannot pass.
+- Current-best train/deployment commands and history remain unchanged. A full
+  A0 pass can authorize only a separately locked matched scratch auxiliary-
+  head pair; any failure closes nearby WILDCAT parameter/layer/fusion sweeps.
