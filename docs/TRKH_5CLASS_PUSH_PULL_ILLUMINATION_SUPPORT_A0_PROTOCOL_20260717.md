@@ -238,10 +238,11 @@ All must pass before the information gate can authorize training:
 8. A static-batch-1 first-block candidate exports at ONNX opset 17 with only
    standard domains; ONNX Runtime maximum error is `<=1e-5`, shapes match, and
    TensorRT parses and builds an engine. ONNX/engine artifacts are ephemeral.
-9. Candidate and control have identical trainable parameter counts. Median
-   complete-model CUDA runtime is `<=1.20x` native and peak allocated memory is
-   `<=1.10x` native over three batch-32 repeats under an isolated GPU timing
-   check.
+9. Candidate and control have identical trainable parameter counts. Using the
+   normal metadata-aware evaluator path, BF16 autocast, five warmups, fixed
+   batch 32, and three timed repeats, median complete-model CUDA runtime is
+   `<=1.20x` native and peak allocated memory is `<=1.10x` native under an
+   isolated GPU timing check.
 
 ## Information, Precision, And Support Gates
 
