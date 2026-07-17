@@ -3473,7 +3473,7 @@
   concat, full orthogonal, object-conditioned orthogonal, and bbox controls on
   the exact 607-row train-only OOF cohort under four lighting conditions.
   Protocol SHA is `51b52aae...e150d`.
-- [ ] Implement the isolated DOLG A0 auditor, tests, and three-phase VS Code-
+- [x] Implement the isolated DOLG A0 auditor, tests, and three-phase VS Code-
   safe wrapper. Require exact official/oracle/gradient/pooling equations,
   standard-forward hook/logit parity, BF16, ONNX/TensorRT, runtime/memory,
   source-fold OOF, independent replay, and four locked contact sheets.

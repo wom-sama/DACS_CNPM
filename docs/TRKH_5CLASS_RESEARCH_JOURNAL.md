@@ -18113,3 +18113,11 @@ Date: 2026-07-02
   edit, full train, or current-command update ran at protocol lock time. A
   failure closes projector/layer/mask/attention/readout rescues; a complete
   pass can authorize only one separately locked short pair.
+- The isolated auditor, nine focused tests, and three-phase PowerShell launcher
+  are now implemented. Preflight/formal require the auditor, test, and launcher
+  to be tracked and commit-clean on the pushed branch; formal additionally
+  refuses any live `python.exe`/`trtexec.exe` or GPU use above the locked
+  isolation limits, without stopping user processes. Finalization requires the
+  exact pre-review summary SHA printed by formal. Python compile, pyflakes,
+  focused `9/9`, full pytest `1381/1381`, and PowerShell AST parse pass;
+  formal remains unrun.
