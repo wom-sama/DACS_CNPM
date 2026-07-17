@@ -18298,3 +18298,36 @@ Date: 2026-07-02
   implementation is committed and pushed. No image epoch, validation, test,
   production integration, full train, or current-best command/history update
   occurred at lock time.
+
+## Learnable Polyphase Downsampling A0 Closure 2026-07-17 - Real Shift Signal, Deployment Reject
+
+- Clean pushed preflight passed at implementation commit `a28a7c7`. The sole
+  formal run started with no unrelated Python/TensorRT process and GPU at
+  `11% / 1468 MiB`; no process was terminated. Official/oracle split, selector,
+  output, gradient, finite-difference, circular permutation/invariance, fixed-
+  phase legacy equivalence, Gumbel, strict BF16, and real-feature selector
+  checks all pass.
+- The keeper's one-pixel shift signal is material. Across 606 decision-stable
+  rows, `46` leave class 1 under at least one shift: `11` TP and `35`
+  restricted FP. Fold exits are `14/15/9/8`; every direction produces exits;
+  median/P90 class1-probability span is `0.016296/0.0309996`. Independent CSV
+  replay is exact over `5,463` rows, and all four contact sheets pass manual
+  alignment/readability review.
+- Reject the three-stage LPD candidate before production integration or an
+  image epoch. Batch-32 runtime is `1.405570x > 1.15x`, peak allocation is
+  `2.633510x > 1.10x`, ONNX feature error is `0.530902 > 1e-5`, and ONNX hard
+  phase mismatches are `[0,3,22] / 32`. Parameter ratio `1.013450x`, standard
+  ONNX domains, and TensorRT parse/build pass, but cannot override the four
+  failed gates.
+- Preserve final summary/manifest/closure SHAs
+  `a2c003d5...6679`/`a5cdc5df...7106`/
+  `b34acd0202e621bb46794cd68d53b720c95c6a39c44ed99cc2a0e94e6108053c`.
+  The payload is `4,956,768` bytes with no checkpoint/ONNX/engine, so it remains
+  as compact no-repeat evidence. Do not sweep widths/layers/padding/tau/phase/
+  antialias/APS/runtime/export tolerances or treat a future method as an LPD
+  rescue.
+- Full retention used all 48 object manifests, verified all 210 compacted
+  originals absent, returned `blockers=[]`, and reported `103.037 GiB` free at
+  SHA `24945ef2...a96a871`. No validation, test, full train, current-best
+  command/history update, raw-data edit, or production model/trainer/config
+  change occurred.
