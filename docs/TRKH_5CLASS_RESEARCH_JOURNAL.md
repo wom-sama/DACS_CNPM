@@ -18251,3 +18251,50 @@ Date: 2026-07-02
   verifies 210/210 compacted originals absent, and returns `blockers=[]` at SHA
   `87511276...3442e`; free space is `103.05 GiB`. Current-best remains three
   revisions/two updates with command/history hashes unchanged.
+
+## Learnable Polyphase Downsampling A0 Lock 2026-07-17 - Shift Signal Before Training
+
+- Re-screened accepted primary work and licensed author source after DART
+  closure. Select NeurIPS-2022 Learnable Polyphase Sampling from the official
+  paper/project and MIT repository at commit/tree
+  `ef28ff2...1d0f30`/`74cda57...3b2269`. The repository has only 13 stars and
+  one fork; that low popularity is disclosed, while the accepted paper,
+  equations, source hashes, and direct TRKH evidence control the decision.
+- BlurPool and APS establish the adjacent shift-invariance lineage, but their
+  inspected implementations are CC BY-NC-SA and unlicensed respectively, so
+  no code is copied. LPD is distinct from closed SoftPool/max-soft and SPT:
+  it learns one complete sampling lattice from four polyphase components
+  rather than blending a fixed local window or adding shifted channels.
+- Protocol
+  `TRKH_5CLASS_LEARNABLE_POLYPHASE_DOWNSAMPLING_A0_PROTOCOL_20260717.md`
+  at SHA `6ba9f452dcf75b3c2815adf0055651769a5e362cec8d0c3b5e033e17bb3b8485`
+  locks a no-epoch train-only gate on the existing 607-row class-1 cohort.
+  Eight exact one-pixel translations move normalized image content, valid
+  mask, model bbox, and crop bbox together. Sample 3657 remains in probability
+  spans but is prospectively excluded from exit counts as the sole known
+  clean-declaration near-tie, leaving 606 decision-stable rows.
+- The exact official V2 phase order is `[00,01,10,11]`. Each current
+  `MaxPool2d(2,2)` is represented as right/bottom zero pad, dense stride-1 max,
+  then a two-convolution shared LPD selector with locked hidden widths
+  `[8,16,32]`. Fixed phase 0 must be bit-identical to every legacy pool. No
+  antialias filter, APS, width, layer, temperature, padding, shift, or gate
+  sweep is permitted.
+- The isolated auditor, eight focused tests, and VS Code-safe three-phase
+  PowerShell launcher are implemented without modifying production model,
+  trainer, config, or launcher paths. It locks official/oracle/gradient,
+  circular permutation and global-mean invariance, real-feature selector,
+  strict BF16, Gumbel gradient, ONNX, TensorRT, batch-32 runtime/memory,
+  class-1 shift transitions, independent CSV replay, and four contact-sheet
+  gates. A pass can authorize only a separately locked matched scratch pair.
+- A read-only development CUDA replay, which is not formal evidence, returned
+  zero official split/logit/output error, maximum gradient error about
+  `4.16e-17`, finite-difference error about `3.38e-12`, strict BF16 error
+  `0.007789`, no BF16 phase mismatch, and all equation gates passing. Static
+  review caught the mathematically redundant final-convolution common bias;
+  the gate correctly requires both convolution kernels to move while all
+  parameter gradients remain finite.
+- Compile, pyflakes, PowerShell AST, focused `8/8`, and full pytest
+  `1403/1403` pass. Formal/preflight evidence remains unrun until this complete
+  implementation is committed and pushed. No image epoch, validation, test,
+  production integration, full train, or current-best command/history update
+  occurred at lock time.
