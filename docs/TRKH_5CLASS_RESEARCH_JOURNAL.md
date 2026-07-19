@@ -18842,3 +18842,46 @@ Date: 2026-07-02
   nearby confidence-penalty rescues on this keeper. Current-best command,
   history, and keeper hashes remain exact; no command revision or promotion.
   Closure SHA is `2a9e382f...42b5c`.
+
+## Schedule-Free AdamW A0 Lock 2026-07-20 - Optimizer Trajectory Before Integration
+
+- Screened accepted papers and official licensed code after Spectral
+  Decoupling. MixMo/MIMO and WTConv were rejected before implementation because
+  their official recipes require 300-1200 epochs or overlap closed frequency/
+  wavelet/large-kernel evidence. BatchEnsemble/Packed-Ensembles remain deferred
+  without a prospective class1 TP-versus-FP mechanism.
+- Selected the NeurIPS-2024 oral Schedule-Free method and pinned Meta's
+  Apache-2.0 repository at commit/tree `d24878d...9d93c4`/
+  `3aff6c4c...d8782f`; paper SHA is `1aef4235...20d3`. Protocol SHA
+  `455d285d...fe499` permits one train-only A0 and explicitly forbids validation,
+  test, scratch epochs, trainer integration, current-best edits, and full train.
+- The locked comparison starts both roles from the exact keeper and consumes
+  60 x 32 byte-identical augmented fit rows. Control is warmup AdamW; candidate
+  is official corrected `AdamWScheduleFree` at the same LR, with explicit
+  train/eval transitions, reconstructed fast iterate z, checkpoint replay, and
+  50 clean fit batches of cumulative-statistics PreciseBN for control/x/z.
+- Implementation review caught and fixed two experiment-invalidating issues
+  before formal. Training originally received the clean evaluation transform;
+  it now reconstructs the exact keeper augmentation config at locked SHA
+  `12dd45b1...bd04`, while holdout and PreciseBN remain clean. Native XAI
+  originally requested `return_attention=True`, which disables token pruning;
+  it now hooks layer-0 QKV during the standard forward, preserving predictions.
+- Batch identity hashes now cover augmented images, targets, sample indices,
+  bbox/crop-bbox/image-mask tensors and all tensor metadata. Independent replay
+  validates condition/sample alignment and probabilities, recomputes raw-vs-
+  keeper mismatches, x-vs-z diagnostics, every structural check, metric,
+  transition, and gate, and binds all retained artifact hashes. Finalization
+  verifies all four pages plus the XAI NPZ and manifest before accepting a
+  hash-bound manual note.
+- The first launcher preflight correctly stopped because importlib had created
+  an untracked `__pycache__` in the official source clone. The loader now uses
+  bytecode-free `compile/exec`; only the verified two generated `.pyc` files
+  were removed with scoped `git clean`, and the official worktree remains
+  clean.
+- Compile, pyflakes, PowerShell AST, focused `11/11`, and no-output preflight
+  pass. Official optimized/reference/scalar maximum error is `1.67e-16`; x/y/z
+  are distinct and train/eval/train round trips are exact. Preflight opened no
+  dataset/model and created no run directory. No Schedule-Free candidate
+  behavior has been measured, so no smoke/full train/current-command update is
+  authorized before full pytest, commit/push, repeated preflight, and the sole
+  formal A0.

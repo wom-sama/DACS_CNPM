@@ -3717,3 +3717,36 @@
   variants. Require a prospective mechanism that distinguishes class1 TP from
   restricted FP under clean and illumination shifts before another image
   epoch; only a complete gate pass may authorize autonomous full train.
+- [x] Screen optimizer/ensemble/receptive-field candidates from primary papers
+  and official licensed repositories. Reject MixMo/MIMO because their official
+  300/1200-epoch recipes conflict with the 30-epoch ceiling; reject WTConv as
+  long-schedule overlap with closed wavelet/frequency/large-kernel evidence;
+  defer BatchEnsemble/Packed-Ensembles without a prospective class1 signal.
+- [x] Select NeurIPS-2024-oral Schedule-Free AdamW from Meta's Apache-2.0
+  repository at commit/tree `d24878d...9d93c4`/`3aff6c4c...d8782f` and lock
+  one source-disjoint, train-only A0 at protocol SHA `455d285d...fe499`.
+  Compare 60 byte-identical keeper-initialized AdamW/Schedule-Free updates,
+  exact x/y/z mode handling, 50-batch PreciseBN, clean plus three lighting
+  conditions, precision/TP/FP/resource/export/replay gates, and conditional
+  native-attention plus Grad-CAM review. Validation/test/full train remain
+  forbidden at A0.
+- [x] Implement and harden the isolated Schedule-Free auditor, 11 focused
+  tests, and VS Code-safe preflight/formal/replay/finalize launcher without
+  changing production model/trainer/config/dependencies or current-best
+  commands. Self-review fixed a clean-eval-transform substitution in the
+  training path, expanded batch hashes to augmented image/bbox/mask tensors,
+  made replay reconstruct structural gates, and changed XAI to a faithful QKV
+  hook that preserves normal token pruning.
+- [x] Pass compile, pyflakes, PowerShell AST, focused `11/11`, immutable source/
+  paper/checkpoint/protocol hashes, clean official worktree, and no-output
+  preflight. Official/reference/scalar maximum equation error is `1.67e-16`;
+  train/eval mode round trips are exact. Lock keeper augmentation settings at
+  SHA `12dd45b1...bd04`. No dataset/model inference or candidate metric exists.
+- [ ] Run full pytest, commit/push the immutable Schedule-Free A0 implementation,
+  and repeat no-output preflight from the pushed commit. Then run exactly one
+  formal only under the owned-process and `<=10%` GPU-isolation gate; replay
+  every artifact and inspect all four XAI pages if automatic gates pass.
+- [ ] Apply the all-conjunctive stop rule. Any failure closes Schedule-Free LR/
+  beta/warmup/r/weighting/weight-decay/fold/seed/budget/BN variants on this
+  keeper. A complete automatic plus manual pass permits only a separately
+  locked scratch matched smoke, not direct full training or command promotion.
