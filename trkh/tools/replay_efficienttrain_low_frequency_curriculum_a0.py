@@ -19,6 +19,9 @@ FIT_FOLDS = (1, 2, 3, 4)
 EXPECTED_ROWS = 607
 EXPECTED_TP = 421
 EXPECTED_FP = 186
+KNOWN_NEAR_TIE_INDEX = 3657
+KNOWN_NEAR_TIE_COHORT_POSITION = 337
+SENSITIVITY_ROWS = EXPECTED_ROWS - 1
 TP_QUANTILE = 0.97
 
 
@@ -80,18 +83,33 @@ def _read_rows(path: Path) -> list[Dict[str, str]]:
 
 
 def _condition_rows(
-    rows: Sequence[Mapping[str, str]], condition: str
+    rows: Sequence[Mapping[str, str]],
+    condition: str,
+    *,
+    expected_rows: int = EXPECTED_ROWS,
 ) -> list[Mapping[str, str]]:
     selected = [row for row in rows if str(row["condition"]) == condition]
     selected.sort(key=lambda row: int(row["cohort_position"]))
-    if len(selected) != EXPECTED_ROWS:
+    if len(selected) != int(expected_rows):
         raise ValueError(
-            f"Condition {condition} has {len(selected)} rows, expected {EXPECTED_ROWS}."
+            f"Condition {condition} has {len(selected)} rows, expected {expected_rows}."
         )
     positions = [int(row["cohort_position"]) for row in selected]
-    if positions != list(range(EXPECTED_ROWS)):
-        raise ValueError(f"Condition {condition} has a noncanonical row order.")
+    if positions != _expected_cohort_positions(expected_rows):
+        raise ValueError(f"Condition {condition} has noncanonical cohort positions.")
     return selected
+
+
+def _expected_cohort_positions(expected_rows: int) -> list[int]:
+    if int(expected_rows) == EXPECTED_ROWS:
+        return list(range(EXPECTED_ROWS))
+    if int(expected_rows) == SENSITIVITY_ROWS:
+        return [
+            position
+            for position in range(EXPECTED_ROWS)
+            if position != KNOWN_NEAR_TIE_COHORT_POSITION
+        ]
+    raise ValueError(f"Unsupported expected cohort row count: {expected_rows}.")
 
 
 def _thresholds_from_clean(
@@ -144,13 +162,24 @@ def _hard_decisions(
 
 
 def _view_metrics(
-    rows: Sequence[Mapping[str, str]], view: str
+    rows: Sequence[Mapping[str, str]],
+    view: str,
+    *,
+    fixed_thresholds: Optional[Mapping[int, float]] = None,
+    expected_rows: int = EXPECTED_ROWS,
 ) -> Dict[str, object]:
     by_condition = {
-        condition: _condition_rows(rows, condition) for condition in CONDITIONS
+        condition: _condition_rows(
+            rows, condition, expected_rows=expected_rows
+        )
+        for condition in CONDITIONS
     }
     clean = by_condition["clean"]
-    thresholds = _thresholds_from_clean(clean, view)
+    thresholds = (
+        {int(key): float(value) for key, value in fixed_thresholds.items()}
+        if fixed_thresholds is not None
+        else _thresholds_from_clean(clean, view)
+    )
     score_key = f"{view}_suppression_score"
     threshold_key = f"{view}_oof_threshold"
     rejected_key = f"{view}_oof_rejected"
@@ -300,9 +329,11 @@ def assess_information_gate(view_metrics: Mapping[str, object]) -> Dict[str, obj
 
 
 def _mechanism_summary(
-    rows: Sequence[Mapping[str, str]]
+    rows: Sequence[Mapping[str, str]],
+    *,
+    expected_rows: int = EXPECTED_ROWS,
 ) -> Dict[str, object]:
-    expected = EXPECTED_ROWS * len(CONDITIONS) * len(VIEWS)
+    expected = int(expected_rows) * len(CONDITIONS) * len(VIEWS)
     if len(rows) != expected:
         raise ValueError(f"Mechanism CSV has {len(rows)} rows, expected {expected}.")
     views: Dict[str, object] = {}
@@ -316,9 +347,14 @@ def _mechanism_summary(
                 and str(row["condition"]) == condition
             ]
             selected.sort(key=lambda row: int(row["cohort_position"]))
-            if len(selected) != EXPECTED_ROWS:
+            if len(selected) != int(expected_rows):
                 raise ValueError(
                     f"Mechanism {view}/{condition} has {len(selected)} rows."
+                )
+            positions = [int(row["cohort_position"]) for row in selected]
+            if positions != _expected_cohort_positions(expected_rows):
+                raise ValueError(
+                    f"Mechanism {view}/{condition} has noncanonical cohort positions."
                 )
             labels = [int(str(row["cohort"]) == "fp") for row in selected]
             object_scores = [float(row["object_residual_rms"]) for row in selected]
@@ -422,6 +458,45 @@ def replay_artifacts(
     information_gate = assess_information_gate(view_metrics)
     mechanism_summary = _mechanism_summary(_read_rows(mechanism_path))
     mechanism_gate = assess_mechanism_gate(mechanism_summary)
+    filtered_predictions = [
+        row
+        for row in prediction_rows
+        if int(row["sample_index"]) != KNOWN_NEAR_TIE_INDEX
+    ]
+    sensitivity_views: Dict[str, object] = {}
+    for view in VIEWS:
+        thresholds = {
+            int(key): float(value)
+            for key, value in view_metrics[view]["fold_thresholds"].items()
+        }
+        sensitivity_views[view] = _view_metrics(
+            filtered_predictions,
+            view,
+            fixed_thresholds=thresholds,
+            expected_rows=SENSITIVITY_ROWS,
+        )
+    prediction_sensitivity = {
+        "excluded_sample_index": KNOWN_NEAR_TIE_INDEX,
+        "rows_per_condition": SENSITIVITY_ROWS,
+        "thresholds_refit": False,
+        "view_metrics": sensitivity_views,
+        "information_gate": assess_information_gate(sensitivity_views),
+    }
+    mechanism_rows = _read_rows(mechanism_path)
+    filtered_mechanism = [
+        row
+        for row in mechanism_rows
+        if int(row["sample_index"]) != KNOWN_NEAR_TIE_INDEX
+    ]
+    sensitivity_mechanism_summary = _mechanism_summary(
+        filtered_mechanism, expected_rows=SENSITIVITY_ROWS
+    )
+    mechanism_sensitivity = {
+        "excluded_sample_index": KNOWN_NEAR_TIE_INDEX,
+        "rows_per_condition_view": SENSITIVITY_ROWS,
+        "mechanism_summary": sensitivity_mechanism_summary,
+        "mechanism_gate": assess_mechanism_gate(sensitivity_mechanism_summary),
+    }
     return {
         "prediction_rows": len(prediction_rows),
         "mechanism_rows": EXPECTED_ROWS * len(CONDITIONS) * len(VIEWS),
@@ -431,6 +506,10 @@ def replay_artifacts(
         "information_gate": information_gate,
         "mechanism_summary": mechanism_summary,
         "mechanism_gate": mechanism_gate,
+        "known_near_tie_exclusion_sensitivity": {
+            "prediction": prediction_sensitivity,
+            "mechanism": mechanism_sensitivity,
+        },
     }
 
 
@@ -467,6 +546,10 @@ def verify_summary(
         ),
         "mechanism_gate_exact": canonical_close(
             replay["mechanism_gate"], summary["mechanism_gate"]
+        ),
+        "known_near_tie_exclusion_exact_within_1e12": canonical_close(
+            replay["known_near_tie_exclusion_sensitivity"],
+            summary["known_near_tie_exclusion_sensitivity"],
         ),
     }
 

@@ -14,6 +14,9 @@ from trkh.tools.audit_efficienttrain_low_frequency_curriculum_a0 import (
     _load_official_freq_crop,
     _masked_rms,
     _new_geometry_accumulator,
+    _declaration_mismatch_policy,
+    _summarize_known_near_tie_exclusion,
+    _summarize_known_near_tie_mechanism_exclusion,
     _summarize_mechanism,
     _summarize_views,
     _update_geometry,
@@ -150,6 +153,22 @@ def test_independent_quantile_and_auroc_handle_ties() -> None:
     values = [0.0, 1.0, 2.0, 3.0]
     assert empirical_quantile_higher(values, 0.5) == 2.0
     assert binary_auroc([0, 0, 1, 1], [0.0, 0.5, 0.5, 1.0]) == 0.875
+
+
+def test_declaration_policy_allows_only_the_locked_known_near_tie() -> None:
+    known = {
+        "expected_sample_index": 3657,
+        "observed_sample_index": 3657,
+        "expected_target": 2,
+        "observed_target": 2,
+        "expected_prediction": 1,
+        "observed_prediction": 2,
+    }
+    assert _declaration_mismatch_policy([known])["policy_passed"]
+    unknown = dict(known)
+    unknown["observed_sample_index"] = 3658
+    assert not _declaration_mismatch_policy([unknown])["policy_passed"]
+    assert not _declaration_mismatch_policy([])["policy_passed"]
 
 
 def _condition_metrics(
@@ -307,6 +326,7 @@ def test_full_csv_contract_replays_thresholds_hard_counts_and_mechanism(
             position = int(source["cohort_position"])
             fold = int(source["fold"])
             target = 1 if cohort == "tp" else 0
+            sample_index = 3657 if position == 337 else position
             native_p1 = 0.80
             early_score = (
                 0.010 + position * 1e-7
@@ -317,7 +337,7 @@ def test_full_csv_contract_replays_thresholds_hard_counts_and_mechanism(
             row: dict[str, object] = {
                 "condition": condition,
                 "cohort_position": position,
-                "sample_index": position,
+                "sample_index": sample_index,
                 "source_stem": f"sample_{position}",
                 "image_path": f"D:/train/sample_{position}.jpg",
                 "fold": fold,
@@ -348,7 +368,7 @@ def test_full_csv_contract_replays_thresholds_hard_counts_and_mechanism(
                         "condition": condition,
                         "view": view,
                         "cohort_position": position,
-                        "sample_index": position,
+                        "sample_index": sample_index,
                         "fold": fold,
                         "target": target,
                         "cohort": cohort,
@@ -364,6 +384,12 @@ def test_full_csv_contract_replays_thresholds_hard_counts_and_mechanism(
                 )
     expected_views = _summarize_views(records)
     expected_mechanism = _summarize_mechanism(mechanism_rows)
+    expected_prediction_sensitivity = _summarize_known_near_tie_exclusion(
+        records, expected_views
+    )
+    expected_mechanism_sensitivity = (
+        _summarize_known_near_tie_mechanism_exclusion(mechanism_rows)
+    )
     predictions_path = tmp_path / "predictions_all_conditions.csv"
     mechanism_path = tmp_path / "frequency_mechanism.csv"
     _write_predictions(predictions_path, records)
@@ -371,5 +397,13 @@ def test_full_csv_contract_replays_thresholds_hard_counts_and_mechanism(
     replay = replay_artifacts(predictions_path, mechanism_path)
     assert canonical_close(expected_views, replay["view_metrics"])
     assert canonical_close(expected_mechanism, replay["mechanism_summary"])
+    assert canonical_close(
+        expected_prediction_sensitivity,
+        replay["known_near_tie_exclusion_sensitivity"]["prediction"],
+    )
+    assert canonical_close(
+        expected_mechanism_sensitivity,
+        replay["known_near_tie_exclusion_sensitivity"]["mechanism"],
+    )
     assert replay["prediction_rows"] == 4 * 607
     assert replay["mechanism_rows"] == 4 * 2 * 607

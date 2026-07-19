@@ -3,7 +3,8 @@
 Date: 2026-07-17
 
 Status: prospectively locked before candidate inference, trainer integration,
-or an image epoch.
+or an image epoch; amended only by the declaration-only erratum below before
+any B176/B224 inference or candidate metric.
 
 ## Question
 
@@ -86,6 +87,42 @@ Validation, test, fold 0 holdout, manual labels, and raw-data changes are
 forbidden. Formal execution requires a clean tracked TRKH tree at the exact
 pushed branch commit and a clean locked official-source worktree.
 
+## Declaration-Only Erratum 2026-07-19
+
+The first formal invocation at pushed commit `ce9a75f` stopped during the
+clean native declaration replay, before any B176/B224 forward or candidate
+metric. It reproduced the already documented batch-64 BF16 near-tie at sample
+index `3657`: target `2`, CIDT declaration `1`, current replay `2`, with locked
+CIDT `p1-p2=0.00017741322517395`. This exception was established in multiple
+earlier A0 records before this protocol; omitting it from the original lock was
+a protocol transcription error, not a newly observed candidate result.
+
+Preserve the declaration-only interruption at manifest SHA256
+`1ed3b08b639eaa81645ee611b2c393388a17fcfe489e0175b6e7a4cf4e65e702`
+and transcript SHA256
+`80d636a945168f86576605db59576c3ce9e54ba9f5331a73754f9f3661275ba3`.
+The manifest certifies that no candidate view, behavioral metric, image epoch,
+validation, or test access occurred.
+
+The following rules supersede only the original declaration-exact wording:
+
+- require exactly one replay mismatch with tuple
+  `(sample_index=3657, target=2, declared=1, replayed=2)` and no other index,
+  target, or prediction mismatch;
+- retain all 607 prospectively locked rows for the primary analysis;
+- independently repeat every information, hard-decision, and mechanism gate
+  after read-only exclusion of sample 3657, using the full-cohort OOF fold
+  thresholds unchanged and without refitting;
+- require both the full-607 gate and the decision-stable 606-row sensitivity
+  gate to pass, so the known exception can neither create nor rescue a result;
+- allow exactly one corrected formal invocation only after this erratum,
+  implementation, replay, tests, and launcher are committed and pushed.
+
+No bandwidth, condition, threshold, metric, gate value, bbox rule, visual
+selection, source hash, authorization boundary, validation/test prohibition,
+or stop rule changes. Any additional declaration mismatch or either analysis
+failing remains an immediate A0 rejection.
+
 ## Locked Transform
 
 Apply the exact official `freq_crop` operation after the normal evaluation
@@ -135,8 +172,9 @@ The four immutable conditions are:
   state or parameter count.
 - Positional interpolation, prefix count, pruning indices, and finite logits
   must pass for every view.
-- The clean `native_b256` predictions must reproduce all 607 locked keeper
-  declarations exactly before any candidate metric is read.
+- Before any candidate metric is read, the clean `native_b256` predictions
+  must satisfy the exact declaration policy in the erratum: only the locked
+  sample-3657 near-tie may differ and every other row must match.
 
 ### Precision and Positive-Support Signal
 
@@ -199,8 +237,9 @@ Write only a compact formal directory containing:
 
 An independent replay must reconstruct row counts, suppression AUROC,
 threshold decisions, TP/FP counts, hard transitions, and mechanism summaries
-from CSV artifacts. No checkpoint, ONNX, TensorRT engine, cache, validation,
-test, or raw-data artifact is permitted.
+from CSV artifacts for both the full 607 rows and the no-refit sample-3657
+exclusion sensitivity. No checkpoint, ONNX, TensorRT engine, cache,
+validation, test, or raw-data artifact is permitted.
 
 ## Stop Rule
 

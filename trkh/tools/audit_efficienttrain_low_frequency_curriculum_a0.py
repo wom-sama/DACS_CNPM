@@ -80,6 +80,12 @@ EXPECTED_FOLD_COUNTS = {
 EXPECTED_ORDERED_INDEX_SHA256 = (
     "a2689d1be8579386eea9ef02a826822a5e7d78e2d29439e8947c1731ccc738bd"
 )
+KNOWN_NEAR_TIE_INDEX = 3657
+KNOWN_NEAR_TIE_COHORT_POSITION = 337
+KNOWN_NEAR_TIE_TARGET = 2
+KNOWN_NEAR_TIE_DECLARED_PREDICTION = 1
+KNOWN_NEAR_TIE_REPLAY_PREDICTION = 2
+SENSITIVITY_COHORT_ROWS = EXPECTED_COHORT_ROWS - 1
 CONDITIONS = (
     ("clean", 1.00, 1.00),
     ("lighting_dim", 0.70, 0.90),
@@ -100,7 +106,7 @@ LOCKED_LAUNCHER_ARGS_SHA256 = "908a05cf66b2a01162cae62e4ff2251eaae1297d31e705101
 LOCKED_DATA_SHA256 = "716e33df24c63a9e9920f97b685199707fb84ab4c7154544f5dd9a3e00d884ef"
 LOCKED_CIDT_SUMMARY_SHA256 = "d4891edf2963ab12385b7ce5bdc812ec3e19c5c098acd25c66eb557af541d7ad"
 LOCKED_CIDT_PREDICTIONS_SHA256 = "2e0993752d58d99ea429bfefe1e2bfe6fa949e45aea1a26cc4bdfee97d4db21c"
-LOCKED_PROTOCOL_SHA256 = "c632f92074dd394528830ebeaa5713d47a36e3968d3aa0621008819ac5c1c7a2"
+LOCKED_PROTOCOL_SHA256 = "c8cd9bcf65b297c43e7dacc5e588a82f6edccf58c53a1e625f8f8a79ff071be4"
 LOCKED_PAPER_SHA256 = "3191ac4650bfea859492360ca916c83b487906e7c5eae98af803d83bdb251eae"
 LOCKED_SUPPLEMENTAL_SHA256 = "aa542b054afdd2cfdc53fb4bb0cb8f7df932c37a126400d822939aba0b79c92c"
 LOCKED_OFFICIAL_COMMIT = "bdefd277c71ba3bfc2a88c13768b215f15301350"
@@ -114,6 +120,8 @@ LOCKED_OFFICIAL_HASHES = {
 }
 LOCKED_CURRENT_COMMAND_SHA256 = "36b9aa1a21b765829acf4c8321be147bd76297de4ccdb8a40e6dee8e37940faf"
 LOCKED_COMMAND_HISTORY_SHA256 = "39bd2879ce66fddf36a953021ea1e40f8d9de6cb4334b9b825011b2b8dc98f53"
+LOCKED_INTERRUPTED_MANIFEST_SHA256 = "1ed3b08b639eaa81645ee611b2c393388a17fcfe489e0175b6e7a4cf4e65e702"
+LOCKED_INTERRUPTED_TRANSCRIPT_SHA256 = "80d636a945168f86576605db59576c3ce9e54ba9f5331a73754f9f3661275ba3"
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
@@ -187,6 +195,14 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--interrupted-reference",
+        type=Path,
+        default=Path(
+            "runs/audit_efficienttrain_low_frequency_curriculum_a0_"
+            "interrupted_declaration_20260719"
+        ),
+    )
+    parser.add_argument(
         "--output-dir",
         type=Path,
         default=Path(
@@ -225,6 +241,7 @@ def _locked_args_exact(args: argparse.Namespace) -> bool:
 def _source_paths(args: argparse.Namespace) -> Dict[str, Path]:
     official = Path(args.official_root).resolve()
     repository = Path(__file__).resolve().parents[2]
+    interrupted = Path(args.interrupted_reference).resolve()
     return {
         "repository": repository,
         "checkpoint": Path(args.checkpoint).resolve(),
@@ -241,6 +258,9 @@ def _source_paths(args: argparse.Namespace) -> Dict[str, Path]:
         "training": official / "ET_training.py",
         "readme": official / "README.md",
         "license": official / "LICENSE",
+        "interrupted_reference": interrupted,
+        "interrupted_manifest": interrupted / "failure_manifest.json",
+        "interrupted_transcript": interrupted / "launcher_transcript.txt",
         "current_commands": repository
         / "docs"
         / "TRKH_CURRENT_BEST_FULL_TRAIN_COMMANDS_20260706.txt",
@@ -318,6 +338,16 @@ def _load_locked_inputs(
             LOCKED_COMMAND_HISTORY_SHA256,
             "current-best command history",
         ),
+        "interrupted_manifest": _verify_sha256(
+            paths["interrupted_manifest"],
+            LOCKED_INTERRUPTED_MANIFEST_SHA256,
+            "declaration-only interruption manifest",
+        ),
+        "interrupted_transcript": _verify_sha256(
+            paths["interrupted_transcript"],
+            LOCKED_INTERRUPTED_TRANSCRIPT_SHA256,
+            "declaration-only interruption transcript",
+        ),
     }
     for name, expected in LOCKED_OFFICIAL_HASHES.items():
         hashes[name] = _verify_sha256(
@@ -351,6 +381,25 @@ def _load_locked_inputs(
         )
     ):
         raise ValueError("CIDT provenance indicates validation-data use.")
+    interrupted = json.loads(
+        paths["interrupted_manifest"].read_text(encoding="utf-8")
+    )
+    expected_interruption = {
+        "sample_index": KNOWN_NEAR_TIE_INDEX,
+        "target": KNOWN_NEAR_TIE_TARGET,
+        "expected_prediction": KNOWN_NEAR_TIE_DECLARED_PREDICTION,
+        "observed_prediction": KNOWN_NEAR_TIE_REPLAY_PREDICTION,
+    }
+    failure = interrupted.get("failure", {})
+    if any(
+        int(failure.get(key, -1)) != value
+        for key, value in expected_interruption.items()
+    ):
+        raise ValueError("Interrupted declaration tuple differs from erratum.")
+    if bool(interrupted.get("candidate_b176_b224_inference_run", True)) or bool(
+        interrupted.get("candidate_behavioral_metrics_read", True)
+    ):
+        raise ValueError("Interrupted reference contains candidate behavior.")
 
     rows = _read_clean_train_rows(paths["cidt_predictions"])
     cohort = [row for row in rows if _cohort_label(row) is not None]
@@ -420,6 +469,16 @@ def _load_locked_inputs(
             "holdout_data_used": False,
             "test_data_used": False,
             "training_used": False,
+            "declaration_erratum": {
+                "known_near_tie_index": KNOWN_NEAR_TIE_INDEX,
+                "known_near_tie_target": KNOWN_NEAR_TIE_TARGET,
+                "declared_prediction": KNOWN_NEAR_TIE_DECLARED_PREDICTION,
+                "replayed_prediction": KNOWN_NEAR_TIE_REPLAY_PREDICTION,
+                "interrupted_manifest_sha256": hashes[
+                    "interrupted_manifest"
+                ],
+                "candidate_behavior_observed_in_interruption": False,
+            },
         },
         rows,
         cohort,
@@ -704,6 +763,32 @@ def _forward_logits_and_features(
     return logits, features
 
 
+def _declaration_mismatch_policy(
+    mismatches: Sequence[Mapping[str, int]],
+) -> Dict[str, object]:
+    expected = {
+        "expected_sample_index": KNOWN_NEAR_TIE_INDEX,
+        "observed_sample_index": KNOWN_NEAR_TIE_INDEX,
+        "expected_target": KNOWN_NEAR_TIE_TARGET,
+        "observed_target": KNOWN_NEAR_TIE_TARGET,
+        "expected_prediction": KNOWN_NEAR_TIE_DECLARED_PREDICTION,
+        "observed_prediction": KNOWN_NEAR_TIE_REPLAY_PREDICTION,
+    }
+    exact_known_exception = bool(
+        len(mismatches) == 1
+        and all(
+            int(mismatches[0].get(key, -1)) == value
+            for key, value in expected.items()
+        )
+    )
+    return {
+        "mismatch_count": len(mismatches),
+        "exact_known_exception": exact_known_exception,
+        "policy_passed": exact_known_exception,
+        "expected_exception": expected,
+    }
+
+
 def _collect_native_declarations(
     *,
     model: nn.Module,
@@ -735,32 +820,27 @@ def _collect_native_declarations(
             predictions_out.extend(
                 int(value) for value in logits.argmax(dim=1).cpu().tolist()
             )
-    expected_indices = [row.sample_index for row in cohort]
-    expected_targets = [row.target for row in cohort]
-    expected_predictions = [row.keeper_prediction for row in cohort]
-    exact = bool(
-        indices_out == expected_indices
-        and targets_out == expected_targets
-        and predictions_out == expected_predictions
-    )
-    if not exact:
-        mismatches = [
-            {
-                "position": position,
-                "expected_index": source.sample_index,
-                "observed_index": indices_out[position],
-                "expected_target": source.target,
-                "observed_target": targets_out[position],
-                "expected_prediction": source.keeper_prediction,
-                "observed_prediction": predictions_out[position],
-            }
-            for position, source in enumerate(cohort)
-            if indices_out[position] != source.sample_index
-            or targets_out[position] != source.target
-            or predictions_out[position] != source.keeper_prediction
-        ]
+    if len(indices_out) != len(cohort):
+        raise ValueError("Clean native declaration row count differs.")
+    mismatches = [
+        {
+            "position": position,
+            "expected_sample_index": source.sample_index,
+            "observed_sample_index": indices_out[position],
+            "expected_target": source.target,
+            "observed_target": targets_out[position],
+            "expected_prediction": source.keeper_prediction,
+            "observed_prediction": predictions_out[position],
+        }
+        for position, source in enumerate(cohort)
+        if indices_out[position] != source.sample_index
+        or targets_out[position] != source.target
+        or predictions_out[position] != source.keeper_prediction
+    ]
+    policy = _declaration_mismatch_policy(mismatches)
+    if not bool(policy["policy_passed"]):
         raise ValueError(
-            "Clean native declarations differ before candidate metrics: "
+            "Clean native declaration mismatch policy failed before candidate metrics: "
             f"{mismatches[:10]}"
         )
     return {
@@ -770,7 +850,9 @@ def _collect_native_declarations(
         "predictions": predictions_out,
         "logits": torch.cat(logits_out, dim=0).numpy(),
         "probabilities": torch.cat(probabilities_out, dim=0).numpy(),
-        "exact": exact,
+        "exact": not mismatches,
+        "mismatches": mismatches,
+        "mismatch_policy": policy,
         "candidate_metric_read_before_declaration": False,
     }
 
@@ -1086,21 +1168,43 @@ def _collect_conditions(
 
 
 def _condition_records(
-    records: Sequence[Mapping[str, object]], condition: str
+    records: Sequence[Mapping[str, object]],
+    condition: str,
+    *,
+    expected_rows: int = EXPECTED_COHORT_ROWS,
 ) -> list[Mapping[str, object]]:
     selected = [row for row in records if str(row["condition"]) == condition]
     selected.sort(key=lambda row: int(row["cohort_position"]))
-    if len(selected) != EXPECTED_COHORT_ROWS:
+    if len(selected) != int(expected_rows):
         raise ValueError(
             f"Condition {condition} has {len(selected)} prediction rows."
         )
+    expected_positions = _expected_cohort_positions(expected_rows)
+    positions = [int(row["cohort_position"]) for row in selected]
+    if positions != expected_positions:
+        raise ValueError(f"Condition {condition} has noncanonical cohort positions.")
     return selected
 
 
+def _expected_cohort_positions(expected_rows: int) -> list[int]:
+    if int(expected_rows) == EXPECTED_COHORT_ROWS:
+        return list(range(EXPECTED_COHORT_ROWS))
+    if int(expected_rows) == SENSITIVITY_COHORT_ROWS:
+        return [
+            position
+            for position in range(EXPECTED_COHORT_ROWS)
+            if position != KNOWN_NEAR_TIE_COHORT_POSITION
+        ]
+    raise ValueError(f"Unsupported expected cohort row count: {expected_rows}.")
+
+
 def _fit_thresholds(
-    records: Sequence[Mapping[str, object]], view: str
+    records: Sequence[Mapping[str, object]],
+    view: str,
+    *,
+    expected_rows: int = EXPECTED_COHORT_ROWS,
 ) -> Dict[int, float]:
-    clean = _condition_records(records, "clean")
+    clean = _condition_records(records, "clean", expected_rows=expected_rows)
     score_key = f"{view}_suppression_score"
     thresholds: Dict[int, float] = {}
     for held_fold in FIT_FOLDS:
@@ -1153,9 +1257,17 @@ def _hard_decision_summary(
 
 
 def _summarize_view_and_assign_thresholds(
-    records: Sequence[Dict[str, object]], view: str
+    records: Sequence[Dict[str, object]],
+    view: str,
+    *,
+    fixed_thresholds: Optional[Mapping[int, float]] = None,
+    expected_rows: int = EXPECTED_COHORT_ROWS,
 ) -> Dict[str, object]:
-    thresholds = _fit_thresholds(records, view)
+    thresholds = (
+        {int(key): float(value) for key, value in fixed_thresholds.items()}
+        if fixed_thresholds is not None
+        else _fit_thresholds(records, view, expected_rows=expected_rows)
+    )
     score_key = f"{view}_suppression_score"
     threshold_key = f"{view}_oof_threshold"
     rejected_key = f"{view}_oof_rejected"
@@ -1166,7 +1278,9 @@ def _summarize_view_and_assign_thresholds(
 
     conditions: Dict[str, object] = {}
     for condition, _, _ in CONDITIONS:
-        selected = _condition_records(records, condition)
+        selected = _condition_records(
+            records, condition, expected_rows=expected_rows
+        )
         labels = np.asarray(
             [int(str(row["cohort"]) == "fp") for row in selected],
             dtype=np.int64,
@@ -1190,7 +1304,7 @@ def _summarize_view_and_assign_thresholds(
             "fp_suppression_median": float(np.median(scores[fp_mask])),
         }
 
-    clean = _condition_records(records, "clean")
+    clean = _condition_records(records, "clean", expected_rows=expected_rows)
     fold_metrics: Dict[str, object] = {}
     for fold in FIT_FOLDS:
         selected = [row for row in clean if int(row["fold"]) == fold]
@@ -1238,6 +1352,36 @@ def _summarize_views(
     return {
         view: _summarize_view_and_assign_thresholds(records, view)
         for view, _ in CROPPED_VIEWS
+    }
+
+
+def _summarize_known_near_tie_exclusion(
+    records: Sequence[Dict[str, object]],
+    full_view_metrics: Mapping[str, object],
+) -> Dict[str, object]:
+    filtered = [
+        row for row in records if int(row["sample_index"]) != KNOWN_NEAR_TIE_INDEX
+    ]
+    if len(filtered) != len(CONDITIONS) * SENSITIVITY_COHORT_ROWS:
+        raise ValueError("Known near-tie exclusion prediction count differs.")
+    views: Dict[str, object] = {}
+    for view, _ in CROPPED_VIEWS:
+        thresholds = {
+            int(key): float(value)
+            for key, value in full_view_metrics[view]["fold_thresholds"].items()
+        }
+        views[view] = _summarize_view_and_assign_thresholds(
+            filtered,
+            view,
+            fixed_thresholds=thresholds,
+            expected_rows=SENSITIVITY_COHORT_ROWS,
+        )
+    return {
+        "excluded_sample_index": KNOWN_NEAR_TIE_INDEX,
+        "rows_per_condition": SENSITIVITY_COHORT_ROWS,
+        "thresholds_refit": False,
+        "view_metrics": views,
+        "information_gate": assess_information_gate(views),
     }
 
 
@@ -1307,6 +1451,8 @@ def assess_information_gate(
 
 def _summarize_mechanism(
     rows: Sequence[Mapping[str, object]],
+    *,
+    expected_rows: int = EXPECTED_COHORT_ROWS,
 ) -> Dict[str, object]:
     views: Dict[str, object] = {}
     for view, _ in CROPPED_VIEWS:
@@ -1319,9 +1465,14 @@ def _summarize_mechanism(
                 and str(row["condition"]) == condition
             ]
             selected.sort(key=lambda row: int(row["cohort_position"]))
-            if len(selected) != EXPECTED_COHORT_ROWS:
+            if len(selected) != int(expected_rows):
                 raise ValueError(
                     f"Mechanism {view}/{condition} has {len(selected)} rows."
+                )
+            positions = [int(row["cohort_position"]) for row in selected]
+            if positions != _expected_cohort_positions(expected_rows):
+                raise ValueError(
+                    f"Mechanism {view}/{condition} has noncanonical cohort positions."
                 )
             labels = np.asarray(
                 [int(str(row["cohort"]) == "fp") for row in selected],
@@ -1395,6 +1546,26 @@ def assess_mechanism_gate(
         "checks": checks,
         "failed_checks": [name for name, passed in checks.items() if not passed],
         "passed": all(checks.values()),
+    }
+
+
+def _summarize_known_near_tie_mechanism_exclusion(
+    rows: Sequence[Mapping[str, object]],
+) -> Dict[str, object]:
+    filtered = [
+        row for row in rows if int(row["sample_index"]) != KNOWN_NEAR_TIE_INDEX
+    ]
+    expected = len(CONDITIONS) * len(CROPPED_VIEWS) * SENSITIVITY_COHORT_ROWS
+    if len(filtered) != expected:
+        raise ValueError("Known near-tie exclusion mechanism count differs.")
+    summary = _summarize_mechanism(
+        filtered, expected_rows=SENSITIVITY_COHORT_ROWS
+    )
+    return {
+        "excluded_sample_index": KNOWN_NEAR_TIE_INDEX,
+        "rows_per_condition_view": SENSITIVITY_COHORT_ROWS,
+        "mechanism_summary": summary,
+        "mechanism_gate": assess_mechanism_gate(summary),
     }
 
 
@@ -1931,8 +2102,10 @@ def _formal_structural_checks(
             and equation["b256_same_storage"]
             and collection["native_b256_input_bit_exact"]
         ),
-        "clean_native_declarations_exact_before_candidate_metrics": bool(
-            declarations["exact"]
+        "clean_native_declaration_erratum_exact_before_candidate_metrics": bool(
+            declarations["mismatch_policy"]["policy_passed"]
+            and declarations["mismatch_policy"]["exact_known_exception"]
+            and int(declarations["mismatch_policy"]["mismatch_count"]) == 1
             and int(declarations["rows"]) == EXPECTED_COHORT_ROWS
             and not declarations["candidate_metric_read_before_declaration"]
         ),
@@ -1978,6 +2151,10 @@ def _formal_structural_checks(
             == LOCKED_CURRENT_COMMAND_SHA256
             and _sha256(paths["command_history"])
             == LOCKED_COMMAND_HISTORY_SHA256
+            and _sha256(paths["interrupted_manifest"])
+            == LOCKED_INTERRUPTED_MANIFEST_SHA256
+            and _sha256(paths["interrupted_transcript"])
+            == LOCKED_INTERRUPTED_TRANSCRIPT_SHA256
         ),
         "repository_and_implementation_unchanged_at_end": bool(
             _tracked_worktree_clean(repository)
@@ -2093,8 +2270,14 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
     )
     view_metrics = _summarize_views(records)
     information_gate = assess_information_gate(view_metrics)
+    exclusion_sensitivity = _summarize_known_near_tie_exclusion(
+        records, view_metrics
+    )
     mechanism_summary = _summarize_mechanism(mechanism_rows)
     mechanism_gate = assess_mechanism_gate(mechanism_summary)
+    mechanism_exclusion_sensitivity = (
+        _summarize_known_near_tie_mechanism_exclusion(mechanism_rows)
+    )
 
     predictions_path = output_dir / "predictions_all_conditions.csv"
     mechanism_path = output_dir / "frequency_mechanism.csv"
@@ -2113,6 +2296,18 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
         ),
         "mechanism_gate_exact": canonical_close(
             mechanism_gate, independent_replay["mechanism_gate"]
+        ),
+        "known_near_tie_exclusion_exact_within_1e12": canonical_close(
+            exclusion_sensitivity,
+            independent_replay["known_near_tie_exclusion_sensitivity"][
+                "prediction"
+            ],
+        ),
+        "known_near_tie_mechanism_exclusion_exact_within_1e12": canonical_close(
+            mechanism_exclusion_sensitivity,
+            independent_replay["known_near_tie_exclusion_sensitivity"][
+                "mechanism"
+            ],
         ),
     }
     replay_path = output_dir / "independent_replay.json"
@@ -2168,6 +2363,8 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
         structural_gate["passed"]
         and information_gate["passed"]
         and mechanism_gate["passed"]
+        and exclusion_sensitivity["information_gate"]["passed"]
+        and mechanism_exclusion_sensitivity["mechanism_gate"]["passed"]
     )
     automatic_failed_checks = [
         *(
@@ -2180,6 +2377,18 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
         ),
         *(
             f"mechanism:{name}" for name in mechanism_gate["failed_checks"]
+        ),
+        *(
+            f"sensitivity_information:{name}"
+            for name in exclusion_sensitivity["information_gate"][
+                "failed_checks"
+            ]
+        ),
+        *(
+            f"sensitivity_mechanism:{name}"
+            for name in mechanism_exclusion_sensitivity["mechanism_gate"][
+                "failed_checks"
+            ]
         ),
     ]
     gate = {
@@ -2220,6 +2429,10 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
         "information_gate": information_gate,
         "mechanism_summary": mechanism_summary,
         "mechanism_gate": mechanism_gate,
+        "known_near_tie_exclusion_sensitivity": {
+            "prediction": exclusion_sensitivity,
+            "mechanism": mechanism_exclusion_sensitivity,
+        },
         "independent_replay_audit": {
             "checks": replay_checks,
             "all_exact": all(replay_checks.values()),

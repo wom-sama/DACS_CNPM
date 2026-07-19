@@ -18619,3 +18619,32 @@ Date: 2026-07-02
   inference has run yet, no formal directory exists, and validation/test/
   training/checkpoint/engine/current-command access remains absent pending a
   clean pushed preflight.
+
+## EfficientTrain A0 Declaration Erratum 2026-07-19 - Known Near Tie Before Candidate Views
+
+- The first formal invocation from pushed commit `ce9a75f` stopped in the
+  clean native declaration pass. Sample index `3657`, target 2, reproduced as
+  class 2 versus the CIDT class-1 declaration. Its locked probabilities are
+  `p1=0.2312383503`, `p2=0.2310609370`, margin `0.0001774132`.
+- This is the exact batch-64 BF16 near tie already documented by PDC,
+  Meta-ACON, GRN, LPD, WILDCAT, and other A0 work before EfficientTrain was
+  selected. The original protocol accidentally required 607/607 exact instead
+  of incorporating that established exception.
+- The stop occurred before any B176/B224 forward, suppression score, mechanism
+  value, contact sheet, or candidate metric. Preserve its two-file 2,270-byte
+  payload at failure-manifest/transcript SHAs
+  `1ed3b08b639eaa81645ee611b2c393388a17fcfe489e0175b6e7a4cf4e65e702` /
+  `80d636a945168f86576605db59576c3ce9e54ba9f5331a73754f9f3661275ba3`.
+- Erratum protocol SHA
+  `c8cd9bcf65b297c43e7dacc5e588a82f6edccf58c53a1e625f8f8a79ff071be4`
+  changes only declaration handling: require exactly tuple
+  `(3657, target2, declared1, replay2)` and no other mismatch. All original
+  B/condition/threshold/gate/authorization boundaries remain fixed.
+- Primary analysis still uses all 607 rows. Independent replay must also remove
+  only sample 3657 read-only, retain full-cohort OOF thresholds without refit,
+  and require every information/hard-decision/mechanism gate to pass on the
+  resulting 606 rows. Thus the known exception cannot create or rescue a pass.
+- Updated auditor/replay regression suite passes `13/13`, including the exact
+  mismatch policy and full-CSV no-refit sensitivity. Exactly one corrected
+  formal is allowed after commit/push/preflight; validation/test/training and
+  current-best commands remain untouched.
