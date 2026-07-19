@@ -18799,3 +18799,46 @@ Date: 2026-07-02
   GPU duty cycle, host RAM, and startup reliability, then record requested and
   effective settings in run metadata. Never maximize worker count by CPU count
   alone.
+
+## Spectral Decoupling A0 Closure 2026-07-20 - FP Reduction Is TP-Unsafe
+
+- Locked the NeurIPS-2021 Spectral Decoupling objective from the accepted paper
+  and official MIT source. The exact TRKH loss is per-sample ordinary CE plus
+  `lambda/2 * mean_class(logit^2)`, lambda `0.01`; both matched roles disable
+  weight decay and label smoothing. Protocol SHA is `fe7c14ee...ac576`.
+- Stage-A v1 stopped on a diagnostic dtype mismatch: the implementation
+  intentionally computes in FP32 while the oracle retained FP64. The corrected
+  v2 compares the declared FP32 equation and passes all 16 checks at SHA
+  `c2daaa7d...e91d348`; neither Stage-A run loaded validation or test.
+- The first loader benchmark invocation exposed an old two-field batch unpack
+  assumption. After supporting metadata-rich YOLO batches, workers 4 measured
+  `196.346 images/s` and `10.85%` data wait versus `107.006 images/s` and
+  `52.48%` for workers 2. Formal train/eval settings were locked to `4/2`.
+- The deterministic scratch pair completed from pushed commit `4de1f7b` with
+  five epochs, 120 train batches per epoch, full 2,606-row validation, no
+  pretraining/resume/test, equal parameter count, and equal `7,110 MiB` peak
+  reserved VRAM. Control/candidate best epochs were `5/4`.
+- Candidate minus control changes macro/class1 F1 by
+  `-0.007203/-0.011345`, class1 precision/recall by
+  `+0.004744/-0.046358`, and restricted FP by `-14`. It makes 44 corrections
+  versus 58 harms, removes/creates `30/16` FP, and rescues/breaks `5/12`
+  class1 examples. Pair summary SHA is `3e623fa4...42b0c`.
+- The gain is broad suppression, not selective precision. Mean class1
+  probability falls by almost the same amount for removed FP and broken TP
+  (`0.123943/0.124061`). Mean confidence falls, but NLL/Brier/ECE all worsen;
+  class-2 to class-1 and class-3 to class-2 harms offset class-0 FP removals.
+- Both five-class architecture traces were inspected. Geometry/counts match,
+  pruning identities change within plausible separately trained ranges, and
+  pairwise route weights are zero on the five trace samples. The clean gate
+  fails before robustness, so shifted audits, changed-cohort XAI, test, longer
+  probe, and full train are denied by the prospective stop rule.
+- Compact six source directories into
+  `runs/evidence_spectral_decoupling_rejected_20260720`: 54 verified payloads,
+  payload-manifest SHA `52d09f11...3d20`, `379.719 MiB` recovered. A relative
+  output-path duplication was normalized and all metadata/payload hashes were
+  reverified. Retention passes over 766 directories/50 object manifests, all
+  230 compacted originals absent, at SHA `2b3f0a40...c718`.
+- Close lambda/class-specific/weight-decay/label-smoothing/seed/budget and
+  nearby confidence-penalty rescues on this keeper. Current-best command,
+  history, and keeper hashes remain exact; no command revision or promotion.
+  Closure SHA is `2a9e382f...42b5c`.

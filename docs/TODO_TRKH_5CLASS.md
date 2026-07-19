@@ -3688,9 +3688,32 @@
   directories. All 210 compacted originals remain absent and `blockers=[]` at
   retention SHA `e42037f8...4379`; closure SHA is `49e0c432...9112` and
   current-best commands remain unchanged.
+- [x] Screen the next accepted-primary, officially licensed, equation-distinct
+  precision route against the complete no-repeat record. Select NeurIPS-2021
+  Spectral Decoupling from its accepted paper and official MIT source; lock
+  ordinary CE plus `lambda/2 * mean(logit^2)` with `lambda=0.01`, no weight
+  decay/label smoothing, matched random initialization, and no test.
+- [x] Implement and push the Spectral Decoupling loss, CLI/config/launcher
+  plumbing, Stage-A auditor, worker benchmark support for metadata-rich YOLO
+  batches, deterministic matched-pair wrapper, and focused tests at commit
+  `4de1f7b`. Correct the diagnostic-only FP64 oracle mismatch; Stage-A v2
+  passes all 16 checks at SHA `c2daaa7d...e91d348`.
+- [x] Benchmark loader workers before compute. Select train/eval workers `4/2`:
+  workers 4 achieve `196.346 images/s` and `10.85%` wait versus workers 2 at
+  `107.006 images/s` and `52.48%` wait. Run the sole five-epoch, 120-batch,
+  full-validation matched pair with identical `7,110 MiB` peak reserved VRAM.
+- [x] Reject Spectral Decoupling before robustness/XAI/full train. Candidate
+  minus control class1 P/R/F1 is `+0.004744/-0.046358/-0.011345`; macro F1 is
+  `-0.007203`. It removes 14 net restricted FP but breaks 12 TP while rescuing
+  five and produces 44 corrections versus 58 harms. Calibration also worsens.
+- [x] Inspect both histories, full confusion/source transitions, calibration,
+  and one architecture trace per class. Compact six rejected directories into
+  54 verified payloads at manifest SHA `52d09f11...3d20`, recover
+  `379.719 MiB`, and pass 50-manifest retention with 230/230 originals absent
+  and `blockers=[]` at SHA `2b3f0a40...c718`. Closure SHA is
+  `2a9e382f...42b5c`.
 - [ ] Screen the next accepted-primary, officially licensed, equation-distinct
-  precision route against the complete no-repeat record. Require prospective
-  clean plus illumination TP/FP evidence before code, then audit every smoke.
-  A candidate that passes may autonomously proceed through a measured worker
-  benchmark and a justified <=30-epoch full train without using test for
-  selection.
+  route. Exclude confidence/logit penalties and nearby Spectral Decoupling
+  variants. Require a prospective mechanism that distinguishes class1 TP from
+  restricted FP under clean and illumination shifts before another image
+  epoch; only a complete gate pass may authorize autonomous full train.
