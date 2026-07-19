@@ -18591,3 +18591,31 @@ Date: 2026-07-02
   trainer integration, image epochs, raw-data edits, checkpoints, engines, and
   current-best command/history changes remain forbidden. A conjunctive A0 pass
   can authorize only a separately locked matched scratch protocol.
+
+## EfficientTrain A0 Implementation 2026-07-19 - Independent Replay Before Formal
+
+- Implemented the exact official FP32 `fft2` four-corner crop, `(B/H)^2`
+  scaling, real `ifft2`, and detached `176/224/256` views in an isolated audit
+  tool. The production model, trainer, configs, raw data, and current-best
+  command/history files remain untouched.
+- AST-isolated execution of the locked official `utils.py` function is exact
+  against the candidate and an independent `fftshift` center-crop oracle for
+  both B176 and B224. Spectral replay error is zero; same-size low-frequency
+  reconstruction closes within `2.38e-7`; B256 returns the original tensor
+  byte-for-byte.
+- Added clean-native declaration-first enforcement, dynamic `11x11/14x14/16x16`
+  geometry and pruning-index checks, fold-held-out clean TP 97th-percentile
+  thresholds, four lighting conditions, hard correction/harm counts, and
+  object-versus-outside residual-energy gates. Any failed gate still forbids
+  an image epoch.
+- Added a separate replay module that computes tied-rank AUROC and empirical
+  `higher` quantiles without sklearn. A synthetic end-to-end contract replays
+  all `2428` prediction and `4856` mechanism rows within `1e-12`.
+- The three-phase PowerShell launcher invokes Python directly, checks exit
+  codes, reports owned compute processes/GPU state, optionally pauses and
+  always resumes Wallpaper Engine, and replays the formal CSVs before visual
+  finalization. It never terminates an unknown process.
+- Compile, pyflakes, PowerShell AST, and focused `12/12` pass. No keeper/data
+  inference has run yet, no formal directory exists, and validation/test/
+  training/checkpoint/engine/current-command access remains absent pending a
+  clean pushed preflight.

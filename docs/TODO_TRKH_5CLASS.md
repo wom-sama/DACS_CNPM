@@ -3614,10 +3614,12 @@
   `c632f920...1c7a2`: exact `176/224/256` FFT-cropped views, 607 source-fold
   rows, four lighting conditions, OOF TP protection, object/outside residual,
   equation/dynamic-geometry/resource/replay, and complete visual gates.
-- [ ] Implement and push the isolated EfficientTrain A0 auditor, focused tests,
-  independent replay, contact-sheet renderer, and VS Code-safe preflight/formal
-  launcher without modifying the production model, trainer, config, raw data,
-  validation/test access, or current-best commands.
+- [x] Implement and push the isolated EfficientTrain A0 auditor, 12 focused
+  tests, independent rank-AUROC/quantile replay, four-page contact-sheet
+  renderer, and VS Code-safe preflight/formal/finalize launcher. Compile,
+  pyflakes, focused `12/12`, synthetic full-CSV replay over `2428/4856` rows,
+  and PowerShell AST pass without modifying production model/trainer/config,
+  raw data, validation/test access, or current-best commands.
 - [ ] Run exactly one formal EfficientTrain A0 after owned-process/GPU checks,
   inspect all audit artifacts and contact-sheet pages, apply the all-or-nothing
   stop rule, then close/retain/document the route before selecting another.
