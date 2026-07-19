@@ -18736,3 +18736,66 @@ Date: 2026-07-02
   39% unrelated GUI GPU utilization, so the formal correctly remains unrun.
   No validation, test, formal output, current-best command update, or raw-data
   change has occurred.
+
+## SIFER Feature-Sieve A0 Closure 2026-07-20 - Clean Gain, Robust Precision Reject
+
+- Three launcher attempts stopped before model/data access because display
+  utilization exceeded the locked 10% isolation gate. The sole formal began
+  only after temporarily hiding Codex, pausing Wallpaper Engine through its
+  official control command, waiting five seconds for the display queue, and
+  observing `0/0/0%`. No user process was terminated.
+- The source-disjoint train-only comparison is active and structurally sound.
+  All 60 matched updates run, every main parameter group moves, identify loss
+  decreases `12/12`, stem/probability differences are
+  `0.004924196/0.000488500`, runtime is `1.516599x`, peak allocation is
+  `3.961097 GiB`, and ONNX passes with error `4.77e-7`.
+- Relative to matched adaptation, clean macro/class1 F1 rises
+  `+0.003095/+0.013179`; class1 P/R become `0.825581/0.651376`. This is not a
+  precision solution: precision rises only `+0.004153`, one restricted FP is
+  removed and one is created, so net FP reduction is zero.
+- SIFER's intended forgetting direction is inconsistent. Uniform-target CE
+  and auxiliary entropy move correctly on only `5/12` forget steps. Dim,
+  bright, and low-contrast class1 precision deltas are
+  `-0.012653/-0.032132/-0.000337`; low contrast also breaks two class1 TP and
+  reduces F1 by `-0.016386`.
+- All four clean/dim/bright/low-contrast auxiliary CAM sheets were inspected
+  and finalized `fail`. Control/candidate maps are nearly identical broad
+  fruit, peel, silhouette, edge, and background responses; bright creates two
+  class-2 to class-1 FP and low contrast breaks two TP without a new selective
+  visual cue.
+- Formal pre-review/final summary SHAs are
+  `883a87d5...e65d`/`4b23302a...953db`; final artifact manifest is
+  `4a1519a2...4613`. Preserve 12 artifacts totaling `8,025,440` bytes. No
+  validation, test, checkpoint, full train, engine, raw-data edit, or command
+  update occurred.
+- Independent replay initially found a `2.01e-11` reduction-order difference
+  in the stem aggregate, only `0.043` FP32 ULP. Pushed erratum `93eca1c`
+  permits one FP32 ULP only for that path and keeps all other numeric fields at
+  `1e-12`; official replay then verifies all rows, metrics, gates, paths, and
+  hashes at SHA `784c9e1...b1f51`. This cannot rescue nine automatic failures.
+- Close nearby SIFER stem/layer/width/depth/interval/LR/optimizer/target/fold/
+  seed/budget/class-mask variants. The method changes features but does not
+  create illumination-stable class-conditional precision evidence.
+- Focused `13/13`, full pytest `1468/1468`, compileall, pyflakes, PowerShell
+  AST, and 48-manifest retention pass. Retention covers 764 directories, all
+  210 compacted originals remain absent, and `blockers=[]` at SHA
+  `e42037f8...4379`; closure SHA is `49e0c432...9112`. A failed sparse SIFER
+  clone and empty large-LR repository were removed from `%TEMP%`; official
+  SIFER source/PDF remain.
+
+## Autonomous Full-Train Policy 2026-07-20 - Evidence First, Throughput Measured
+
+- The user authorizes an autonomous full train when a future candidate is
+  prospectively assessed as high potential and passes its smoke/probe plus
+  complete metric, robustness, and XAI gates. This does not bypass the locked
+  validation promotion gate, test isolation, or current-best command history.
+- Select epochs and patience from observed convergence with an absolute ceiling
+  of 30 epochs. Stop early when the candidate loses its prospective signal;
+  do not launch a full train merely because implementation exists.
+- Current machine baseline is i7-12700H (`14C/20T`), `15.64 GiB` RAM, RTX 4060
+  Laptop `8,188 MiB`, and about `102.62 GiB` free on D. Before a long run,
+  benchmark Windows-safe loader settings, prioritizing `num_workers=2/4` and
+  persistent workers/prefetch only when stable. Select by measured images/s,
+  GPU duty cycle, host RAM, and startup reliability, then record requested and
+  effective settings in run metadata. Never maximize worker count by CPU count
+  alone.

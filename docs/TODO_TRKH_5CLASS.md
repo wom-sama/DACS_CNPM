@@ -3669,7 +3669,28 @@
   final tensor finiteness. Focused `12/12`, full pytest `1467/1467`, compile,
   pyflakes, PowerShell AST, source/hash verification, and no-output preflight
   pass.
-- [ ] Perform explicit-path commit/push and a clean no-output preflight from
-  the pushed commit. Run the sole formal A0 only
-  after local GPU utilization is isolated; inspect every contact sheet and
-  apply the all-or-nothing stop rule before any trainer integration.
+- [x] Perform explicit-path commit/push and a clean no-output preflight from
+  pushed commit `b732d72`. Run the sole formal only after the locked GPU gate
+  observes `0/0/0%`; independently replay all 1,843 clean and 5,529 lighting
+  rows and inspect every contact sheet before trainer integration.
+- [x] Preserve the replay-only FP32 reduction erratum at pushed commit
+  `93eca1c`. Restrict the `5e-10` tolerance to the stem aggregate while every
+  other numeric field remains `1e-12`; official replay passes at SHA
+  `784c9e1...b1f51` without rerunning formal or changing its summary/gates.
+- [x] Reject SIFER before Stage B. Clean macro/class1 F1 improve
+  `+0.003095/+0.013179`, but class1 precision gains only `+0.004153`, net
+  restricted-FP reduction is zero, uniform-CE/entropy forgetting succeeds on
+  only `5/12` steps, and dim/bright/low-contrast precision all decline. All
+  four CAM sheets fail manual review; preserve final summary/manifest SHAs
+  `4b23302a...953db`/`4a1519a2...4613`.
+- [x] Close SIFER with focused `13/13`, full pytest `1468/1468`, compileall,
+  pyflakes, PowerShell AST, exact replay, and 48-manifest retention over 764
+  directories. All 210 compacted originals remain absent and `blockers=[]` at
+  retention SHA `e42037f8...4379`; closure SHA is `49e0c432...9112` and
+  current-best commands remain unchanged.
+- [ ] Screen the next accepted-primary, officially licensed, equation-distinct
+  precision route against the complete no-repeat record. Require prospective
+  clean plus illumination TP/FP evidence before code, then audit every smoke.
+  A candidate that passes may autonomously proceed through a measured worker
+  benchmark and a justified <=30-epoch full train without using test for
+  selection.
