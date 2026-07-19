@@ -3789,7 +3789,22 @@
   `1500/1500`, exact CSV/hash replay, and read-only retention over 770
   directories/49 object manifests. All 216 compacted originals remain absent,
   `blockers=[]`, and current-best commands remain unchanged.
-- [ ] Screen the next accepted-primary, officially licensed, equation-distinct
+- [x] Screen the next accepted-primary, officially licensed, equation-distinct
   precision route. Prioritize a spatial-offset or directional morphology cue
   with an explicit TP-versus-restricted-FP mechanism; reject any candidate
   that only expands class1 support or needs pretrained/long-schedule evidence.
+- [x] Reject DRP/GTN/HEX/CoL/Deep-COOC/morphology-NAS before code because they
+  overlap closed pooling/graph/texture families, depend on pretrained or long
+  schedules, have implementation/license defects, or lack a prospective
+  class-1 precision mechanism.
+- [x] Inspect all eight 17-model unanimous class-1 residual images and verify
+  the UC Davis/Wiley mango spatial-ripening paper directly. Select a novel
+  low-frequency axial color-topology hypothesis, while recording that the
+  physiology evidence does not prove external RGB label identifiability.
+- [x] Prospectively lock the train-only axial color-topology A0 before code or
+  metrics. Use exact CIDT source folds/lighting conditions, matched 165D
+  global-color/axial/placebo readouts, explicit precision/TP/FP/direction gates,
+  conditional visual review, no validation/test, and no parameter sweep.
+- [ ] Implement, test, commit, and push the isolated axial color-topology A0;
+  run it once only after provenance, no-output preflight, and owned-process/GPU
+  checks. Integrate or train an image model only if every locked gate passes.
