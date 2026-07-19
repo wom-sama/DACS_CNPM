@@ -22,6 +22,7 @@ from trkh.tools.audit_sifer_feature_sieve_a0 import (
     assess_a0,
     uniform_cross_entropy,
 )
+from trkh.tools.replay_sifer_feature_sieve_a0 import _assert_close
 
 
 def _locked_namespace() -> Namespace:
@@ -284,3 +285,26 @@ def test_probability_rows_remain_normalized_fixture() -> None:
     row = _prediction_row(1, 0, 1, 0.6)
     probabilities = np.asarray([row[f"prob_{index}"] for index in range(5)])
     assert probabilities.sum() == pytest.approx(1.0, abs=1e-12)
+
+
+def test_replay_tolerance_is_wider_only_for_float32_stem_aggregate() -> None:
+    formal = 0.004924195830225621
+    row_replay = 0.004924195810138767
+    assert np.float32(formal) == np.float32(row_replay)
+    _assert_close(
+        row_replay,
+        formal,
+        "mechanism.stem_mean_absolute_difference",
+    )
+    with pytest.raises(AssertionError):
+        _assert_close(
+            formal + 6e-10,
+            formal,
+            "mechanism.stem_mean_absolute_difference",
+        )
+    with pytest.raises(AssertionError):
+        _assert_close(
+            1.0 + 2e-12,
+            1.0,
+            "mechanism.probability_mean_absolute_difference",
+        )

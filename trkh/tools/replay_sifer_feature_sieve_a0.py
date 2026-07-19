@@ -19,6 +19,10 @@ from trkh.tools.audit_sifer_feature_sieve_a0 import (
 from trkh.tools.audit_xca_dual_axis_readiness import _comparison, _sha256
 
 
+DEFAULT_REPLAY_ABS_TOLERANCE = 1e-12
+STEM_AGGREGATE_ABS_TOLERANCE = 5e-10
+
+
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Independent CSV/history replay for the locked SIFER A0 audit."
@@ -79,8 +83,13 @@ def _assert_close(observed: object, expected: object, path: str = "root") -> Non
             raise AssertionError(f"{path}: {observed!r} != {expected!r}")
         return
     if isinstance(expected, (int, float)):
+        tolerance = (
+            STEM_AGGREGATE_ABS_TOLERANCE
+            if path == "mechanism.stem_mean_absolute_difference"
+            else DEFAULT_REPLAY_ABS_TOLERANCE
+        )
         if not math.isclose(
-            float(observed), float(expected), rel_tol=0.0, abs_tol=1e-12
+            float(observed), float(expected), rel_tol=0.0, abs_tol=tolerance
         ):
             raise AssertionError(f"{path}: {observed!r} != {expected!r}")
         return
