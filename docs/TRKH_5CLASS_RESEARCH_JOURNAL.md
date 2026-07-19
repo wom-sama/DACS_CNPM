@@ -18689,3 +18689,50 @@ Date: 2026-07-02
   scale, OOF threshold, fold, lighting, mask, batch, seed, or nearby frequency
   curricula on this keeper. Closure SHA is `ba3f3391...1b2c79`; current-best
   commands remain three revisions/two actual updates.
+
+## SIFER Feature-Sieve A0 Lock 2026-07-19 - Early Feature Forgetting Before Integration
+
+- The next route was screened against the accepted ICML-2023 PMLR paper and
+  Google's Apache-2.0 source. Pin the original release commit/tree
+  `76b0612...f4`/`890e374...a57`, algorithm/network/parameter blobs
+  `43595d1...1aa`/`cf59f54...3cf`/`5d3aefd...a96`, and paper SHA
+  `49a64b97...7959`. Repository popularity is provenance context, not evidence
+  that SIFER will work on mango grading.
+- SaSPA was rejected before code because its primary mechanism generates new
+  images with GPT-4, BLIP-Diffusion, and ControlNet. That violates the current
+  no-new-raw-data/no-pretrained direction and is too expensive for a controlled
+  8-GiB scratch-model comparison.
+- SIFER is selected because alternating auxiliary label decoding and uniform-
+  target lower-network forgetting is equation-distinct from closed RSC,
+  attention/token masking, A-GEM/GEM/V-REx/CAGrad, sample reweighting, routing,
+  and branch-capacity methods. It may still fail because class 1 genuinely uses
+  easy color/surface cues; the precision and TP-safety gates are therefore
+  symmetric and fail closed.
+- Protocol SHA `90588283...c235bc` locks one train-only A0: the official two-
+  BasicBlock width-256 auxiliary head on the `256x32x32` stem output, identify
+  every step, forget at `0,5,...,55`, and matched 60-step AdamW keeper
+  adaptation. Auxiliary SGD is `1e-2`; forget-only stem SGD is `1e-4`, keeping
+  the official 10:1 forget/main LR ratio without changing the established main
+  adaptation LR.
+- Main-forward RNG is role-reset per step; auxiliary stem forwards freeze main
+  BatchNorm running statistics; every identify/forget optimizer scope is
+  hashed. Four source-disjoint holdout conditions require precision/F1 gain,
+  restricted-FP removal, true-class1 TP protection, unchanged inference ONNX,
+  independent replay, and manual review of auxiliary class-1 CAM sheets.
+- The isolated auditor, replay, twelve focused tests, and VS Code-safe
+  preflight/formal/finalize wrapper are implemented. The first focused run
+  caught a `1.19e-7` summation-order discrepancy and replaced the algebraic
+  uniform CE with the exact soft-target `F.cross_entropy` primitive used by the
+  official code.
+- Self-review then found and fixed four audit-integrity gaps before formal:
+  candidate timing now includes the extra detached-stem identify forward;
+  auxiliary initialization restores both CPU and CUDA RNG with before/after
+  hashes; every contact sheet reserves available FP-removal, TP-break,
+  FN-rescue, and FP-create cases before filling; and replay binds summary paths
+  and exits nonzero on any failed check. Final model/auxiliary tensors and exact
+  CIDT row order are also gated.
+- Focused `12/12`, full pytest `1467/1467`, compile, pyflakes, PowerShell AST,
+  source/hash verification, and no-output preflight pass. Preflight observed
+  39% unrelated GUI GPU utilization, so the formal correctly remains unrun.
+  No validation, test, formal output, current-best command update, or raw-data
+  change has occurred.

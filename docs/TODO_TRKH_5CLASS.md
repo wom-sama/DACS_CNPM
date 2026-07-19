@@ -3640,8 +3640,36 @@
   replay, and retention over 761 directories/48 manifests pass with
   `blockers=[]` at SHA `874e70a4...264b8`. Current-best commands remain three
   revisions/two actual updates.
-- [ ] Screen the next accepted-primary, officially licensed, equation-distinct
+- [x] Screen the next accepted-primary, officially licensed, equation-distinct
   precision route against the complete no-repeat record. Require a cheap
   train-only gate that separates class-1 TP from restricted FP under clean,
   dim, bright, and low-contrast conditions without relying on generic
   foreground, border, frequency, color-support expansion, or TP contraction.
+- [x] Screen ICML-2023 SIFER against the accepted PMLR paper and the official
+  Apache-2.0 Google Research release commit/tree
+  `76b0612...f4`/`890e374...a57`. Select its alternating supervised auxiliary
+  decoder and uniform-target lower-network forgetting because it is
+  equation-distinct from closed RSC, gradient-surgery, masking, routing, and
+  branch-capacity routes. Reject SaSPA before code because it requires
+  pretrained diffusion/VLM components and generated raw images.
+- [x] Prospectively lock one train-only SIFER A0 at protocol SHA
+  `90588283...c235bc`. Freeze the official two-block width-256 auxiliary topology,
+  stem-output attachment, interval 5, 60 matched updates, source-disjoint fold
+  0, main-forward RNG parity, exact optimizer scope, clean/lighting precision
+  and TP gates, unchanged inference export, independent replay, and four
+  auxiliary class-1 CAM contact sheets. Validation/test and current-best
+  command access remain forbidden.
+- [x] Implement the isolated SIFER auditor, independent replay, twelve focused
+  tests, and VS Code-safe preflight/formal/finalize wrapper. Preflight passes
+  without dataset/model inference or output creation; the soft-target equation
+  uses the exact official `CrossEntropyLoss` primitive.
+- [x] Complete implementation self-review and hardening: include the detached
+  stem identify forward in timing, prove auxiliary seed CPU/CUDA RNG isolation,
+  reserve XAI coverage for safety transitions, fail replay closed, and verify
+  final tensor finiteness. Focused `12/12`, full pytest `1467/1467`, compile,
+  pyflakes, PowerShell AST, source/hash verification, and no-output preflight
+  pass.
+- [ ] Perform explicit-path commit/push and a clean no-output preflight from
+  the pushed commit. Run the sole formal A0 only
+  after local GPU utilization is isolated; inspect every contact sheet and
+  apply the all-or-nothing stop rule before any trainer integration.
