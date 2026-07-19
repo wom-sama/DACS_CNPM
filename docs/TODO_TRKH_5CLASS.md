@@ -3625,6 +3625,23 @@
   sample-3657 BF16 near-tie before any B176/B224 forward or candidate metric.
   Lock erratum SHA `c8cd9bcf...71be4`: require that exact sole mismatch and
   require full-607 plus unchanged-threshold 606-row sensitivity to both pass.
-- [ ] Run exactly one formal EfficientTrain A0 after owned-process/GPU checks,
+- [x] Run exactly one formal EfficientTrain A0 after owned-process/GPU checks,
   inspect all audit artifacts and contact-sheet pages, apply the all-or-nothing
   stop rule, then close/retain/document the route before selecting another.
+- [x] Reject EfficientTrain before any image epoch. B176 clean/four-condition
+  AUROC is `0.472212/0.451552`; its locked OOF threshold removes only one of
+  186 restricted FP while breaking 11 of 421 TP. B224 clean/four-condition
+  AUROC is `0.501762/0.500358` and also fails precision/TP gates. Full-607 and
+  unchanged-threshold 606-row sensitivity both fail; all four contact sheets
+  show generic bbox/padding/peel residual rather than class-conditional signal.
+- [x] Close EfficientTrain at closure SHA `ba3f3391...1b2c79`. Preserve final
+  summary/manifest SHAs `c7357893...d03e`/`8555691e...3109` and the
+  declaration-only reference. Focused `13/13`, full pytest `1455/1455`, exact
+  replay, and retention over 761 directories/48 manifests pass with
+  `blockers=[]` at SHA `874e70a4...264b8`. Current-best commands remain three
+  revisions/two actual updates.
+- [ ] Screen the next accepted-primary, officially licensed, equation-distinct
+  precision route against the complete no-repeat record. Require a cheap
+  train-only gate that separates class-1 TP from restricted FP under clean,
+  dim, bright, and low-contrast conditions without relying on generic
+  foreground, border, frequency, color-support expansion, or TP contraction.

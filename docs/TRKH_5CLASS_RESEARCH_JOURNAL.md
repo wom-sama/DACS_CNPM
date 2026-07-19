@@ -18648,3 +18648,44 @@ Date: 2026-07-02
   mismatch policy and full-CSV no-refit sensitivity. Exactly one corrected
   formal is allowed after commit/push/preflight; validation/test/training and
   current-best commands remain untouched.
+
+## EfficientTrain A0 Closure 2026-07-19 - Frequency Curriculum Has No Precision Signal
+
+- The corrected formal ran once from pushed commit `51efab0`. All structural
+  checks pass, the exact sample-3657 declaration exception is the sole mismatch,
+  model/RNG state remains unchanged, and independent replay reconstructs full
+  607-row plus no-refit 606-row sensitivity results within `1e-12`.
+- Reject B176 before a matched scratch pair. Clean/four-condition mean AUROC is
+  `0.472212/0.451552`; the 97%-TP OOF rule removes one of 186 restricted FP and
+  breaks 11 of 421 TP. Direct hard predictions remove 45 FP but break 20 TP,
+  so they are not precision-safe.
+- B224 is not a rescue: clean/four-condition mean AUROC is
+  `0.501762/0.500358`; it removes six FP and breaks 13 TP at the OOF threshold.
+  The 606-row sensitivity fails the same ten information and three mechanism
+  checks as the primary cohort.
+- B176 object-residual AUROC is only `0.527354/0.518453/0.531288/0.525847`
+  across clean/dim/bright/low contrast. Object-minus-outside AUROC advantage
+  exceeds `0.03` only under dim lighting; the signal is essentially generic
+  residual energy rather than class-conditional evidence.
+- All four contact sheets were inspected and finalized `fail`. Residuals follow
+  bbox/padding edges, fruit silhouettes, stems/cracks, and broad peel texture
+  in both TP and restricted FP, with no repeatable maturity/color/risk-surface
+  distinction.
+- Official AST equation, FFT-shift oracle, and spectral replay errors are zero;
+  reconstruction error is `2.38e-7`, B256 is bit-exact/same-storage, and
+  dynamic `11x11/14x14/16x16` geometry passes. Correct implementation cannot
+  override the information failure.
+- Final summary/manifest/replay SHAs are
+  `c7357893...d03e`/`8555691e...3109`/`70399c41...ed36a`; preserve the
+  15,177,238-byte formal payload plus the declaration-only interrupted
+  reference. No validation, test, image epoch, checkpoint, engine, raw-data
+  edit, or current-command change occurred.
+- Compileall, pyflakes, PowerShell AST, focused `13/13`, full pytest
+  `1455/1455`, and retention over 761 directories/all 48 object manifests
+  pass. All 210 compacted originals remain absent, nothing was deleted,
+  `blockers=[]`, and free space is `102.632 GiB`; retention SHA is
+  `874e70a4...264b8`.
+- Do not sweep EfficientTrain band widths, stage/schedule, FFT convention,
+  scale, OOF threshold, fold, lighting, mask, batch, seed, or nearby frequency
+  curricula on this keeper. Closure SHA is `ba3f3391...1b2c79`; current-best
+  commands remain three revisions/two actual updates.
