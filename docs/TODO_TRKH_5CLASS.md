@@ -3742,11 +3742,30 @@
   preflight. Official/reference/scalar maximum equation error is `1.67e-16`;
   train/eval mode round trips are exact. Lock keeper augmentation settings at
   SHA `12dd45b1...bd04`. No dataset/model inference or candidate metric exists.
-- [ ] Run full pytest, commit/push the immutable Schedule-Free A0 implementation,
-  and repeat no-output preflight from the pushed commit. Then run exactly one
-  formal only under the owned-process and `<=10%` GPU-isolation gate; replay
-  every artifact and inspect all four XAI pages if automatic gates pass.
-- [ ] Apply the all-conjunctive stop rule. Any failure closes Schedule-Free LR/
-  beta/warmup/r/weighting/weight-decay/fold/seed/budget/BN variants on this
-  keeper. A complete automatic plus manual pass permits only a separately
-  locked scratch matched smoke, not direct full training or command promotion.
+- [x] Pass full pytest `1488/1488`, commit/push immutable implementation
+  `6c9bafc`, repeat no-output preflight, isolate GPU at `0%`, and complete the
+  sole formal A0. Independent replay is exact over all `7,372` condition rows;
+  automatic gates fail, so conditional XAI is correctly absent.
+- [x] Apply the all-conjunctive stop rule and reject Schedule-Free before Stage
+  B. Clean class1 P/R/F1 moves `0.5132/0.3578/0.4216 ->
+  0.5333/0.5138/0.5234`, but restricted FP worsen `37 -> 49`; shifted FP worsen
+  by `17/23/28`, dim precision falls, and low-contrast macro F1/TP safety fail.
+  Close LR/beta/warmup/r/weighting/weight-decay/fold/seed/budget/BN variants.
+- [x] Preserve the post-formal audit erratum without rerunning candidate
+  behavior. Round-trip errors `3.73e-9/7.28e-12` are below FP32 epsilon but v1
+  incorrectly required bit identity; ONNX was unmeasured because a mutable
+  alias left the model on CUDA while inputs were CPU. Harden both paths with
+  focused `18/18`; neither fix can rescue eight metric/robustness failures.
+- [x] Write Schedule-Free closure at SHA `b38f13d1...b9439fb5`; preserve formal
+  summary/replay/manifest SHAs `4c2c71f8...4d330a`/
+  `2a543eaf...0b2f67`/`8f3360e3...f225e`. No validation, test, checkpoint,
+  XAI, Stage-B smoke, full train, or current-best command update occurred.
+- [x] Pass post-erratum pyflakes, focused `18/18`, and full pytest `1490/1490`.
+  Read-only retention covers 768 run directories and all 49 currently present
+  object compaction manifests; all 216 listed originals remain absent and
+  `blockers=[]` at SHA `9041110a...bbbdb0d`.
+- [ ] Screen and prospectively lock the next accepted-primary, officially
+  licensed, equation-distinct route. It must expose a morphology/surface signal
+  that separates class1 TP from restricted `0/2/4 -> 1` FP under dim, bright,
+  and low-contrast conditions; exclude optimizer-only, global ranking, generic
+  foreground localization, and all nearby closed-family rescues.

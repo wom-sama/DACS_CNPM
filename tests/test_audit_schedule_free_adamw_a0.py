@@ -11,11 +11,13 @@ from trkh.tools.audit_schedule_free_adamw_a0 import (
     EXPECTED_CALIBRATION_BATCHES,
     EXPECTED_TRAIN_BATCHES,
     LEARNING_RATE,
+    MAX_MODE_ROUNDTRIP_ERROR,
     WARMUP_STEPS,
     _equation_diagnostics,
     _focus_tp_retention,
     _json_max_abs_difference,
     _locked_args_exact,
+    _mode_roundtrip_within_fp32_tolerance,
     _ordered_index_sha256,
     _parameter_max_abs_difference,
     _prediction_artifact_integrity,
@@ -161,6 +163,15 @@ def test_parameter_and_json_differences_fail_closed() -> None:
     assert _parameter_max_abs_difference(left, right) == pytest.approx(0.25)
     assert _json_max_abs_difference({"a": [1.0, True]}, {"a": [1.1, True]}) == pytest.approx(0.1)
     assert _json_max_abs_difference({"a": 1}, {"b": 1}) == float("inf")
+
+
+def test_structural_roundtrip_uses_declared_fp32_tolerance() -> None:
+    assert _mode_roundtrip_within_fp32_tolerance(0.0)
+    assert _mode_roundtrip_within_fp32_tolerance(MAX_MODE_ROUNDTRIP_ERROR)
+    assert not _mode_roundtrip_within_fp32_tolerance(
+        MAX_MODE_ROUNDTRIP_ERROR * 2.0
+    )
+    assert not _mode_roundtrip_within_fp32_tolerance(float("nan"))
 
 
 def test_rows_from_csv_reconstructs_locked_role(tmp_path: Path) -> None:

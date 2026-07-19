@@ -52,7 +52,6 @@ from trkh.tools.audit_xca_dual_axis_readiness import (
     _git_commit,
     _make_loader,
     _prepare_output_dir,
-    _rng_equal,
     _rng_snapshot,
     _rng_summary,
     _sha256,
@@ -700,6 +699,9 @@ def _export_candidate(
     metadata: Mapping[str, object],
     output_dir: Path,
 ) -> Dict[str, object]:
+    # ONNX receives CPU inputs below, so normalize the model device explicitly.
+    # Several auditors keep a CPU alias to a model that was later moved in place.
+    candidate = candidate.cpu().eval()
     bbox = metadata.get("bbox")
     image_mask = metadata.get("image_mask")
     cpu_images = images[:1].detach().float().cpu()

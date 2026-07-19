@@ -2,14 +2,25 @@ from pathlib import Path
 import os
 
 import torch
+from torch import nn
 
 from trkh.core.config import ModelConfig
 from trkh.models.model import create_model
 from trkh.tools.audit_class1_protected_rsc_readiness import (
+    _export_candidate,
     _locked_args_exact,
     assess_stage_a,
     parse_args,
 )
+
+
+class _TinyExportModel(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.weight = nn.Parameter(torch.ones(1))
+
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        return inputs * self.weight
 
 
 def _comparison(
@@ -54,6 +65,39 @@ def test_default_arguments_match_locked_protocol() -> None:
     assert args.eligible_classes == "0,2,3,4"
     assert args.max_train_batches == 60
     assert os.environ["CUBLAS_WORKSPACE_CONFIG"] == ":4096:8"
+
+
+def test_export_candidate_normalizes_model_and_inputs_to_cpu(
+    tmp_path: Path, monkeypatch
+) -> None:
+    observed: dict[str, object] = {}
+
+    def fake_compare(*, wrapper, inputs, input_names, path):
+        observed["model_device"] = next(wrapper.model.parameters()).device.type
+        observed["input_devices"] = [value.device.type for value in inputs]
+        observed["training"] = wrapper.model.training
+        observed["input_names"] = input_names
+        observed["path"] = path
+        return {"succeeded": True}
+
+    monkeypatch.setattr(
+        "trkh.tools.audit_class1_protected_rsc_readiness._onnx_compare",
+        fake_compare,
+    )
+    model = _TinyExportModel().train()
+    result = _export_candidate(
+        candidate=model,
+        images=torch.zeros(2, 3, 4, 4),
+        metadata={
+            "bbox": torch.zeros(2, 8),
+            "image_mask": torch.ones(2, 4, 4, dtype=torch.bool),
+        },
+        output_dir=tmp_path,
+    )
+    assert result["succeeded"] is True
+    assert observed["model_device"] == "cpu"
+    assert observed["input_devices"] == ["cpu", "cpu", "cpu"]
+    assert observed["training"] is False
 
 
 def test_native_position_grid_skips_nondeterministic_bicubic(monkeypatch) -> None:
