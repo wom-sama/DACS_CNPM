@@ -492,6 +492,7 @@ class TrainConfig:
     ldr_margin: float = 2.0
     ldr_temperature: float = 1.0
     logit_norm_temperature: float = 0.04
+    spectral_decoupling_lambda: float = 0.01
     symmetric_ce_alpha: float = 0.1
     symmetric_ce_beta: float = 1.0
     symmetric_ce_epsilon: float = 1e-4

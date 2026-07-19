@@ -10,7 +10,12 @@ import torch
 from torch.utils.data import DataLoader
 
 from trkh.core.config import load_data_spec
-from trkh.core.utils import autocast_context, build_safe_dataloader_kwargs, set_seed
+from trkh.core.utils import (
+    autocast_context,
+    build_safe_dataloader_kwargs,
+    json_dump,
+    set_seed,
+)
 from trkh.data.dataset import (
     ClassificationFolderDataset,
     MangoYOLOCropDataset,
@@ -56,6 +61,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--disable-persistent-workers", action="store_true", default=False)
     parser.add_argument("--allow-windows-workers", action="store_true", default=True)
     parser.add_argument("--no-allow-windows-workers", dest="allow_windows_workers", action="store_false")
+    parser.add_argument("--output-json", type=Path, default=None)
     return parser.parse_args()
 
 
@@ -112,10 +118,13 @@ def benchmark_worker_count(
     for batch_index in range(total_batches):
         batch_total_start = time.perf_counter()
         try:
-            images, targets = next(iterator)
+            batch = next(iterator)
         except StopIteration:
             iterator = iter(loader)
-            images, targets = next(iterator)
+            batch = next(iterator)
+        if not isinstance(batch, (tuple, list)) or len(batch) < 2:
+            raise ValueError("Benchmark loader must return images and targets first.")
+        images, targets = batch[0], batch[1]
         after_data = time.perf_counter()
         if device.type == "cuda":
             torch.cuda.synchronize(device)
@@ -235,6 +244,20 @@ def main() -> None:
         results.append(result)
         print(result, flush=True)
     best = max(results, key=lambda item: float(item["samples_per_second"]))
+    summary = {
+        "device": "cuda" if torch.cuda.is_available() else "cpu",
+        "dataset_samples": len(dataset),
+        "batch_size": int(args.batch_size),
+        "image_size": int(args.image_size),
+        "warmup_batches": int(args.warmup_batches),
+        "measure_batches": int(args.measure_batches),
+        "disable_pin_memory": bool(args.disable_pin_memory),
+        "disable_persistent_workers": bool(args.disable_persistent_workers),
+        "results": results,
+        "best_by_samples_per_second": best,
+    }
+    if args.output_json is not None:
+        json_dump(Path(args.output_json), summary)
     print({"best_by_samples_per_second": best}, flush=True)
 
 

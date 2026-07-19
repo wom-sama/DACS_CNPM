@@ -711,13 +711,14 @@ param(
     [string]$OrdinalDistributionClasses = "0,1,2,3",
     [double]$OrdinalDistributionTargetSigma = 0.0,
     [int]$OrdinalDistributionStartEpoch = 1,
-    [ValidateSet("cross_entropy", "ce", "ldam_focal", "balanced_softmax", "gce", "ldam_gce", "ldr_kl", "seesaw", "logit_norm", "symmetric_cross_entropy", "sce")]
+    [ValidateSet("cross_entropy", "ce", "ldam_focal", "balanced_softmax", "gce", "ldam_gce", "ldr_kl", "seesaw", "logit_norm", "spectral_decoupling", "symmetric_cross_entropy", "sce")]
     [string]$ClassificationLoss = "ldam_focal",
     [double]$BalancedSoftmaxTau = 1.0,
     [double]$GceQ = 0.7,
     [double]$LdrMargin = 2.0,
     [double]$LdrTemperature = 1.0,
     [double]$LogitNormTemperature = 0.04,
+    [double]$SpectralDecouplingLambda = 0.01,
     [double]$SymmetricCeAlpha = 0.1,
     [double]$SymmetricCeBeta = 1.0,
     [double]$SymmetricCeEpsilon = 1e-4,
@@ -849,6 +850,9 @@ if ($LdrMargin -lt 0.0 -or $LdrTemperature -le 0.0) {
 }
 if ($LogitNormTemperature -le 0.0) {
     throw "LogitNormTemperature phai > 0."
+}
+if ($SpectralDecouplingLambda -lt 0.0) {
+    throw "SpectralDecouplingLambda phai >= 0."
 }
 if ($SymmetricCeAlpha -lt 0.0 -or $SymmetricCeBeta -lt 0.0) {
     throw "SymmetricCeAlpha/Beta phai >= 0."
@@ -2318,6 +2322,7 @@ if ($PreflightOnly) {
         ldr_margin = $LdrMargin
         ldr_temperature = $LdrTemperature
         logit_norm_temperature = $LogitNormTemperature
+        spectral_decoupling_lambda = $SpectralDecouplingLambda
         symmetric_ce_alpha = $SymmetricCeAlpha
         symmetric_ce_beta = $SymmetricCeBeta
         symmetric_ce_epsilon = $SymmetricCeEpsilon
@@ -2489,6 +2494,7 @@ try {
         "--ldr-margin", "$LdrMargin",
         "--ldr-temperature", "$LdrTemperature",
         "--logit-norm-temperature", "$LogitNormTemperature",
+        "--spectral-decoupling-lambda", "$SpectralDecouplingLambda",
         "--symmetric-ce-alpha", "$SymmetricCeAlpha",
         "--symmetric-ce-beta", "$SymmetricCeBeta",
         "--symmetric-ce-epsilon", "$SymmetricCeEpsilon",
@@ -3812,6 +3818,7 @@ if ($ClassIndependentHead) {
         ldr_margin = $LdrMargin
         ldr_temperature = $LdrTemperature
         logit_norm_temperature = $LogitNormTemperature
+        spectral_decoupling_lambda = $SpectralDecouplingLambda
         symmetric_ce_alpha = $SymmetricCeAlpha
         symmetric_ce_beta = $SymmetricCeBeta
         symmetric_ce_epsilon = $SymmetricCeEpsilon

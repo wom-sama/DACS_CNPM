@@ -86,6 +86,7 @@ from trkh.training.losses import (
     LabelDistributionallyRobustLoss,
     LogitNormCrossEntropyLoss,
     SeesawCrossEntropyLoss,
+    SpectralDecouplingCrossEntropyLoss,
     SupervisedContrastiveLoss,
     SymmetricCrossEntropyLoss,
 )
@@ -1401,6 +1402,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
             "ldr_kl",
             "seesaw",
             "logit_norm",
+            "spectral_decoupling",
             "symmetric_cross_entropy",
             "sce",
         ),
@@ -1412,6 +1414,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
             "ldr_kl toi uu phan phoi trong so nhan xau nhat co KL regularization; "
             "seesaw can bang gradient am va phat false-positive; "
             "logit_norm ap CE tren vector logit da L2-normalize; "
+            "spectral_decoupling them lambda/2 * mean(logit^2) vao CE; "
             "symmetric_cross_entropy/sce them reverse CE bi chan cho nhan nhieu."
         ),
     )
@@ -1439,6 +1442,12 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         type=float,
         default=0.04,
         help="Temperature tau cho LogitNorm loss; nho hon lam softmax tren logit don vi sac hon.",
+    )
+    parser.add_argument(
+        "--spectral-decoupling-lambda",
+        type=float,
+        default=0.01,
+        help="Lambda cua train-only Spectral Decoupling: CE + lambda/2 * mean(logit^2).",
     )
     parser.add_argument("--symmetric-ce-alpha", type=float, default=0.1)
     parser.add_argument("--symmetric-ce-beta", type=float, default=1.0)
@@ -4893,6 +4902,8 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         raise ValueError("--ldr-temperature phai > 0.")
     if args.logit_norm_temperature <= 0.0:
         raise ValueError("--logit-norm-temperature phai > 0.")
+    if args.spectral_decoupling_lambda < 0.0:
+        raise ValueError("--spectral-decoupling-lambda phai >= 0.")
     if args.symmetric_ce_alpha < 0.0:
         raise ValueError("--symmetric-ce-alpha phai >= 0.")
     if args.symmetric_ce_beta < 0.0:
@@ -7042,6 +7053,7 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         ldr_margin=args.ldr_margin,
         ldr_temperature=args.ldr_temperature,
         logit_norm_temperature=args.logit_norm_temperature,
+        spectral_decoupling_lambda=args.spectral_decoupling_lambda,
         symmetric_ce_alpha=args.symmetric_ce_alpha,
         symmetric_ce_beta=args.symmetric_ce_beta,
         symmetric_ce_epsilon=args.symmetric_ce_epsilon,
@@ -30199,6 +30211,18 @@ def main() -> None:
                 label_smoothing=train_config.label_smoothing,
                 temperature=train_config.logit_norm_temperature,
             )
+        elif classification_loss_name == "spectral_decoupling":
+            criterion = SpectralDecouplingCrossEntropyLoss(
+                weight=class_weights,
+                label_smoothing=train_config.label_smoothing,
+                regularization_lambda=train_config.spectral_decoupling_lambda,
+            )
+            eval_criterion = FocalCrossEntropyLoss(
+                weight=class_weights,
+                gamma=0.0,
+                focal_mix=0.0,
+                label_smoothing=train_config.label_smoothing,
+            )
         elif classification_loss_name in {"symmetric_cross_entropy", "sce"}:
             criterion = SymmetricCrossEntropyLoss(
                 weight=class_weights,
@@ -30293,6 +30317,11 @@ def main() -> None:
                     "logit_norm_temperature": (
                         float(train_config.logit_norm_temperature)
                         if classification_loss_name == "logit_norm"
+                        else None
+                    ),
+                    "spectral_decoupling_lambda": (
+                        float(train_config.spectral_decoupling_lambda)
+                        if classification_loss_name == "spectral_decoupling"
                         else None
                     ),
                     "symmetric_ce_alpha": (

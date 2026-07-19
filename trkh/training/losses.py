@@ -99,6 +99,42 @@ class FocalCrossEntropyLoss(_SoftTargetLossBase):
         return self.per_sample_loss(logits, targets).mean()
 
 
+class SpectralDecouplingCrossEntropyLoss(_SoftTargetLossBase):
+    """Cross entropy with a train-only squared-logit penalty."""
+
+    def __init__(
+        self,
+        weight: Optional[Tensor] = None,
+        label_smoothing: float = 0.0,
+        regularization_lambda: float = 0.01,
+    ) -> None:
+        super().__init__(weight=weight, label_smoothing=label_smoothing)
+        if float(regularization_lambda) < 0.0:
+            raise ValueError("Spectral Decoupling lambda phai >= 0.")
+        self.regularization_lambda = float(regularization_lambda)
+
+    def per_sample_loss(self, logits: Tensor, targets: Tensor) -> Tensor:
+        if logits.ndim != 2:
+            raise ValueError(
+                "SpectralDecouplingCrossEntropyLoss yeu cau logits co shape [batch, num_classes]."
+            )
+        _, target_probs = self._prepare_targets(logits, targets)
+        work_logits = logits.float()
+        ce_loss = self._soft_cross_entropy(
+            work_logits,
+            target_probs.to(dtype=work_logits.dtype),
+        )
+        logit_penalty = (
+            0.5
+            * self.regularization_lambda
+            * work_logits.square().mean(dim=1)
+        )
+        return (ce_loss + logit_penalty).to(dtype=logits.dtype)
+
+    def forward(self, logits: Tensor, targets: Tensor) -> Tensor:
+        return self.per_sample_loss(logits, targets).mean()
+
+
 class LogitNormCrossEntropyLoss(_SoftTargetLossBase):
     """Cross entropy on L2-normalized logits.
 
