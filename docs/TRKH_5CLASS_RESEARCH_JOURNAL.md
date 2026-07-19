@@ -18936,3 +18936,42 @@ Date: 2026-07-02
   `9041110ae889f3fb6df47f561eaa88f3f5acb53f02d6458248d2cfb6cbbbdb0d`.
   This current manifest-derived count supersedes the earlier unreproducible
   `50/230` prose snapshot; no file was deleted by this retention run.
+
+## MS-Lacunarity Stem Closure 2026-07-20 - Recall Expansion, Precision Reject
+
+- Rejected IMS/CAPTN before implementation because IMS overlaps closed IRM/
+  V-REx and entropy routes, while CAPTN relies on a pretrained frozen ConvNeXt
+  and a 300-epoch recipe; its D2P permutation is absorbable by an unconstrained
+  `1x1` convolution and its degree-2 Chebyshev map overlaps failed second-order
+  terms. FENet/CLASSNet were also excluded for licensing/pretraining/complexity
+  concerns recorded in the prospective protocol.
+- Selected the CVPRW Vision4Ag-2024 MS-lacunarity equation from the accepted
+  paper and official MIT repository at commit/tree
+  `6e464b4...e65f7`/`9f1a7c6...e39fe`. Protocol SHA is
+  `a6151deb...7cb9e`; protocol/implementation commits `c99b265`/`a709506` were
+  pushed before formal.
+- The isolated auditor compares a 512D frozen-stem mean control with a 1536D
+  control-plus-lacunarity descriptor over full/object regions and native/one
+  fixed Gaussian-pyrdown scale. All 12 natural-frequency readouts converge;
+  effective candidate-only rank is `42.753535`, peak CUDA is `995.75 MiB`, and
+  all source-disjoint support/hash/equation/finite checks pass.
+- OOF macro/class1 F1 improve `+0.009997/+0.042573`. Holdout macro/class1 F1
+  improve `+0.005502/+0.023266`, but class1 precision falls `-0.065611` while
+  recall rises `+0.082569`. Restricted `0/2/4 -> 1` FP worsen `27 -> 42`, and
+  direction AUROC is only `0.583014` on holdout.
+- Fail precision gain, restricted-FP removal, and holdout direction-AUROC
+  gates. This is another broad class1 support expansion, so the prospective
+  stop rule denies condition replay, XAI, image-model smoke, validation/test,
+  and full train. Do not sweep nearby lacunarity scales/kernels/regions/
+  erosion/interactions/readouts/weights/thresholds or combine with closed
+  texture branches.
+- Preserve seven formal payloads totaling `4,106,353` bytes at aggregate SHA
+  `fa47e6d...f55c4c`; summary/manifest SHAs are
+  `23f9149c...db585`/`d7ff114b...a7fe`. Independent CSV replay is exact.
+  Two non-decisional prefix directories were removed after fixing NumPy
+  squaring and missing-class probability-shape defects.
+- Focused `10/10`, full pytest `1500/1500`, compile, and diff checks pass.
+  Read-only retention covers 770 directories/49 object manifests, all 216
+  compacted originals remain absent, and `blockers=[]` at SHA
+  `6f2a6459...52da458`. Closure SHA is `8989b970...30620bd`; current-best
+  checkpoint/commands remain unchanged.

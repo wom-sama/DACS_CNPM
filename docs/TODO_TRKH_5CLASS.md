@@ -3712,7 +3712,7 @@
   `379.719 MiB`, and pass 50-manifest retention with 230/230 originals absent
   and `blockers=[]` at SHA `2b3f0a40...c718`. Closure SHA is
   `2a9e382f...42b5c`.
-- [ ] Screen the next accepted-primary, officially licensed, equation-distinct
+- [x] Screen the next accepted-primary, officially licensed, equation-distinct
   route. Exclude confidence/logit penalties and nearby Spectral Decoupling
   variants. Require a prospective mechanism that distinguishes class1 TP from
   restricted FP under clean and illumination shifts before another image
@@ -3764,8 +3764,32 @@
   Read-only retention covers 768 run directories and all 49 currently present
   object compaction manifests; all 216 listed originals remain absent and
   `blockers=[]` at SHA `9041110a...bbbdb0d`.
-- [ ] Screen and prospectively lock the next accepted-primary, officially
+- [x] Screen and prospectively lock the next accepted-primary, officially
   licensed, equation-distinct route. It must expose a morphology/surface signal
   that separates class1 TP from restricted `0/2/4 -> 1` FP under dim, bright,
   and low-contrast conditions; exclude optimizer-only, global ranking, generic
   foreground localization, and all nearby closed-family rescues.
+- [x] Reject IMS/CAPTN/FENet/CLASSNet before code where their assumptions,
+  licenses, schedules, or equations conflict with the scratch/30-epoch/no-
+  repeat boundary. Select CVPRW-2024 MS-lacunarity from its accepted paper and
+  official MIT source; prospectively lock one frozen-stem, source-disjoint,
+  train-only mean-versus-lacunarity readiness audit at protocol SHA
+  `a6151deb...7cb9e`.
+- [x] Implement and push the isolated auditor and 10 focused tests at commit
+  `a709506`. Fix prefix-only NumPy squaring and missing-class probability-shape
+  defects, then complete the sole formal over `7,372/1,843` fit/holdout rows.
+  All 12 readouts converge, candidate-only rank is `42.753535`, and peak CUDA
+  allocation is `995.75 MiB`.
+- [x] Reject MS-lacunarity before condition replay/XAI/image training. Holdout
+  macro/class1 F1 gain `+0.005502/+0.023266`, but class1 precision falls
+  `-0.065611`, restricted FP worsen `27 -> 42`, and holdout direction AUROC is
+  `0.583014`. Preserve summary/manifest SHAs
+  `23f9149c...db585`/`d7ff114b...a7fe`; do not sweep nearby variants.
+- [x] Close at SHA `8989b970...30620bd`; pass focused `10/10`, full pytest
+  `1500/1500`, exact CSV/hash replay, and read-only retention over 770
+  directories/49 object manifests. All 216 compacted originals remain absent,
+  `blockers=[]`, and current-best commands remain unchanged.
+- [ ] Screen the next accepted-primary, officially licensed, equation-distinct
+  precision route. Prioritize a spatial-offset or directional morphology cue
+  with an explicit TP-versus-restricted-FP mechanism; reject any candidate
+  that only expands class1 support or needs pretrained/long-schedule evidence.
