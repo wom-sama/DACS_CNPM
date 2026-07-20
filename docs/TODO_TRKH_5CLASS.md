@@ -4206,7 +4206,19 @@
   retention over 798 directories/all 50 manifests with 219 compacted
   originals absent and `blockers=[]` at SHA `81e40d26...f5af`. Current-best
   commands remain unchanged.
-- [ ] Screen the next accepted-primary, officially licensed, equation-distinct
-  supervised precision representation against all closed families. Require a
-  prospective train-only source-disjoint information gate and explicit
-  seed/placebo/XAI controls before any model integration or training.
+- [x] Screen the next accepted-primary, officially licensed, equation-distinct
+  precision route against all closed families. Select natural-first deferred
+  class reweighting because strict sampling exposes class 1 `3.41x`, while the
+  failed natural-prior continuation cannot test representation formation from
+  random initialization. Pin NeurIPS-2019 LDAM-DRW and its MIT official source.
+- [ ] Implement and independently replay the locked no-training A0 using only
+  train metadata and persisted CIDT clean predictions. Require exact hashes,
+  source-partition stability, and unsafe post-hoc-prior controls before one
+  natural-only scratch smoke is authorized.
+- [ ] If A0 passes, run the five-epoch natural-only smoke with scheduler horizon
+  30, full validation, one trace per class, and complete XAI/robustness. Do not
+  integrate deferred weighting unless every prospective Stage-B gate passes.
+- [ ] If Stage B passes, implement default-off natural-sampler deferred
+  effective-number weighting with resume/history telemetry and disabled
+  equivalence. Compare epoch-5 forks through epoch 8 with natural, seed, and
+  activation-placebo controls before any probe or full train.

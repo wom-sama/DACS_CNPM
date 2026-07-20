@@ -19882,3 +19882,29 @@ Date: 2026-07-02
   unauthorized. The next route must learn a stable supervised
   class-conditional precision representation rather than post-hoc factorize
   frozen final tokens.
+
+## Research Lock 2026-07-20 - Natural-First Deferred Reweight A0
+
+- Re-open the sampling question only at random initialization, not as another
+  keeper continuation. The closed continuation changed a representation that
+  had already learned under strict balancing; it cannot answer whether the
+  initial class prior shaped the class-1 false-positive region.
+- The current strict sampler exposes class 1 about `1843/541 = 3.41x` per
+  epoch, raising it from `5.87%` of train rows to approximately `20%`. The
+  scratch checkpoint predicts class 1 on `792` clean train rows for support
+  `541`, with P/R `0.6439/0.9427` and `275` restricted `0/2/4 -> 1` FP. The
+  same over-support pattern is present in all five source partitions.
+- Fixed post-hoc natural-prior corrections are unsafe: the square-root factor
+  drops scratch train class-1 recall to `0.0924`, and the full factor to zero.
+  This rules out a logit-calibration shortcut and motivates testing the
+  representation trajectory instead.
+- Pin Cao et al. NeurIPS-2019 and the official MIT LDAM-DRW source at commit
+  `2536330...e762a`. The official mechanism uses natural shuffled sampling and
+  switches class weighting late; TRKH will not copy its 200-epoch schedule or
+  oversample class 1.
+- Prospectively lock Stage-B/Stage-C gates in
+  `TRKH_5CLASS_DEFERRED_REWEIGHT_A0_PROTOCOL_20260720.md`, SHA
+  `1627a2b5...c76276`. A0 is explicitly a replay of already-observed train
+  evidence; only the natural-only smoke and later deferred-fork thresholds are
+  prospective. No validation/test, model integration, full train, or
+  current-best command update is authorized yet.
