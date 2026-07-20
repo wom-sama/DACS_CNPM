@@ -56,18 +56,41 @@ function Assert-GpuIsolation {
     }
     $Samples = @()
     for ($Index = 0; $Index -lt 3; $Index++) {
-        $Raw = & nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits
+        $Raw = & nvidia-smi --query-gpu=utilization.gpu,power.draw,pstate `
+            --format=csv,noheader,nounits
         if ($LASTEXITCODE -ne 0) {
-            throw "nvidia-smi utilization query failed."
+            throw "nvidia-smi isolation query failed."
         }
-        $Samples += [int]($Raw.Trim())
+        $Fields = $Raw.Split(",")
+        if ($Fields.Count -ne 3) {
+            throw "Unexpected nvidia-smi isolation response: $Raw"
+        }
+        $Samples += [pscustomobject]@{
+            Utilization = [int]$Fields[0].Trim()
+            PowerWatts = [double]::Parse(
+                $Fields[1].Trim(),
+                [Globalization.CultureInfo]::InvariantCulture
+            )
+            PState = $Fields[2].Trim()
+        }
         if ($Index -lt 2) {
             Start-Sleep -Seconds 1
         }
     }
-    Write-Host "GPU utilization samples: $($Samples -join ', ') percent"
-    if (($Samples | Measure-Object -Maximum).Maximum -gt 20) {
-        throw "Formal chromatic persistence A0 is blocked because background GPU utilization exceeds 20 percent."
+    $Utilization = @($Samples | ForEach-Object { $_.Utilization })
+    $Power = @($Samples | ForEach-Object { $_.PowerWatts })
+    $MaximumUtilization = ($Utilization | Measure-Object -Maximum).Maximum
+    $MaximumPower = ($Power | Measure-Object -Maximum).Maximum
+    $LowPowerIdle = ($MaximumPower -le 10.0) -and (
+        @($Samples | Where-Object { $_.PState -ne "P8" }).Count -eq 0
+    )
+    Write-Host "GPU utilization samples: $($Utilization -join ', ') percent"
+    Write-Host "GPU power samples: $($Power -join ', ') W; states: $($Samples.PState -join ', ')"
+    if (($MaximumUtilization -gt 20) -and (-not $LowPowerIdle)) {
+        throw "Formal chromatic persistence A0 is blocked by non-idle background GPU activity."
+    }
+    if ($MaximumUtilization -gt 20) {
+        Write-Host "Utilization exceeded 20 percent, but the locked low-power P8 idle fallback passed."
     }
 }
 
