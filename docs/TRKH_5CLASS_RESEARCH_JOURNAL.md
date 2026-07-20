@@ -19505,3 +19505,44 @@ Date: 2026-07-02
   tests `21/21`, full pytest `1594/1594`, pycompile/pyflakes, PowerShell parse,
   and diff checks. The current-best checkpoint/command/history hashes remain
   `1f49d577...2677`, `36b9aa1a...0faf`, and `39bd2879...8f53`.
+
+## Validity Partial-Conv Formal Stage A And Stage-B Lock 2026-07-20
+
+- Commit and push the dynamic-export correction at `571ba2a`, then complete
+  the clean formal Stage A in
+  `runs/audit_validity_partial_conv_stem_stage_a_20260720`. All 32 checks pass,
+  external gate replay is exact, and no validation/test row or candidate
+  checkpoint is used. Summary/manifest/external-replay SHAs are
+  `683aab0f...bc42`/`53ef670c...7bba`/`818cd086...662`.
+- The all-valid stem/logit path is bit exact and maximum gradient difference is
+  `7.28e-12`. Candidate masked-fill stem/logit changes are zero versus control
+  `18.09733/0.1776825`; valid-mask fractions increase monotonically
+  `0.77893 -> 0.80870 -> 0.84485 -> 0.90204`. Manual review of the fixed
+  mechanism sheet confirms changes remain localized to synthetic padding
+  bands rather than fruit interiors.
+- Dynamic-batch ONNX replay reaches maximum error `1.862645e-7`, exact argmax,
+  and no custom operator. Candidate/control runtime ratio is `1.110663` and
+  peak candidate allocation is `2.520991 GiB`. Stage A authorizes exactly one
+  matched smoke; `full_train_permission=false` and current-best artifacts stay
+  unchanged.
+- Prospectively operationalize Stage B before any candidate output at document
+  SHA `2755710b...64e`. Freeze five source-disjoint folds with class1 supports
+  `[27,31,29,28,36]` and restricted-negative supports
+  `[363,342,348,349,341]`; all meet the predeclared `25/300` adequacy rule.
+  A geometry-only census finds 105-250 unique mask shapes per class and exact
+  one-to-one donors in all 20 same-class/quartile partitions under different-
+  source and different-mask constraints.
+- Implement the paired auditor and launcher so both roles reload the same
+  keeper, reset optimizer state, use the identical two-epoch occurrence order,
+  and differ only by standard versus validity-partial stem plus artifact paths.
+  The auditor independently reloads both checkpoints, reconstructs all 2,606
+  validation rows, replays aligned and placebo masks, and verifies provenance,
+  scheduler, trace, test isolation, data identity, source folds, calibration,
+  transitions, runtime, and conjunctive scientific gates.
+- Pycompile, pyflakes, focused tests `25/25`, full pytest `1601/1601`,
+  PowerShell parse, role-difference checks, and no-output preflight pass. A
+  final provenance review also makes both nested and outer manifests derive
+  `raw_dataset_modified` from the measured before/after identity. Auditor/test/
+  launcher SHAs are `0ec5d6ce...c87`/`498b4acc...4de`/`7157ee88...018`.
+  Commit/push and a clean preflight remain mandatory before the sole Stage-B
+  pair; no command update, probe, test, or full train is authorized yet.

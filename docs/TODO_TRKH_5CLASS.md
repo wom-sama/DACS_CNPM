@@ -4027,6 +4027,25 @@
 - [x] Re-run sequential no-output preflight, focused tests `21/21`, full pytest
   `1594/1594`, pycompile/pyflakes, PowerShell parse, and diff checks after the
   export correction; all pass while current-best hashes remain unchanged.
-- [ ] Commit/push the export correction, rerun clean no-output preflight, and
-  complete the sole formal Stage A. Do not run the matched smoke unless every
-  persisted gate and independent replay passes.
+- [x] Commit/push the export correction at `571ba2a`, rerun clean no-output
+  preflight, and complete the sole formal Stage A. All 32 checks pass;
+  independent gate replay is exact, dynamic-batch ONNX error is `1.86e-7`,
+  runtime ratio is `1.110663`, peak candidate VRAM is `2.520991 GiB`, and
+  validation/test remain unused. Summary/manifest/replay SHAs are
+  `683aab0f...bc42`/`53ef670c...7bba`/`818cd086...662`; authorize only the
+  precommitted matched smoke, never full train.
+- [x] Lock Stage-B operationalization before candidate output. Five
+  source-disjoint validation folds have class1/restricted-negative supports
+  `[27,31,29,28,36]`/`[363,342,348,349,341]`; all 20 same-class/quartile
+  different-source/different-mask placebo partitions admit a perfect
+  one-to-one assignment. Operationalization SHA is `2755710b...64e`.
+- [x] Implement the independent matched-pair auditor, seven gate/placebo
+  regression tests, and direct-native PowerShell launcher. Pycompile,
+  pyflakes, focused `25/25`, full pytest `1601/1601`, PowerShell parse,
+  role-difference checks, and no-output preflight pass; auditor/test/launcher
+  SHAs are `0ec5d6ce...c87`/`498b4acc...4de`/`7157ee88...018`.
+- [ ] Commit/push the Stage-B infrastructure, rerun its preflight from a clean
+  synced tracked tree, and execute the sole matched `120b x 2e` pair. Inspect
+  every persisted gate, full-validation replay, source fold, transition,
+  calibration, placebo, runtime, trace, and raw-data identity before deciding
+  whether the fixed post-smoke robustness/XAI audit is authorized.
