@@ -19261,3 +19261,29 @@ Date: 2026-07-02
   originals remain absent, `deleted_anything=false`, and `blockers=[]` at
   summary SHA `e15c0485...adcf`. Closure SHA is `d66da1c9...b34`; keeper and
   current-best commands remain unchanged.
+
+## BBox-Centered Log-Polar Stem A0 Protocol 2026-07-20 - Prospectively Locked
+
+- Screen an equation-distinct spatial route after factor-product closure. The
+  accepted ICCV-2019 paper and official Apache-2.0 implementation are pinned at
+  paper SHA `19718844...8e21` and commit/tree
+  `45d0a922...cfe8`/`527738e3...091`; the accepted ICLR-2018 PTN source and
+  official MIT repository are pinned at paper SHA `a49644af...e304` and
+  commit/tree `c6a4ad61...b7a3`/`a0b328bb...0cdc`.
+- Direct log-polar sampling is not another C4 prediction-consensus test. It
+  resamples the bbox-centered RGB support before learned convolution, while the
+  matched Cartesian role performs the same polar sampling only after the frozen
+  stem. Direct linear-polar and source-deranged log-polar descriptors are fixed
+  controls/placebos.
+- Lock protocol SHA `dc04f38e...6f76` before auditor code or new candidate
+  inference. The sole train-only A0 uses all 9,215 rows, the immutable five CIDT
+  source folds, four fixed lighting conditions, a 2,048D four-radial-band
+  mean/std descriptor, identical residual readouts, and a deterministic
+  transform/activation sheet with one row per class.
+- A complete pass requires simultaneous macro/class-1 F1 and precision gains,
+  recall/TP safety, net restricted-FP removal, four-of-five fold stability,
+  direction AUROC at least `0.62`, superiority to both linear and deranged
+  controls, lighting robustness, and exact replay. Any failure blocks model,
+  smoke, validation, test, probe, full train, and command promotion.
+- Keeper and current-best command/history hashes remain
+  `1f49d577...2677`, `36b9aa1a...0faf`, and `39bd2879...8f53`.

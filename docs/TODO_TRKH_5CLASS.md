@@ -3940,7 +3940,20 @@
   `deleted_anything=false`, `blockers=[]`; retention SHA is
   `e15c0485...adcf`, closure SHA is `d66da1c9...b34`, and keeper/current-best
   hashes remain unchanged.
-- [ ] Screen the next accepted-primary, licensed, equation-distinct route. It
-  must expose a spatially grounded class-conditional signal not reducible to
-  the now-closed global descriptor/readout families, and it must pass a
-  prospective TP-versus-restricted-FP information gate before model changes.
+- [x] Screen the next accepted-primary, licensed, equation-distinct route.
+  Select bbox-centered direct log-polar RGB sampling before the frozen CNN stem
+  from accepted ICCV-2019/ICLR-2018 sources and pinned Apache-2.0/MIT official
+  repositories. It is distinct from failed C4 consensus and Cartesian axial
+  descriptors because the coordinate transform precedes learned convolution.
+- [x] Prospectively lock object-centered log-polar A0 at protocol SHA
+  `dc04f38e...6f76`. Compare direct log-polar against matched Cartesian
+  post-feature polar pooling, direct linear-polar, and source-deranged placebo
+  over the immutable 9,215 train rows/five CIDT source folds/four lighting
+  conditions. Require precision, F1, restricted-FP, TP-safety, fold,
+  direction-AUROC, placebo, replay, and visual-geometry gates before model edits.
+- [ ] Implement and test the isolated log-polar auditor, exact replay, artifact
+  manifest, and VS Code-safe launcher without opening validation/test or
+  modifying the current model/trainer.
+- [ ] Commit/push the infrastructure before the sole formal A0, then either
+  authorize one locked dual-view model smoke after every gate passes or close
+  the exact/nearby polar route and preserve its evidence.
