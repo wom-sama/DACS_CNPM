@@ -4211,10 +4211,10 @@
   class reweighting because strict sampling exposes class 1 `3.41x`, while the
   failed natural-prior continuation cannot test representation formation from
   random initialization. Pin NeurIPS-2019 LDAM-DRW and its MIT official source.
-- [ ] Implement and independently replay the locked no-training A0 using only
-  train metadata and persisted CIDT clean predictions. Require exact hashes,
-  source-partition stability, and unsafe post-hoc-prior controls before one
-  natural-only scratch smoke is authorized.
+- [x] Implement and independently replay the locked no-training A0 using only
+  train metadata and persisted CIDT clean predictions. All seven gates pass;
+  exact replay SHA is `ab073792...25a51f`, and retention passes 800 directories
+  with no blocker. This authorizes one natural-only scratch smoke only.
 - [ ] If A0 passes, run the five-epoch natural-only smoke with scheduler horizon
   30, full validation, one trace per class, and complete XAI/robustness. Do not
   integrate deferred weighting unless every prospective Stage-B gate passes.

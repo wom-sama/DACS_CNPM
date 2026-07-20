@@ -19908,3 +19908,27 @@ Date: 2026-07-02
   evidence; only the natural-only smoke and later deferred-fork thresholds are
   prospective. No validation/test, model integration, full train, or
   current-best command update is authorized yet.
+
+## Deferred Reweight A0 Result - 2026-07-20
+
+- The no-training replay passes all seven gates. Exact strict exposure is
+  `[1844,1843,1843,1843,1843]`; class 1 receives `3.406654x` natural exposure.
+  Scratch clean-train class-1 support ratio/P/R/F1 is
+  `1.463956/0.643939/0.942699/0.765191`, with `275` restricted FP. Support
+  inflation and recall-minus-precision gap pass in all five source partitions.
+- Fixed square-root/full natural-prior corrections reduce class-1 recall to
+  `0.092421/0`; post-hoc prior correction is explicitly closed. Prospective
+  deferred `beta=0.999` weighting has class-1 mass share `0.116601`, between
+  natural `0.058709` and strict `0.199978`, without oversampling.
+- Summary/manifest/replay SHAs are `cfa0d366...9176a5`/
+  `53c8212a...d805c0`/`a00cf2f7...c0ce0`; second-process canonical replay is
+  exact. Focused/full pytest pass `4/4` and `1663/1663`.
+- Retention passes over `800` directories/all 50 valid object-schema manifests
+  with `blockers=[]` at SHA `950282d0...e65b19`. An initial invocation over
+  all 256 filename matches correctly failed before output on an array-schema
+  historical manifest; future reruns must filter for object payloads containing
+  `compacted_names`.
+- A0 authorizes only the locked five-epoch natural-only Stage-B smoke. Test,
+  deferred integration, probe/full train, and current-best updates remain
+  unauthorized. Full details are in
+  `TRKH_5CLASS_DEFERRED_REWEIGHT_A0_RESULT_20260720.md`.
