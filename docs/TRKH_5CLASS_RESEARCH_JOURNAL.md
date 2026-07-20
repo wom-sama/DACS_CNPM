@@ -20031,3 +20031,32 @@ Date: 2026-07-02
   prediction payload, verify existing fold/geometry evidence, then write the
   missing summary/manifest and run exact replay. No threshold, seed, equation,
   role, or candidate output may change.
+
+## Hyperspherical Support A0 Closure - 2026-07-21
+
+- Finalize only the six hash-locked interrupted payloads at commit `4102ca0`;
+  no second readout, support generation, or logistic fit occurs. Every
+  structural gate passes and canonical replay is exact over 9,215 rows with
+  maximum numeric difference `0.0`.
+- Reject after 9/22 mechanism gates fail. Versus duplicate balancing, the cap
+  candidate raises class1 precision `0.723164 -> 0.755796` and removes `38`
+  restricted FP, but breaks `23` class1 TP, lowers recall
+  `0.946396 -> 0.903882`, and gains only `+0.001115/+0.003376` macro/class1
+  F1. The required gains are `+0.002/+0.010` with TP net at least `-2`.
+- The behavior is stable, not sampling noise: repeat agreement is `0.999457`,
+  macro-F1 difference is `0.00009884`, and class1 F1 is identical. Precision
+  and FP improve in all five folds, but TP net is `[-9,-2,-6,-1,-5]`.
+- Geometry invalidates the single-cap premise on the current embedding. All 25
+  supports hit the `0.911738 rad` cap; none separates from any rival. Class 1
+  is nearest class 0 in every fold, with cap margin about `-1.01 rad`.
+- Close empirical cap generation and nearby alpha/radius/count/seed/readout,
+  post-hoc head-regularization, and FeatRecon-like SupCon integration on this
+  keeper. No validation/XAI/smoke/probe/full train/test or command update is
+  authorized. Full closure is in
+  `TRKH_5CLASS_HYPERSPHERICAL_SUPPORT_A0_CLOSURE_20260721.md`, SHA-256
+  `f2bdac0f757b4ef5feec8e7c1655986ac1094e540f70eba347b6c0a9478f1f81`.
+- Keep the 6.218 MiB formal at summary/manifest SHAs
+  `ff203f2d...2e537e` / `0cefb8c9...a09a8d`. Read-only retention passes over
+  805 directories, 51 object-schema manifests, and 233 expected-absent names
+  with no remaining original/deletion/blocker; retention SHA is
+  `405c210c...7f5121`.

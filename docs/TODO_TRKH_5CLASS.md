@@ -4251,11 +4251,25 @@
   manifest, VS Code-safe launcher, and 12 focused tests at `f2c45cb`. Pass
   compile/pyflakes, PowerShell parse, no-output locked preflight, focused
   `12/12`, and full pytest `1681/1681`.
-- [ ] Finalize the sole interrupted formal without rerunning readouts. Lock the
-  six pre-summary payload hashes before opening metrics, normalize only the
-  non-gating float32 keeper reference, reconstruct unchanged gates from the
-  existing predictions, and write only the missing summary/manifest.
-- [ ] Execute exactly one formal train-only A0 and inspect every metric, fold,
-  transition, geometry, seed-stability, replay, and retention artifact. Close
-  the route on any gate failure; authorize a default-off representation smoke
-  only after a complete pass.
+- [x] Finalize the sole interrupted formal without rerunning readouts. Verify
+  all six pre-summary payload hashes, normalize only the non-gating keeper
+  reference, reconstruct original gates, write only summary/manifest, and pass
+  exact second-process replay (`9215` rows, maximum difference `0.0`).
+- [x] Reject hyperspherical support after 9/22 mechanism gates fail. Candidate
+  precision/FP improve versus duplicate, but class1 TP net is `-23`, recall
+  falls `-0.042514`, and macro/class1 F1 gains are only
+  `+0.001115/+0.003376`; no smoke or trainer integration is authorized.
+- [x] Inspect all fold/seed/geometry evidence. Repeat agreement is `0.999457`;
+  TP losses occur in every fold; all 25 caps hit the maximum radius, no cap
+  separates from a rival, and class1 is nearest class0 with margin about
+  `-1.01 rad`. Close alpha/radius/count/seed/readout and post-hoc
+  head-regularization neighbors.
+- [x] Keep the 6.218 MiB formal and pass read-only retention over 805
+  directories, 51 object-schema manifests, and 233 expected-absent names with
+  zero remaining original/deletion/blocker at SHA `405c210c...7f5121`.
+  Closure SHA is `f2bdac0f...78f1f81`.
+- [ ] Screen and prospectively lock the next accepted-primary, licensed,
+  equation-distinct train-only gate for a learned class1-vs-class0 surface or
+  boundary representation with explicit TP protection. Reject prototype,
+  subcenter, GMM, neighbor, global contrastive, support expansion, and plain
+  optimizer/loss reweighting neighbors before code.
