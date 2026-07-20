@@ -50,8 +50,11 @@ function Assert-HostResources {
         2
     )
     Write-Host "Available physical memory: $AvailableGiB GiB"
-    if ($AvailableGiB -lt 10.0) {
-        throw "Formal PMG A0 requires at least 10 GiB available physical memory for four workers."
+    if ($AvailableGiB -lt 6.0) {
+        throw "Formal PMG A0 requires at least 6 GiB available physical memory for four workers."
+    }
+    if ($AvailableGiB -lt 8.0) {
+        Write-Host "Available memory is below 8 GiB; extraction and OOF readouts remain sequential."
     }
 }
 

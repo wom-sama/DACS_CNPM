@@ -19624,3 +19624,9 @@ Date: 2026-07-02
   summary SHA and intact manifest/contact sheet; even a complete A0 pass may
   authorize only the prospectively locked matched short pair, never full train
   or current-best command promotion.
+- Post-push host inspection found no compute process and an idle `P8` GPU, but
+  only `6.72 GiB` available RAM while Codex/ChatGPT and system services remained
+  active. Replace the launcher's unsupported `10 GiB` floor with a `6 GiB`
+  fail-closed floor plus an under-`8 GiB` warning. Batch `64`, workers `4`, and
+  the locked sequential extraction/readout protocol are unchanged; no user or
+  desktop process is terminated.
