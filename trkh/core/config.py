@@ -151,6 +151,7 @@ class ModelConfig:
     use_cnn_stem: bool = True
     stem_channels: int = 32
     stem_architecture: str = "conv_pool"
+    stem_normalization: str = "batch"
     stem_pooling_mode: str = "max"
     stem_softpool_blend: float = 0.15
     shifted_patch_tokenization: bool = False

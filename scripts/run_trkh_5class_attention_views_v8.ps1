@@ -11,6 +11,8 @@ param(
     [int]$ImageSize = 256,
     [ValidateSet("conv_pool", "coatnet_mbconv", "dbb_conv_pool")]
     [string]$StemArchitecture = "conv_pool",
+    [ValidateSet("batch", "ibn_a_first")]
+    [string]$StemNormalization = "batch",
     [ValidateSet("max", "soft", "max_soft")]
     [string]$StemPoolingMode = "max",
     [double]$StemSoftpoolBlend = 0.15,
@@ -1652,6 +1654,7 @@ if ($PreflightOnly) {
         scheduler_total_epochs = $SchedulerTotalEpochsEffective
         image_size = $ImageSize
         stem_architecture = $StemArchitecture
+        stem_normalization = $StemNormalization
         stem_pooling_mode = $StemPoolingMode
         stem_softpool_blend = $StemSoftpoolBlend
         shifted_patch_tokenization = [bool]$ShiftedPatchTokenization
@@ -2423,6 +2426,7 @@ try {
         "--patch-size", "16",
         "--stem-channels", "32",
         "--stem-architecture", "$StemArchitecture",
+        "--stem-normalization", "$StemNormalization",
         "--stem-pooling-mode", "$StemPoolingMode",
         "--stem-softpool-blend", "$StemSoftpoolBlend",
         "--shifted-patch-shift", "$ShiftedPatchShift",
@@ -3610,6 +3614,7 @@ if ($ClassIndependentHead) {
         disable_balanced_epoch_sampling = [bool]$DisableBalancedEpochSampling
         image_size = $ImageSize
         stem_architecture = $StemArchitecture
+        stem_normalization = $StemNormalization
         stem_pooling_mode = $StemPoolingMode
         stem_softpool_blend = $StemSoftpoolBlend
         shifted_patch_tokenization = [bool]$ShiftedPatchTokenization

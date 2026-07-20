@@ -388,6 +388,15 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--stem-normalization",
+        choices=("batch", "ibn_a_first"),
+        default="batch",
+        help=(
+            "Normalization in the legacy conv_pool stem. ibn_a_first applies "
+            "a 50/50 affine IN/BN split only in the first stem block."
+        ),
+    )
+    parser.add_argument(
         "--stem-pooling-mode",
         choices=("max", "soft", "max_soft"),
         default="max",
@@ -6626,6 +6635,7 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         use_cnn_stem=not args.disable_cnn_stem,
         stem_channels=args.stem_channels,
         stem_architecture=args.stem_architecture,
+        stem_normalization=args.stem_normalization,
         stem_pooling_mode=args.stem_pooling_mode,
         stem_softpool_blend=args.stem_softpool_blend,
         shifted_patch_tokenization=bool(args.shifted_patch_tokenization),
@@ -27464,6 +27474,7 @@ def main() -> None:
         if (
             float(args.patch_evidence_mil_loss_weight) > 0.0
             or bool(args.patch_evidence_router_head)
+            or str(args.stem_normalization) != "batch"
             or bool(args.shifted_patch_tokenization)
             or bool(args.gated_relative_position_attention)
             or bool(args.visual_contrast_attention)
@@ -27680,6 +27691,25 @@ def main() -> None:
             train_config.sample_weight_manifest = str(args.sample_weight_manifest or "")
             train_config.sample_weight_factor = float(args.sample_weight_factor)
             train_config.sample_weight_max = float(args.sample_weight_max)
+        if str(args.stem_normalization) != "batch":
+            if str(model_config.stem_architecture) != "conv_pool":
+                raise ValueError(
+                    "--stem-normalization ibn_a_first requires "
+                    "stem_architecture=conv_pool in the resumed checkpoint."
+                )
+            model_config.stem_normalization = str(args.stem_normalization)
+            print(
+                {
+                    "resume_cli_model_extension": {
+                        "stem_normalization": model_config.stem_normalization,
+                    },
+                    "reason": (
+                        "allow checkpoint-schema-compatible shallow IBN-a "
+                        "without rebuilding the full checkpoint config from CLI"
+                    ),
+                },
+                flush=True,
+            )
         if bool(args.shifted_patch_tokenization):
             model_config.shifted_patch_tokenization = True
             model_config.shifted_patch_shift = int(args.shifted_patch_shift)

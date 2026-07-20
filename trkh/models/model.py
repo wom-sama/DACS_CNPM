@@ -317,6 +317,43 @@ class MaxSoftPool2d(nn.Module):
         return torch.lerp(max_values, soft_values, self.soft_blend)
 
 
+class InstanceBatchNorm2d(nn.BatchNorm2d):
+    """IBN-a split with the legacy BatchNorm2d state-dict schema."""
+
+    def __init__(self, num_features: int, ratio: float = 0.5, **kwargs: Any) -> None:
+        super().__init__(num_features, **kwargs)
+        self.instance_channels = int(num_features * float(ratio))
+        if not 0 < self.instance_channels < int(num_features):
+            raise ValueError("IBN-a requires non-empty instance and batch channel groups.")
+
+    def forward(self, x: Tensor) -> Tensor:
+        self._check_input_dim(x)
+        batch_output = super().forward(x)
+        instance_input = x[:, : self.instance_channels].contiguous()
+        instance_output = F.instance_norm(
+            instance_input,
+            running_mean=None,
+            running_var=None,
+            weight=(
+                self.weight[: self.instance_channels]
+                if self.affine and self.weight is not None
+                else None
+            ),
+            bias=(
+                self.bias[: self.instance_channels]
+                if self.affine and self.bias is not None
+                else None
+            ),
+            use_input_stats=True,
+            momentum=0.0,
+            eps=self.eps,
+        )
+        return torch.cat(
+            (instance_output, batch_output[:, self.instance_channels :]),
+            dim=1,
+        )
+
+
 class ConvStemBlock(nn.Module):
     def __init__(
         self,
@@ -324,6 +361,7 @@ class ConvStemBlock(nn.Module):
         out_channels: int,
         pooling_mode: str = "max",
         softpool_blend: float = 0.15,
+        normalization: str = "batch",
     ) -> None:
         super().__init__()
         normalized_pooling_mode = str(pooling_mode).strip().lower()
@@ -342,7 +380,18 @@ class ConvStemBlock(nn.Module):
                 "stem_pooling_mode must be one of: max, soft, max_soft; "
                 f"got {pooling_mode!r}."
             )
+        normalized_normalization = str(normalization).strip().lower()
+        if normalized_normalization == "batch":
+            norm: nn.Module = nn.BatchNorm2d(out_channels)
+        elif normalized_normalization == "ibn_a":
+            norm = InstanceBatchNorm2d(out_channels, ratio=0.5)
+        else:
+            raise ValueError(
+                "stem block normalization must be one of: batch, ibn_a; "
+                f"got {normalization!r}."
+            )
         self.pooling_mode = normalized_pooling_mode
+        self.normalization = normalized_normalization
         self.block = nn.Sequential(
             OrderedDict(
                 [
@@ -357,7 +406,7 @@ class ConvStemBlock(nn.Module):
                             bias=False,
                         ),
                     ),
-                    ("norm", nn.BatchNorm2d(out_channels)),
+                    ("norm", norm),
                     ("act", nn.GELU()),
                     ("pool", pooling),
                 ]
@@ -376,8 +425,15 @@ class HybridConvStem(nn.Module):
         embed_dim: int = 256,
         pooling_mode: str = "max",
         softpool_blend: float = 0.15,
+        normalization: str = "batch",
     ) -> None:
         super().__init__()
+        normalized_normalization = str(normalization).strip().lower()
+        if normalized_normalization not in {"batch", "ibn_a_first"}:
+            raise ValueError(
+                "stem_normalization must be one of: batch, ibn_a_first; "
+                f"got {normalization!r}."
+            )
         mid_channels = stem_channels * 2
         self.blocks = nn.Sequential(
             ConvStemBlock(
@@ -385,6 +441,9 @@ class HybridConvStem(nn.Module):
                 stem_channels,
                 pooling_mode=pooling_mode,
                 softpool_blend=softpool_blend,
+                normalization=(
+                    "ibn_a" if normalized_normalization == "ibn_a_first" else "batch"
+                ),
             ),
             ConvStemBlock(
                 stem_channels,
@@ -401,6 +460,7 @@ class HybridConvStem(nn.Module):
         )
         self.pooling_mode = str(pooling_mode).strip().lower()
         self.softpool_blend = float(softpool_blend)
+        self.normalization = normalized_normalization
         self.downsample_factor = 8
         self.out_channels = embed_dim
 
@@ -5799,6 +5859,7 @@ class VisionTransformerWithRegisters(nn.Module):
         use_cnn_stem: bool = True,
         stem_channels: int = 32,
         stem_architecture: str = "conv_pool",
+        stem_normalization: str = "batch",
         stem_pooling_mode: str = "max",
         stem_softpool_blend: float = 0.15,
         shifted_patch_tokenization: bool = False,
@@ -6104,6 +6165,16 @@ class VisionTransformerWithRegisters(nn.Module):
                 "inceptionnext_atto_tokenizer, moganet_xt_tokenizer, "
                 "octave_conv, starnet_s2_tokenizer; "
                 f"got {stem_architecture!r}."
+            )
+        self.stem_normalization = str(stem_normalization).strip().lower()
+        if self.stem_normalization not in {"batch", "ibn_a_first"}:
+            raise ValueError(
+                "stem_normalization must be one of: batch, ibn_a_first; "
+                f"got {stem_normalization!r}."
+            )
+        if self.stem_normalization != "batch" and self.stem_architecture != "conv_pool":
+            raise ValueError(
+                "stem_normalization=ibn_a_first is only supported by stem_architecture=conv_pool."
             )
         self.stem_pooling_mode = str(stem_pooling_mode).strip().lower()
         self.stem_softpool_blend = float(stem_softpool_blend)
@@ -6910,6 +6981,7 @@ class VisionTransformerWithRegisters(nn.Module):
                     embed_dim=embed_dim,
                     pooling_mode=self.stem_pooling_mode,
                     softpool_blend=self.stem_softpool_blend,
+                    normalization=self.stem_normalization,
                 )
             stem_stride = self.stem.downsample_factor
             if image_size % stem_stride != 0:
@@ -11220,6 +11292,7 @@ class DETRVisionTransformerWithRegisters(VisionTransformerWithRegisters):
         use_cnn_stem: bool = True,
         stem_channels: int = 32,
         stem_architecture: str = "conv_pool",
+        stem_normalization: str = "batch",
         stem_pooling_mode: str = "max",
         stem_softpool_blend: float = 0.15,
         shifted_patch_tokenization: bool = False,
@@ -11530,6 +11603,7 @@ class DETRVisionTransformerWithRegisters(VisionTransformerWithRegisters):
             use_cnn_stem=use_cnn_stem,
             stem_channels=stem_channels,
             stem_architecture=stem_architecture,
+            stem_normalization=stem_normalization,
             stem_pooling_mode=stem_pooling_mode,
             stem_softpool_blend=stem_softpool_blend,
             shifted_patch_tokenization=shifted_patch_tokenization,
