@@ -4174,8 +4174,17 @@
   readout, threshold, descriptor-subset, and test-time-voting neighbors on the
   current keeper. Retention passes over 796 directories/all 50 valid manifests
   with 219 originals absent and `blockers=[]` at SHA `38b3643f...c60216`.
-- [ ] Screen the next accepted-primary, officially licensed, equation-distinct
-  class-conditional surface-representation route. It must survive a
-  prospective train-only information/readiness gate and must not reopen frozen
-  perturbation sensitivity, paste mixing, handcrafted texture, attention
-  selection, post-hoc routing, or pretrained-teacher routes.
+- [x] Screen the next accepted-primary, officially licensed, equation-distinct
+  class-conditional surface-representation route. Select only Hamburger's
+  nonnegative low-rank reconstruction equation; do not copy its GPL-3.0 source
+  or transfer its segmentation schedule/results to TRKH classification.
+- [x] Pin the ICLR-2021 paper and authors' official repository at commit/tree
+  `d9b51f6...57c08`/`a399506...02c2e`, plus the independent BSD scikit-learn
+  numerical reference. Prospectively lock the 750-row train-only
+  Hamburger-NMF surface A0 at protocol SHA `c2c36323...7f7c9` before auditor
+  implementation or candidate metrics.
+- [ ] Implement the isolated rank-8/six-step NMF auditor, equal-dimensional
+  raw/SVD controls, seed-repeat/source-deranged placebos, independent NumPy
+  replay, fixed component/residual XAI sheet, focused tests, and VS Code-safe
+  launcher. Commit/push all infrastructure and pass engineering preflight
+  before opening the sole formal candidate metrics.

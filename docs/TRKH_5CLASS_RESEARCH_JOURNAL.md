@@ -19797,3 +19797,28 @@ Date: 2026-07-02
   learned class-conditional surface representation rather than reuse frozen
   perturbation sensitivity. Full detail is in
   `TRKH_5CLASS_CUTPASTE_SURFACE_RESPONSE_A0_CLOSURE_20260720.md`.
+
+## Research Lock 2026-07-20 - Hamburger-NMF Surface Decomposition A0
+
+- Screen the remaining representation families against the closure matrix.
+  Reject BagNet/stock-backbone, region-part, histogram/Gabor, covariance,
+  prototype, and noisy-label neighbors because their operative mechanisms have
+  already failed on this keeper. Retain only Geng et al.'s ICLR-2021
+  optimization-defined nonnegative low-rank reconstruction as an
+  equation-distinct surface representation.
+- Pin the accepted paper at SHA `4eed8898...ae9f1` and the authors' official
+  repository at commit/tree `d9b51f6...57c08`/`a399506...02c2e`. The official
+  code is GPL-3.0 and is reviewed only as a reference; TRKH will independently
+  implement the paper equations and cross-check against a separately written
+  NumPy oracle plus installed BSD scikit-learn `1.6.1`.
+- Preserve adverse transfer evidence before metrics: Hamburger reports
+  segmentation/image-generation results with large backbones and long
+  iteration schedules, not five-class scratch mango classification. No claimed
+  accuracy or schedule transfers to TRKH.
+- Prospectively lock protocol SHA `c2c36323...7f7c9` before auditor code or any
+  candidate metric. Use the exact 750-row CIDT train cohort, final object-bbox
+  tokens, fixed `256 -> 32` QR projection, rank 8, six NMF updates, equal 290D
+  raw/SVD/NMF roles, seed-repeat and source-deranged placebos, five-fold OOF
+  readouts, precision-first gates, independent replay, and a fixed 12-row XAI
+  sheet. Validation/test, model/trainer edits, smoke/probe/full train, and
+  current-best command updates remain forbidden.
