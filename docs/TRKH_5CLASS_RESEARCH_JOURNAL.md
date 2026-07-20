@@ -19315,3 +19315,42 @@ Date: 2026-07-02
   `94d651aa...84f0`/`b5583ffb...3e90`/`c24e7cd2...ded6`. No candidate metric,
   validation/test access, output artifact, checkpoint, smoke, probe, full train,
   or command promotion exists yet.
+
+## BBox-Centered Log-Polar Stem A0 Closure 2026-07-20 - Nonselective Suppression
+
+- Commit/push the isolated infrastructure at `d0d16d4`, rerun no-output
+  preflight, and complete the sole formal over all 9,215 `yolo_f/train` rows,
+  five source folds, and clean/dim/bright/low-contrast conditions. All source,
+  provenance, geometry, convergence, dataset-integrity, and isolation checks
+  pass; validation/test remain unopened.
+- Reject direct log-polar before model integration. Versus matched Cartesian,
+  clean macro/class1 F1 changes `-0.001550/-0.008260`, class1 precision/recall
+  changes `-0.002843/-0.007394`, restricted FP remain `28 -> 28`, FN-rescue/
+  TP-break is `12/16`, and corrections/harms are `56/57`.
+- Direct linear-polar is better than log-polar in clean macro/class1 F1 and
+  precision by `+0.017539/+0.039120/+0.016560`. Candidate direction AUROC is
+  only `0.518060`, effective rank is `13.986852`, and only one of five source
+  folds improves class1 F1. Candidate also loses aggregate F1 to the source-
+  deranged placebo. Twenty-two automatic gates fail.
+- Lighting replay does not rescue the route. Dim/bright/low-contrast class1-F1
+  deltas versus Cartesian are `+0.015179/-0.033613/+0.008319`, while restricted-
+  FP net removals are `-1/+8/-3`. Precision is negative under low contrast and
+  bright-light recall contracts strongly.
+- Manual transform/activation-sheet review confirms correct bbox center and
+  coordinate order. Log-polar maps instead emphasize silhouette, shadows,
+  context/padding transitions, and the angular seam; they do not isolate lesion
+  morphology from class 0/2/4 surface appearance. Close log/linear radius,
+  center, scale, band, seam, stem-placement, fusion, readout, threshold, seed,
+  and nearby polar sweeps on this keeper.
+- Formal runtime is `447.951 s`, with effective workers `4/4` and peak CUDA
+  allocation `2,254.911 MiB`. Exact equation replay verifies every payload at
+  probability and metric/gate differences `0.0`. Preserve summary/manifest/
+  prediction/cache/sheet SHAs `968b53a1...9db`/`84a2fd4c...4ae`/
+  `a876e4d3...75a`/`4acc06c0...984`/`235d411a...a81`; no smoke, probe,
+  checkpoint, full train, raw-data edit, or current-best command update occurs.
+- Focused tests pass `10/10`, full pytest passes `1571/1571`, and read-only
+  retention covers 783 directories/all 50 valid compaction manifests. All 219
+  compacted originals remain absent, no file is deleted, and `blockers=[]` at
+  summary SHA `a6e7dcf4...ca21`. Retain the 865.7 MB formal because the
+  four-condition exact equation replay depends on its compressed cache. Closure
+  SHA is `9a4a9b98...049b`; keeper/current-best command hashes remain unchanged.

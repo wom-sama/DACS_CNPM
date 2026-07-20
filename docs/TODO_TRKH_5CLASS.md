@@ -3958,6 +3958,24 @@
   pyflakes, PowerShell parse, focused `10/10`, full pytest `1571/1571`,
   no-output preflight, and a no-metric 64-row tensor check pass at `2.04 GiB`
   peak GPU allocation.
-- [ ] Commit/push the infrastructure before the sole formal A0, then either
-  authorize one locked dual-view model smoke after every gate passes or close
-  the exact/nearby polar route and preserve its evidence.
+- [x] Commit/push the infrastructure at `d0d16d4` before the sole formal A0.
+  Complete all 9,215 train rows/four conditions with workers `4/4`, exact
+  source isolation, unchanged raw metadata, 20/20 converged readouts, and
+  probability/metric/gate replay differences `0.0`.
+- [x] Reject direct log-polar before model integration. Candidate-minus-
+  Cartesian macro/class1 F1 is `-0.001550/-0.008260`, precision/recall is
+  `-0.002843/-0.007394`, restricted FP net removal is zero, and corrections/
+  harms are `56/57`. It loses to linear-polar and source-placebo controls;
+  direction AUROC is `0.518060`, effective rank is `13.986852`, and 22 gates
+  fail. Manual sheet review confirms valid geometry but silhouette/shadow/seam
+  responses rather than selective lesion morphology. Close nearby polar sweeps.
+- [x] Finalize log-polar closure with focused `10/10`, full pytest
+  `1571/1571`, and read-only retention over 783 directories/all 50 valid
+  compaction manifests. Preserve the exact-replay cache; all 219 compacted
+  originals remain absent with `deleted_anything=false`, `blockers=[]`, and
+  retention SHA `a6e7dcf4...ca21`. Closure SHA is `9a4a9b98...049b`;
+  current-best commands remain unchanged.
+- [ ] Screen the next accepted-primary, officially licensed, equation-distinct
+  class-conditional spatial route. Require a prospective mechanism that raises
+  class-1 precision and removes restricted FP without another broad support
+  suppressor/expander, then lock one train-only A0 before code or metrics.
