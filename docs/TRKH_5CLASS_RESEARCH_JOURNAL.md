@@ -19766,3 +19766,34 @@ Date: 2026-07-02
   `53.12` pairs/s with projected full-cohort geometry time `112.95 s` and
   minimum enumerated source/destination supports `740/511`. No seed, geometry,
   cohort, model, descriptor, readout, gate, or worker setting changes.
+
+## CutPaste Surface-Response A0 Closure - 2026-07-20
+
+- The sole 750-row, five-fold train-only formal rejects the exact route.
+  Candidate/base/Cutout/paired/source-deranged AUROCs are
+  `0.824913/0.831900/0.826645/0.833871/0.822772`. Candidate TP retention is
+  `0.964015`, but FP rejection is only `0.193694` (`43` rejects, `39`
+  corrections, `19` harms), below both base (`51`) and Cutout (`53`) FP
+  rejects. It wins both controls in only `2/5` folds.
+- Nine of 18 mechanism gates fail. Candidate response rank is only `3.781693`.
+  The strongest individual cue is regular class1-versus-rival mean-margin
+  delta at oriented AUROC `0.642421`: true class1 evidence is disrupted more
+  than restricted FP evidence. Paired contrast adds only `+0.001971` AUROC over
+  base, so this is low-rank fragility, not a precision-safe surface veto.
+- Preserve the prospective structural miss instead of repairing it: exact
+  argmax is retained, but clean probability max error `2.261996e-5` narrowly
+  exceeds the locked `2e-5`. Mechanism rejection is independently decisive.
+- All 6,000 geometry records and second-process hash replay pass. Manual review
+  passes the exact 12-row sheet (`4ec2c8ed...8d59d6e`), but cannot rescue the
+  automated failure. Stage B, integration, validation/test, smoke/probe/full
+  train, and current-best update remain forbidden.
+- Exact final summary/manifest SHAs are `887a5132...742ee`/
+  `8edf28ea...15d3f2`; all ten files total `6.96 MiB`. Focused/full tests pass
+  `14/14` and `1644/1644`. Read-only retention covers 796 directories/all 50
+  valid object-schema manifests with 219 originals absent, no deletion, and
+  `blockers=[]` at SHA `38b3643f...c60216`.
+- Close nearby CutPaste/Cutout/jitter/geometry/response/readout/threshold/
+  descriptor-subset/test-time-voting variants. The next method must add a new
+  learned class-conditional surface representation rather than reuse frozen
+  perturbation sensitivity. Full detail is in
+  `TRKH_5CLASS_CUTPASTE_SURFACE_RESPONSE_A0_CLOSURE_20260720.md`.

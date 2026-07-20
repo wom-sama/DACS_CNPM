@@ -4146,7 +4146,7 @@
   with the official BSD-3 PyTorch rectangle sampler as the licensed equation
   reference, because its proxy target differs from prior label-preserving and
   counterexample five-class paste routes.
-- [ ] Prospectively lock and implement the object-interior CutPaste
+- [x] Prospectively lock and implement the object-interior CutPaste
   surface-response A0. Use only the 750-row CIDT train cohort, five
   source-disjoint folds, four fixed CutPaste/CutPaste-Scar draws, paired
   Cutout/source-deranged controls, and clean-first conjunctive gates. Do not
@@ -4157,3 +4157,25 @@
   two-pixel erosion, and exhaustive valid-placement sampling. No model forward
   or candidate metric has been accessed; formal remains blocked until the new
   protocol hash, implementation, tests, and clean pushed preflight agree.
+- [x] Push the locked auditor/launcher/tests at `5aefb3c`, correct only the
+  operational RAM floor at `bc68585`, and complete the sole formal clean A0.
+  Requested/effective workers are `4/4`, paired GPU batch is `64`, peak VRAM
+  is `1.13453 GiB`, and no validation/test row or metric is opened.
+- [x] Reject CutPaste response information before Stage B. Candidate/base/
+  Cutout/paired/deranged AUROCs are `0.824913/0.831900/0.826645/0.833871/
+  0.822772`; candidate TP retention/FP rejection is `0.964015/0.193694`, it
+  rejects `8/10` fewer FP than base/Cutout, wins only `2/5` folds, and response
+  rank is `3.781693`. Nine of 18 mechanism gates fail.
+- [x] Pass all 6,000 geometry checks and exact second-process replay, inspect
+  the 12-row sheet, and finalize visual pass without rescuing the automated
+  failure. Preserve the 6.96 MiB formal at summary/manifest/sheet SHAs
+  `887a5132...742ee`/`8edf28ea...15d3f2`/`4ec2c8ed...8d59d6e`.
+- [x] Close CutPaste/CutPaste-Scar/Cutout geometry, jitter, draw, response,
+  readout, threshold, descriptor-subset, and test-time-voting neighbors on the
+  current keeper. Retention passes over 796 directories/all 50 valid manifests
+  with 219 originals absent and `blockers=[]` at SHA `38b3643f...c60216`.
+- [ ] Screen the next accepted-primary, officially licensed, equation-distinct
+  class-conditional surface-representation route. It must survive a
+  prospective train-only information/readiness gate and must not reopen frozen
+  perturbation sensitivity, paste mixing, handcrafted texture, attention
+  selection, post-hoc routing, or pretrained-teacher routes.
