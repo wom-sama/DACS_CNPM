@@ -19085,3 +19085,37 @@ Date: 2026-07-02
   loader remains workers `4/2` (`196.346 images/s` for train workers 4), GPU is
   isolated at P8, and no test/full-train/current-best-command permission exists
   before the formal two-epoch comparison.
+
+## Shallow IBN-a Stem A0 Closure 2026-07-20 - Broad Class-1 FP Expansion
+
+- Complete the sole committed/pushed matched smoke from the common current
+  keeper with seed 42, two epochs, 120 batches/epoch, full 2,606-row validation,
+  workers `4/2`, BF16, and five-class traces. All artifact hashes and provenance
+  checks pass; only run identity and `batch -> ibn_a_first` differ.
+- Control-to-candidate macro/class1 F1 changes
+  `-0.088650/-0.159915`; class1 precision/recall changes
+  `-0.216002/+0.026490`. Restricted class1 FP worsen by 100: eight removed and
+  108 created. Decisions yield only `33/254` corrections/harms despite
+  `15/11` class1 FN rescues/TP breaks.
+- Candidate class1 probability rises by mean `+0.02537` on true class 0 and
+  `+0.01148` on true class 2, including 80.7% of class-0 rows. NLL/Brier also
+  worsen. Six gates fail: macro, class1 F1, class1 precision, restricted FP,
+  correction/harm, and non-focus preservation.
+- Five-class rendered trace attention remains nearly unchanged (correlations
+  `0.947-0.998`; stem `0.944-0.998`) and manual review shows the same broad
+  fruit/edge focus. The failure is early feature-statistic/logit drift, not a
+  newly selective visual cue. Per the prospective stop rule, no post-smoke
+  robustness/XAI, probe, test, full train, or command promotion is allowed.
+- Close exact shallow IBN-a before any ratio/placement/channel-order/schedule/
+  seed/loss sweep. Preserve comparison/manifest SHAs
+  `b0e9c527...30da`/`9b033a33...8f42`; closure is
+  `TRKH_5CLASS_IBN_A_SHALLOW_STEM_A0_CLOSURE_20260720.md`.
+- Compact the rejected pair to 350 verified payloads while retaining every
+  prediction, metric, config, history, and five-class trace PNG. Exclude only
+  four rejected checkpoints, then delete only the three verified source run
+  directories, recovering 395,141,120 bytes. Preserve evidence/cleanup SHAs
+  `b1b68c1c...7fe`/`1ef2912d...7f3`.
+- The post-cleanup read-only retention audit passes over 777 directories and
+  all 50 valid compaction manifests with `blockers=[]`; summary SHA is
+  `117acf93...a3f7`. Keeper and current-best command/history hashes remain
+  unchanged. Final closure SHA is `c9c1e083...21dbc`.

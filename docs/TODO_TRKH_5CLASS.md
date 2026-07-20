@@ -3858,7 +3858,26 @@
   transition/source-group audit, and five regression tests. Pass Python
   compile, PowerShell parse, direct no-output preflight, focused `17/17`, full
   pytest `1540/1540`, loader `4/2`, and P8 GPU isolation.
-- [ ] Commit and push the prospective smoke infrastructure, then run the sole
-  two-epoch/120-batch full-validation control-versus-IBN pair. Inspect every
-  locked precision-first gate; only a complete pass may authorize changed-case
-  XAI and fixed dim/bright/low-contrast replay.
+- [x] Commit and push the prospective smoke infrastructure at `508582e`, then
+  complete the sole two-epoch/120-batch full-validation control-versus-IBN pair.
+  All provenance, alignment, trace, runtime, and artifact-hash checks pass.
+- [x] Reject shallow IBN-a. Macro/class1 F1 changes
+  `-0.088650/-0.159915`, class1 precision changes `-0.216002`, restricted FP
+  worsen by 100, and corrections/harms are `33/254`. Six clean gates fail;
+  no post-smoke robustness/XAI, probe, test, or full train is authorized.
+- [x] Inspect all five control/candidate architecture traces. Attention remains
+  nearly unchanged (`0.947-0.998` correlation) despite broad class1 logit
+  expansion, so close the route as feature-statistic drift rather than a new
+  class-conditional visual cue. Do not sweep nearby IBN variants.
+- [x] Compact the rejected smoke to 350 verified payloads while retaining
+  predictions, metrics, configs, hashes, histories, and all five-class trace
+  images. Exclude only four rejected checkpoints and delete only the three
+  verified source directories, recovering 395,141,120 bytes. Preserve payload/
+  cleanup SHAs `b1b68c1c...7fe`/`1ef2912d...7f3`.
+- [x] Pass the post-cleanup read-only retention audit over 777 directories and
+  all 50 valid compaction manifests with `blockers=[]`, summary SHA
+  `117acf93...a3f7`. Update the skill; keeper and current-best commands remain
+  unchanged. Final closure SHA is `c9c1e083...21dbc`.
+- [ ] Screen one equation-distinct, licensed primary-source method whose
+  mechanism can add class-conditional surface/boundary selectivity. Lock its
+  prospective protocol before any implementation or validation access.
