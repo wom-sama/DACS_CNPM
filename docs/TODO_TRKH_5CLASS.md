@@ -4294,9 +4294,30 @@
   probabilities (`0.0` error), bit-exact keeper state, all six roles with
   finite nonzero gradients and changed parameters, and only a recorded
   `7.364154e-5` BF16/batch-shape delta to the old CIDT cache with exact argmax.
-- [ ] Commit/push the DeepBDC infrastructure, rerun locked preflight and the
+- [x] Commit/push the DeepBDC infrastructure, rerun locked preflight and the
   no-output engineering forward on that clean pushed state, then execute the
   sole 750-row formal train-only audit, second-process state/score/action
   replay, and fixed 16-row XAI review. Open robustness only if every clean gate
   passes; never open validation/test, image-model training, or command
-  promotion from a failure.
+  promotion from a failure. Infrastructure commit is `9e31058`; all `11/11`
+  structural gates and exact second-process replay pass, but only `7/17`
+  mechanism gates pass, so clean failure correctly prevents robustness.
+- [x] Reject aligned BDC: candidate AUROC/TP retention/FP rejection is
+  `0.779603/0.964015/0.144144`, below covariance AUROC `0.789141` and the
+  same-weight dephased placebo `0.790123`. The placebo removes 50 FP versus
+  candidate 32 with only one more TP harm; aligned joint dependence is not the
+  selective signal.
+- [x] Review the fixed 16-row XAI sheet and record visual fail: maps emphasize
+  silhouette, padding/context transitions, boundary pixels, and isolated hot
+  spots rather than stable class-specific surface evidence. Close the exact
+  stem-final `d=32` BDC family and all locked nearby sweeps; no smoke, trainer
+  integration, validation/test, full train, or command update is authorized.
+- [x] Preserve the 12.741 MiB formal at summary/manifest SHAs
+  `1d0503b0...4fa91f7`/`3a1e2d0d...5eca6b`, delete nothing, and pass read-only
+  retention over 807 directories/all 50 valid manifests with all 219 compacted
+  originals absent and `blockers=[]` at SHA `84b1f209...d75609`. Closure SHA
+  is `2df639cd...2767fff`.
+- [ ] Screen and prospectively lock the next accepted-primary, permissively
+  implementable, equation-distinct class-1 precision representation. It must
+  learn supervised lesion/surface evidence and beat covariance plus a
+  marginal-preserving spatial placebo before any model integration.

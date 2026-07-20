@@ -20080,8 +20080,11 @@ Date: 2026-07-02
   verify it with a separate NumPy/FP64 oracle.
 - Prospectively locked
   `docs/TRKH_5CLASS_DEEPBDC_STEM_JOINT_DEPENDENCE_A0_PROTOCOL_20260721.md`
-  at SHA-256 `21b95f52a753458255cb7ec922fa2c9a6d9103ff96308ca6ace65ad838c0f512`
-  before auditor code, feature extraction, or candidate metrics. The exact
+  before auditor code, feature extraction, or candidate metrics. A pre-pixel
+  provenance erratum corrected two mistyped official-file hashes without
+  changing a scientific setting; final protocol SHA-256 is
+  `4148b61ecf40168a82796030dcb9fd4648e5312fe60e6ea21c3e27c47837f93d`.
+  The exact
   train-only cohort contains 750 keeper-predicted class-1 objects: 528 TP and
   222 restricted `0/2/4 -> 1` FP across five source-disjoint CIDT folds.
 - A0 captures the frozen keeper's `256x32x32` final CNN-stem map, removes only
@@ -20130,3 +20133,37 @@ Date: 2026-07-02
   validation/test access, model/trainer edit, smoke/probe/full train, or
   current-best command update has occurred. Commit/push this infrastructure
   before the one permitted formal train-only audit.
+
+## DeepBDC Stem Joint-Dependence A0 Closure - 2026-07-21
+
+- Run the sole 750-row formal from clean pushed commit `9e31058`. Extraction
+  uses effective `num_workers=4`, keeps ordinary/hooked probabilities exact,
+  leaves keeper state unchanged, and peaks at `1.187 GiB`; all 11 structural
+  gates pass. Full pytest remains `1703/1703`.
+- Reject aligned BDC after only 7/17 mechanism gates pass. Candidate
+  AUROC/TP retention/FP rejection is `0.779603/0.964015/0.144144`; covariance
+  AUROC is `0.789141`, and aligned-only AUROC is only `0.621579`.
+- The same-weight dephasing intervention is decisive: destroying aligned
+  spatial channel dependence raises AUROC to `0.790123`, FP rejection to
+  `0.225225`, and corrections from `32` to `50`, while harms move only
+  `19 -> 20`. The candidate is not exploiting the intended selective joint
+  dependence.
+- Candidate rank is healthy (`24.6980`) and every fold retains at least 95% TP,
+  so this is an information/selectivity failure, not descriptor collapse or a
+  single-fold threshold accident. Candidate beats base/mean/covariance/
+  trained-dephased/same-weight-dephased in only `3/4/2/4/2` folds.
+- Fixed XAI review fails: aligned/covariance gradients concentrate on fruit
+  silhouette, padding/context transitions, boundaries, and isolated pixels,
+  without stable lesion-specific evidence. Robustness remains unopened because
+  the clean conjunctive gate failed.
+- Independent replay has score/analysis differences `2.22e-16/1.07e-14` with
+  exact actions. Preserve final summary/manifest SHAs
+  `1d0503b0...4fa91f7`/`3a1e2d0d...5eca6b`; the 12.741 MiB formal needs no
+  cleanup. Read-only retention passes 807 directories/all 50 valid manifests
+  at SHA `84b1f209...d75609` with 219 originals absent and no blocker.
+- Close the locked DeepBDC dimension/stem/crop/projection/temperature/
+  normalization/optimizer/epoch/fold/seed/threshold/dephasing neighbors. No
+  model integration, smoke/probe/full train, validation/test, or current-best
+  command update is authorized. Full closure is
+  `TRKH_5CLASS_DEEPBDC_STEM_JOINT_DEPENDENCE_A0_CLOSURE_20260721.md`, SHA-256
+  `2df639cd9e565f59931c6737a52b88df6e4eece0903c41515d55000fd2767fff`.
