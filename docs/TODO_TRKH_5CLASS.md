@@ -4138,8 +4138,17 @@
   Retention passes 794 directories/all 50 manifests with 219 compacted
   originals absent and no blocker at SHA `ce5f71fa...dd78e`; closure SHA is
   `3b2959d9...3bf6a`.
-- [ ] Screen the next accepted-primary, officially licensed, equation-distinct
-  precision route against the closure matrix. Require a genuinely
-  class-conditional surface/boundary cue that is not another CLS-attention
-  selector, post-hoc threshold, pretrained transfer, or closed pooling/stem
-  neighbor; lock train-only source-disjoint gates before code or metrics.
+- [x] Screen the next accepted-primary, officially licensed, equation-distinct
+  precision route against the closure matrix. CAL is rejected before code
+  because its unique counterfactual-logit term is embedded in a pretrained,
+  160-epoch bilinear-attention/crop/drop/center recipe that overlaps closed
+  TRKH families. Select the CVPR-2021 CutPaste surface-irregularity hypothesis,
+  with the official BSD-3 PyTorch rectangle sampler as the licensed equation
+  reference, because its proxy target differs from prior label-preserving and
+  counterexample five-class paste routes.
+- [ ] Prospectively lock and implement the object-interior CutPaste
+  surface-response A0. Use only the 750-row CIDT train cohort, five
+  source-disjoint folds, four fixed CutPaste/CutPaste-Scar draws, paired
+  Cutout/source-deranged controls, and clean-first conjunctive gates. Do not
+  open validation/test or integrate/train unless all clean and lighting gates
+  pass.

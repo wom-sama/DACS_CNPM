@@ -19702,3 +19702,35 @@ Date: 2026-07-02
   Read-only retention passes 794 directories/all 50 manifests with 219
   originals absent, no deletion/blocker, at SHA `ce5f71fa...dd78e`; closure
   SHA is `3b2959d9...3bf6a`.
+
+## Research Lock 2026-07-20 - Object-Interior CutPaste Surface Response A0
+
+- Screen accepted primary and licensed-source candidates after IELT closure.
+  Finer-CAM was already closed on 2026-07-12, so it is not repeated. Reject
+  CAL before code because its distinct counterfactual-logit equation is bundled
+  with pretrained ResNet-101, 448-pixel bilinear attention pooling,
+  attention crop/drop, center loss, and a 160-epoch released configuration;
+  those components overlap closed TRKH families and do not provide a direct
+  class-1 surface cue.
+- Select Li et al. CutPaste (CVPR 2021) narrowly as a surface-irregularity
+  information gate. The primary paper reports a scratch ResNet-18 result and
+  defines normal-versus-CutPaste proxy supervision; this differs from the
+  rejected TRKH SnapMix/counterexample routes, which trained the five-class
+  decision directly on pasted images and widened class-1 support.
+- Pin the paper/supplement SHAs at `e40ec13...17f4`/`fa89f98...1ea6` and the
+  official BSD-3 torchvision `v0.21.0` rectangle-sampler reference at
+  commit/tree `7af6987...9eba`/`9188eec...ce0a`. Disclose that the authors did
+  not publish an official CutPaste implementation; the audit will implement
+  the paper equation independently and use official PyTorch only for sampler
+  cross-checks.
+- Record adverse transfer constraints before metrics: the original scratch
+  recipe uses 65,000 updates and studies 128-384 paper epochs, so it cannot be
+  copied into the <=30-dataset-epoch TRKH budget. A0 tests only whether the
+  frozen keeper already exposes a selective response that could justify a
+  light auxiliary branch.
+- Lock exactly 750 train-only CIDT keeper-class1 rows across all five source
+  folds (`528` TP, `222` target-`0/2/4` FP), four deterministic object-interior
+  CutPaste and CutPaste-Scar draws, geometry-matched Cutout, a source-deranged
+  placebo, clean-fitted OOF readouts, and clean-first conjunctive gates. No
+  validation/test, trainer/model edit, smoke/probe/full train, or command
+  update is authorized by the protocol alone.
