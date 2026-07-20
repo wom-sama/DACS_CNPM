@@ -19630,3 +19630,35 @@ Date: 2026-07-02
   fail-closed floor plus an under-`8 GiB` warning. Batch `64`, workers `4`, and
   the locked sequential extraction/readout protocol are unchanged; no user or
   desktop process is terminated.
+
+## Result 2026-07-20 - PMG Progressive-Jigsaw Signal A0 Rejected
+
+- Commit/push infrastructure at `86cd087` and the host-memory gate correction at
+  `9b8dcf1`. The sole formal uses all 9,215 train object rows, exact CIDT source
+  folds, effective workers `4`, and no validation/test pixels or metrics. Every
+  structural gate passes; model state is bit-exact and clean probability replay
+  differs by only `8.94e-8`.
+- PMG aligned versus clean control changes macro/class1 F1 by
+  `+0.000829/+0.008403`, class1 precision/recall by
+  `-0.002539/+0.018484`, corrections/harms by `96/103`, and restricted FP
+  removal/creation by `30/36`. Predicted class1 support expands `512 -> 527`;
+  true-class `0/2/4` FP change `91/24/6 -> 93/24/10`.
+- Source-fold class1 F1 deltas are
+  `+0.040533/-0.015495/+0.016021/-0.024333/+0.025789`, but only folds 2/3 have
+  non-worse precision and fold 3 loses `0.058252` recall. The weak aggregate
+  recall gain is neither precision-safe nor fold-stable.
+- PMG direction AUROC is `0.535661`, only `+0.024152` over the strongest
+  placebo; effective rank is `10.8696`. Deepest-only placebo reaches higher
+  macro/class1 F1 `0.917481/0.745763` than PMG
+  `0.916351/0.743446`, so progressive alignment is not the useful mechanism.
+- Manual five-class geometry review passes: local pixels/masks are preserved,
+  boundaries are sharp, and no interpolation/label-dependent transform is
+  present. Visual finalization cannot override the automated rejection. Final
+  summary/manifest SHAs are `13c47a69...d7f44`/`f48b5a9f...be89c`; replay
+  difference is `0.0` and every authorization flag remains false.
+- Keep the complete 9.16 MB replayable formal. Read-only retention passes 792
+  directories/all 50 valid object-schema manifests with all 219 compacted
+  originals absent, no deletion, and no blockers at SHA `4c7133c4...c9e33`.
+  Close PMG grids, seeds, stages, ordering, readout, fusion, threshold/router,
+  jigsaw probability, and sequential-training neighbors on this keeper. Closure
+  SHA is `ab643811...b5324`.

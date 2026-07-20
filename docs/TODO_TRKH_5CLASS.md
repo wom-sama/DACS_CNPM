@@ -4095,11 +4095,26 @@
   untracked user payloads remain untracked and match their prospective hashes.
   A visual pass can authorize only the matched short pair after an automated
   pass; it can never authorize full train or current-best command promotion.
-- [ ] Commit and push the PMG A0 infrastructure before opening formal train
-  pixels, then run exactly one `9215`-row formal with workers `4`, independently
-  replay every artifact, and inspect the fixed five-class jigsaw sheet.
-- [ ] If any PMG A0 gate fails, close grids/seeds/readout/stage/fusion neighbors
-  before trainer integration. If all gates pass, authorize only one matched
-  short sequential-update pair; full train and current-best commands stay
-  unchanged until that pair also clears metric, robustness, runtime, replay,
-  and XAI gates.
+- [x] Commit and push the PMG A0 infrastructure at `86cd087`, calibrate the host
+  RAM gate without changing protocol at `9b8dcf1`, then run exactly one
+  `9215`-row formal with effective workers `4`, independently replay every
+  artifact, and inspect/finalize the fixed five-class jigsaw sheet.
+- [x] Reject PMG A0 after 11/16 mechanism gates fail. Candidate-minus-control
+  macro/class1 F1 is only `+0.000829/+0.008403`; class1 precision/recall is
+  `-0.002539/+0.018484`, corrections/harms are `96/103`, and restricted FP
+  removal/creation is `30/36`. Deepest-only placebo has higher class1 F1, and
+  candidate direction AUROC/effective rank are only `0.535661/10.8696`.
+- [x] Because PMG A0 fails, close grids/seeds/readout/stage/fusion neighbors
+  before trainer integration. Do not authorize a matched short pair, full train,
+  or current-best command update.
+- [x] Pass geometry review and exact replay (`0.0`), retain the complete 9.16 MB
+  formal, and run read-only retention over 792 run directories/all 50 valid
+  object-schema manifests. All 219 compacted originals remain absent with no
+  deletion/blocker at retention SHA `4c7133c4...c9e33`; closure SHA is
+  `ab643811...b5324`.
+- [ ] Write, verify, commit, and push the PMG closure; keep current-best command
+  and update history byte-identical.
+- [ ] Screen the next accepted-primary, officially licensed, equation-distinct
+  route for a precision-selective class-1 signal. Lock source-disjoint train-only
+  TP-versus-restricted-FP and placebo gates before model/trainer edits; avoid
+  jigsaw, partial-conv, post-hoc threshold, and previously closed neighbors.
