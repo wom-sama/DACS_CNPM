@@ -20007,3 +20007,27 @@ Date: 2026-07-02
   before auditor implementation or candidate metrics. Validation/test,
   model/trainer edits, smoke/probe/full train, and current-best command updates
   remain forbidden.
+
+## Hyperspherical Support A0 Reporting Interruption - 2026-07-21
+
+- Commit/push the isolated auditor, 12 focused tests, and direct-native
+  PowerShell launcher at `f2c45cb`. Compile, pyflakes, PowerShell parse,
+  focused `12/12`, no-output locked preflight, and full pytest `1681/1681`
+  pass before formal execution. The preflight opens no NPZ and creates no run
+  output.
+- The first and only formal readout process writes six pre-summary payloads,
+  then stops before `summary.json` while the strict float64 metric helper checks
+  the historical float32 keeper reference. The loader allows the cache's
+  `2e-4` row-sum tolerance, but the helper requires `1e-9`; candidate gates do
+  not use this keeper reference.
+- Do not open the generated predictions, fold metrics, or geometry values.
+  Lock only their names, sizes, and SHA-256 values in
+  `TRKH_5CLASS_HYPERSPHERICAL_SUPPORT_A0_INCOMPLETE_FINALIZATION_ERRATUM_20260721.md`,
+  SHA-256
+  `1c19383dfde7c6216220a88a8d7833b07ba8df3c6432642d79580b1c6e6d1258`.
+  A second readout run is forbidden.
+- Authorize only a hash-locked incomplete finalizer: normalize keeper rows for
+  its non-gating reference, reconstruct unchanged gates from the existing
+  prediction payload, verify existing fold/geometry evidence, then write the
+  missing summary/manifest and run exact replay. No threshold, seed, equation,
+  role, or candidate output may change.

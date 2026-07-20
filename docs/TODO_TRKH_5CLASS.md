@@ -4245,10 +4245,16 @@
   natural, matched duplicate, seed-repeat, and nearest-center-deranged roles.
   Require selective class1 precision/F1/FP gains with TP protection before any
   trainer integration; validation/test and all training remain forbidden.
-- [ ] Commit and push the hyperspherical-support A0 protocol before writing the
-  auditor or opening candidate metrics.
-- [ ] Implement the isolated auditor, canonical replay, artifact manifest,
-  VS Code-safe launcher, and focused tests; run no-output preflight first.
+- [x] Commit and push the hyperspherical-support A0 protocol at `b28d961`
+  before writing the auditor or opening candidate metrics.
+- [x] Implement and push the isolated auditor, canonical replay, artifact
+  manifest, VS Code-safe launcher, and 12 focused tests at `f2c45cb`. Pass
+  compile/pyflakes, PowerShell parse, no-output locked preflight, focused
+  `12/12`, and full pytest `1681/1681`.
+- [ ] Finalize the sole interrupted formal without rerunning readouts. Lock the
+  six pre-summary payload hashes before opening metrics, normalize only the
+  non-gating float32 keeper reference, reconstruct unchanged gates from the
+  existing predictions, and write only the missing summary/manifest.
 - [ ] Execute exactly one formal train-only A0 and inspect every metric, fold,
   transition, geometry, seed-stability, replay, and retention artifact. Close
   the route on any gate failure; authorize a default-off representation smoke
