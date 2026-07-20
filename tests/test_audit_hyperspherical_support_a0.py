@@ -173,3 +173,60 @@ def test_manifest_detects_payload_mutation(tmp_path: Path) -> None:
     payload.write_text(json.dumps({"value": 2}), encoding="utf-8")
     with pytest.raises(ValueError, match="SHA-256 mismatch"):
         support_a0._verify_manifest(tmp_path)
+
+
+def test_keeper_reference_normalization_is_bounded_and_non_gating() -> None:
+    probabilities = np.asarray(
+        [[0.2, 0.2, 0.2, 0.2, 0.19999], [0.1, 0.2, 0.3, 0.1, 0.30001]],
+        dtype=np.float32,
+    )
+    normalized, record = support_a0.normalize_keeper_reference(probabilities)
+    np.testing.assert_allclose(normalized.sum(axis=1), 1.0, atol=1e-12)
+    assert record["maximum_pre_normalization_row_sum_error"] <= 2e-4
+    assert record["enters_candidate_or_gate"] is False
+
+
+def test_incomplete_payload_verification_locks_exact_set_size_and_hash(
+    tmp_path: Path,
+) -> None:
+    payload = tmp_path / "predictions.csv"
+    payload.write_text("locked", encoding="utf-8")
+    expected = {
+        payload.name: {
+            "size_bytes": payload.stat().st_size,
+            "sha256": support_a0._sha256(payload),
+        }
+    }
+    result = support_a0.verify_incomplete_payloads(tmp_path, expected)
+    assert result["verified"] is True
+    assert result["payload_count"] == 1
+    (tmp_path / "extra.txt").write_text("extra", encoding="utf-8")
+    with pytest.raises(ValueError, match="payload set differs"):
+        support_a0.verify_incomplete_payloads(tmp_path, expected)
+
+
+def test_prediction_payload_replay_matches_cache_and_folds(tmp_path: Path) -> None:
+    targets, folds, outputs = _passing_predictions()
+    rows = targets.size
+    cache = {
+        "labels": targets,
+        "sample_index": np.arange(rows, dtype=np.int64),
+        "paths": np.asarray(
+            [str(tmp_path / "images" / "train" / f"image_{i}.jpg") for i in range(rows)]
+        ),
+        "source_stems": np.asarray([f"image_{i}" for i in range(rows)]),
+    }
+    prediction_path = tmp_path / "predictions.csv"
+    support_a0._write_csv(
+        prediction_path,
+        support_a0._prediction_rows(cache=cache, folds=folds, outputs=outputs),
+    )
+    replay_targets, replay_folds, replay_outputs = support_a0.load_prediction_payload(
+        prediction_path,
+        cache=cache,
+        expected_folds=folds,
+    )
+    np.testing.assert_array_equal(replay_targets, targets)
+    np.testing.assert_array_equal(replay_folds, folds)
+    for role in support_a0.ROLES:
+        np.testing.assert_allclose(replay_outputs[role], outputs[role], atol=0.0)

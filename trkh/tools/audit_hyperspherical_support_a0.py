@@ -61,6 +61,11 @@ PROTOCOL_PATH = (
     / "docs"
     / "TRKH_5CLASS_HYPERSPHERICAL_SUPPORT_A0_PROTOCOL_20260721.md"
 )
+ERRATUM_PATH = (
+    REPO_ROOT
+    / "docs"
+    / "TRKH_5CLASS_HYPERSPHERICAL_SUPPORT_A0_INCOMPLETE_FINALIZATION_ERRATUM_20260721.md"
+)
 TRAIN_CACHE_PATH = (
     REPO_ROOT
     / "runs"
@@ -91,6 +96,11 @@ LOCKED_FILES = (
         "protocol",
         PROTOCOL_PATH,
         "f9485b7bb0ed22b8ff5d6b4cc2f79af0f766b409d43eef2be3f70518410b280c",
+    ),
+    (
+        "incomplete_finalization_erratum",
+        ERRATUM_PATH,
+        "1c19383dfde7c6216220a88a8d7833b07ba8df3c6432642d79580b1c6e6d1258",
     ),
     (
         "train_embedding_cache",
@@ -134,6 +144,33 @@ LOCKED_FILES = (
     ),
 )
 
+INCOMPLETE_PAYLOADS = {
+    "fold_assignment.json": {
+        "size_bytes": 4246,
+        "sha256": "162f75c959957ce89c72a43b44a916ebf56b458b7044fc016bb6991727ef97fc",
+    },
+    "fold_metrics.csv": {
+        "size_bytes": 3008,
+        "sha256": "79ccb358096a893d94a6f42a1e7a307052e9ccd06bf814659560e3da0c6e662c",
+    },
+    "fold_protocol.json": {
+        "size_bytes": 25721,
+        "sha256": "b45852a53dc015740fb4b945be459e91d76b50fbaa34851c8e133728b8a51966",
+    },
+    "predictions.csv": {
+        "size_bytes": 6221489,
+        "sha256": "ec86e45c8d539e48d1bcb6801e09476acb80226f82f4839f8eb48eecc467da20",
+    },
+    "synthetic_geometry.csv": {
+        "size_bytes": 51637,
+        "sha256": "051f454e47c133fc6ba97b21c67b5eb60c6baa4ce42c87fbda44827888577134",
+    },
+    "synthetic_geometry.json": {
+        "size_bytes": 119813,
+        "sha256": "9ed3d9241718b49931de26c8640a95f4f97ca7e0ac4207318e67e1ade7fad796",
+    },
+}
+
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -148,6 +185,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     )
     parser.add_argument("--blas-threads", type=int, default=8)
     parser.add_argument("--preflight-only", action="store_true")
+    parser.add_argument("--finalize-incomplete", action="store_true")
     parser.add_argument("--replay-summary", type=Path)
     return parser.parse_args(argv)
 
@@ -924,6 +962,36 @@ def classification_metrics(
     }
 
 
+def normalize_keeper_reference(
+    probabilities: np.ndarray,
+) -> Tuple[np.ndarray, Dict[str, object]]:
+    values = np.asarray(probabilities, dtype=np.float64)
+    if values.ndim != 2 or values.shape[1] != CLASS_COUNT:
+        raise ValueError("Keeper reference must have shape [N,5]")
+    if not np.isfinite(values).all() or bool((values < 0.0).any()):
+        raise ValueError("Keeper reference contains invalid values")
+    row_sums = values.sum(axis=1, keepdims=True)
+    if bool((row_sums <= 0.0).any()):
+        raise ValueError("Keeper reference contains a zero probability row")
+    maximum_error = float(np.max(np.abs(row_sums[:, 0] - 1.0)))
+    if maximum_error > 2e-4:
+        raise ValueError(
+            "Keeper reference row-sum error exceeds the locked cache tolerance: "
+            f"{maximum_error}"
+        )
+    normalized = values / row_sums
+    return normalized, {
+        "normalization_applied": True,
+        "source_dtype": str(np.asarray(probabilities).dtype),
+        "maximum_pre_normalization_row_sum_error": maximum_error,
+        "maximum_post_normalization_row_sum_error": float(
+            np.max(np.abs(normalized.sum(axis=1) - 1.0))
+        ),
+        "normalized_probabilities_sha256": _array_sha256(normalized),
+        "enters_candidate_or_gate": False,
+    }
+
+
 def _focus(metrics: Mapping[str, object]) -> Mapping[str, object]:
     return metrics["per_class"][FOCUS_CLASS]
 
@@ -1298,6 +1366,97 @@ def _verify_manifest(output_dir: Path) -> Dict[str, object]:
     }
 
 
+def verify_incomplete_payloads(
+    output_dir: Path,
+    expected: Mapping[str, Mapping[str, object]] = INCOMPLETE_PAYLOADS,
+) -> Dict[str, object]:
+    resolved = Path(output_dir).expanduser().resolve()
+    if not resolved.is_dir():
+        raise FileNotFoundError(f"Incomplete output directory is missing: {resolved}")
+    if (resolved / "summary.json").exists() or (
+        resolved / "artifact_manifest.json"
+    ).exists():
+        raise FileExistsError(
+            "Incomplete finalization requires both summary and manifest to be absent"
+        )
+    observed = {
+        path.name: path for path in sorted(resolved.iterdir()) if path.is_file()
+    }
+    if set(observed) != set(expected):
+        raise ValueError(
+            "Incomplete payload set differs from the locked erratum: "
+            f"observed={sorted(observed)}, expected={sorted(expected)}"
+        )
+    records: Dict[str, object] = {}
+    for name, lock in expected.items():
+        path = observed[name]
+        size = int(path.stat().st_size)
+        digest = _sha256(path)
+        if size != int(lock["size_bytes"]):
+            raise ValueError(f"Incomplete payload size mismatch: {name}")
+        if digest != str(lock["sha256"]):
+            raise ValueError(f"Incomplete payload SHA-256 mismatch: {name}")
+        records[name] = {
+            "size_bytes": size,
+            "sha256": digest,
+        }
+    return {
+        "verified": True,
+        "payload_count": len(records),
+        "files": records,
+    }
+
+
+def load_prediction_payload(
+    path: Path,
+    *,
+    cache: Mapping[str, np.ndarray],
+    expected_folds: np.ndarray,
+) -> Tuple[np.ndarray, np.ndarray, Dict[str, np.ndarray]]:
+    expected_rows = int(np.asarray(cache["labels"]).shape[0])
+    targets = np.full(expected_rows, -1, dtype=np.int64)
+    folds = np.full(expected_rows, -1, dtype=np.int64)
+    outputs = {
+        role: np.full((expected_rows, CLASS_COUNT), np.nan, dtype=np.float64)
+        for role in ROLES
+    }
+    observed = np.zeros(expected_rows, dtype=bool)
+    with Path(path).open("r", newline="", encoding="utf-8-sig") as handle:
+        for row in csv.DictReader(handle):
+            sample_index = int(row["sample_index"])
+            if sample_index < 0 or sample_index >= expected_rows or observed[sample_index]:
+                raise ValueError(f"Prediction sample index is invalid: {sample_index}")
+            if str(row["source_stem"]).casefold() != str(
+                cache["source_stems"][sample_index]
+            ).casefold():
+                raise ValueError(f"Prediction/cache source mismatch at {sample_index}")
+            if Path(str(row["image_path"])).name.casefold() != Path(
+                str(cache["paths"][sample_index])
+            ).name.casefold():
+                raise ValueError(f"Prediction/cache path mismatch at {sample_index}")
+            target = int(row["target_index"])
+            fold = int(row["fold"])
+            if target != int(cache["labels"][sample_index]):
+                raise ValueError(f"Prediction/cache target mismatch at {sample_index}")
+            if fold != int(expected_folds[sample_index]):
+                raise ValueError(f"Prediction/CIDT fold mismatch at {sample_index}")
+            targets[sample_index] = target
+            folds[sample_index] = fold
+            for role in ROLES:
+                outputs[role][sample_index] = [
+                    float(row[f"{role}_prob_{class_index}"])
+                    for class_index in range(CLASS_COUNT)
+                ]
+            observed[sample_index] = True
+    if not observed.all():
+        raise ValueError(
+            f"Prediction payload is incomplete: {int(observed.sum())}/{expected_rows}"
+        )
+    if any(not np.isfinite(outputs[role]).all() for role in ROLES):
+        raise ValueError("Prediction payload contains non-finite role probabilities")
+    return targets, folds, outputs
+
+
 def _recursive_difference(left: object, right: object, path: str = "root") -> float:
     if isinstance(left, Mapping) and isinstance(right, Mapping):
         if set(left) != set(right):
@@ -1494,9 +1653,194 @@ def _geometry_structural_gates(
     }
 
 
+def finalize_incomplete(args: argparse.Namespace) -> Dict[str, object]:
+    started = time.perf_counter()
+    locked = verify_locked_inputs()
+    preflight = verify_preflight_checks()
+    output_dir = Path(args.output_dir).expanduser().resolve()
+    incomplete = verify_incomplete_payloads(output_dir)
+
+    cache = load_locked_train_cache()
+    cidt_folds, fold_assignment = load_locked_cidt_folds(cache)
+    stored_fold_assignment = json.loads(
+        (output_dir / "fold_assignment.json").read_text(encoding="utf-8")
+    )
+    fold_assignment_difference = _recursive_difference(
+        stored_fold_assignment, _jsonable(fold_assignment)
+    )
+    if fold_assignment_difference > 0.0:
+        raise ValueError("Stored fold assignment differs from the locked CIDT replay")
+
+    targets, prediction_folds, outputs = load_prediction_payload(
+        output_dir / "predictions.csv",
+        cache=cache,
+        expected_folds=cidt_folds,
+    )
+    if not np.array_equal(targets, cache["labels"]):
+        raise ValueError("Finalizer prediction targets differ from the locked cache")
+    if not np.array_equal(prediction_folds, cidt_folds):
+        raise ValueError("Finalizer prediction folds differ from the locked CIDT folds")
+
+    fold_protocol = json.loads(
+        (output_dir / "fold_protocol.json").read_text(encoding="utf-8")
+    )
+    geometry_payload = json.loads(
+        (output_dir / "synthetic_geometry.json").read_text(encoding="utf-8")
+    )
+    geometry_rows = geometry_payload["rows"]
+    geometry_gates = _geometry_structural_gates(geometry_rows, fold_protocol)
+    geometry_gate_difference = _recursive_difference(
+        geometry_payload["structural_gates"], geometry_gates
+    )
+    if geometry_gate_difference > 0.0:
+        raise ValueError("Stored geometry gates differ from the locked replay")
+
+    analysis = analyze_predictions(targets, prediction_folds, outputs)
+    normalized_keeper, keeper_normalization = normalize_keeper_reference(
+        cache["probabilities"]
+    )
+    structural_gates = {
+        "locked_inputs_verified": True,
+        "repo_clean_pushed_and_protocol_ancestor": True,
+        "incomplete_payload_set_and_hashes_exact": bool(incomplete["verified"]),
+        "train_rows_exact": int(cache["labels"].size) == EXPECTED_ROWS,
+        "class_counts_exact": tuple(
+            np.bincount(cache["labels"], minlength=CLASS_COUNT).tolist()
+        )
+        == EXPECTED_CLASS_COUNTS,
+        "fold_counts_exact": tuple(
+            np.bincount(cidt_folds, minlength=FOLDS).tolist()
+        )
+        == EXPECTED_FOLD_COUNTS,
+        "source_overlap_zero": int(fold_assignment["source_overlap"]) == 0,
+        "stored_fold_assignment_exact": fold_assignment_difference == 0.0,
+        "stored_geometry_gates_exact": geometry_gate_difference == 0.0,
+        "all_outputs_cover_all_rows": all(
+            outputs[role].shape == (EXPECTED_ROWS, CLASS_COUNT)
+            and np.isfinite(outputs[role]).all()
+            for role in ROLES
+        ),
+        "preflight_checks_passed": all(
+            bool(record["passed"]) for record in preflight.values()
+        ),
+        "validation_test_unopened": True,
+        **geometry_gates,
+    }
+    structural_passed = all(structural_gates.values())
+    passed = structural_passed and bool(analysis["mechanism_gates_passed"])
+    finalization_seconds = time.perf_counter() - started
+
+    with threadpool_limits(limits=int(args.blas_threads)):
+        effective_threadpools = threadpool_info()
+    summary = {
+        "mode": "hyperspherical_support_a0",
+        "status": "pass" if passed else "fail",
+        "locked_inputs": locked,
+        "protocol": {
+            "seed": SEED,
+            "folds": FOLDS,
+            "alpha": 0.99,
+            "logistic_c": 0.3,
+            "logistic_max_iter": 2000,
+            "logistic_tolerance": 1e-9,
+            "class_weight": None,
+            "roles": list(ROLES),
+            "blas_threads_requested": int(args.blas_threads),
+            "paper_scope": "independent Eq. 7/10/14-16 empirical-cap information gate",
+            "complete_featrecon_reproduction": False,
+            "dependency_versions": {
+                "numpy": np.__version__,
+                "scipy": scipy.__version__,
+                "scikit_learn": sklearn.__version__,
+            },
+            "effective_threadpools_during_finalization": effective_threadpools,
+        },
+        "input_summary": {
+            "rows": EXPECTED_ROWS,
+            "embedding_dim": EXPECTED_EMBEDDING_DIM,
+            "class_counts": list(EXPECTED_CLASS_COUNTS),
+            "fold_counts": list(EXPECTED_FOLD_COUNTS),
+            "embedding_array_sha256": _array_sha256(cache["embeddings"]),
+            "label_array_sha256": _array_sha256(cache["labels"]),
+            "fold_array_sha256": _array_sha256(cidt_folds),
+        },
+        "analysis": analysis,
+        "keeper_in_sample_reference": {
+            "normalization": keeper_normalization,
+            "metrics": classification_metrics(cache["labels"], normalized_keeper),
+        },
+        "structural_gates": structural_gates,
+        "structural_gates_passed": structural_passed,
+        "all_gates_passed": passed,
+        "runtime": {
+            "formal_compute_seconds": None,
+            "formal_compute_peak_rss_bytes": None,
+            "formal_compute_unavailable_reason": (
+                "The reporting exception occurred before summary serialization; "
+                "the missing values were not inferred."
+            ),
+            "incomplete_finalization_seconds": finalization_seconds,
+        },
+        "incomplete_finalization": {
+            "erratum_path": str(ERRATUM_PATH.resolve()),
+            "erratum_sha256": _sha256(ERRATUM_PATH),
+            "second_readout_run_performed": False,
+            "support_generation_called": False,
+            "logistic_fitting_called": False,
+            "locked_pre_summary_payloads": incomplete,
+            "pre_summary_payloads_rewritten": False,
+            "keeper_reference_only_normalized": True,
+        },
+        "preflight": preflight,
+        "authorization": {
+            "default_off_representation_smoke_authorized": passed,
+            "validation_authorized": False,
+            "test_authorized": False,
+            "probe_authorized": False,
+            "full_train_authorized": False,
+            "current_best_update_authorized": False,
+        },
+        "raw_dataset_touched": False,
+        "validation_test_opened": False,
+        "note": (
+            "Train-only frozen-keeper source-held readout evidence finalized from "
+            "the exact locked interrupted payloads. Embeddings are not encoder-OOF "
+            "and the audit is not a generalization estimate."
+        ),
+    }
+    _write_json(output_dir / "summary.json", summary)
+    manifest = _write_manifest(output_dir)
+    verified_manifest = _verify_manifest(output_dir)
+    return {
+        "status": summary["status"],
+        "all_gates_passed": passed,
+        "analysis": analysis,
+        "structural_gates": structural_gates,
+        "authorization": summary["authorization"],
+        "summary_sha256": _sha256(output_dir / "summary.json"),
+        "artifact_manifest_sha256": verified_manifest["manifest_sha256"],
+        "artifact_payload_count": manifest["payload_count"],
+        "second_readout_run_performed": False,
+    }
+
+
 def run_audit(args: argparse.Namespace) -> Dict[str, object]:
+    active_modes = sum(
+        bool(value)
+        for value in (
+            args.preflight_only,
+            args.finalize_incomplete,
+            args.replay_summary is not None,
+        )
+    )
+    if active_modes > 1:
+        raise ValueError(
+            "Choose only one of preflight, incomplete finalization, or replay"
+        )
     if args.replay_summary is not None:
         return replay_summary(args.replay_summary)
+    if args.finalize_incomplete:
+        return finalize_incomplete(args)
     output_path = Path(args.output_dir)
     if args.preflight_only:
         _require_absent_output(output_path)
@@ -1568,6 +1912,9 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
             ),
         },
     )
+    normalized_keeper, keeper_normalization = normalize_keeper_reference(
+        cache["probabilities"]
+    )
     summary = {
         "mode": "hyperspherical_support_a0",
         "status": "pass" if passed else "fail",
@@ -1601,9 +1948,10 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
             "fold_array_sha256": _array_sha256(folds),
         },
         "analysis": analysis,
-        "keeper_in_sample_reference": classification_metrics(
-            cache["labels"], cache["probabilities"]
-        ),
+        "keeper_in_sample_reference": {
+            "normalization": keeper_normalization,
+            "metrics": classification_metrics(cache["labels"], normalized_keeper),
+        },
         "structural_gates": structural_gates,
         "structural_gates_passed": structural_passed,
         "all_gates_passed": passed,
