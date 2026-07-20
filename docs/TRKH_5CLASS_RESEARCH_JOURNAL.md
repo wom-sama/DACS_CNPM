@@ -19166,3 +19166,34 @@ Date: 2026-07-02
   PowerShell parse, `git diff --check`, focused `9/9`, related `25/25`, and
   full pytest `1549/1549` pass. No formal output, validation/test access,
   checkpoint, XAI, smoke, probe, or full train exists yet.
+
+## C4 Rotation-Consensus A0 Closure 2026-07-20 - Reversed TP/FP Selectivity
+
+- Commit and push the isolated implementation at `c0941ad`, rerun clean
+  preflight, then complete the sole formal on all `9,215` `yolo_f/train` rows.
+  All provenance, source-fold, four-angle, CIDT, probability, resource, and
+  artifact structural gates pass. Clean-CIDT maximum probability difference is
+  `8.94e-8`; validation/test pixels, labels, predictions, and metrics remain
+  unopened.
+- C4 probability mean reduces macro/class1 F1 by
+  `-0.008779/-0.025223`; class1 precision/recall change
+  `-0.011132/-0.049908`. It removes/creates `53/52` restricted FP, rescues/
+  breaks `1/28` class1 cases, and yields `54/107` corrections/harms. NLL and
+  Brier also worsen.
+- Macro F1 falls in all five folds. Class1 precision falls in four folds;
+  restricted-FP net removals are `-4/+3/0/+4/-2`, while class1 net TP losses
+  are `2/9/4/4/8`. Twelve of 14 mechanism gates fail.
+- The mechanism is reversed: mean `delta_p1` is `-0.01835` on class1 TP but
+  only `-0.01154` on restricted FP. Direction and rotation-JS AUROC are
+  `0.42794/0.48461`. Orientation disagreement is real but cannot provide the
+  required negative-evidence direction. Close nearby C4/D4/angle/aggregation/
+  bbox/threshold/router/regularizer/seed variants before model integration.
+- Formal inference takes `355.995 s`, peaks at `1.1326 GiB`, and replays all
+  metrics/gates with difference `0.0`. Preserve four payloads totaling
+  `7,878,340` bytes at summary/manifest/prediction SHAs
+  `7695af82...3dfb`/`9807a7b4...16ac`/`9154f82f...a1a6`; do not compact.
+- Read-only retention covers 779 directories and all 50 valid compaction
+  manifests, with all 219 originals absent, no deletion, and `blockers=[]` at
+  summary SHA `93c13f33...389d`. No XAI, validation smoke, checkpoint, probe,
+  test, full train, raw-data edit, or current-best command update is permitted.
+  Closure SHA is `1a4708bd...06fe1`.

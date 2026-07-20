@@ -3892,6 +3892,24 @@
   py_compile/pyflakes, PowerShell parse, no-output preflight, related `25/25`,
   full pytest `1549/1549`, and `git diff --check`; implementation/auditor/
   launcher/test SHAs are pending the pre-formal commit.
-- [ ] Run the sole formal C4 A0 only after preflight. Close before model edits
-  on any failed gate; only a complete pass may authorize one parameter-neutral
-  stem-orbit implementation and matched validation smoke.
+- [x] Commit/push C4 infrastructure at `c0941ad`, rerun clean no-output
+  preflight, and complete the sole `9,215`-row formal. All structural/CIDT/
+  source/hash gates pass; exact replay difference is `0.0`.
+- [x] Reject C4 before model integration. Macro/class1 F1 change
+  `-0.008779/-0.025223`, class1 precision/recall change
+  `-0.011132/-0.049908`, restricted FP net removal is only one, and
+  corrections/harms are `54/107`. Twelve mechanism gates fail.
+- [x] Diagnose reversed selectivity: mean class1-TP `delta_p1=-0.01835` versus
+  restricted-FP `-0.01154`, direction AUROC `0.42794`, rotation-JS AUROC
+  `0.48461`, and macro F1 loss in all five folds. Close nearby C4/D4/angle/
+  aggregation/bbox/threshold/router/regularizer/seed variants.
+- [x] Preserve all four formal payloads at summary/manifest/prediction SHAs
+  `7695af82...3dfb`/`9807a7b4...16ac`/`9154f82f...a1a6`; only 7.9 MB, so no
+  compaction/deletion. Read-only retention over 779 directories/all 50 valid
+  manifests passes with 219 originals absent and `blockers=[]` at summary SHA
+  `93c13f33...389d`. Closure SHA is `1a4708bd...06fe1`; current-best commands
+  remain unchanged.
+- [ ] Screen the next accepted-primary, licensed, equation-distinct route. It
+  must encode class-conditional negative surface/boundary evidence rather than
+  generic invariance, localization, confidence averaging, or class-1 support
+  contraction/expansion; lock its train-only protocol before code or metrics.
