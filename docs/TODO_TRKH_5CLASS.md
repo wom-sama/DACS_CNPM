@@ -4044,8 +4044,28 @@
   pyflakes, focused `25/25`, full pytest `1601/1601`, PowerShell parse,
   role-difference checks, and no-output preflight pass; auditor/test/launcher
   SHAs are `0ec5d6ce...c87`/`498b4acc...4de`/`7157ee88...018`.
-- [ ] Commit/push the Stage-B infrastructure, rerun its preflight from a clean
-  synced tracked tree, and execute the sole matched `120b x 2e` pair. Inspect
-  every persisted gate, full-validation replay, source fold, transition,
-  calibration, placebo, runtime, trace, and raw-data identity before deciding
-  whether the fixed post-smoke robustness/XAI audit is authorized.
+- [x] Commit/push Stage-B infrastructure at `e259974`, pass the clean synced
+  preflight, and execute the sole matched `120b x 2e` pair with exact two-epoch
+  occurrence hashes. Full validation is 2,606 rows; test/raw data remain
+  untouched and runtime/VRAM pass at `1.020118x`/`6.071 GiB`.
+- [x] Correct the audit-only serialized failure-order incident at `59c82ce`
+  without retraining, reevaluation, or threshold changes. Corrected internal
+  and external replay are exact at summary/manifest SHAs
+  `7505bac2...4b7`/`56eaa9f8...bd5`; independent argmax is exact while the
+  locked BF16 probability replay gate remains failed. Focused/full tests pass
+  `26/26` and `1602/1602`.
+- [x] Reject validity partial-conv after the matched smoke. Macro/class1 F1
+  deltas are `-0.047336/-0.071376`, class1 precision/recall deltas are
+  `-0.088775/-0.033113`, corrections/harms are `37/155`, restricted FP net
+  reduction is `-26`, and all five source folds lose class1 precision. Eleven
+  gates fail; no post-smoke robustness/XAI, probe, test, full train, or command
+  update is authorized.
+- [x] Review all 240 trace images and quantify representation drift. Inputs are
+  exact, but stem/patch/block maps change globally while attention/pruning
+  selection changes little. Preserve both replayable best checkpoints and all
+  evidence; remove only two rejected `last.pt` files (`221.57 MiB`) at cleanup
+  SHA `b97b5160...c27`. Retention passes 790 directories/all 50 manifests with
+  219 originals absent and `blockers=[]` at SHA `cd49f50b...035`.
+- [ ] Screen the next accepted-primary, officially licensed, equation-distinct
+  route against the accumulated closure matrix. Prospectively lock a no-test
+  readiness gate before implementation and avoid all partial-conv neighbors.

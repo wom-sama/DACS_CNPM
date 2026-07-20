@@ -19546,3 +19546,39 @@ Date: 2026-07-02
   launcher SHAs are `0ec5d6ce...c87`/`498b4acc...4de`/`7157ee88...018`.
   Commit/push and a clean preflight remain mandatory before the sole Stage-B
   pair; no command update, probe, test, or full train is authorized yet.
+
+## Validity Partial-Conv Stage-B Closure 2026-07-20
+
+- Commit/push the matched pair at `e259974` and run the sole control/candidate
+  adaptation with exact shared data order, LR sequence, scheduler, budget, and
+  workers `4/2`. Both occurrence files have identical SHA `da5417d9...92be`;
+  test is unused and raw identity remains `a7caeccb...5fb6`.
+- The first audit completes inference but its own strict replay detects only a
+  reordered `failed_checks` list after sorted-key JSON serialization. Lock the
+  incident at correction SHA `5fee986e...33a`, sort failure names, include the
+  two mirrored cartography artifact paths, and persist argmax separately. Push
+  at `59c82ce`; do not retrain, reevaluate, or relax `5e-4`.
+- Corrected internal/external replay are exact. Independent control/candidate
+  argmax are exact, but BF16 probability errors `0.034772/0.030549` remain
+  above the locked bound and correctly fail. Corrected summary/manifest SHAs
+  are `7505bac2...4b7`/`56eaa9f8...bd5`.
+- Reject the route: macro/class1 F1 changes `-0.047336/-0.071376`, class1
+  precision/recall changes `-0.088775/-0.033113`, restricted FP removal/
+  creation is `20/46`, corrections/harms are `37/155`, and class1 TP rescue/
+  break is `5/10`. Every one of five source folds loses class1 precision.
+- Aligned validity still beats the deranged-mask placebo, proving geometry has
+  signal relative to a wrong mask, but it loses every class F1 to the standard
+  control. Calibration Brier/NLL also worsen. Eleven gates fail, so no fixed
+  robustness, additional XAI, probe, test, full train, or command promotion.
+- Trace review covers all 240 PNGs. Inputs are exact; stem/patch/block rendered
+  MAE grows from `2.2735/4.9083` to as high as `7.51`, while attention score is
+  `0.7246` and prune maps change under `0.7%`. Interpret this as global feature
+  drift without selective foreground benefit, not successful background
+  rejection.
+- Preserve both best checkpoints and replay artifacts; delete only the two
+  rejected `last.pt` files, freeing `221.57 MiB`, at cleanup SHA
+  `b97b5160...c27`. Read-only retention passes 790 directories/all 50 valid
+  manifests with 219 originals absent and `blockers=[]` at SHA
+  `cd49f50b...035`. Pycompile/pyflakes, focused `26/26`, full pytest
+  `1602/1602`, PowerShell parse, and diff checks pass. Closure SHA is
+  `2715b864...1fd`; keeper/current-best hashes remain unchanged.
