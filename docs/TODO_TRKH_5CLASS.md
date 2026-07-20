@@ -4191,9 +4191,22 @@
   focused `15/15`, full pytest `1659/1659`, no-output launcher preflight, and
   two-row real engineering forward all pass; workers are effective `4`, token
   support is `32/160`, state is bit-exact, and peak CUDA is `80.58 MiB`.
-- [ ] Commit/push the prospective no-metric Hamburger host-resource erratum,
+- [x] Commit/push the prospective no-metric Hamburger host-resource erratum,
   rerun engineering with batch/workers `64/2`, then execute the sole formal
   train-only audit, independent second-process replay, and fixed visual review.
   Open lighting only after the complete clean gate passes; never open
   validation/test or training otherwise. The final resource-amended protocol
   SHA is `0bc33ac9...d7996`.
+- [x] Reject Hamburger-NMF before lighting: candidate AUROC/TP retention/FP
+  rejection is `0.769127/0.876894/0.373874`, versus base AUROC `0.831900` and
+  source-deranged `0.769554`; seed action agreement is only `0.809333`.
+  Preserve the replay-tolerance and visual-alignment failures without post-hoc
+  repair. Closure SHA is `2c1cd458...d0f78`.
+- [x] Preserve the 18.57 MiB formal, delete nothing, and pass read-only
+  retention over 798 directories/all 50 manifests with 219 compacted
+  originals absent and `blockers=[]` at SHA `81e40d26...f5af`. Current-best
+  commands remain unchanged.
+- [ ] Screen the next accepted-primary, officially licensed, equation-distinct
+  supervised precision representation against all closed families. Require a
+  prospective train-only source-disjoint information gate and explicit
+  seed/placebo/XAI controls before any model integration or training.

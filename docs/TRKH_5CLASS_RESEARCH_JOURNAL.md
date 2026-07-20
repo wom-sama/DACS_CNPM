@@ -19853,3 +19853,32 @@ Date: 2026-07-02
   `4.25 GiB` RAM floor. Repeat engineering under the new `2/2` worker lock
   before the sole metric-producing formal run. The resource-amended final
   protocol SHA is `0bc33ac9...d7996`.
+- The sole 750-row train-only formal rejects Hamburger-NMF before lighting.
+  Base/raw/SVD/NMF/repeat/source-deranged AUROCs are
+  `0.831900/0.793927/0.743158/0.769127/0.744514/0.769554`. NMF raises FP
+  rejection to `0.373874` (`83` rejects) but retains only `0.876894` TP and
+  makes `77/65` corrections/harms. It loses to base/raw, is `-0.000427` below
+  source derangement, and wins raw+SVD together in only `1/5` folds.
+- This is not rank collapse: candidate effective rank is `34.454303`. It is an
+  unstable/nonselective representation failure: seed action agreement is
+  `0.809333`, seed AUROC difference is `0.024613`, and the minimum descriptor
+  cosine is `0.811616`. Ten of 21 mechanism gates fail.
+- Internal/external replay completes with exact actions and analysis, but the
+  prelocked `1e-10` score/state criterion fails at `2.23e-9/4.92e-10`; do not
+  repair it after metric access. CIDT argmax is exact and probability error is
+  within its separate gate at `2.31564e-5`. Structural gates pass `23/25`.
+- Manual XAI review fails: fixed rows `58` and `4012` are extreme thin strips,
+  and several support maps include hand/background. Final summary/manifest/
+  sheet SHAs are `0a0cf04d...e110a`/`79e37691...83280`/
+  `1c61c4eb...618a6`; all 11 files total `18.57 MiB` and are preserved.
+- Requested/effective workers are `2/2`; batch `64` clean extraction takes
+  `26.124 s` at `28.709` images/s with peak CUDA `1,202,673,664` bytes.
+  Read-only retention covers 798 directories/all 50 manifests, keeps all 219
+  compacted originals absent, deletes nothing, and reports `blockers=[]` at
+  SHA `81e40d26...f5af`. Closure SHA is `2c1cd458...d0f78`.
+- Close rank/step/seed/projection/component/descriptor/readout/threshold/voting
+  neighbors of per-image frozen-token NMF on this keeper. Stage B, integration,
+  validation/test, smoke/probe/full train, and current-best update remain
+  unauthorized. The next route must learn a stable supervised
+  class-conditional precision representation rather than post-hoc factorize
+  frozen final tokens.
