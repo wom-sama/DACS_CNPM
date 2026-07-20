@@ -3805,6 +3805,21 @@
   metrics. Use exact CIDT source folds/lighting conditions, matched 165D
   global-color/axial/placebo readouts, explicit precision/TP/FP/direction gates,
   conditional visual review, no validation/test, and no parameter sweep.
-- [ ] Implement, test, commit, and push the isolated axial color-topology A0;
-  run it once only after provenance, no-output preflight, and owned-process/GPU
-  checks. Integrate or train an image model only if every locked gate passes.
+- [x] Implement, test, commit, and push the isolated axial color-topology A0 at
+  `6f4e426`. Pass focused `10/10`, related `48/48`, immutable provenance,
+  no-output preflight, and owned-process/GPU isolation before the sole formal.
+- [x] Reject axial color topology before visual review or image-model training.
+  Clean precision improves `+0.036436` and restricted FP improve `121 -> 83`,
+  but recall/F1 fall `-0.109057/-0.038105`, corrections/harms are `96/270`,
+  and FN-rescue/TP-break counts are `2/61`. Candidate also loses to placebo;
+  all five clean folds reduce macro/class1 F1 and direction AUROC is `0.354470`.
+- [x] Preserve six formal payloads (`40,576,913` bytes) at summary/manifest/
+  aggregate SHAs `24707029...d224`/`4ad122d3...11c4`/`314c95df...862f`.
+  Exact replay, full pytest `1510/1510`, and read-only retention over `772`
+  directories pass with `blockers=[]`; no XAI, validation/test, checkpoint,
+  full train, raw-data edit, or current-best command update occurred. Closure
+  SHA is `e5b83e19...c1940db`.
+- [ ] Screen the next accepted-primary, licensed, equation-distinct route. It
+  must produce one joint TP-versus-restricted-FP mechanism under all four
+  lighting conditions, not merely combine the closed recall-expansion and
+  precision-suppression signals or add another post-hoc threshold/router.

@@ -18975,3 +18975,37 @@ Date: 2026-07-02
   compacted originals remain absent, and `blockers=[]` at SHA
   `6f2a6459...52da458`. Closure SHA is `8989b970...30620bd`; current-best
   checkpoint/commands remain unchanged.
+
+## Axial Color Topology A0 Closure 2026-07-20 - Precision Suppression Without TP Selectivity
+
+- After rejecting DRP/GTN/HEX/CoL/Deep-COOC/morphology-NAS, inspect all eight
+  17-model unanimous class-1 residuals and verify the UC Davis/Wiley spatial-
+  ripening evidence directly. Lock a novel train-only axial color-topology A0
+  before code at protocol SHA `038faf95...4758d1`; protocol/implementation
+  commits `34d43ff`/`6f4e426` are pushed before formal measurement.
+- The exact five-fold source-safe audit compares matched `165D` global-color,
+  global-plus-axial, and source-deranged-placebo offset readouts over all `9215`
+  `yolo_f/train` rows and clean/dim/bright/low-contrast CIDT conditions. All 15
+  readouts converge, axial effective rank is `21.644701`, minimum bin support is
+  `1308`, every structural check passes, and validation/test remain unopened.
+- Clean control-to-candidate macro/class1 F1 changes
+  `-0.022718/-0.038105`; class1 precision/recall changes
+  `+0.036436/-0.109057`. Restricted FP improve `121 -> 83`, but transitions are
+  `96/270` corrections/harms and only `2/61` FN rescues/TP breaks. Direction
+  AUROC is `0.354470`, and candidate loses to placebo by
+  `-0.022696/-0.034920` macro/class1 F1.
+- All five clean folds reduce macro and class1 F1. Dim/bright/low-contrast
+  class1 F1 changes `-0.055139/-0.044545/-0.022810`; fourteen automatic gates
+  fail. Reject before conditional contact sheets/XAI, image-model smoke,
+  validation/test, checkpoint writing, or full train. Do not sweep nearby axial
+  descriptors or convert this broad suppressor into another post-hoc verifier.
+- Independent replay is exact (`0.0`). Preserve six payloads totaling
+  `40,576,913` bytes at summary/manifest/aggregate SHAs
+  `24707029...d224`/`4ad122d3...11c4`/`314c95df...862f`. Formal elapsed
+  `1379.7 s`; requested loader workers `4` were effectively `0` under the
+  Windows-safe helper, while eight descriptor threads handled CPU analysis.
+- Focused `10/10`, related `48/48`, and full pytest `1510/1510` pass. Read-only
+  retention covers 772 directories, keeps all 34 current manifest-derived
+  compacted originals absent, deletes nothing, and reports `blockers=[]` at SHA
+  `41933ca4...8f8414`. Closure SHA is `e5b83e19...c1940db`; current-best
+  checkpoint/commands remain unchanged.
