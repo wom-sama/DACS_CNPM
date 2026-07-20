@@ -19983,3 +19983,27 @@ Date: 2026-07-02
   all `50` object-schema compaction manifests. All `219` compacted originals
   remain absent, `deleted_anything=false`, `blockers=[]`, and summary SHA is
   `adcc9ab35c2b8ccd460c62c804b86e45e406e58fdeb9e8e05317e045610816fe`.
+
+## Research Lock 2026-07-21 - Hyperspherical Support Generation A0
+
+- Screen recent accepted primary work before another trainer edit. Reject
+  PLTR-SD, GKP-GSA, SEL, CurrMix, and IBC before code because their operative
+  contrastive, multi-objective, SAM/group-gradient, MixUp, SSL/prototype, or
+  expert mechanisms overlap locally closed families and do not offer a new
+  precision-selective class-1 signal under the <=30-epoch scratch constraint.
+- Retain only the independently implementable cap-generation equations from
+  Yi et al., ICLR 2025 FeatRecon: class-center/0.99-angle support estimation,
+  the half-simplex cap bound, and truncated-normal tangent generation on the
+  unit hypersphere. OpenReview marks the accepted paper CC BY 4.0; no official
+  code release was found, so no implementation is copied.
+- Do not claim a FeatRecon reproduction. The paper omits concrete `q`,
+  `gamma`, and `m`; A0 fixes the unregularized empirical-support case and asks
+  only whether angular synthetic diversity beats exact duplicate balancing at
+  matched counts on source-held train readouts.
+- Prospectively lock all inputs, equations, seeds, controls, replay, and
+  conjunctive precision/recall/FP gates in
+  `TRKH_5CLASS_HYPERSPHERICAL_SUPPORT_A0_PROTOCOL_20260721.md`, SHA-256
+  `f9485b7bb0ed22b8ff5d6b4cc2f79af0f766b409d43eef2be3f70518410b280c`,
+  before auditor implementation or candidate metrics. Validation/test,
+  model/trainer edits, smoke/probe/full train, and current-best command updates
+  remain forbidden.

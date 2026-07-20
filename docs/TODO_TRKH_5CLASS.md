@@ -4232,8 +4232,24 @@
   alternate-shell deletion was attempted. Read-only retention passes over 803
   directories/all 50 manifests with 219 originals absent, no deletion/blocker,
   and summary SHA `adcc9ab3...816fe`.
-- [ ] Screen the next accepted-primary, officially licensed,
-  equation-distinct class1 representation route against the closure matrix.
-  Reject pure prior/classifier normalization neighbors unless they add a
-  train-time minority-specific representation mechanism with explicit TP
-  protection; lock a no-test A0 before any new trainer integration.
+- [x] Screen the next accepted-primary, licensed, equation-distinct class1
+  representation route against the closure matrix. Reject PLTR-SD, GKP-GSA,
+  SEL, CurrMix, and IBC before code because their operative mechanisms overlap
+  closed contrastive, multi-objective, SAM/group-gradient, MixUp, SSL,
+  prototype, or expert families.
+- [x] Select only the independently specified FeatRecon confidence-cap and
+  hyperspherical generation equations. Record the accepted ICLR-2025/OpenReview
+  CC-BY-4.0 source, absence of official code, missing `q/gamma/m` values, and
+  prohibit any claim of a complete FeatRecon reproduction.
+- [x] Prospectively lock a train-only, fixed-CIDT-fold information gate with
+  natural, matched duplicate, seed-repeat, and nearest-center-deranged roles.
+  Require selective class1 precision/F1/FP gains with TP protection before any
+  trainer integration; validation/test and all training remain forbidden.
+- [ ] Commit and push the hyperspherical-support A0 protocol before writing the
+  auditor or opening candidate metrics.
+- [ ] Implement the isolated auditor, canonical replay, artifact manifest,
+  VS Code-safe launcher, and focused tests; run no-output preflight first.
+- [ ] Execute exactly one formal train-only A0 and inspect every metric, fold,
+  transition, geometry, seed-stability, replay, and retention artifact. Close
+  the route on any gate failure; authorize a default-off representation smoke
+  only after a complete pass.
