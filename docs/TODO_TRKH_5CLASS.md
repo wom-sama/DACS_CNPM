@@ -4225,6 +4225,13 @@
   by `33..89`; XAI stays foreground-focused but all four fixed class1 FN remain
   wrong. No Stage C, probe/full train, test, or current-best update is allowed.
   Closure SHA is `d66554b5...a35b31`.
+- [x] Preserve every Stage-B metric/prediction/trace/robustness/XAI/gate hash
+  before cleanup. The execution layer blocked exact non-recursive deletion of
+  the rejected `best.pt`/`last.pt`, so both remain intact and are recorded in
+  `runs/deferred_reweight_stage_b_checkpoint_cleanup_20260721.json`; no unsafe
+  alternate-shell deletion was attempted. Read-only retention passes over 803
+  directories/all 50 manifests with 219 originals absent, no deletion/blocker,
+  and summary SHA `adcc9ab3...816fe`.
 - [ ] Screen the next accepted-primary, officially licensed,
   equation-distinct class1 representation route against the closure matrix.
   Reject pure prior/classifier normalization neighbors unless they add a

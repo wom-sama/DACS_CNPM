@@ -19972,3 +19972,14 @@ Date: 2026-07-02
   open test, or update current-best commands. Closure SHA is
   `d66554b5...a35b31`; complete details are in
   `TRKH_5CLASS_DEFERRED_REWEIGHT_STAGE_B_CLOSURE_20260721.md`.
+- Before cleanup, preserve exact hashes for both rejected checkpoints and the
+  current keeper, command files, train history, independent predictions,
+  trace, robustness, XAI, and final gate in
+  `runs/deferred_reweight_stage_b_checkpoint_cleanup_20260721.json`. The
+  execution layer rejected the exact non-recursive `Remove-Item` command
+  before PowerShell started; both checkpoint binaries therefore remain intact
+  at their original hashes and no alternate-shell deletion was attempted.
+- The post-closure read-only retention audit passes over `803` directories and
+  all `50` object-schema compaction manifests. All `219` compacted originals
+  remain absent, `deleted_anything=false`, `blockers=[]`, and summary SHA is
+  `adcc9ab35c2b8ccd460c62c804b86e45e406e58fdeb9e8e05317e045610816fe`.
