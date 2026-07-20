@@ -351,7 +351,9 @@ class ValidityAwareAttentionController:
         ).permute(2, 0, 3, 1, 4)
         query, key, value = qkv[0], qkv[1], qkv[2]
         logits = (query @ key.transpose(-2, -1)) * module.scale
-        pre_attention = logits.softmax(dim=-1)
+        pre_class_attention = (
+            logits[:, :, 0, :].softmax(dim=-1) if self.collect else None
+        )
         masked_logits = logits.masked_fill(
             full_mask[:, None, None, :], torch.finfo(logits.dtype).min
         )
@@ -361,7 +363,7 @@ class ValidityAwareAttentionController:
         if self.collect:
             invalid = full_mask[:, None, :]
             pre_mass = (
-                pre_attention[:, :, 0, :] * invalid.to(pre_attention.dtype)
+                pre_class_attention * invalid.to(pre_class_attention.dtype)
             ).sum(dim=-1).mean(dim=1)
             post_mass = (
                 attention[:, :, 0, :] * invalid.to(attention.dtype)
@@ -371,7 +373,7 @@ class ValidityAwareAttentionController:
             record["pre_mass"].append(pre_mass.detach().float().cpu())
             record["post_mass"].append(post_mass.detach().float().cpu())
             if self.capture_visuals and layer_index == 0:
-                pre_patch = pre_attention[:, :, 0, prefix_count:].mean(dim=1)
+                pre_patch = pre_class_attention[:, :, prefix_count:].mean(dim=1)
                 post_patch = attention[:, :, 0, prefix_count:].mean(dim=1)
                 for position, sample_index in enumerate(
                     self.sample_indices.detach().cpu().tolist()

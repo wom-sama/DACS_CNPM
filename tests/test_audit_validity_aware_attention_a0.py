@@ -112,8 +112,15 @@ def test_masked_key_has_zero_attention_and_pruned_index_is_gathered() -> None:
     assert output.shape == tokens.shape
     assert torch.count_nonzero(attention[..., 1]) == 0
     invalid_count = torch.cat(controller.records[0]["invalid_count"]).numpy()
+    pre_mass = torch.cat(controller.records[0]["pre_mass"])
     post_mass = torch.cat(controller.records[0]["post_mass"]).numpy()
+    module = model.blocks[0].attn
+    qkv = module.qkv(tokens).reshape(1, 3, 3, module.num_heads, module.head_dim)
+    query, key = qkv.permute(2, 0, 3, 1, 4)[:2]
+    full_attention = ((query @ key.transpose(-2, -1)) * module.scale).softmax(dim=-1)
+    expected_pre_mass = full_attention[:, :, 0, 1].mean(dim=1)
     assert invalid_count.tolist() == [1]
+    assert torch.allclose(pre_mass, expected_pre_mass, atol=0.0, rtol=0.0)
     assert post_mass.tolist() == [0.0]
 
 
