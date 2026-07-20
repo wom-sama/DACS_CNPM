@@ -19143,3 +19143,26 @@ Date: 2026-07-02
   proposal before architecture code, smoke, XAI, probe, or full train.
 - Keeper and current-best command/history hashes remain
   `1f49d577...2677`, `36b9aa1a...0faf`, and `39bd2879...8f53`.
+
+## C4 Rotation-Consensus A0 Implementation 2026-07-20 - Pre-Formal
+
+- Add an isolated train-only auditor without changing the model, trainer, data,
+  or evaluation modules. It executes the fixed four-angle appearance orbit,
+  freezes source-coordinate bbox, rotates the valid-image mask, stores every
+  angle probability, and computes fixed baseline-versus-consensus metrics,
+  calibration, transitions, cohort statistics, source-fold gates, and
+  direction AUROC.
+- Add deterministic replay that reconstructs all metrics and mechanism gates
+  from `predictions.csv`, plus a SHA/size artifact manifest. Synthetic tests
+  require selective restricted-FP removal to pass and explicitly reject broad
+  class-1 contraction.
+- Add `scripts/run_trkh_c4_rotation_consensus_a0.ps1` with one-line VS Code-
+  safe direct invocation, `Preflight/Formal/Replay` phases, strict native exit
+  codes, owned-process/GPU isolation, optional Wallpaper Engine pause, and no
+  output reuse. Preflight verifies every protocol/source/data/checkpoint/CIDT/
+  current-command hash without loading the model or dataset.
+- Auditor/test/launcher SHAs before commit are `ecbff1f5...4420c`,
+  `f4ccf2d9...7d646`, and `6d6e7343...1ab42`. Pycompile, pyflakes,
+  PowerShell parse, `git diff --check`, focused `9/9`, related `25/25`, and
+  full pytest `1549/1549` pass. No formal output, validation/test access,
+  checkpoint, XAI, smoke, probe, or full train exists yet.

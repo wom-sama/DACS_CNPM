@@ -3887,9 +3887,11 @@
   `e4852c34...9bb3`; it fixes all four angles, probability averaging, frozen
   source-coordinate bbox, CIDT replay, source folds, precision/recall/FP gates,
   and a no-nearby-sweep stop rule.
-- [ ] Implement the isolated C4 auditor, VS Code-safe launcher, deterministic
-  replay, artifact manifest, and focused tests. Commit and push them before the
-  sole formal `9,215`-row train audit.
+- [x] Implement the isolated C4 auditor, VS Code-safe direct-native launcher,
+  deterministic CSV replay, artifact manifest, and nine focused tests. Pass
+  py_compile/pyflakes, PowerShell parse, no-output preflight, related `25/25`,
+  full pytest `1549/1549`, and `git diff --check`; implementation/auditor/
+  launcher/test SHAs are pending the pre-formal commit.
 - [ ] Run the sole formal C4 A0 only after preflight. Close before model edits
   on any failed gate; only a complete pass may authorize one parameter-neutral
   stem-orbit implementation and matched validation smoke.
