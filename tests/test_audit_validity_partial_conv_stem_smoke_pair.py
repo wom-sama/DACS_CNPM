@@ -5,6 +5,7 @@ import copy
 import numpy as np
 
 from trkh.tools.audit_validity_partial_conv_stem_smoke_pair import (
+    ALLOWED_ROLE_CONFIG_DIFFERENCES,
     _deep_differences,
     _normalized_train_arguments,
     assess_validity_partial_smoke_pair,
@@ -119,6 +120,17 @@ def test_validity_partial_smoke_gate_is_conjunctive() -> None:
     assert gate["route_closed"] is True
 
 
+def test_validity_partial_smoke_gate_replay_is_input_order_independent() -> None:
+    first = _passing_gate_inputs()
+    first["structural_checks"] = {"z_check": False, "a_check": False}
+    second = copy.deepcopy(first)
+    second["structural_checks"] = {"a_check": False, "z_check": False}
+    first_gate = assess_validity_partial_smoke_pair(**first)
+    second_gate = assess_validity_partial_smoke_pair(**second)
+    assert first_gate == second_gate
+    assert first_gate["failed_checks"] == sorted(first_gate["failed_checks"])
+
+
 def test_mask_derangement_is_bijective_and_changes_source_and_shape() -> None:
     rows_per_class = 24
     labels = np.repeat(np.arange(5), rows_per_class)
@@ -195,6 +207,12 @@ def test_argument_normalization_allows_only_matched_role_fields() -> None:
 
 def test_deep_config_diff_reports_only_exact_paths() -> None:
     control = {
+        "data": {
+            "data_cartography": {
+                "occurrence_output": "control_occurrence.json",
+                "output": "control.csv",
+            }
+        },
         "run_name": "control",
         "run_dir": "runs/control",
         "model_config": {"stem_convolution": "standard", "depth": 8},
@@ -204,13 +222,22 @@ def test_deep_config_diff_reports_only_exact_paths() -> None:
         },
     }
     candidate = copy.deepcopy(control)
+    candidate["data"]["data_cartography"]["occurrence_output"] = (
+        "candidate_occurrence.json"
+    )
+    candidate["data"]["data_cartography"]["output"] = "candidate.csv"
     candidate["run_name"] = "candidate"
     candidate["run_dir"] = "runs/candidate"
     candidate["model_config"]["stem_convolution"] = "validity_partial"
     candidate["train_config"]["data_cartography_output"] = "candidate.csv"
     assert _deep_differences(control, candidate) == [
+        "data.data_cartography.occurrence_output",
+        "data.data_cartography.output",
         "model_config.stem_convolution",
         "run_dir",
         "run_name",
         "train_config.data_cartography_output",
     ]
+    assert set(_deep_differences(control, candidate)) == set(
+        ALLOWED_ROLE_CONFIG_DIFFERENCES
+    )

@@ -58,6 +58,16 @@ MASK_RANK_BINS = 4
 MIN_FOLD_CLASS1_SUPPORT = 25
 MIN_FOLD_RESTRICTED_NEGATIVE_SUPPORT = 300
 MAX_INDEPENDENT_PROBABILITY_ERROR = 5e-4
+ALLOWED_ROLE_CONFIG_DIFFERENCES = frozenset(
+    {
+        "data.data_cartography.occurrence_output",
+        "data.data_cartography.output",
+        "model_config.stem_convolution",
+        "run_dir",
+        "run_name",
+        "train_config.data_cartography_output",
+    }
+)
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
@@ -817,7 +827,7 @@ def assess_validity_partial_smoke_pair(
         "runtime_ratio_bounded": math.isfinite(runtime_ratio)
         and runtime_ratio <= 1.35 + tolerance,
     }
-    failed = [name for name, value in checks.items() if not bool(value)]
+    failed = sorted(name for name, value in checks.items() if not bool(value))
     return {
         "metric_gate_passed": not failed,
         "post_smoke_audit_required": not failed,
@@ -1136,12 +1146,7 @@ def _validate_run_provenance(
     if not isinstance(control_args, list) or not isinstance(candidate_args, list):
         raise ValueError("Locked pair protocol omits train arguments")
     config_differences = _deep_differences(control_config, candidate_config)
-    allowed_differences = {
-        "model_config.stem_convolution",
-        "run_dir",
-        "run_name",
-        "train_config.data_cartography_output",
-    }
+    allowed_differences = ALLOWED_ROLE_CONFIG_DIFFERENCES
     control_model_config = control_config.get("model_config")
     candidate_model_config = candidate_config.get("model_config")
     control_train_config = control_config.get("train_config")
@@ -1177,6 +1182,14 @@ def _validate_run_provenance(
                 - np.asarray(csv_candidate["probabilities"])
             )
         )
+    )
+    control_argmax_exact = np.array_equal(
+        np.asarray(independent_probabilities["control"]).argmax(axis=1),
+        csv_control["predictions"],
+    )
+    candidate_argmax_exact = np.array_equal(
+        np.asarray(independent_probabilities["candidate"]).argmax(axis=1),
+        csv_candidate["predictions"],
     )
     checks = {
         "stage_a_authorized": stage_a.get("method") == METHOD
@@ -1237,16 +1250,10 @@ def _validate_run_provenance(
         and np.array_equal(independent["labels"], csv_candidate["labels"]),
         "independent_control_replay": control_error
         <= MAX_INDEPENDENT_PROBABILITY_ERROR
-        and np.array_equal(
-            np.asarray(independent_probabilities["control"]).argmax(axis=1),
-            csv_control["predictions"],
-        ),
+        and control_argmax_exact,
         "independent_candidate_replay": candidate_error
         <= MAX_INDEPENDENT_PROBABILITY_ERROR
-        and np.array_equal(
-            np.asarray(independent_probabilities["candidate"]).argmax(axis=1),
-            csv_candidate["predictions"],
-        ),
+        and candidate_argmax_exact,
         "checkpoint_states_unchanged": bool(independent.get("state_unchanged")),
         "partial_conv_placement": int(independent.get("control_partial_count", -1))
         == 0
@@ -1265,6 +1272,8 @@ def _validate_run_provenance(
         "ordered_occurrence_epochs": control_occurrence_epochs,
         "independent_control_probability_max_abs_error": control_error,
         "independent_candidate_probability_max_abs_error": candidate_error,
+        "independent_control_argmax_exact": bool(control_argmax_exact),
+        "independent_candidate_argmax_exact": bool(candidate_argmax_exact),
         "independent_probability_threshold": MAX_INDEPENDENT_PROBABILITY_ERROR,
     }
     return checks, details

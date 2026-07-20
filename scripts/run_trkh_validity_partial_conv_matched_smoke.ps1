@@ -46,8 +46,8 @@ $LockedFiles = [ordered]@{
     "trkh\core\config.py" = "72b32a160ab6be2aecdd87670e2da325976f79ac1803a63d0b06b7f1f931e2fa"
     "trkh\training\train.py" = "763073051fe62dfac43eb5f509abad04991d03ccbcd893244d501720b7030c32"
     "scripts\run_trkh_5class_attention_views_v8.ps1" = "8512df324c1ddb196f8b579f2c1a268ead588799941ef236de237ac8c1b42f5a"
-    "trkh\tools\audit_validity_partial_conv_stem_smoke_pair.py" = "0ec5d6cef8e47094726ae19e1846597c24f9eb7f92cc1dd6bf5f228f7aa20c87"
-    "tests\test_audit_validity_partial_conv_stem_smoke_pair.py" = "498b4acc0d3aa71e098502009471ae53ede958478775754fd395bee0af34de4d"
+    "trkh\tools\audit_validity_partial_conv_stem_smoke_pair.py" = "c3f13618758815514ff86e947592c27755a36484ff3df180ec78b7fd8ef225b0"
+    "tests\test_audit_validity_partial_conv_stem_smoke_pair.py" = "8d582f88251d35d2715dea76bf6da545487a90b1f5266003c83930eaa4824d2e"
     "docs\TRKH_CURRENT_BEST_FULL_TRAIN_COMMANDS_20260706.txt" = "36b9aa1a21b765829acf4c8321be147bd76297de4ccdb8a40e6dee8e37940faf"
     "docs\TRKH_CURRENT_BEST_COMMAND_UPDATE_HISTORY.txt" = "39bd2879ce66fddf36a953021ea1e40f8d9de6cb4334b9b825011b2b8dc98f53"
 }
