@@ -3841,8 +3841,24 @@
   SHA `6c456de9...5a692`. No XAI, validation/test, smoke, checkpoint, full
   train, raw-data edit, or current-best command update occurred. Closure SHA is
   `8e0afea6...f2a4e`.
-- [ ] Screen the next accepted-primary, licensed, equation-distinct route. It
-  must provide a stable class-conditional signal beyond keeper probabilities
-  and global color in every held source fold and under illumination, not a
-  low-rank handcrafted descriptor, generic support expansion/contraction, or
-  another post-hoc threshold/router.
+- [x] Screen the next accepted-primary, licensed, equation-distinct route.
+  Select shallow IBN-a from the accepted ECCV-2018 paper and authors' MIT
+  source, with a prospective precision/recall/FP gate and no nearby sweep.
+- [x] Lock protocol SHA `7e329a7c...e576`, implement the state-compatible
+  first-stem-only IBN path at `5d08496`, and pass the formal train-only Stage A.
+  Preserve summary/manifest/launcher SHAs `14b484ff...b422`/
+  `8595174c...dff6`/`b38c9067...e3f3`; runtime is `1.083251x`, peak allocation
+  is `4.58305 GiB`, and validation/test remain unopened.
+- [x] Detect that the keeper launcher's v4 resume dependency was deleted by the
+  documented legacy cleanup and has no preserved bytes. Prospectively lock
+  erratum SHA `2ba11cfc...f91e`: use the current keeper SHA
+  `1f49d577...2677` as the common resume for both roles without changing any
+  metric, robustness, XAI, or stop gate.
+- [x] Implement the matched-smoke launcher, provenance/metric/calibration/
+  transition/source-group audit, and five regression tests. Pass Python
+  compile, PowerShell parse, direct no-output preflight, focused `17/17`, full
+  pytest `1540/1540`, loader `4/2`, and P8 GPU isolation.
+- [ ] Commit and push the prospective smoke infrastructure, then run the sole
+  two-epoch/120-batch full-validation control-versus-IBN pair. Inspect every
+  locked precision-first gate; only a complete pass may authorize changed-case
+  XAI and fixed dim/bright/low-contrast replay.

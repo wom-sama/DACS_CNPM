@@ -19052,3 +19052,36 @@ Date: 2026-07-02
   originals remain absent and `blockers=[]` at SHA `6c456de9...5a692`.
   Closure SHA is `8e0afea6...f2a4e`; current-best checkpoint/commands remain
   unchanged.
+
+## Shallow IBN-a Stem Stage A 2026-07-20 - Engineering Gate Passed
+
+- Select the ECCV-2018 IBN-Net equation from the accepted CVF paper and the
+  authors' MIT repository at commit/tree `d1673389...da915`/
+  `e113673c...ab4b`. Lock one 50/50 affine IN-plus-BN split in only the first
+  convolutional stem block at protocol SHA `7e329a7c...e576`; do not sweep
+  split ratio, placement, channel order, or normalization family.
+- Implement a state-schema-compatible `InstanceBatchNorm2d` and propagate the
+  explicit `stem_normalization=batch|ibn_a_first` option through config, model,
+  trainer, and v8 launcher at commit `5d08496`. Default and explicit BN remain
+  bit-identical, both roles strict-load the keeper with identical state hashes,
+  parameter count remains `7,245,590`, and only stem block 1 changes type.
+- The formal train-only Stage A passes every gate. Oracle/direct equation error
+  is `9.54e-7/0.0`; the BN half is bit-identical; FP32 and BF16 gradients are
+  finite and nonzero. Candidate BF16 runtime is `1.083251x`, peak allocation is
+  `4.58305 GiB`, and standard-op ONNX parity error is `3.0518e-5` under the
+  locked `5e-5` engineering tolerance.
+- Preserve Stage-A summary/manifest/launcher SHAs
+  `14b484ff...b422`/`8595174c...dff6`/`b38c9067...e3f3`. Validation and test
+  were unopened, no raw data changed, and Stage A grants only one matched smoke;
+  full train remains denied.
+- The keeper's historical launcher points to the v4 checkpoint deleted by the
+  documented 2026-07-02 cleanup, and no byte-preserved copy exists. Lock a
+  prospective resume erratum at SHA `2ba11cfc...f91e`: both smoke roles resume
+  from the current keeper SHA `1f49d577...2677`, reset training state, and keep
+  every other source argument unchanged. The sole pairwise model difference is
+  still `batch -> ibn_a_first`; all original precision-first gates remain.
+- The matched-smoke audit/launcher passes compile, PowerShell parse, direct
+  preflight, focused pytest `17/17`, and full pytest `1540/1540`. The measured
+  loader remains workers `4/2` (`196.346 images/s` for train workers 4), GPU is
+  isolated at P8, and no test/full-train/current-best-command permission exists
+  before the formal two-epoch comparison.
