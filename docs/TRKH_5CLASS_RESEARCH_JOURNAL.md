@@ -19287,3 +19287,31 @@ Date: 2026-07-02
   smoke, validation, test, probe, full train, and command promotion.
 - Keeper and current-best command/history hashes remain
   `1f49d577...2677`, `36b9aa1a...0faf`, and `39bd2879...8f53`.
+
+## BBox-Centered Log-Polar Stem A0 Implementation 2026-07-20 - Pre-Formal
+
+- Add a standalone auditor that normalizes the bbox support, performs locked
+  direct log/linear-polar RGB sampling, replays keeper stem weights with
+  periodic angle padding, builds matched 2,048D radial-band descriptors, and
+  fits four identical residual readout roles over five immutable source folds.
+  The model, trainer, augmentation, evaluator, and current-best commands are
+  unchanged.
+- Persist all four lighting-condition FP32 descriptors, FP64 scaler/readout
+  equations, OOF probabilities, fold/transition/cohort/calibration metrics,
+  source-safe derangements, and a one-row-per-class transform/activation sheet.
+  Replay reconstructs every probability, metric, transition, cohort, fold, and
+  gate and verifies every payload SHA.
+- Add `scripts/run_trkh_bbox_logpolar_stem_a0.ps1` with direct native Python
+  invocation, strict `$LASTEXITCODE`, `Preflight/Formal/Replay` phases, owned-
+  process/RAM/GPU inspection, and Windows workers `4` plus persistent workers.
+  Preflight opens neither checkpoint nor dataset and creates no output.
+- Pycompile, pyflakes, PowerShell parse, focused `10/10`, full pytest
+  `1571/1571`, and provenance preflight pass. A no-metric 64-row technical
+  tensor check gives all three `64x256x32x32` stem maps and `64x2048` finite
+  descriptors at `2.04 GiB` peak allocation. The separate stdin/worker
+  experiment was terminated by owned PID after confirming the expected Windows
+  spawn limitation; no process remains.
+- Auditor/test/launcher SHAs before commit are
+  `94d651aa...84f0`/`b5583ffb...3e90`/`c24e7cd2...ded6`. No candidate metric,
+  validation/test access, output artifact, checkpoint, smoke, probe, full train,
+  or command promotion exists yet.

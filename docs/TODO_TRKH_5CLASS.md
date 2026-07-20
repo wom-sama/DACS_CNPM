@@ -3951,9 +3951,13 @@
   over the immutable 9,215 train rows/five CIDT source folds/four lighting
   conditions. Require precision, F1, restricted-FP, TP-safety, fold,
   direction-AUROC, placebo, replay, and visual-geometry gates before model edits.
-- [ ] Implement and test the isolated log-polar auditor, exact replay, artifact
-  manifest, and VS Code-safe launcher without opening validation/test or
-  modifying the current model/trainer.
+- [x] Implement the isolated log-polar auditor, exact descriptor/readout replay,
+  artifact manifest, fixed five-class transform/activation sheet, and VS Code-
+  safe launcher without modifying model/trainer. Auditor/test/launcher SHAs are
+  `94d651aa...84f0`/`b5583ffb...3e90`/`c24e7cd2...ded6`; pycompile,
+  pyflakes, PowerShell parse, focused `10/10`, full pytest `1571/1571`,
+  no-output preflight, and a no-metric 64-row tensor check pass at `2.04 GiB`
+  peak GPU allocation.
 - [ ] Commit/push the infrastructure before the sole formal A0, then either
   authorize one locked dual-view model smoke after every gate passes or close
   the exact/nearby polar route and preserve its evidence.
