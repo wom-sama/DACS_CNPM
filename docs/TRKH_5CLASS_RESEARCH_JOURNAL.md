@@ -20289,3 +20289,31 @@ Date: 2026-07-02
   `107.006 images/s`, `52.48%` wait for workers 2). Validation/test, production
   edits, image-model smoke/probe/full train, and current-best command updates
   remain closed until the complete prospective gate chain authorizes them.
+
+## Sparse Class-Evidence A0 Infrastructure And Engineering - 2026-07-21
+
+- Implement and push the independent auditor, NumPy/FP64 Eq. (1)-(2) oracle,
+  deterministic SHA-derived toroidal channel dephasing, five-fold OOF trainer,
+  exact threshold/score/action/metric/map-stat replay, static ONNX export,
+  resource checks, direct evidence-map XAI, feature-input-gradient XAI, and
+  VS Code-safe PowerShell launcher at commit `4ba52cf`.
+- The preflight opens no dataset pixel and reproduces the locked 763-row cohort
+  and ordered-index SHA `59d21466...1c85b2`. FP64 PyTorch versus independent
+  NumPy errors are at most `2.22e-16`; common spatial permutation symmetry,
+  every-batch-item regularization, deterministic marginal-preserving
+  dephasing, and global-RNG isolation all pass.
+- The no-output two-row engineering forward captures the keeper's second stem
+  block at `[B,64,64,64]`, creates FP16 `[B,64,48,48]` temporary features,
+  and deletes the cache in a verified cleanup. Hooked/ordinary keeper
+  probabilities and argmax agree, keeper state remains bit-exact, and no
+  validation/test path or image-model checkpoint is opened or written.
+- All five trainable parameter tensors in each of the four matched roles
+  receive finite nonzero gradients and updates. Sparse-map and logit-L1 lambda
+  calibration reaches exactly `0.05` of first-batch CE before any update;
+  BF16 versus FP32 probability error is `1.360774e-4`, and FP32 versus FP64 is
+  `5.057858e-8`, with exact non-near-tie argmax.
+- Compile, pyflakes, PowerShell parse, focused tests, and full regression pass
+  `13/13` and `1734/1734`. Formal execution additionally refuses untracked or
+  worktree-divergent implementation blobs and requires requested/effective
+  workers `4/4`. No candidate metric, run directory, current-best command
+  change, validation/test access, smoke, probe, or full train has occurred.

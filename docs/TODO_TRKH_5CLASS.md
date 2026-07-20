@@ -4375,11 +4375,15 @@
   Require matched dense/logit-L1/trained-dephased roles, a same-weight causal
   dephasing intervention, 97% fit-TP fold thresholds, sparse-map statistics,
   exact replay, static export, resource checks, and fixed faithful XAI.
-- [ ] Implement and push the isolated Sparse Class-Evidence A0 auditor,
+- [x] Implement and push the isolated Sparse Class-Evidence A0 auditor,
   independent NumPy/FP64 equation oracle, deterministic cache/dephasing,
   exact replay, fixed 15-row XAI sheet, VS Code-safe launcher, and focused
   tests. Run compile, pyflakes, PowerShell parse, focused tests, full pytest,
   and a no-output two-row engineering forward before the sole formal audit.
+  Infrastructure commit is `4ba52cf`; focused/full tests pass `13/13` and
+  `1734/1734`. Engineering verifies exact hook/keeper state, every trainable
+  parameter gradient/update, 5% lambda calibration, FP64/FP32/BF16 numeric
+  gates, and verified temporary-cache deletion.
 - [ ] Run the sole five-fold clean A0 from a clean pushed commit with formal
   workers `4/4`; evaluate every conjunctive gate and manually review XAI.
   Open shifted conditions only after all clean automatic gates pass. Never
