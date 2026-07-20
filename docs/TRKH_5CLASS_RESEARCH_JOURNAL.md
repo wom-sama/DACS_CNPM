@@ -19582,3 +19582,45 @@ Date: 2026-07-02
   `cd49f50b...035`. Pycompile/pyflakes, focused `26/26`, full pytest
   `1602/1602`, PowerShell parse, and diff checks pass. Closure SHA is
   `2715b864...1fd`; keeper/current-best hashes remain unchanged.
+
+## Research Lock 2026-07-20 - PMG Progressive-Jigsaw Signal A0
+
+- Re-screen accepted-primary, licensed FGVC methods after validity partial-conv
+  closes. Dual PatchNorm is already implemented but supplies only generic patch
+  normalization, Res2Net overlaps closed multi-scale local backbones and its
+  classification source is noncommercial, and TransFG-style selectors already
+  have multiple negative TRKH adaptations. None supplies a new class-1-positive
+  signal on its own.
+- Retain Du et al.'s ECCV-2020 PMG only because its exact optimization is not a
+  relabeling of prior work: train the `n={8,4,2}` stage outputs with separate
+  forward/backward/optimizer steps in shallow-to-deep order, then update the
+  clean fused output. Prior TRKH multi-granularity CE, contrastive, and
+  HERBS-style heads backpropagated jointly; DCL-lite used one shuffled final-head
+  loss. The official MIT repository is pinned at commit/tree
+  `db7a7d7...2b51a`/`85949974...e99e` and the accepted paper SHA is
+  `ae701299...da85`.
+- Preserve adverse source evidence. The accepted recipe uses pretrained
+  convolutional layers, input 448, batch 16, up to 200 epochs, and four optimizer
+  updates per logical batch. The README says train from scratch, but released
+  `train.py` explicitly calls `pretrain=True`. This does not justify a 30-epoch
+  scratch full train on the laptop.
+- Prospectively lock a cheaper train-only information gate at protocol SHA
+  `7af3630a...a8c1`. Frozen keeper blocks `2/5/8` expose normalized mean/max
+  patch descriptors for deterministic, pixel/mask-bijective `P8/P4/P2` views.
+  Four equal-dimensional roles compare the PMG alignment against clean,
+  reverse-order, and deepest-only controls under fixed source-disjoint OOF
+  logistic readouts. Precision, recall, restricted-FP, fold, direction-AUROC,
+  placebo, rank, provenance, resource, and replay gates are conjunctive.
+- Add an isolated auditor, 15 synthetic tests, and direct-native PowerShell
+  launcher without touching model/trainer or raw data. Compile, pyflakes,
+  PowerShell parse, focused `15/15`, and a no-output launcher preflight pass.
+  A real keeper batch-2 engineering forward confirms role shape `[2,1024]`,
+  block patch counts `256/218/167`, finite features, bit-exact state, and only
+  `0.0701 GiB` peak allocation. Formal train pixels remain unopened until this
+  infrastructure is committed and pushed.
+- Close two procedural gaps before commit. Formal now hashes and verifies all
+  seven protected untracked payloads before output creation. Manual sheet review
+  is finalized only through `VisualPass/VisualFail` against the exact inspected
+  summary SHA and intact manifest/contact sheet; even a complete A0 pass may
+  authorize only the prospectively locked matched short pair, never full train
+  or current-best command promotion.

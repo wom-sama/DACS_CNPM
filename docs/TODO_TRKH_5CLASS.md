@@ -4066,6 +4066,40 @@
   evidence; remove only two rejected `last.pt` files (`221.57 MiB`) at cleanup
   SHA `b97b5160...c27`. Retention passes 790 directories/all 50 manifests with
   219 originals absent and `blockers=[]` at SHA `cd49f50b...035`.
-- [ ] Screen the next accepted-primary, officially licensed, equation-distinct
+- [x] Screen the next accepted-primary, officially licensed, equation-distinct
   route against the accumulated closure matrix. Prospectively lock a no-test
   readiness gate before implementation and avoid all partial-conv neighbors.
+- [x] Screen Dual PatchNorm, Res2Net, TransFG neighbors, and exact PMG against
+  the closure matrix. Reject a generic normalization/stock-backbone launch;
+  retain only PMG's equation-distinct `8 -> 4 -> 2 -> clean` sequential
+  optimizer ordering, which was not tested by the prior simultaneous
+  multi-granularity CE/contrastive/HERBS or single DCL-lite objectives.
+- [x] Pin the accepted ECCV-2020 PMG paper and authors' MIT source at
+  commit/tree `db7a7d7...2b51a`/`85949974...e99e`, explicitly recording that
+  released `train.py` uses pretrained convolutional layers, 200 epochs, and
+  four optimizer updates per logical batch despite the README's scratch claim.
+- [x] Prospectively lock the train-only PMG stage-aligned jigsaw A0 at protocol
+  SHA `7af3630a...a8c1`. It uses all 9,215 immutable train rows, exact CIDT
+  source folds, deterministic pixel/mask permutations, frozen block `2/5/8`
+  descriptors, matched clean/reverse/deepest roles, fixed OOF readouts, and
+  conjunctive precision/recall/FP/placebo gates. Validation/test and model edits
+  remain forbidden.
+- [x] Implement the isolated auditor, direct-native VS Code PowerShell launcher,
+  artifact replay, hash-locked `VisualPass/VisualFail`, contact sheet, and 15
+  focused tests. Compile, pyflakes,
+  PowerShell parse, focused `15/15`, no-output launcher preflight, and a real
+  keeper batch-2 engineering forward pass all pass; role shapes are `[2,1024]`,
+  block patch counts are `256/218/167`, state is bit-exact, and peak allocation
+  is `0.0701 GiB`.
+- [x] Make the formal fail before output creation unless all seven protected
+  untracked user payloads remain untracked and match their prospective hashes.
+  A visual pass can authorize only the matched short pair after an automated
+  pass; it can never authorize full train or current-best command promotion.
+- [ ] Commit and push the PMG A0 infrastructure before opening formal train
+  pixels, then run exactly one `9215`-row formal with workers `4`, independently
+  replay every artifact, and inspect the fixed five-class jigsaw sheet.
+- [ ] If any PMG A0 gate fails, close grids/seeds/readout/stage/fusion neighbors
+  before trainer integration. If all gates pass, authorize only one matched
+  short sequential-update pair; full train and current-best commands stay
+  unchanged until that pair also clears metric, robustness, runtime, replay,
+  and XAI gates.
