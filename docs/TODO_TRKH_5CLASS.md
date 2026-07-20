@@ -3878,6 +3878,18 @@
   all 50 valid compaction manifests with `blockers=[]`, summary SHA
   `117acf93...a3f7`. Update the skill; keeper and current-best commands remain
   unchanged. Final closure SHA is `c9c1e083...21dbc`.
-- [ ] Screen one equation-distinct, licensed primary-source method whose
-  mechanism can add class-conditional surface/boundary selectivity. Lock its
-  prospective protocol before any implementation or validation access.
+- [x] Screen one equation-distinct, licensed primary-source method whose
+  mechanism can add class-conditional surface/boundary selectivity. Select the
+  ICML-2016 G-CNN C4 weight-sharing principle after checking the accepted paper
+  and official licensed e2cnn reference; do not add the deprecated dependency.
+- [x] Prospectively lock one clean train-only C4 probability-consensus
+  information gate before auditor code or new inference. Protocol SHA is
+  `e4852c34...9bb3`; it fixes all four angles, probability averaging, frozen
+  source-coordinate bbox, CIDT replay, source folds, precision/recall/FP gates,
+  and a no-nearby-sweep stop rule.
+- [ ] Implement the isolated C4 auditor, VS Code-safe launcher, deterministic
+  replay, artifact manifest, and focused tests. Commit and push them before the
+  sole formal `9,215`-row train audit.
+- [ ] Run the sole formal C4 A0 only after preflight. Close before model edits
+  on any failed gate; only a complete pass may authorize one parameter-neutral
+  stem-orbit implementation and matched validation smoke.

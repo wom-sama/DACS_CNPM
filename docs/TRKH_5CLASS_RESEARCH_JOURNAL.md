@@ -19119,3 +19119,27 @@ Date: 2026-07-02
   all 50 valid compaction manifests with `blockers=[]`; summary SHA is
   `117acf93...a3f7`. Keeper and current-best command/history hashes remain
   unchanged. Final closure SHA is `c9c1e083...21dbc`.
+
+## C4 Rotation-Consensus A0 Protocol 2026-07-20 - Prospectively Locked
+
+- Inspect the accepted ICML-2016 G-CNN paper and the authors' official e2cnn
+  reference at commit/tree `022d6ca4...40238`/`7673db4f...df6ff`. The local
+  paper and redistribution-license SHAs are `e9b4c64d...a0b93` and
+  `9d3ddfa2...8e02c`. No external source or dependency is copied into TRKH.
+- The keeper uses only `rotate90_probability=0.03`, and the earlier PDisco
+  diagnostic measured foreground-part rotation equivariance `0.71559`.
+  Horizontal-flip TTA and an equivariance regularizer already failed, so the
+  accepted question is narrower: does fixed C4 appearance consensus remove
+  restricted class-1 FP selectively without broad class-1 contraction?
+- Lock protocol SHA `e4852c34...9bb3` before auditor code or new inference.
+  The sole A0 uses all `9,215` `yolo_f/train` rows, angles `0/90/180/270`,
+  probability mean, fixed source-coordinate bbox, rotated image mask, exact
+  clean-CIDT replay, five source folds, no threshold/router, and no validation
+  or test access.
+- A complete pass requires non-worse macro F1, class-1 F1/precision gains
+  `+0.005/+0.010`, recall delta at least `-0.005`, at least ten net restricted
+  FP removals, corrections not below harms, selective `delta_p1` AUROC at least
+  `0.62`, and fold/resource integrity. Any failure closes the C4 stem-orbit
+  proposal before architecture code, smoke, XAI, probe, or full train.
+- Keeper and current-best command/history hashes remain
+  `1f49d577...2677`, `36b9aa1a...0faf`, and `39bd2879...8f53`.
