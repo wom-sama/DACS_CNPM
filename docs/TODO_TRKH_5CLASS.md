@@ -4336,9 +4336,35 @@
   parameter-matched real CNN, spatial RGB covariance, red-axis quaternion,
   trained and same-weight toroidal channel-dephasing, theta-zero, seed-repeat,
   replay, robustness, static export, resource, and fixed XAI controls.
-- [ ] Implement the isolated quaternion auditor, independent Rodrigues oracle,
+- [x] Implement the isolated quaternion auditor, independent Rodrigues oracle,
   canonical replay, fixed contact sheet, VS Code-safe launcher, and focused
-  tests. Commit/push the implementation before the sole formal train-only A0.
-- [ ] Run clean A0 once and apply every conjunctive gate. Open lighting only
+  tests. Commit/push the implementation at `0cb10ed` before the sole formal
+  train-only A0. Equation/materialization/gradient/parameter checks pass;
+  focused/full tests pass `17/17` and `1720/1720` at the formal commit.
+- [x] Run clean A0 once and apply every conjunctive gate. Open lighting only
   after a complete clean pass; never open validation/test, trainer integration,
   smoke/probe/full train, or current-best command promotion from a failure.
+  Candidate AUROC/TP retention/FP rejection is
+  `0.794414/0.971591/0.207207`, below base AUROC `0.808635`; clean failure
+  correctly skips robustness.
+- [x] Reject the quaternion family after 14 clean checks fail. Gray-only AUROC
+  is `0.559378`, same-weight dephasing/theta-zero are within
+  `0.001536/0.005341`, effective rank is `5.2692`, and one pooled channel has
+  zero variance. Seed-repeat `0.810913` is weak seed sensitivity, not a
+  promotion basis.
+- [x] Review the fixed 16-row XAI sheet and record manual fail: dense
+  high-frequency maps cover broad peel/silhouette and remain similar under
+  dephasing/theta-zero, without stable lesion-selective evidence. Add the
+  hash-locked nested-status reconciler at `6e55dc6`; it changes no scientific
+  field. Focused/full tests pass `18/18` and `1721/1721`.
+- [x] Preserve the approximately 4.0 MiB replayable formal at final
+  summary/manifest SHAs `23554b3d...d4d6bb`/`ff19434c...22344a`. Read-only
+  retention passes 810 directories, 51 object manifests, and all 233
+  expected-absent originals with `blockers=[]` at SHA
+  `1e04726b...cc00b5`. Closure SHA is `d3b68bcb...39b26d`; current-best
+  commands remain unchanged.
+- [ ] Screen and prospectively lock the next accepted-primary,
+  equation-distinct route that directly learns sparse lesion/boundary evidence
+  without repeating color mixing, covariance, frequency, part selection,
+  attention, prototypes, or post-hoc routing. Require a causal spatial placebo
+  and train-only TP protection before any integration.

@@ -20200,3 +20200,54 @@ Date: 2026-07-02
   same-weight toroidal channel-dephasing, and same-weight theta-zero. No
   validation/test, production edit, smoke/probe/full train, or command update
   is authorized by this lock.
+
+## Quaternion Color-Rotation A0 Closure - 2026-07-21
+
+- Implement and push the independent paper-equation auditor, NumPy/FP64
+  Rodrigues oracle, static materializer/ONNX export, five-fold OOF trainer,
+  causal placebos, replay, XAI, and VS Code-safe launcher at `0cb10ed` before
+  the sole formal. All equation, FP64/FP32/BF16, symmetry, gradient,
+  materialization, parameter-match, and two-row engineering checks pass.
+  Focused/full tests pass `17/17` and `1720/1720` at formal launch.
+- Run exactly one 750-row train-only formal from clean pushed HEAD. Extraction
+  uses requested/effective workers `4/4`, peak CUDA is `0.18775 GiB`, static
+  runtime ratio is `1.79850`, materialized logits are exact, and ONNX error is
+  `2.38419e-7`. Every declared parameter receives a finite nonzero first-step
+  gradient and changes; no validation/test or keeper forward is used.
+- Reject after 14 clean gates fail. Candidate AUROC/TP retention/FP rejection
+  is `0.794414/0.971591/0.207207`, versus base
+  `0.808635/0.965909/0.229730`, real CNN AUROC `0.789269`, red-axis
+  `0.790549`, trained dephasing `0.791573`, same-weight dephasing `0.792878`,
+  and theta-zero `0.789073`. Candidate rejects 46 FP and harms 15 TP, five
+  fewer corrections than base.
+- Gray-only AUROC is only `0.559378`. Candidate pooled-feature rank is
+  `5.2692/48` with a zero-variance channel, while scale/angle parameters remain
+  healthy. Seed-repeat reaches `0.810913` but still supplies no required
+  control margin; do not select a favorable seed after observing it.
+  Same-weight dephasing and theta-zero deltas are only
+  `-0.001536/-0.005341`, so aligned chromatic rotation and learned angles are
+  not causal selective signals. Robustness remains unopened.
+- Automatic XAI passes border mass (`0.306891`), but manual review fails:
+  dense grid-like gradients cover broad peel and silhouette and stay visually
+  similar across aligned, dephased, and theta-zero columns. They do not isolate
+  stable lesions or class-1 ripeness boundaries.
+- Independent replay preserves exact actions with maximum score error
+  `8.11855e-8`. A post-finalization audit found only the nested
+  `xai.manual_review` still saying `pending`; commit `6e55dc6` adds a
+  hash/manifest-locked reconciler, mirrors the already final top-level `fail`,
+  records the old hash, and changes no scientific field. Focused/full tests
+  then pass `18/18` and `1721/1721`.
+- Preserve final summary/manifest/XAI/ONNX SHAs
+  `23554b3d...d4d6bb`/`ff19434c...22344a`/
+  `f85ff880...6e57bb`/`c1c42f81...34465f`. The temporary RGB cache is
+  deleted; the approximately 4.0 MiB formal needs no cleanup. Final read-only
+  retention passes 810 directories, 51 object-schema manifests, and all 233
+  expected-absent originals with `blockers=[]`, no deletion, and `100.822 GiB`
+  free at SHA `1e04726b...cc00b5`.
+- Close the exact central-80%-bbox `64x64` crop, gray-axis three-layer
+  quaternion widths/kernels, axis/angle/pooling, optimizer/epoch/seed/fold,
+  TP threshold, and nearby fusion/sweep family on this keeper. No production
+  integration, smoke/probe/full train, validation/test, or current-best command
+  update is authorized. Full closure is
+  `TRKH_5CLASS_QUATERNION_COLOR_ROTATION_A0_CLOSURE_20260721.md`, SHA-256
+  `d3b68bcbd6750406a067239d5fe901bbe0e8920c8266ba91f9467765f339b26d`.
