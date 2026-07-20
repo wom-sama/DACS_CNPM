@@ -4317,7 +4317,28 @@
   retention over 807 directories/all 50 valid manifests with all 219 compacted
   originals absent and `blockers=[]` at SHA `84b1f209...d75609`. Closure SHA
   is `2df639cd...2767fff`.
-- [ ] Screen and prospectively lock the next accepted-primary, permissively
+- [x] Screen and prospectively lock the next accepted-primary, permissively
   implementable, equation-distinct class-1 precision representation. It must
   learn supervised lesion/surface evidence and beat covariance plus a
   marginal-preserving spatial placebo before any model integration.
+- [x] Screen the post-DeepBDC color/surface space against every closed family.
+  Reject Cross-X as part/consistency overlap and reject quaternion source reuse
+  because the paper-citing repository has no software license. Select only the
+  independently implementable ECCV-2018 gray-axis quaternion rotation equation,
+  which is distinct from CEConv, Gabor/LHO, covariance, and ordinary RGB mixing.
+- [x] Pin the ECCV paper at SHA `0cbf1019...6a8cb4` and the clean paper-citing
+  repository at commit/tree `8c381f5...f79401`/`82a0545...3368d`; prohibit
+  importing, copying, translating, or adapting its unlicensed Keras source.
+- [x] Prospectively lock the 750-row train-only quaternion color-rotation A0 in
+  `docs/TRKH_5CLASS_QUATERNION_COLOR_ROTATION_A0_PROTOCOL_20260721.md` before
+  auditor code, pixel access, crop extraction, or candidate metrics. Protocol
+  SHA-256 is `87d59f49...2db7fa8`. Require a
+  parameter-matched real CNN, spatial RGB covariance, red-axis quaternion,
+  trained and same-weight toroidal channel-dephasing, theta-zero, seed-repeat,
+  replay, robustness, static export, resource, and fixed XAI controls.
+- [ ] Implement the isolated quaternion auditor, independent Rodrigues oracle,
+  canonical replay, fixed contact sheet, VS Code-safe launcher, and focused
+  tests. Commit/push the implementation before the sole formal train-only A0.
+- [ ] Run clean A0 once and apply every conjunctive gate. Open lighting only
+  after a complete clean pass; never open validation/test, trainer integration,
+  smoke/probe/full train, or current-best command promotion from a failure.

@@ -20167,3 +20167,36 @@ Date: 2026-07-02
   command update is authorized. Full closure is
   `TRKH_5CLASS_DEEPBDC_STEM_JOINT_DEPENDENCE_A0_CLOSURE_20260721.md`, SHA-256
   `2df639cd9e565f59931c6737a52b88df6e4eece0903c41515d55000fd2767fff`.
+
+## Research Lock 2026-07-21 - Quaternion Color-Rotation A0
+
+- Re-screened accepted fine-grained, color, surface, and precision methods
+  against the local closure matrix. AUPRC/pAUC, MIL/part selection, PMG,
+  Cross-X-style part/consistency regularization, graph mixing, token labels,
+  capsules, Gabor/LHO, covariance, topology, and standard color correction
+  repeat mechanisms already tested locally and are rejected before code.
+- Selected only Zhu et al.'s ECCV-2018 quaternion convolution equation. It
+  treats RGB as a pure quaternion and learns a scale plus rotation around the
+  gray axis at every spatial tap. This preserves achromatic projection while
+  constraining chromatic mixing, an equation-distinct hypothesis for the
+  class-1 ripeness boundary rather than another unconstrained RGB convolution.
+- Pinned the accepted CVF paper at SHA `0cbf1019...6a8cb4`. The available
+  paper-citing Keras repository is clean at commit/tree
+  `8c381f5...f79401`/`82a0545...3368d` but has no LICENSE and acknowledges
+  borrowed implementation code. It is adverse provenance only: TRKH will not
+  import or copy it and must use an independent paper-equation implementation
+  plus a separately written NumPy/FP64 Rodrigues oracle.
+- Prospectively locked
+  `TRKH_5CLASS_QUATERNION_COLOR_ROTATION_A0_PROTOCOL_20260721.md` before any
+  auditor code, dataset pixel, crop cache, fit, or candidate metric. Protocol
+  SHA-256 is `87d59f49ec9f06ac6ac549eb932626e189c19f58bfb29b4fd5112e8df2db7fa8`.
+  The exact 750-row train-only CIDT cohort, five source folds, central 80% bbox crop,
+  `64x64 uint8` cache, three-layer compact quaternion trunk, 20 epochs, and 97%
+  fit-TP threshold are immutable.
+- Promotion requires AUROC `>=0.85`, TP retention `>=0.95`, FP rejection
+  `>=0.25`, four-of-five fold wins, seed stability, robustness, replay, static
+  export, resource, and XAI gates. The candidate must beat a parameter-matched
+  real CNN, spatial RGB covariance, red-axis quaternion, trained and
+  same-weight toroidal channel-dephasing, and same-weight theta-zero. No
+  validation/test, production edit, smoke/probe/full train, or command update
+  is authorized by this lock.
