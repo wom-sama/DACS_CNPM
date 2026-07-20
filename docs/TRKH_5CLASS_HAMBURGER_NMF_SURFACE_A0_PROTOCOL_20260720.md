@@ -52,6 +52,24 @@ output. It adds no label, segmentation, top-k selection, adaptive dilation, or
 metric-dependent choice. All projection, NMF, descriptor, readout, seed, gate,
 resource, and stop settings remain unchanged.
 
+## Prospective Host-Resource Erratum - 2026-07-20
+
+The first formal launcher attempt stopped after focused and full tests passed,
+but before the engineering forward, output-directory creation, dataset pixels,
+or candidate metrics, because only `4.83 GiB` physical RAM was available versus
+the locked `5 GiB` floor. A post-stop measurement showed `4.70 GiB` available
+on this `15.64 GiB` host, no Python/TensorRT/FFmpeg process, and an idle RTX
+4060. User-facing applications are left untouched.
+
+Keep the CUDA batch at `64` and every scientific setting unchanged. Reduce only
+the Windows DataLoader worker count from `4` to `2` and the fail-closed physical
+RAM floor from `5 GiB` to `4.25 GiB`. Two workers bound duplicated loader and
+pinned-prefetch state while batch `64` preserves the GPU work unit. The final
+formal run must record requested/effective workers `2/2`; the two-row
+engineering forward must be repeated under this resource lock. This is a
+prospective operational correction and cannot be changed again after any
+candidate metric is emitted.
+
 ## Research Question
 
 Does a compact nonnegative low-rank reconstruction of the frozen keeper's
@@ -378,9 +396,9 @@ before model integration.
   support, dominant NMF component, NMF reconstruction strength, and residual
   heat. The sheet must show finite, object-aligned support and no invalid/padded
   token use. Manual review cannot rescue an automated failure.
-- Use CUDA batch size `64`, requested loader workers `4`, seed `20260720`, and
+- Use CUDA batch size `64`, requested loader workers `2`, seed `20260720`, and
   record requested/effective workers. Peak allocated CUDA memory must be
-  `<=3.5 GiB`; available system RAM preflight must be `>=5 GiB`.
+  `<=3.5 GiB`; available system RAM preflight must be `>=4.25 GiB`.
 - Compare clean probabilities with the locked CIDT cache at maximum absolute
   tolerance `3e-5` and require exact argmax. This bound is prospectively set
   above the already documented same-keeper BF16 replay difference

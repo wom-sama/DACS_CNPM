@@ -50,7 +50,7 @@ METHOD = "hamburger_nmf_surface_a0"
 MODE = "hamburger_nmf_surface_a0_train_information_gate"
 SEED = 20260720
 BATCH_SIZE = 64
-NUM_WORKERS = 4
+NUM_WORKERS = 2
 FOCUS_CLASS = 1
 RESTRICTED_NEGATIVE_CLASSES = (0, 2, 4)
 FOLDS = (0, 1, 2, 3, 4)
@@ -105,7 +105,7 @@ LOCKED_RESOLVED_CONFIG_SHA256 = "e9c4f48917e333d2f34f61806bb54041b35f2217ebb23af
 LOCKED_DATA_SHA256 = "716e33df24c63a9e9920f97b685199707fb84ab4c7154544f5dd9a3e00d884ef"
 LOCKED_CIDT_SUMMARY_SHA256 = "d4891edf2963ab12385b7ce5bdc812ec3e19c5c098acd25c66eb557af541d7ad"
 LOCKED_CIDT_PREDICTIONS_SHA256 = "2e0993752d58d99ea429bfefe1e2bfe6fa949e45aea1a26cc4bdfee97d4db21c"
-LOCKED_PROTOCOL_SHA256 = "9f1f1216a28d527f9ad418d015cd33906e7f84524321f014a4ef4bc4e0654061"
+LOCKED_PROTOCOL_SHA256 = "0bc33ac9c7934e0b8bb274f79a4e3818a1219538f61d11abc28e71a4d36d7996"
 LOCKED_CURRENT_COMMAND_SHA256 = "36b9aa1a21b765829acf4c8321be147bd76297de4ccdb8a40e6dee8e37940faf"
 LOCKED_COMMAND_HISTORY_SHA256 = "39bd2879ce66fddf36a953021ea1e40f8d9de6cb4334b9b825011b2b8dc98f53"
 LOCKED_PAPER_SHA256 = "4eed8898973d9aa9a1101e32d436c95e57f0f61c5ef459b46f673e33666ae9f1"
@@ -2793,8 +2793,8 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
             "model_state_before_sha256"
         ]
         == clean_extraction["runtime"]["model_state_after_sha256"],
-        "requested_workers_4_effective_workers_4": NUM_WORKERS == 4
-        and effective_workers == 4,
+        "requested_workers_2_effective_workers_2": NUM_WORKERS == 2
+        and effective_workers == 2,
         "peak_cuda_allocation_le_3_5_gib": int(
             clean_extraction["runtime"]["peak_cuda_bytes"]
         )

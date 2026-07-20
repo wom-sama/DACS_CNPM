@@ -4191,7 +4191,9 @@
   focused `15/15`, full pytest `1659/1659`, no-output launcher preflight, and
   two-row real engineering forward all pass; workers are effective `4`, token
   support is `32/160`, state is bit-exact, and peak CUDA is `80.58 MiB`.
-- [ ] Commit/push the final Hamburger-NMF A0 infrastructure, rerun the clean
-  synced preflight, then execute the sole formal train-only audit, independent
-  second-process replay, and fixed visual review. Open lighting only after the
-  complete clean gate passes; never open validation/test or training otherwise.
+- [ ] Commit/push the prospective no-metric Hamburger host-resource erratum,
+  rerun engineering with batch/workers `64/2`, then execute the sole formal
+  train-only audit, independent second-process replay, and fixed visual review.
+  Open lighting only after the complete clean gate passes; never open
+  validation/test or training otherwise. The final resource-amended protocol
+  SHA is `0bc33ac9...d7996`.

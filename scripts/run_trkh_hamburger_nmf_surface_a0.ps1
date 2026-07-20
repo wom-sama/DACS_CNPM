@@ -64,8 +64,8 @@ function Assert-HostResources {
         2
     )
     Write-Host "Available physical memory: $AvailableGiB GiB"
-    if ($AvailableGiB -lt 5.0) {
-        throw "Formal Hamburger-NMF A0 requires at least 5 GiB available physical memory."
+    if ($AvailableGiB -lt 4.25) {
+        throw "Formal Hamburger-NMF A0 requires at least 4.25 GiB available physical memory."
     }
 }
 
@@ -153,7 +153,7 @@ function Invoke-StaticPreflight {
         "--preflight-only",
         "--output-dir", $OutputDir,
         "--batch-size", "64",
-        "--num-workers", "4",
+        "--num-workers", "2",
         "--seed", "20260720",
         "--device", "cuda"
     )
@@ -231,7 +231,7 @@ try {
         "--engineering-forward",
         "--output-dir", $OutputDir,
         "--batch-size", "64",
-        "--num-workers", "4",
+        "--num-workers", "2",
         "--seed", "20260720",
         "--device", "cuda"
     )
@@ -242,7 +242,7 @@ try {
         "-m", "trkh.tools.audit_hamburger_nmf_surface_a0",
         "--output-dir", $OutputDir,
         "--batch-size", "64",
-        "--num-workers", "4",
+        "--num-workers", "2",
         "--seed", "20260720",
         "--device", "cuda"
     )

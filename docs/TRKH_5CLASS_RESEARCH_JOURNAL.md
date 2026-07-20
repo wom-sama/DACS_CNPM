@@ -19844,3 +19844,12 @@ Date: 2026-07-02
   tokens, preserves model state exactly, allocates only `80.58 MiB` peak CUDA,
   and produces median two-seed descriptor cosine `0.977130`. No formal output,
   readout metric, validation/test access, model edit, or train was produced.
+- Formal attempt 1 then stopped after focused/full tests passed (`15/15`,
+  `1659/1659`) but before engineering, output creation, dataset pixels, or any
+  candidate metric because available RAM was `4.83 GiB` against the `5 GiB`
+  floor. With no compute process and an idle RTX 4060, the host stabilized near
+  `4.70 GiB`; leave user applications untouched. Prospectively retain batch
+  `64`, reduce only Windows loader workers `4 -> 2`, and set a fail-closed
+  `4.25 GiB` RAM floor. Repeat engineering under the new `2/2` worker lock
+  before the sole metric-producing formal run. The resource-amended final
+  protocol SHA is `0bc33ac9...d7996`.
