@@ -9,6 +9,11 @@ frozen current keeper. It does not authorize validation/test access, a TRKH
 model or trainer edit, a checkpoint, an image-model smoke/probe/full train, or
 current-best command promotion.
 
+Preflight erratum, recorded before any dataset pixel, feature, or candidate
+metric was read: the `stl_deepbdc.py` and `README.md` hashes below each had one
+missing/transposed hexadecimal character in the first lock. They are corrected
+to independently recomputed file hashes; no scientific setting or gate changed.
+
 ## Research Question
 
 Can a small learned projection plus Brownian distance covariance (BDC) expose
@@ -42,9 +47,9 @@ probabilities and matched first/second-order controls.
   - `methods/bdc_module.py`:
     `27ef7cb7752ff085b3858945c89818383f12a4ce25cbe0e208f38891fab30bf6`;
   - `methods/stl_deepbdc.py`:
-    `258602a39f50e94518eeeb8e623d09666322d43e92485065310b42d9f12b37b`;
+    `258602a39f50e94518eee8b8e623d09666322d43e92485065310b42d9f12b37b`;
   - `README.md`:
-    `ed4025410d52ca745abb6393fe4153349963e9a2faedf45a071fc5bd5d0e38d`.
+    `ed4025410d52ca745abb6393fe4153349963e9a2faeedf45a071fc5bd5d0e38d`.
 
 TRKH will not import, copy, or adapt the repository source. The implementation
 must be written independently from paper Eq. (4)-(6), checked by a separately

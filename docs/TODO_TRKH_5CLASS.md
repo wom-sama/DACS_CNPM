@@ -4280,12 +4280,23 @@
   separate NumPy/FP64 oracle; never import or copy the official module.
 - [x] Prospectively lock the 750-row train-only DeepBDC stem A0 at
   `docs/TRKH_5CLASS_DEEPBDC_STEM_JOINT_DEPENDENCE_A0_PROTOCOL_20260721.md`.
-  Protocol SHA-256 is `21b95f52...c0f512`.
+  Final pre-pixel erratum protocol SHA-256 is `4148b61e...37f93d`; only two
+  mistyped official-source hashes changed, with every scientific setting and
+  gate unchanged.
   It learns identical `256->32` fold heads, compares aligned BDC against
   keeper-logprob, mean, covariance, trained-dephased, and same-weight-dephased
   controls, and fits actions at 97% TP retention. Validation/test, trainer,
   image-model smoke/probe/full train, and command promotion remain forbidden.
-- [ ] Implement the isolated DeepBDC A0 auditor, independent oracle, exact
+- [x] Implement the isolated DeepBDC A0 auditor, independent oracle, exact
   replay, fixed contact sheet, VS Code-safe launcher, and focused tests. Pass
-  compile/static/full tests and a no-output real engineering preflight on a
-  clean pushed commit before the sole formal train-only audit.
+  compile/pyflakes/PowerShell parse, focused `19/19`, and full pytest
+  `1703/1703`. The two-row no-output engineering forward has exact hooked
+  probabilities (`0.0` error), bit-exact keeper state, all six roles with
+  finite nonzero gradients and changed parameters, and only a recorded
+  `7.364154e-5` BF16/batch-shape delta to the old CIDT cache with exact argmax.
+- [ ] Commit/push the DeepBDC infrastructure, rerun locked preflight and the
+  no-output engineering forward on that clean pushed state, then execute the
+  sole 750-row formal train-only audit, second-process state/score/action
+  replay, and fixed 16-row XAI review. Open robustness only if every clean gate
+  passes; never open validation/test, image-model training, or command
+  promotion from a failure.

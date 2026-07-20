@@ -20096,3 +20096,37 @@ Date: 2026-07-02
   condition replay, score/action replay, and class-specific gradient XAI. A0
   cannot open validation/test or authorize trainer integration, smoke, probe,
   full train, or current-best command changes by itself.
+
+## DeepBDC A0 Infrastructure And Engineering - 2026-07-21
+
+- Locked preflight found two one-character transcription errors in the
+  prospective official `stl_deepbdc.py` and `README.md` hashes before any
+  dataset pixel, feature, or candidate metric was read. Correct only those
+  hashes and record the erratum in the protocol; the final protocol SHA is
+  `4148b61ecf40168a82796030dcb9fd4648e5312fe60e6ea21c3e27c47837f93d`.
+- Implement paper Eq. (4)-(6) independently in
+  `trkh.tools.audit_deepbdc_stem_joint_dependence_a0`. A separately written
+  explicit-pairwise NumPy/FP64 oracle agrees within `1.67e-16`; FP32/BF16
+  descriptor errors are `6.24e-8/0.004516`. Symmetry, translation,
+  orthonormal-transform, normalized-scale, singleton-batch, invalid-input,
+  analytic-gradient, and finite-difference checks all pass.
+- The real two-row train-only engineering forward captures the frozen
+  `HybridConvStem` output at `[2,256,32,32]`, crops only the downsampled valid
+  rectangle, and produces temporary FP16 `[2,256,16,16]` maps. Hooked versus
+  ordinary keeper probabilities are bit-exact (`0.0` maximum difference), the
+  keeper state hash is unchanged, and CIDT argmax is exact. Preserve the
+  observed `7.364154e-5` numeric delta to the historical CIDT cache as
+  batch-shape/BF16 telemetry; it is not substituted for the prospectively
+  locked ordinary-versus-hook gate.
+- One AdamW step reaches every projection, BN affine, BDC temperature, and FC
+  parameter in all six learned roles with finite nonzero gradients; every
+  parameter changes. Head construction now forks/restores CPU and all CUDA RNG
+  states, serialized parameter hashing handles scalar `tau`, and optimizer
+  state is hash-attested. The launcher uses direct native Python invocation and
+  the repo's actual Windows worker environment names for formal
+  `num_workers=4`, pin memory, and persistent workers.
+- Focused tests pass `19/19`; compile, pyflakes, PowerShell parse, and full
+  pytest pass `1703/1703` with only existing warnings. No run directory,
+  validation/test access, model/trainer edit, smoke/probe/full train, or
+  current-best command update has occurred. Commit/push this infrastructure
+  before the one permitted formal train-only audit.
