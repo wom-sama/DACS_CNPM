@@ -4152,3 +4152,8 @@
   Cutout/source-deranged controls, and clean-first conjunctive gates. Do not
   open validation/test or integrate/train unless all clean and lighting gates
   pass.
+  Geometry-only preflight found that `crop_bbox` includes hand/background, so
+  lock a pre-metric erratum using deterministic surface support, ellipse,
+  two-pixel erosion, and exhaustive valid-placement sampling. No model forward
+  or candidate metric has been accessed; formal remains blocked until the new
+  protocol hash, implementation, tests, and clean pushed preflight agree.

@@ -19734,3 +19734,23 @@ Date: 2026-07-02
   placebo, clean-fitted OOF readouts, and clean-first conjunctive gates. No
   validation/test, trainer/model edit, smoke/probe/full train, or command
   update is authorized by the protocol alone.
+
+### Prospective Geometry Erratum - Before Formal Metrics
+
+- A 12-row geometry-only preview proved that transformed `crop_bbox` is not an
+  object mask: rectangle placements reached hand, basket, and background
+  (`49454d5f...f664a`). No keeper forward, response/readout, validation/test, or
+  candidate metric was accessed.
+- Ellipse-only support (`86added6...6c0c`) still leaked background. A GrabCut
+  alternative (`431a9a5...2009b`) was not visibly better and is rejected to
+  avoid a new unstable segmentation dependency.
+- Prospectively replace support by existing deterministic surface mask at
+  `margin=0.08` intersected with `crop_bbox`, `image_mask`, a centered
+  radius-`0.92` ellipse, and two-pixel erosion. Enumerate all valid source and
+  destination placements, enforce IoU `<=0.05`, and sample uniformly. Static
+  review removed an unintended duplicate bbox inset before any model load; the
+  exact one-erosion geometry-only preview passes practical inspection at
+  `4ec2c8ed...8d59d6e` (`802e0568...b3c36` was the pre-fix draft).
+- Clarify that the locked cohort hash uses comma-joined ASCII sample indices.
+  Re-lock the protocol hash and rerun every engineering/preflight gate before
+  formal extraction; the metric and escalation gates are unchanged.

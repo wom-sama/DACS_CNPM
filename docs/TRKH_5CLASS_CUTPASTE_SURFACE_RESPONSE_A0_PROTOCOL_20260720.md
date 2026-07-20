@@ -8,6 +8,42 @@ the frozen current keeper. It does not authorize validation/test access, model
 or trainer edits, a checkpoint, a smoke/probe/full train, or current-best
 command promotion.
 
+## Prospective Geometry Erratum - 2026-07-20
+
+This erratum was locked after a geometry-only 12-row image preview and before
+any keeper forward, response descriptor, readout, validation/test access, or
+candidate metric. The original `crop_bbox`-rectangle rule was unsafe because
+`crop_bbox` describes the valid transformed crop, not a mango segmentation:
+the preview exposed placements on a hand, basket, and background. Its SHA-256
+is `49454d5f2b619ff2b59b594bdd16ba5b0d4324294aff6dda9b1458f4a7bf664a`.
+
+The exact valid support is prospectively replaced by the intersection of:
+
+- the existing deterministic `_surface_detail_foreground_mask_array` computed
+  from denormalized evaluation RGB with `margin=0.08`;
+- `crop_bbox` and `image_mask`;
+- a centered crop-bbox ellipse with radius factor `0.92`;
+- a final binary erosion of two pixels (`5x5` invalid-mask max pool).
+
+The regular-patch area ratio is relative to the final valid-support pixel
+count. For each sampled shape, enumerate every fully valid source placement
+and every fully valid destination placement satisfying source/destination IoU
+`<=0.05`, then sample uniformly from those finite sets with the locked local
+generator. Resample the shape/geometry at most ten times. Persist the support
+mask hash and both candidate counts for every record.
+
+A simple ellipse-only preview still leaked background, while a GrabCut variant
+did not improve the deterministic surface mask. Static review then removed an
+unintended duplicate bbox inset so that the implementation performs exactly one
+two-pixel erosion after all intersections. The exact final geometry-only
+surface-support preview passed practical inspection at SHA-256
+`4ec2c8eda5713af947cfc0fc6deb594238844a35d813e6c5c0c24c6df8d59d6e`.
+No model was loaded for that correction or preview. These previews selected
+geometric validity only and cannot authorize or rescue any mechanism gate.
+This erratum supersedes only the conflicting support and placement wording
+below; all cohort, seed, descriptor, readout, gate, and stop rules remain
+unchanged.
+
 ## Research Question
 
 Does the frozen keeper respond to object-interior CutPaste irregularities in a
@@ -127,7 +163,8 @@ target is in `{0,1,2,4}`. The cohort is exactly 750 objects:
 - restricted-FP target totals by fold:
   `0:[23,36,37,36,26]`, `2:[12,9,8,13,12]`,
   `4:[1,0,3,3,3]`;
-- ordered sample-index SHA-256
+- ordered sample-index SHA-256, serialized as comma-joined ASCII integers with
+  no trailing delimiter,
   `55913ec45265b156a611dc96c779e46b08f28582737af8269105afe6f65694d7`.
 
 Use the immutable CIDT folds `0..4`. Each OOF readout fits four folds and is
@@ -143,10 +180,11 @@ the synthetic transform, then restore the same normalization. Lighting shifts,
 illumination normalization, padding, and background suppression happen before
 CutPaste. The keeper receives its unchanged native `bbox` and `image_mask`.
 
-Sampling is limited to the valid object rectangle from `crop_bbox`, intersected
-with `image_mask` and eroded by two pixels. A sample is fatal if no valid
-rectangle can be drawn after ten attempts. Source and destination masks must be
-fully valid and have intersection-over-union at most `0.05`.
+Sampling is limited to the final surface-support mask defined by the prospective
+geometry erratum. A sample is fatal if no valid geometry can be drawn after ten
+shape attempts. Source and destination masks must be fully valid, come from
+uniform draws over their enumerated valid-placement sets, and have
+intersection-over-union at most `0.05`.
 
 For each sample, condition, and draw `d in {0,1,2,3}`, seed a local CPU
 generator from `20260720 + 1000003*sample_index + 1009*d + condition_id`.
@@ -155,7 +193,7 @@ Global Python, NumPy, and Torch RNG state may not be consumed.
 ### Standard CutPaste
 
 - sample pasted area ratio log-uniformly in `[0.02,0.15]` relative to the
-  valid `crop_bbox` area;
+  final valid-support pixel count;
 - sample aspect ratio log-uniformly in `[0.3,3.3]`;
 - select source and destination uniformly among fully valid placements;
 - apply brightness, contrast, saturation, and hue jitter in a deterministic
@@ -166,11 +204,12 @@ Global Python, NumPy, and Torch RNG state may not be consumed.
 
 - sample short side uniformly from integer pixels `[2,16]` and long side from
   `[10,25]`;
-- select source uniformly inside the valid object rectangle;
+- select source uniformly among placements fully inside final valid support;
 - apply the same maximum-0.1 color jitter;
 - rotate uniformly in `[-45,45]` degrees with bilinear RGB and nearest mask;
-- select a destination that keeps the full rotated mask in the valid object
-  rectangle, then paste by the rotated binary mask.
+- select a destination uniformly among placements that keep the full rotated
+  mask in final valid support and satisfy the locked IoU, then paste by the
+  rotated binary mask.
 
 ### Matched Controls
 
