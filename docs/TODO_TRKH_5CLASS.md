@@ -3909,7 +3909,18 @@
   manifests passes with 219 originals absent and `blockers=[]` at summary SHA
   `93c13f33...389d`. Closure SHA is `1a4708bd...06fe1`; current-best commands
   remain unchanged.
-- [ ] Screen the next accepted-primary, licensed, equation-distinct route. It
-  must encode class-conditional negative surface/boundary evidence rather than
-  generic invariance, localization, confidence averaging, or class-1 support
-  contraction/expansion; lock its train-only protocol before code or metrics.
+- [x] Screen the next accepted-primary, licensed, equation-distinct route.
+  Reject DAM/maximal-separation/NEGEV/PMRC before code because they overlap
+  closed metric/prototype/pooling families, lack licensed official code, or
+  require pretrained/long schedules. Select an ICML-2020 Concept Bottleneck-
+  inspired mango factor-product hypothesis from the accepted paper and MIT
+  source at commit `d6353f2...d583f8`.
+- [x] Prospectively lock the factor-concept product A0 before auditor code or
+  new metrics. Use only the immutable 9,215-row train cache, source-disjoint
+  OOF folds, global maturity evidence, signed `interior-core - boundary-ring`
+  transport/damage evidence, a matched five-class control, explicit placebos,
+  precision/recall/FP/direction gates, and no validation/test access.
+- [ ] Implement, test, commit, and push the isolated factor-product auditor
+  before the sole formal A0. If any conjunctive gate fails, close the exact
+  factor code/product/signed-descriptor family without validation, XAI,
+  trainer integration, smoke, probe, full train, or command update.

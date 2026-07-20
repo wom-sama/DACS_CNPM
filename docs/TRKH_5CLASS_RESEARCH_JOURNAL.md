@@ -19197,3 +19197,30 @@ Date: 2026-07-02
   summary SHA `93c13f33...389d`. No XAI, validation smoke, checkpoint, probe,
   test, full train, raw-data edit, or current-best command update is permitted.
   Closure SHA is `1a4708bd...06fe1`.
+
+## Factor-Concept Product A0 Protocol 2026-07-20 - Prospectively Locked
+
+- Screened accepted class-conditional candidates after C4. DAM, maximal
+  separation, NEGEV, and PMRC were rejected before code because they overlap
+  closed metric/prototype/negative-pooling families, lack a suitable licensed
+  official implementation, or depend on pretrained and long-schedule
+  assumptions that do not fit TRKH.
+- Selected the X-to-concept-to-label principle from Koh et al., ICML 2020.
+  The accepted PMLR paper is locked at SHA `250cf7d6...e9b4b`; the authors'
+  official MIT repository is pinned at commit/tree
+  `d6353f2...d583f8`/`d93ca72...af4eb9`. No external code or weights are copied.
+- The TRKH-specific hypothesis factorizes classes into maturity
+  `{0,1}|{2,3}|{4}` and transport/damage `{0,2}|{1}|{3,4}`. Unlike the failed
+  semantic-attribute loss, independent factor heads and a deterministic
+  posterior product require both factors for class 1 and permit either factor
+  to veto a false positive.
+- Lock one train-only A0 at
+  `docs/TRKH_5CLASS_FACTOR_CONCEPT_PRODUCT_A0_PROTOCOL_20260720.md`. It uses
+  only the immutable 9,215-row descriptor cache: global keeper head features
+  for maturity and signed `core_second_order - ring_second_order` for the
+  transport/damage factor. A matched five-class readout and sum/context
+  transport placebos use the same fixed five source folds.
+- The gate requires simultaneous macro/class-1/precision/recall/FP/TP safety,
+  fold stability, signed TP-versus-FP AUROC, and superiority to both placebos.
+  Validation/test, XAI, model/trainer edits, smoke, probe, full training, and
+  current-best command promotion remain forbidden before a complete A0 pass.
