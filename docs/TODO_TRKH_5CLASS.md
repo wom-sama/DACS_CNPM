@@ -3819,7 +3819,30 @@
   directories pass with `blockers=[]`; no XAI, validation/test, checkpoint,
   full train, raw-data edit, or current-best command update occurred. Closure
   SHA is `e5b83e19...c1940db`.
+- [x] Screen the next accepted-primary, licensed, equation-distinct route.
+  Select chromatic cubical persistent homology from the accepted WACV-2024
+  PHG-Net motivation and GUDHI's MIT API. Do not copy the unlicensed paper-
+  repository source. Lock one train-only information audit before descriptor
+  extraction at protocol SHA `6e91d163...e7892b`.
+- [x] Implement and push the isolated chromatic-persistence auditor, 13 focused
+  tests, and VS Code-safe launcher at `f136a5d`; harden the Windows GPU-idle
+  gate at `5689fc0` before data access. Reconstruct all 64 persisted readouts,
+  16 thresholds, scores, actions, source mappings, metrics, and gates during
+  independent replay rather than trusting recorded CSV values.
+- [x] Reject chromatic cubical persistence before visual review or neural
+  surrogate integration. Clean candidate/control/pixel/source AUC is
+  `0.696709/0.793048/0.712901/0.690076`; candidate removes only `10/186` FP,
+  breaks seven TP, and accepts `8/11` FN. Under dim/bright/low contrast, TP
+  breaks versus FP removals are `145/83`, `32/19`, and `122/92`.
+- [x] Preserve five formal payloads at summary/manifest/aggregate SHAs
+  `2dd9065c...aa711`/`accc41e5...fedd4`/`59a5d90d...1db0`. Focused `13/13`,
+  full pytest `1523/1523`, exact coefficient-based replay, and read-only
+  retention over 774 directories/all 49 manifests pass with `blockers=[]` at
+  SHA `6c456de9...5a692`. No XAI, validation/test, smoke, checkpoint, full
+  train, raw-data edit, or current-best command update occurred. Closure SHA is
+  `8e0afea6...f2a4e`.
 - [ ] Screen the next accepted-primary, licensed, equation-distinct route. It
-  must produce one joint TP-versus-restricted-FP mechanism under all four
-  lighting conditions, not merely combine the closed recall-expansion and
-  precision-suppression signals or add another post-hoc threshold/router.
+  must provide a stable class-conditional signal beyond keeper probabilities
+  and global color in every held source fold and under illumination, not a
+  low-rank handcrafted descriptor, generic support expansion/contraction, or
+  another post-hoc threshold/router.

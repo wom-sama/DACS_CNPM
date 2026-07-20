@@ -19009,3 +19009,46 @@ Date: 2026-07-02
   compacted originals absent, deletes nothing, and reports `blockers=[]` at SHA
   `41933ca4...8f8414`. Closure SHA is `e5b83e19...c1940db`; current-best
   checkpoint/commands remain unchanged.
+
+## Chromatic Cubical Persistence A0 Closure 2026-07-20 - Topology Loses To Control And Placebo
+
+- Verify the accepted WACV-2024 PHG-Net paper and GUDHI's documented MIT
+  cubical-complex API. The paper-linked repository has no declared license, so
+  inspect provenance only and copy no source. Lock GUDHI `3.11.0`, the paper,
+  wheel, keeper, CIDT, dataset, command, cohort, four-condition, ROI/rank-map,
+  H0/H1, placebo, nested-OOF, and automatic gates at protocol SHA
+  `6e91d163...e7892b` before implementation or feature extraction.
+- Implement and push the isolated auditor, 13 focused tests, and direct-native
+  VS Code-safe launcher at `f136a5d`. Independent replay now uses all persisted
+  scaler/coefficient records to reconstruct 48 inner scores, 16 thresholds,
+  and all outer-condition scores instead of trusting the CSV. A low-power P8
+  fallback for Windows display utilization is separately recorded at
+  `5689fc0`; two earlier attempts stopped before data/output.
+- The sole formal uses 618 train-only rows: 421 keeper TP, 11 keeper FN, and
+  186 restricted FP across source folds 1..4. All 64 readouts converge and all
+  structural, provenance, source-derangement, histogram, synthetic H0/H1,
+  raw-metadata, command-hash, and replay checks pass.
+- Reject before visual review. Clean candidate/control/pixel/source AUC is
+  `0.696709/0.793048/0.712901/0.690076`. Candidate retains `414/421` TP,
+  accepts `8/11` FN, and removes only `10/186` FP; clean action corrections/
+  harms are `9/7`. Candidate AUC is below control in every held fold.
+- Dim/bright/low-contrast candidate AUC is
+  `0.584939/0.585300/0.635342`; TP breaks versus FP removals are
+  `145/83`, `32/19`, and `122/92`. Score correlation with clean is only
+  `0.537/0.445/0.540`. Eight clean, sixteen shifted, and five aggregate gates
+  fail, so contact sheets/XAI, surrogate integration, validation/test, smoke,
+  checkpoint, and full train are denied.
+- The `252D` clean topology has effective rank only `3.025`. Outer-fold
+  topology coefficient cosine is `0.558-0.639`, versus `0.890-0.926` for base
+  features. Pixel-shuffled adjacency still beats real topology. Close nearby
+  channel/polarity/homology/floor/rank/resolution/ROI/smoothing/Betti/readout/
+  threshold/fold/seed variants and do not train a PHG-like surrogate without
+  the prospectively required information signal.
+- Preserve five payloads totaling `4,314,680` bytes at summary/manifest/
+  aggregate SHAs `2dd9065c...aa711`/`accc41e5...fedd4`/
+  `59a5d90d...1db0`. Replay maximum score difference is `2.22e-16`; metrics
+  and gates are exact. Focused `13/13`, full pytest `1523/1523`, and read-only
+  retention over 774 directories/all 49 manifests pass. All 216 compacted
+  originals remain absent and `blockers=[]` at SHA `6c456de9...5a692`.
+  Closure SHA is `8e0afea6...f2a4e`; current-best checkpoint/commands remain
+  unchanged.
