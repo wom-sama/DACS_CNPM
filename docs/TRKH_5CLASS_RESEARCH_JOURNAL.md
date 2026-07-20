@@ -20348,3 +20348,35 @@ Date: 2026-07-02
   Close nearby map-L1/width/grid/layer/epoch/seed/fold/threshold/dephasing
   sweeps. Closure SHA is `7eb6985e...f259562`; no integration, smoke, probe,
   full train, validation/test, or current-best command update is authorized.
+
+## Research Lock 2026-07-21 - BoxInst Foreground-Mask A0
+
+- Re-screen global distribution pooling, local texture aggregation, and
+  foreground separation against the closure matrix. FSPool, NetVLAD, and
+  learned-histogram variants repeat rejected DeepTEN/histogram/global-texture
+  mechanisms. Select only BoxInst's projection and LAB pairwise-affinity mask
+  equations because TRKH has bbox priors and heuristic masks but no learned
+  box-supervised pixelwise object mask.
+- Pin Tian et al.'s CVPR-2021 accepted paper at SHA
+  `95b01b2b...2f66e0` and the authors' 3.5k-star AdelaiDet repository at
+  commit/tree `5e19cb1...ad3acb8`/`bd79180...86a702`. Its license permits
+  academic use but separately restricts commercial use; TRKH must implement
+  the paper equations independently and use official code only as hashed
+  provenance.
+- Prospectively lock
+  `TRKH_5CLASS_BOXINST_FOREGROUND_MASK_A0_PROTOCOL_20260721.md` at SHA-256
+  `cb6335e787df64eb624db4abe1c677e16eaf248d8ab74d3b28a5db6ac3643425`
+  before auditor code, full feature extraction, mask fit, or candidate metric.
+  Class-agnostic mask heads train source-held on all 9,215 `yolo_f/train` rows;
+  classification gates use the existing 763-row TP/FN/restricted-FP cohort.
+- Preserve the full `[64,64,64]` block-2 geometry and wide context. Candidate
+  projection+aligned-affinity masks must beat valid-uniform, bbox rectangle,
+  projection-only, trained affinity-dephased, and same-weight mask-roll
+  controls under fold-safe fixed readouts and 97%-TP thresholds.
+- Adverse evidence remains binding: prior XAI says distant background is not
+  the dominant error source, LAB smoothing may erase lesions, and projection
+  admits degenerate masks. A0 requires AUROC/AUPRC `>=0.85/0.90`, TP retention
+  `>=0.95`, FP rejection `>=0.25`, causal margins, geometry, robustness,
+  replay/export/resource checks, and fixed manual XAI. No validation/test,
+  production edit, smoke/probe/full train, or command update is authorized by
+  the protocol alone.

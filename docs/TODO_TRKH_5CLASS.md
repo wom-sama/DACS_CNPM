@@ -4403,8 +4403,28 @@
   with `blockers=[]` at SHA `aebdc14c...2cba2`. Closure SHA is
   `7eb6985e...f259562`; no smoke/full train/current-command update is
   authorized.
-- [ ] Screen the next accepted-primary, licensed, equation-distinct route for
-  class-conditional lesion/texture evidence before spatial averaging. It must
-  beat a matched non-spatial control and explicit boundary/context placebos,
-  retain class-1 TP, and avoid every closed color/covariance/frequency/part/
-  attention/evidence-map family before any trainer integration.
+- [x] Screen the next accepted-primary, licensed, equation-distinct route for
+  class-conditional lesion/texture evidence before spatial averaging. Reject
+  FSPool/NetVLAD/histogram variants as repeats of closed global texture
+  aggregation. Select only BoxInst's projection plus LAB-affinity mask loss as
+  an untested way to learn object-tight shape from existing `yolo_f` boxes.
+- [x] Pin the CVPR-2021 paper and authors' 3.5k-star AdelaiDet source at
+  paper SHA `95b01b2b...2f66e0`, commit/tree
+  `5e19cb1...ad3acb8`/`bd79180...86a702`. Treat its academic-only BSD-like
+  license as provenance: independently implement equations and never copy or
+  import official source.
+- [x] Prospectively lock the source-disjoint 9,215-row class-agnostic mask
+  training and 763-row class-1 gate in
+  `TRKH_5CLASS_BOXINST_FOREGROUND_MASK_A0_PROTOCOL_20260721.md`, SHA-256
+  `cb6335e787df64eb624db4abe1c677e16eaf248d8ab74d3b28a5db6ac3643425`.
+  Candidate must beat uniform/bbox/projection-only/affinity-dephased/mask-roll
+  controls before any trainer integration.
+- [ ] Implement the isolated BoxInst foreground-mask A0 auditor, independent
+  projection/pairwise/LAB oracles, source-held mask training, exact replay,
+  static export, resource gates, fixed mask/gradient XAI, tests, and VS Code-
+  safe launcher. Commit/push all infrastructure before extracting formal
+  features or viewing a candidate metric.
+- [ ] Run the sole clean A0 with requested/effective workers `4/4`. Open
+  shifted conditions only on a complete clean pass; never open validation/test,
+  trainer integration, smoke/probe/full train, or current-command promotion
+  from an A0 failure.
