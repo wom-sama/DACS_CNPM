@@ -4268,8 +4268,24 @@
   directories, 51 object-schema manifests, and 233 expected-absent names with
   zero remaining original/deletion/blocker at SHA `405c210c...7f5121`.
   Closure SHA is `f2bdac0f...78f1f81`.
-- [ ] Screen and prospectively lock the next accepted-primary, licensed,
-  equation-distinct train-only gate for a learned class1-vs-class0 surface or
-  boundary representation with explicit TP protection. Reject prototype,
-  subcenter, GMM, neighbor, global contrastive, support expansion, and plain
-  optimizer/loss reweighting neighbors before code.
+- [x] Screen the next accepted-primary, licensed, equation-distinct train-only
+  gate for a learned class1-vs-class0 surface representation with explicit TP
+  protection. Reject FDConv and higher-order convolution before code because
+  they overlap closed ODConv/frequency and Moga/StarNet/HorNet mechanisms.
+  Select only CVPR-2022 DeepBDC's nonlinear channel-dependence equation, not
+  its prototype, pretraining, distillation, or reported schedule.
+- [x] Pin the CVPR oral paper and authors' CC BY-NC 4.0 repository at
+  commit/tree `adfab39...7a83a`/`058e8d0...882cec`. Because the code license is
+  non-permissive, require an independent paper-equation implementation and a
+  separate NumPy/FP64 oracle; never import or copy the official module.
+- [x] Prospectively lock the 750-row train-only DeepBDC stem A0 at
+  `docs/TRKH_5CLASS_DEEPBDC_STEM_JOINT_DEPENDENCE_A0_PROTOCOL_20260721.md`.
+  Protocol SHA-256 is `21b95f52...c0f512`.
+  It learns identical `256->32` fold heads, compares aligned BDC against
+  keeper-logprob, mean, covariance, trained-dephased, and same-weight-dephased
+  controls, and fits actions at 97% TP retention. Validation/test, trainer,
+  image-model smoke/probe/full train, and command promotion remain forbidden.
+- [ ] Implement the isolated DeepBDC A0 auditor, independent oracle, exact
+  replay, fixed contact sheet, VS Code-safe launcher, and focused tests. Pass
+  compile/static/full tests and a no-output real engineering preflight on a
+  clean pushed commit before the sole formal train-only audit.

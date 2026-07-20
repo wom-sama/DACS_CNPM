@@ -20060,3 +20060,39 @@ Date: 2026-07-02
   805 directories, 51 object-schema manifests, and 233 expected-absent names
   with no remaining original/deletion/blocker; retention SHA is
   `405c210c...7f5121`.
+
+## Research Lock 2026-07-21 - DeepBDC Stem Joint Dependence A0
+
+- Re-screened accepted 2024-2026 representation work against the local closure
+  matrix. NeurIPS-2025 higher-order convolution reduces to local
+  multiplicative interactions already tested by MogaNet/StarNet and screened
+  for HorNet. CVPR-2025 FDConv combines dynamic-kernel and frequency-band
+  mechanisms already closed by ODConv and multiple Fourier/wavelet routes.
+  Neither supplies an independent class-1 TP-protection mechanism, so both are
+  rejected before code.
+- Selected only Xie et al.'s CVPR-2022 oral DeepBDC equation. The paper
+  explicitly distinguishes double-centered Euclidean channel-distance
+  dependence from covariance and includes a conventional supervised FC form,
+  so no prototype or neighbor route is needed. The authors' repository has 185
+  stars/27 forks and is pinned at commit/tree
+  `adfab39...7a83a`/`058e8d0...882cec`; its CC BY-NC 4.0 source will not be
+  copied or imported. TRKH must independently implement paper Eq. (4)-(6) and
+  verify it with a separate NumPy/FP64 oracle.
+- Prospectively locked
+  `docs/TRKH_5CLASS_DEEPBDC_STEM_JOINT_DEPENDENCE_A0_PROTOCOL_20260721.md`
+  at SHA-256 `21b95f52a753458255cb7ec922fa2c9a6d9103ff96308ca6ace65ad838c0f512`
+  before auditor code, feature extraction, or candidate metrics. The exact
+  train-only cohort contains 750 keeper-predicted class-1 objects: 528 TP and
+  222 restricted `0/2/4 -> 1` FP across five source-disjoint CIDT folds.
+- A0 captures the frozen keeper's `256x32x32` final CNN-stem map, removes only
+  square padding through the existing valid mask, resizes the complete valid
+  wide crop to `16x16`, and trains matched 20-epoch fold heads at fixed
+  `d=32`. Aligned BDC must beat keeper log probabilities, projected mean,
+  covariance, a separately trained channel-dephased BDC, and a same-weight
+  dephasing causal placebo.
+- The action threshold is fit only on each four-fold training partition to
+  retain at least 97% TP. Promotion requires OOF AUROC `>=0.85`, aggregate TP
+  retention `>=0.95`, FP rejection `>=0.25`, four-of-five fold wins, robust
+  condition replay, score/action replay, and class-specific gradient XAI. A0
+  cannot open validation/test or authorize trainer integration, smoke, probe,
+  full train, or current-best command changes by itself.
