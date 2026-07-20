@@ -362,6 +362,7 @@ class ConvStemBlock(nn.Module):
         pooling_mode: str = "max",
         softpool_blend: float = 0.15,
         normalization: str = "batch",
+        convolution: str = "standard",
     ) -> None:
         super().__init__()
         normalized_pooling_mode = str(pooling_mode).strip().lower()
@@ -390,22 +391,40 @@ class ConvStemBlock(nn.Module):
                 "stem block normalization must be one of: batch, ibn_a; "
                 f"got {normalization!r}."
             )
+        normalized_convolution = str(convolution).strip().lower()
+        if normalized_convolution not in {"standard", "validity_partial"}:
+            raise ValueError(
+                "stem block convolution must be one of: standard, validity_partial; "
+                f"got {convolution!r}."
+            )
+        if normalized_convolution == "validity_partial" and normalized_pooling_mode != "max":
+            raise ValueError("validity_partial stem convolution requires max pooling.")
+        convolution_layer: nn.Module
+        if normalized_convolution == "validity_partial":
+            convolution_layer = ValidityPartialConv2d(
+                in_channels,
+                out_channels,
+                kernel_size=3,
+                stride=1,
+                padding=1,
+                bias=False,
+            )
+        else:
+            convolution_layer = nn.Conv2d(
+                in_channels,
+                out_channels,
+                kernel_size=3,
+                stride=1,
+                padding=1,
+                bias=False,
+            )
         self.pooling_mode = normalized_pooling_mode
         self.normalization = normalized_normalization
+        self.convolution = normalized_convolution
         self.block = nn.Sequential(
             OrderedDict(
                 [
-                    (
-                        "conv",
-                        nn.Conv2d(
-                            in_channels,
-                            out_channels,
-                            kernel_size=3,
-                            stride=1,
-                            padding=1,
-                            bias=False,
-                        ),
-                    ),
+                    ("conv", convolution_layer),
                     ("norm", norm),
                     ("act", nn.GELU()),
                     ("pool", pooling),
@@ -415,6 +434,118 @@ class ConvStemBlock(nn.Module):
 
     def forward(self, x: Tensor) -> Tensor:
         return self.block(x)
+
+    def forward_with_validity_mask(
+        self,
+        x: Tensor,
+        validity_mask: Tensor,
+        *,
+        return_trace: bool = False,
+    ) -> Tuple[Tensor, Tensor, Optional[Dict[str, Tensor]]]:
+        if self.convolution != "validity_partial":
+            raise RuntimeError("forward_with_validity_mask requires validity_partial convolution.")
+        convolution = self.block.conv
+        if not isinstance(convolution, ValidityPartialConv2d):
+            raise RuntimeError("Validity-partial stem block has an unexpected convolution module.")
+        x, updated_mask, valid_count = convolution.forward_with_mask(x, validity_mask)
+        x = self.block.norm(x)
+        x = self.block.act(x)
+        masked_x = torch.where(
+            updated_mask,
+            x,
+            torch.full_like(x, torch.finfo(x.dtype).min),
+        )
+        x = self.block.pool(masked_x)
+        pooled_mask = F.max_pool2d(
+            updated_mask.to(dtype=torch.float32),
+            kernel_size=2,
+            stride=2,
+        ) > 0.0
+        x = torch.where(pooled_mask, x, torch.zeros_like(x))
+        trace = None
+        if return_trace:
+            trace = {
+                "input_mask": validity_mask.detach(),
+                "valid_count": valid_count.detach(),
+                "updated_mask": updated_mask.detach(),
+                "pooled_mask": pooled_mask.detach(),
+                "activation": x.detach(),
+            }
+        return x, pooled_mask, trace
+
+
+class ValidityPartialConv2d(nn.Conv2d):
+    """State-compatible partial convolution for internal image padding."""
+
+    mask_epsilon = 1e-6
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        if self.kernel_size != (3, 3):
+            raise ValueError("ValidityPartialConv2d is locked to a 3x3 kernel.")
+        if self.stride != (1, 1) or self.padding != (1, 1):
+            raise ValueError("ValidityPartialConv2d is locked to stride=1, padding=1.")
+        if self.dilation != (1, 1) or self.groups != 1:
+            raise ValueError("ValidityPartialConv2d requires dilation=1 and groups=1.")
+        self.register_buffer(
+            "_validity_kernel",
+            torch.ones(1, 1, 3, 3, dtype=torch.float32),
+            persistent=False,
+        )
+
+    @staticmethod
+    def _normalize_mask(input_tensor: Tensor, validity_mask: Tensor) -> Tensor:
+        if validity_mask.ndim == 3:
+            validity_mask = validity_mask.unsqueeze(1)
+        if validity_mask.ndim != 4 or int(validity_mask.size(1)) != 1:
+            raise ValueError("validity_mask must have shape [B,H,W] or [B,1,H,W].")
+        if int(validity_mask.size(0)) != int(input_tensor.size(0)):
+            raise ValueError("validity_mask batch size must match the convolution input.")
+        if tuple(validity_mask.shape[-2:]) != tuple(input_tensor.shape[-2:]):
+            raise ValueError("validity_mask spatial size must match the convolution input.")
+        return validity_mask.to(device=input_tensor.device, dtype=torch.bool)
+
+    def forward_with_mask(
+        self,
+        input_tensor: Tensor,
+        validity_mask: Tensor,
+    ) -> Tuple[Tensor, Tensor, Tensor]:
+        mask = self._normalize_mask(input_tensor, validity_mask)
+        mask_float = mask.to(dtype=torch.float32)
+        with torch.autocast(device_type=input_tensor.device.type, enabled=False):
+            padded_mask = F.pad(mask_float, (1, 1, 1, 1), value=1.0)
+            valid_count = F.conv2d(
+                padded_mask,
+                self._validity_kernel.to(device=input_tensor.device, dtype=torch.float32),
+                bias=None,
+                stride=1,
+                padding=0,
+            )
+            updated_mask = valid_count > 0.0
+            mask_ratio = torch.where(
+                updated_mask,
+                (9.0 + self.mask_epsilon) / (valid_count + self.mask_epsilon),
+                torch.zeros_like(valid_count),
+            )
+        raw_output = F.conv2d(
+            input_tensor * mask.to(dtype=input_tensor.dtype),
+            self.weight,
+            self.bias,
+            self.stride,
+            self.padding,
+            self.dilation,
+            self.groups,
+        )
+        if self.bias is None:
+            output = raw_output * mask_ratio.to(dtype=raw_output.dtype)
+        else:
+            bias = self.bias.view(1, -1, 1, 1)
+            output = (raw_output - bias) * mask_ratio.to(dtype=raw_output.dtype) + bias
+            output = output * updated_mask.to(dtype=output.dtype)
+        return output, updated_mask, valid_count
+
+    def forward(self, input_tensor: Tensor) -> Tensor:
+        return super().forward(input_tensor)
 
 
 class HybridConvStem(nn.Module):
@@ -426,6 +557,7 @@ class HybridConvStem(nn.Module):
         pooling_mode: str = "max",
         softpool_blend: float = 0.15,
         normalization: str = "batch",
+        convolution: str = "standard",
     ) -> None:
         super().__init__()
         normalized_normalization = str(normalization).strip().lower()
@@ -435,6 +567,12 @@ class HybridConvStem(nn.Module):
                 f"got {normalization!r}."
             )
         mid_channels = stem_channels * 2
+        normalized_convolution = str(convolution).strip().lower()
+        if normalized_convolution not in {"standard", "validity_partial"}:
+            raise ValueError(
+                "stem_convolution must be one of: standard, validity_partial; "
+                f"got {convolution!r}."
+            )
         self.blocks = nn.Sequential(
             ConvStemBlock(
                 in_channels,
@@ -444,28 +582,66 @@ class HybridConvStem(nn.Module):
                 normalization=(
                     "ibn_a" if normalized_normalization == "ibn_a_first" else "batch"
                 ),
+                convolution=normalized_convolution,
             ),
             ConvStemBlock(
                 stem_channels,
                 mid_channels,
                 pooling_mode=pooling_mode,
                 softpool_blend=softpool_blend,
+                convolution=normalized_convolution,
             ),
             ConvStemBlock(
                 mid_channels,
                 embed_dim,
                 pooling_mode=pooling_mode,
                 softpool_blend=softpool_blend,
+                convolution=normalized_convolution,
             ),
         )
         self.pooling_mode = str(pooling_mode).strip().lower()
         self.softpool_blend = float(softpool_blend)
         self.normalization = normalized_normalization
+        self.convolution = normalized_convolution
         self.downsample_factor = 8
         self.out_channels = embed_dim
 
-    def forward(self, x: Tensor) -> Tensor:
-        return self.blocks(x)
+    def forward(
+        self,
+        x: Tensor,
+        image_valid_mask: Optional[Tensor] = None,
+        *,
+        return_mask_trace: bool = False,
+    ) -> Any:
+        if self.convolution == "standard":
+            output = self.blocks(x)
+            return (output, None) if return_mask_trace else output
+        if image_valid_mask is None:
+            validity_mask = torch.ones(
+                (int(x.size(0)), 1, int(x.size(-2)), int(x.size(-1))),
+                device=x.device,
+                dtype=torch.bool,
+            )
+        else:
+            validity_mask = ValidityPartialConv2d._normalize_mask(x, image_valid_mask)
+        block_traces: List[Dict[str, Tensor]] = []
+        for block in self.blocks:
+            if not isinstance(block, ConvStemBlock):
+                raise RuntimeError("HybridConvStem contains an unexpected block type.")
+            x, validity_mask, block_trace = block.forward_with_validity_mask(
+                x,
+                validity_mask,
+                return_trace=return_mask_trace,
+            )
+            if block_trace is not None:
+                block_traces.append(block_trace)
+        if return_mask_trace:
+            return x, {
+                "mode": self.convolution,
+                "blocks": block_traces,
+                "final_mask": validity_mask.detach(),
+            }
+        return x
 
 
 class CoAtNetMBConvStem(nn.Module):
@@ -5860,6 +6036,7 @@ class VisionTransformerWithRegisters(nn.Module):
         stem_channels: int = 32,
         stem_architecture: str = "conv_pool",
         stem_normalization: str = "batch",
+        stem_convolution: str = "standard",
         stem_pooling_mode: str = "max",
         stem_softpool_blend: float = 0.15,
         shifted_patch_tokenization: bool = False,
@@ -6176,7 +6353,20 @@ class VisionTransformerWithRegisters(nn.Module):
             raise ValueError(
                 "stem_normalization=ibn_a_first is only supported by stem_architecture=conv_pool."
             )
+        self.stem_convolution = str(stem_convolution).strip().lower()
+        if self.stem_convolution not in {"standard", "validity_partial"}:
+            raise ValueError(
+                "stem_convolution must be one of: standard, validity_partial; "
+                f"got {stem_convolution!r}."
+            )
+        if self.stem_convolution != "standard" and self.stem_architecture != "conv_pool":
+            raise ValueError(
+                "stem_convolution=validity_partial is only supported by "
+                "stem_architecture=conv_pool."
+            )
         self.stem_pooling_mode = str(stem_pooling_mode).strip().lower()
+        if self.stem_convolution == "validity_partial" and self.stem_pooling_mode != "max":
+            raise ValueError("stem_convolution=validity_partial requires stem_pooling_mode=max.")
         self.stem_softpool_blend = float(stem_softpool_blend)
         self.shifted_patch_tokenization_enabled = bool(shifted_patch_tokenization)
         self.shifted_patch_shift = int(shifted_patch_shift)
@@ -6982,6 +7172,7 @@ class VisionTransformerWithRegisters(nn.Module):
                     pooling_mode=self.stem_pooling_mode,
                     softpool_blend=self.stem_softpool_blend,
                     normalization=self.stem_normalization,
+                    convolution=self.stem_convolution,
                 )
             stem_stride = self.stem.downsample_factor
             if image_size % stem_stride != 0:
@@ -8680,7 +8871,25 @@ class VisionTransformerWithRegisters(nn.Module):
     ) -> Dict[str, Tensor]:
         input_spatial_size = tuple(int(value) for value in x.shape[-2:])
         input_image = x
-        x = self.stem(x)
+        stem_validity_trace = None
+        if isinstance(self.stem, HybridConvStem) and self.stem_convolution == "validity_partial":
+            if image_valid_mask is not None:
+                normalized_validity_mask = ValidityPartialConv2d._normalize_mask(
+                    x,
+                    image_valid_mask,
+                )
+                input_image = x * normalized_validity_mask.to(dtype=x.dtype)
+                x = input_image
+            if return_trace:
+                x, stem_validity_trace = self.stem(
+                    x,
+                    image_valid_mask=image_valid_mask,
+                    return_mask_trace=True,
+                )
+            else:
+                x = self.stem(x, image_valid_mask=image_valid_mask)
+        else:
+            x = self.stem(x)
         x = self.mixstyle(x)
         stem_features = x
         batch_size = x.shape[0]
@@ -9395,6 +9604,8 @@ class VisionTransformerWithRegisters(nn.Module):
                 "foreground_prior": foreground_prior,
                 "pruning": pruning_trace,
             }
+            if stem_validity_trace is not None:
+                features["trace"]["stem_validity"] = stem_validity_trace
             if self.inattentive_token_fusion_enabled:
                 features["trace"]["inattentive_context"] = context_out
                 features["trace"]["active_prefix_count"] = torch.tensor(
@@ -11293,6 +11504,7 @@ class DETRVisionTransformerWithRegisters(VisionTransformerWithRegisters):
         stem_channels: int = 32,
         stem_architecture: str = "conv_pool",
         stem_normalization: str = "batch",
+        stem_convolution: str = "standard",
         stem_pooling_mode: str = "max",
         stem_softpool_blend: float = 0.15,
         shifted_patch_tokenization: bool = False,
@@ -11604,6 +11816,7 @@ class DETRVisionTransformerWithRegisters(VisionTransformerWithRegisters):
             stem_channels=stem_channels,
             stem_architecture=stem_architecture,
             stem_normalization=stem_normalization,
+            stem_convolution=stem_convolution,
             stem_pooling_mode=stem_pooling_mode,
             stem_softpool_blend=stem_softpool_blend,
             shifted_patch_tokenization=shifted_patch_tokenization,

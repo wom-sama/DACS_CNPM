@@ -397,6 +397,15 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--stem-convolution",
+        choices=("standard", "validity_partial"),
+        default="standard",
+        help=(
+            "Convolution equation in the legacy conv_pool stem. validity_partial "
+            "uses image_valid_mask in all three state-compatible convolutions."
+        ),
+    )
+    parser.add_argument(
         "--stem-pooling-mode",
         choices=("max", "soft", "max_soft"),
         default="max",
@@ -6636,6 +6645,7 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         stem_channels=args.stem_channels,
         stem_architecture=args.stem_architecture,
         stem_normalization=args.stem_normalization,
+        stem_convolution=args.stem_convolution,
         stem_pooling_mode=args.stem_pooling_mode,
         stem_softpool_blend=args.stem_softpool_blend,
         shifted_patch_tokenization=bool(args.shifted_patch_tokenization),
@@ -27475,6 +27485,7 @@ def main() -> None:
             float(args.patch_evidence_mil_loss_weight) > 0.0
             or bool(args.patch_evidence_router_head)
             or str(args.stem_normalization) != "batch"
+            or str(args.stem_convolution) != "standard"
             or bool(args.shifted_patch_tokenization)
             or bool(args.gated_relative_position_attention)
             or bool(args.visual_contrast_attention)
@@ -27706,6 +27717,30 @@ def main() -> None:
                     "reason": (
                         "allow checkpoint-schema-compatible shallow IBN-a "
                         "without rebuilding the full checkpoint config from CLI"
+                    ),
+                },
+                flush=True,
+            )
+        if str(args.stem_convolution) != "standard":
+            if str(model_config.stem_architecture) != "conv_pool":
+                raise ValueError(
+                    "--stem-convolution validity_partial requires "
+                    "stem_architecture=conv_pool in the resumed checkpoint."
+                )
+            if str(model_config.stem_pooling_mode) != "max":
+                raise ValueError(
+                    "--stem-convolution validity_partial requires "
+                    "stem_pooling_mode=max in the resumed checkpoint."
+                )
+            model_config.stem_convolution = str(args.stem_convolution)
+            print(
+                {
+                    "resume_cli_model_extension": {
+                        "stem_convolution": model_config.stem_convolution,
+                    },
+                    "reason": (
+                        "allow checkpoint-schema-compatible validity partial "
+                        "convolution without rebuilding the full checkpoint config from CLI"
                     ),
                 },
                 flush=True,

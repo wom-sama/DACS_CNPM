@@ -4006,8 +4006,18 @@
   commit/tree `610d373...808ec`/`39e37de...cd5f`; protocol SHA is
   `a4b1eeb2...2be7`. The source's zero-trained cross-test failure explicitly
   forbids a frozen metric intervention and requires matched adaptation.
-- [ ] Implement the default-off, state-compatible `stem_convolution` option and
-  the train-only Stage-A readiness auditor. Require external-source equation
-  replay, all-valid standard equivalence, masked-fill invariance, mask geometry,
-  strict checkpoint/gradient/AMP/export/resource gates, fixed five-class stem
-  sheet, focused/full tests, and a committed/pushed Stage-A pass before smoke.
+- [x] Implement the default-off, state-compatible `stem_convolution` option,
+  train-only Stage-A auditor, disk replay, dynamic-batch ONNX preflight, fixed
+  five-class stem sheet, and VS Code-safe launcher. Resolve the prospectively
+  discovered denominator-only epsilon contradiction before Stage A by using
+  `(9+eps)/(S+eps)`; amended protocol SHA is `1838135e...12cda`.
+- [x] Pass pycompile/pyflakes, PowerShell parse, v8 no-output preflight,
+  focused `15/15`, full pytest `1593/1593`, and direct keeper engineering
+  checks. All-valid stem/logits are bit exact, maximum gradient delta is
+  `5.82e-11`, candidate masked-fill delta is `0.0`, real mask fractions are
+  monotonic `0.779 -> 0.809 -> 0.845 -> 0.902`, and batch-2 ONNX replay error
+  is `8.94e-8` with all three dynamic inputs.
+- [ ] Stage only the dependency-coherent implementation, inspect the cached
+  diff, commit/push, rerun clean no-output preflight, and complete the sole
+  formal Stage A. Do not run the matched smoke unless every persisted gate and
+  independent replay passes.

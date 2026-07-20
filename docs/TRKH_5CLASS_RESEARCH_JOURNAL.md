@@ -19436,3 +19436,41 @@ Date: 2026-07-02
   source-aware mask-shape placebo, complete clean audit, and no final test.
 - Smoke/probe/full escalation is precision-first and conjunctive. Current-best
   commands remain unchanged until a locked independent-reload validation win.
+
+## Validity Partial-Conv Stem Implementation 2026-07-20 - Pre-Formal
+
+- Implement `stem_convolution=standard|validity_partial` through config, CLI,
+  resume extension, v8 launcher, all three state-compatible CNN stem
+  convolutions, mask propagation, masked max pooling, and trace telemetry. The
+  candidate also zeros invalid normalized pixels before the keeper's raw-image
+  detail/branch paths so the complete model, not only its stem, satisfies the
+  locked fill-invariance requirement. Default `standard` behavior remains
+  bit-identical.
+- A deterministic pre-Stage-A check exposed an internal protocol contradiction:
+  denominator-only `9/(S+1e-6)` accumulated a keeper stem delta of
+  `3.785789e-4` despite a logit delta of only `8.121133e-7`, violating the
+  prospectively locked stem-equivalence gate. Amend the equation before formal
+  audit, validation, test, or candidate training to `(9+eps)/(S+eps)`, which
+  preserves the partial-window normalization and makes all-valid support exact.
+  Amended protocol SHA is `1838135e...12cda`.
+- The independent NVIDIA-source oracle matches interior outputs within
+  `2.24e-8` and matches updated masks exactly; the nonzero border delta is the
+  documented TRKH legacy-valid exterior condition. On the full keeper,
+  all-valid stem/logits are bit exact and maximum selected-gradient delta is
+  `5.82e-11`. Candidate stem/logit masked-fill deltas are `0.0`, while matched
+  standard control deltas are `18.0973/0.177683`.
+- A real 32-row train-only batch has the required `32x256x32x32` final stem map,
+  finite counts/activations, exact per-block geometry, and monotonic valid-mask
+  fractions `0.778931 -> 0.808701 -> 0.844849 -> 0.902039`. A full keeper ONNX
+  wrapper exports `images`, `image_valid_mask`, and `bbox` with dynamic batch,
+  no custom operator, and batch-2 replay error `8.94e-8`.
+- Add a conjunctive Stage-A auditor, persisted gate inputs, disk/external-process
+  replay, artifact manifest, fixed five-class mechanism sheet, and direct-native
+  PowerShell launcher with process/GPU isolation. Pycompile/pyflakes,
+  PowerShell parse, v8 no-output preflight, focused `15/15`, and full pytest
+  `1593/1593` pass. The Cropr provenance lock is advanced only for the compatible
+  model/config/train/launcher hashes; its five tests still pass.
+- No validation/test row, candidate checkpoint, smoke, probe, or full train is
+  used. Keeper and current-best command/history hashes remain
+  `1f49d577...2677`, `36b9aa1a...0faf`, and `39bd2879...8f53`. Commit/push and
+  a clean formal Stage A remain mandatory before the matched adaptation smoke.

@@ -122,7 +122,7 @@ For a block input `X`, binary validity mask `M`, 3x3 bias-free convolution
 M_border = pad(M, one pixel on every tensor edge, value=1)
 S        = conv2d(M_border, ones[1,1,3,3], padding=0)
 U        = (S > 0)
-R        = 9 / (S + 1e-6) * U
+R        = (9 + 1e-6) / (S + 1e-6) * U
 Y        = C(X * M) * R
 Z        = GELU(BN(Y))
 P        = max_pool2d(where(U, Z, dtype_min), kernel=2, stride=2)
@@ -135,9 +135,23 @@ TRKH boundary condition preserves the keeper's existing zero-padding equation
 when `M` is all valid and isolates only synthetic padding *inside* the 256x256
 canvas. It is not a claim that this boundary choice appears in the paper.
 
+### Pre-Stage-A numerical erratum
+
+The original prospective text used `9 / (S + 1e-6)`. A deterministic
+implementation check performed before Stage A, candidate training, validation,
+or test access found that this denominator-only epsilon contradicts the locked
+all-valid-equivalence gate: on the keeper it accumulated a maximum complete-stem
+delta of `3.785789e-4` (`8.121133e-7` at logits). The numerator now receives the
+same epsilon, so a fully valid 3x3 window has `R=1` exactly while partial-window
+ratios change by less than floating-point tolerance. This is a numerical
+correctness amendment, not a metric-driven candidate change; all other locked
+choices and thresholds remain unchanged.
+
 Mask update `U` follows the accepted irregular-hole mechanism. Masked max pool
 uses `dtype_min` so an invalid zero cannot beat a negative valid GELU response.
-For FP16/BF16 stability use the official README's recommended `1e-6` epsilon.
+For FP16/BF16 stability use the official README's recommended `1e-6` epsilon;
+the symmetric numerator placement is the TRKH all-valid identity condition
+documented above.
 No mask threshold, soft mask, dilation, erosion, learned gate, layer subset,
 pool variant, ratio, or padding-fill variant is permitted.
 

@@ -13,6 +13,8 @@ param(
     [string]$StemArchitecture = "conv_pool",
     [ValidateSet("batch", "ibn_a_first")]
     [string]$StemNormalization = "batch",
+    [ValidateSet("standard", "validity_partial")]
+    [string]$StemConvolution = "standard",
     [ValidateSet("max", "soft", "max_soft")]
     [string]$StemPoolingMode = "max",
     [double]$StemSoftpoolBlend = 0.15,
@@ -1655,6 +1657,7 @@ if ($PreflightOnly) {
         image_size = $ImageSize
         stem_architecture = $StemArchitecture
         stem_normalization = $StemNormalization
+        stem_convolution = $StemConvolution
         stem_pooling_mode = $StemPoolingMode
         stem_softpool_blend = $StemSoftpoolBlend
         shifted_patch_tokenization = [bool]$ShiftedPatchTokenization
@@ -2427,6 +2430,7 @@ try {
         "--stem-channels", "32",
         "--stem-architecture", "$StemArchitecture",
         "--stem-normalization", "$StemNormalization",
+        "--stem-convolution", "$StemConvolution",
         "--stem-pooling-mode", "$StemPoolingMode",
         "--stem-softpool-blend", "$StemSoftpoolBlend",
         "--shifted-patch-shift", "$ShiftedPatchShift",
@@ -3615,6 +3619,7 @@ if ($ClassIndependentHead) {
         image_size = $ImageSize
         stem_architecture = $StemArchitecture
         stem_normalization = $StemNormalization
+        stem_convolution = $StemConvolution
         stem_pooling_mode = $StemPoolingMode
         stem_softpool_blend = $StemSoftpoolBlend
         shifted_patch_tokenization = [bool]$ShiftedPatchTokenization
