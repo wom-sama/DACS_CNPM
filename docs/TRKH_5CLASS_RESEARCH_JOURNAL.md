@@ -19224,3 +19224,40 @@ Date: 2026-07-02
   fold stability, signed TP-versus-FP AUROC, and superiority to both placebos.
   Validation/test, XAI, model/trainer edits, smoke, probe, full training, and
   current-best command promotion remain forbidden before a complete A0 pass.
+
+## Factor-Concept Product A0 Closure 2026-07-20 - Transport Signal Failure
+
+- Implement and push the isolated auditor, 12 synthetic guardrail tests, exact
+  CSV replay, manifest verification, and VS Code-safe launcher at `f527029`.
+  The no-output preflight verifies every protocol/source/cache/checkpoint/data/
+  current-command hash before the NPZ is opened.
+- Complete the sole train-only formal over all 9,215 rows and five source-
+  disjoint OOF folds. All 25 fixed readouts converge without retry, all
+  structural gates pass, and validation/test remain unopened. Runtime is
+  `15.023 s`; peak sampled RSS is `0.6425 GiB` with eight BLAS threads.
+- Reject the product candidate. Control-to-factor macro/class1 F1 changes
+  `-0.094188/-0.263383`; class1 precision/recall changes
+  `-0.329868/-0.129390`. Factor predicts class 1 on `918` rows versus `597`
+  for control, removes/creates `39/430` restricted FP, rescues/breaks
+  `49/119` class1 rows, and yields `140/761` corrections/harms.
+- Maturity is strongly represented (`3-state macro F1=0.983163`), but signed
+  core-minus-ring transport state-1 F1 is only `0.433414`. TP-versus-restricted-
+  FP AUROC is `0.519154`, below sum/context placebos
+  `0.583061/0.545848`. All five folds lose macro F1 and class1 precision; this
+  is a representation failure rather than convergence or fold noise.
+- Close the exact factor code, signed descriptor, product decoder, concept
+  prior, temperature, threshold, class weight, readout `C`, seed, residual,
+  blend, and nearby factor-head variants. The sum placebo is better but still
+  below the locked direction gate, so it is not promoted.
+- Preserve five payloads totaling `7,816,780` bytes at summary/manifest/
+  prediction SHAs `438b8f90...8d4e`/`a4682bb3...e32f`/
+  `92c87ab3...ea23`. Exact replay difference is `0.0`; no XAI, validation,
+  test, smoke, probe, checkpoint, full train, raw-data edit, or command update
+  occurred. Closure is
+  `TRKH_5CLASS_FACTOR_CONCEPT_PRODUCT_A0_CLOSURE_20260720.md`.
+- Focused tests pass `12/12` and the full suite passes `1561/1561`. Remove only
+  the two launcher scratch logs. Read-only retention passes over 781 run
+  directories and all 50 valid compaction manifests; all 219 compacted
+  originals remain absent, `deleted_anything=false`, and `blockers=[]` at
+  summary SHA `e15c0485...adcf`. Closure SHA is `d66da1c9...b34`; keeper and
+  current-best commands remain unchanged.

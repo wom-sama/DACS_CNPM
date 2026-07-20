@@ -3920,7 +3920,27 @@
   OOF folds, global maturity evidence, signed `interior-core - boundary-ring`
   transport/damage evidence, a matched five-class control, explicit placebos,
   precision/recall/FP/direction gates, and no validation/test access.
-- [ ] Implement, test, commit, and push the isolated factor-product auditor
-  before the sole formal A0. If any conjunctive gate fails, close the exact
-  factor code/product/signed-descriptor family without validation, XAI,
-  trainer integration, smoke, probe, full train, or command update.
+- [x] Implement, test, commit, and push the isolated factor-product auditor at
+  `f527029` before the sole formal A0. Pass no-output preflight, focused
+  `12/12`, immutable provenance, exact source folds, CPU/process isolation,
+  and direct VS Code PowerShell execution.
+- [x] Reject factor-concept product before validation or model integration.
+  Macro/class1 F1 change `-0.094188/-0.263383`, class1 precision/recall change
+  `-0.329868/-0.129390`, restricted FP net removal is `-391`, and
+  corrections/harms are `140/761`. Fourteen of 15 mechanism gates fail.
+- [x] Diagnose the representation failure: maturity macro F1 is `0.983163`,
+  but signed transport state-1 F1 is `0.433414`, TP-versus-FP AUROC is
+  `0.519154`, and it loses to sum/context placebos `0.583061/0.545848`.
+  Close factor-code/product/signed-descriptor/prior/temperature/threshold/
+  class-weight/readout/seed/residual/blend variants on the current keeper.
+- [x] Finalize factor-product closure with focused `12/12`, full pytest
+  `1561/1561`, and read-only retention over 781 directories/all 50 valid
+  manifests. Preserve the 7.82 MB replayable formal, remove only launcher
+  scratch logs, and keep all 219 compacted originals absent with
+  `deleted_anything=false`, `blockers=[]`; retention SHA is
+  `e15c0485...adcf`, closure SHA is `d66da1c9...b34`, and keeper/current-best
+  hashes remain unchanged.
+- [ ] Screen the next accepted-primary, licensed, equation-distinct route. It
+  must expose a spatially grounded class-conditional signal not reducible to
+  the now-closed global descriptor/readout families, and it must pass a
+  prospective TP-versus-restricted-FP information gate before model changes.
