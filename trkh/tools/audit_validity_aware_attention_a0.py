@@ -1311,7 +1311,6 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
 
-    paths = _default_paths()
     condition_rows = _read_cidt_conditions(Path(args.cidt_predictions))
     checkpoint = torch.load(Path(args.checkpoint), map_location="cpu", weights_only=False)
     if not isinstance(checkpoint, Mapping):

@@ -3975,7 +3975,33 @@
   originals remain absent with `deleted_anything=false`, `blockers=[]`, and
   retention SHA `a6e7dcf4...ca21`. Closure SHA is `9a4a9b98...049b`;
   current-best commands remain unchanged.
-- [ ] Screen the next accepted-primary, officially licensed, equation-distinct
-  class-conditional spatial route. Require a prospective mechanism that raises
-  class-1 precision and removes restricted FP without another broad support
-  suppressor/expander, then lock one train-only A0 before code or metrics.
+- [x] Screen the next accepted-primary, officially licensed, equation-distinct
+  class-conditional spatial route. Identify the architectural gap that the
+  exact image-valid mask is applied only after all Transformer blocks. Select
+  NaViT/PyTorch-compatible key-padding semantics and lock one train-only A0 at
+  protocol SHA `2b986af2...96df` before candidate-output inspection.
+- [x] Implement and push a scoped eight-block validity-aware attention auditor
+  and seven regression tests at `9ba6e42`; optimize telemetry only at
+  `f769bb4`. Prove all-valid equivalence `0.0`, keeper replay difference
+  `4.47e-08`, model/data immutability, true same-class/fold source
+  derangement, and exact current-best provenance.
+- [x] Complete the sole 9,215-row/four-condition formal with workers `4/4` and
+  independent replay. Reject before integration: clean macro/class1 F1 changes
+  `-0.005980/-0.017946`, precision/recall changes
+  `-0.009208/-0.033272`, corrections/harms are `33/69`, restricted FP net
+  removal is `-3`, direction AUROC is `0.469018`, and all five folds lose
+  class1 F1. All 24 quality/alignment/robustness gates fail.
+- [x] Inspect the fixed XAI sheet and verify exact masking plus nonselective
+  attention renormalization. Preserve seven payloads totaling 13,364,010 bytes
+  with exact replay; close attention threshold/layer/query/soft-mask/training
+  variants and keep current-best commands unchanged.
+- [x] Pass pycompile, pyflakes, focused `7/7`, full pytest `1578/1578`, and
+  read-only retention over 786 run directories/all 50 valid manifests. All 219
+  compacted originals remain absent, nothing is deleted, and `blockers=[]` at
+  retention SHA `03f66d1e...e389b`; closure SHA is
+  `cd94d434...9e6f6` and protected user files remain unstaged.
+- [ ] Screen and prospectively lock the next accepted-primary, licensed,
+  equation-distinct route. Prefer validity-aware CNN stem feature formation
+  such as partial convolution, with a matched mask-shape placebo and explicit
+  class-1 precision/TP/FP/lighting gates; do not infer benefit from the failed
+  frozen attention intervention.

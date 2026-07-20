@@ -19354,3 +19354,59 @@ Date: 2026-07-02
   summary SHA `a6e7dcf4...ca21`. Retain the 865.7 MB formal because the
   four-condition exact equation replay depends on its compressed cache. Closure
   SHA is `9a4a9b98...049b`; keeper/current-best command hashes remain unchanged.
+
+## Validity-Aware Attention A0 Protocol 2026-07-20 - Prospectively Locked
+
+- Find that `9,204/9,215` train rows contain synthetic square padding and that
+  the keeper lets fully invalid patches participate as attention keys/values
+  before the post-Transformer mask is built. The mean is `60.237439/256`
+  invalid patches per row, so the gap is material but not evidence of benefit.
+- Lock NaViT's native-support motivation and PyTorch 2.6 Boolean key-padding
+  semantics at source SHAs `d4421cab...a396` and `ed64d867...d67`, with
+  protocol SHA `2b986af2...96df`. Use only immutable train rows, four fixed
+  conditions, five CIDT source folds, and a same-class/fold different-source
+  mask placebo; validation/test remain forbidden.
+- Implement a scoped monkey patch over all eight standard MHSA blocks, gathering
+  invalid keys through both pruning stages. The all-valid wrapper is exactly
+  equivalent to raw inference and raw keeper/CIDT probability difference is
+  `4.47e-08`. Push protocol/implementation/telemetry optimization at
+  `04f0101`/`9ba6e42`/`f769bb4`.
+- The first formal launch was stopped before any output or metric write because
+  buffered progress hid the true runtime. Change only telemetry cost by
+  extracting the class-query softmax row rather than a redundant full second
+  attention matrix; an exact regression test preserves the locked equation and
+  candidate logits.
+
+## Validity-Aware Attention A0 Closure 2026-07-20 - Nonselective Renormalization
+
+- Complete the sole formal over all 9,215 train rows and clean/dim/bright/low-
+  contrast conditions in `795.404 s`, with requested/effective workers `4/4`.
+  All 18 structural/fidelity/isolation/replay gates pass and all 24 quality,
+  alignment, and robustness gates fail.
+- Reject attention masking before model integration. Clean macro/class1 F1
+  changes `-0.005980/-0.017946`, class1 precision/recall changes
+  `-0.009208/-0.033272`, corrections/harms are `33/69`, restricted FP
+  removal/creation is `22/25`, and class1 FN-rescue/TP-break is `1/19`.
+- Every fold loses macro and class1 F1. Direction AUROC is `0.469018`, below
+  the source-placebo `0.469451`; the real mask also loses aggregate clean
+  macro/class1 F1 and precision to that placebo.
+- Lighting does not rescue the route: dim raises F1 but creates 20 net
+  restricted FP, bright raises precision but breaks recall, and low contrast
+  changes macro/class1 F1/precision by
+  `-0.019633/-0.025627/-0.034697` with 238 harms.
+- Telemetry and manual XAI review verify the mechanism: post-mask invalid-key
+  attention is exactly zero in every block and changes align with padding
+  bands, but remaining attention is renormalized without lesion selectivity.
+  Close nearby attention-mask sweeps/training; partial-convolution/stem masking
+  remains a distinct open question.
+- Exact independent replay has probability/analysis/telemetry/gate difference
+  `0.0`. Preserve seven payloads totaling 13,364,010 bytes at summary/manifest/
+  probability/telemetry/prediction/sheet SHAs
+  `1f28cccc...0a09`/`95e762d0...416c`/`7c1d44e3...afb8`/
+  `a967c0f7...778d`/`e27051c4...ab1`/`50468f92...e4f7`.
+- Pycompile/pyflakes, focused `7/7`, and full pytest `1578/1578` pass. Read-only
+  retention covers 786 run directories and all 50 valid compaction manifests;
+  all 219 compacted originals remain absent, `deleted_anything=false`, and
+  `blockers=[]` at summary SHA `03f66d1e...e389b`. Closure SHA is
+  `cd94d434...9e6f6`; keeper/current-best command hashes stay
+  `1f49d577...2677`, `36b9aa1a...0faf`, and `39bd2879...8f53`.
