@@ -64,8 +64,8 @@ function Assert-HostResources {
         2
     )
     Write-Host "Available physical memory: $AvailableGiB GiB"
-    if ($AvailableGiB -lt 6.0) {
-        throw "Formal CutPaste A0 requires at least 6 GiB available physical memory."
+    if ($AvailableGiB -lt 5.0) {
+        throw "Formal CutPaste A0 requires at least 5 GiB available physical memory."
     }
 }
 

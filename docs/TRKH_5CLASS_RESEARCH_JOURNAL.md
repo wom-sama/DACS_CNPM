@@ -19754,3 +19754,15 @@ Date: 2026-07-02
 - Clarify that the locked cohort hash uses comma-joined ASCII sample indices.
   Re-lock the protocol hash and rerun every engineering/preflight gate before
   formal extraction; the metric and escalation gates are unchanged.
+- Formal attempt 1 stopped after focused/full tests (`14/14`, `1644/1644`) at
+  the host-RAM guard: `5.29 GiB` was available versus an operational `6 GiB`
+  threshold. The audit output did not exist, the keeper was not loaded, and no
+  response/candidate metric was produced. A process/GPU audit found no stale
+  Python/TensorRT/FFmpeg process; memory belonged to active desktop/user apps
+  and was left untouched.
+- Lower only the launcher RAM floor to `5 GiB` before metrics. The machine has
+  `15.64 GiB` total, stabilized at `5.33 GiB` available, the locked paired GPU
+  batch remains `64`, and a 32-row geometry benchmark with workers `4` reached
+  `53.12` pairs/s with projected full-cohort geometry time `112.95 s` and
+  minimum enumerated source/destination supports `740/511`. No seed, geometry,
+  cohort, model, descriptor, readout, gate, or worker setting changes.
