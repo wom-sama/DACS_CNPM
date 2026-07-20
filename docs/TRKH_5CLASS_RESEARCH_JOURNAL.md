@@ -19662,3 +19662,43 @@ Date: 2026-07-02
   Close PMG grids, seeds, stages, ordering, readout, fusion, threshold/router,
   jigsaw probability, and sequential-training neighbors on this keeper. Closure
   SHA is `ab643811...b5324`.
+
+## Result 2026-07-20 - IELT Multi-Head Voting Signal A0 Rejected
+
+- Pin Xu et al., IEEE TMM 2023, and the authors' MIT IELT source at
+  commit/tree `b185111...5eec`/`713ed85...fd050`. Record the adverse transfer
+  boundary: official IELT loads an ImageNet-21k ViT-B/16 checkpoint, uses input
+  448, 50 epochs, and ten warm-up epochs. Prospectively lock only the distinct
+  multi-head top-k vote/count/fixed-kernel equation at protocol SHA
+  `0e4984a0...e58`.
+- Implement an isolated normal-forward hook auditor, independent NumPy oracle,
+  fixed QR token descriptors, four CIDT source-fold binary OOF readouts,
+  dephased-vote placebo, contact sheet, artifact replay, and direct-native
+  launcher. Commit/push infrastructure at `ec2760d` before formal metrics.
+  Synthetic preflight has probability error `0.0`, exact `256/218/167`
+  lineage, bit-exact state, zero leaked hooks, and `0.083 GiB` peak VRAM.
+- The sole 607-row train-only formal rejects MHV. Candidate/base/raw/dephased
+  AUROCs are `0.685299/0.821648/0.711248/0.713585`; candidate TP retention/FP
+  rejection is `0.776722/0.381720`, with `94` TP breaks and `71` FP rejects.
+  Relative to base-only actions it makes `52` corrections and `100` harms and
+  wins zero of four held folds.
+- Diagnose absent useful head consensus: mean head top-k Jaccard is `0.050005`,
+  vote entropy `0.851411`, and dephased alignment `0.459235` exceeds candidate
+  `0.436358`. Candidate effective rank is healthy (`65.4298`), so this is
+  selectivity failure rather than collapsed features. Close MHV quota/head/
+  layer/kernel grids, selector thresholds/routers, refinement, CLR, DS, and
+  full-IELT neighbors on this keeper.
+- Record but do not post-hoc repair one structural declaration miss. Batch-32
+  BF16 adds sample 2446 as an exact `p0=p1` tie beside locked near-tie 3657;
+  ordinary and hooked forwards still match exactly, bbox/oracle/state/replay
+  gates pass, and ten of 15 independent mechanism gates fail. Lighting,
+  validation, test, model integration, smoke/probe/full train, and command
+  update remain skipped.
+- Inspect the complete 12-row sheet: candidate maps follow broad fruit
+  surface/boundary regions without class-1-specific lesion selectivity. Keep
+  all eight replay payloads at summary/manifest/cache/sheet SHAs
+  `ea1247bb...f91c`/`8a418876...fbe4`/`0e29ba9a...3a89`/
+  `d8e70bf7...e01a`. Focused/full tests pass `13/13` and `1630/1630`.
+  Read-only retention passes 794 directories/all 50 manifests with 219
+  originals absent, no deletion/blocker, at SHA `ce5f71fa...dd78e`; closure
+  SHA is `3b2959d9...3bf6a`.

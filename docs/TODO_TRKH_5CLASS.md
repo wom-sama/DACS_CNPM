@@ -4114,7 +4114,32 @@
   `ab643811...b5324`.
 - [x] Write, verify, commit, and push the PMG closure at `91725b1`; keep
   current-best command and update history byte-identical.
+- [x] Screen the next accepted-primary, officially licensed, equation-distinct
+  route for a precision-selective class-1 signal. Select only IELT's exact
+  multi-head voting equation after documenting that the released full model
+  depends on pretrained ViT-B/16, 448-pixel inputs, 50 epochs, and a ten-epoch
+  dynamic-selection warm-up.
+- [x] Prospectively lock the 607-row CIDT TP-versus-restricted-FP MHV A0 at
+  protocol SHA `0e4984a0...e58`. Fix area-scaled `8/7/5` votes, eight layer
+  quotas `[5,4,3,3,3,3,4,5]`, official smoothing, raw/CLS/dephased controls,
+  clean-fitted condition replay, and conjunctive TP/FP/fold/placebo gates.
+- [x] Implement, test, commit, and push the isolated auditor at `ec2760d` before
+  formal metrics. Pass compile/pyflakes, PowerShell parse, focused `13/13`, full
+  pytest `1630/1630`, and synthetic CUDA preflight with exact normal/hook output,
+  oracle, lineage, state, and hook cleanup.
+- [x] Reject MHV before lighting or integration. Candidate AUROC `0.685299` is
+  `-0.136350/-0.025949/-0.028286` versus base/raw/dephased; TP retention is
+  `0.776722`, corrections/harms are `52/100`, and it wins zero held folds.
+  Mean head top-k Jaccard is only `0.050005`; dephasing improves both AUROC and
+  prior alignment. Close quota/head/layer/kernel/CLR/DS/refinement neighbors.
+- [x] Preserve and independently replay all eight formal payloads; inspect the
+  12-row sheet, document the additional batch-32 BF16 tie at sample 2446
+  without post-hoc protocol repair, and keep every training/command flag false.
+  Retention passes 794 directories/all 50 manifests with 219 compacted
+  originals absent and no blocker at SHA `ce5f71fa...dd78e`; closure SHA is
+  `3b2959d9...3bf6a`.
 - [ ] Screen the next accepted-primary, officially licensed, equation-distinct
-  route for a precision-selective class-1 signal. Lock source-disjoint train-only
-  TP-versus-restricted-FP and placebo gates before model/trainer edits; avoid
-  jigsaw, partial-conv, post-hoc threshold, and previously closed neighbors.
+  precision route against the closure matrix. Require a genuinely
+  class-conditional surface/boundary cue that is not another CLS-attention
+  selector, post-hoc threshold, pretrained transfer, or closed pooling/stem
+  neighbor; lock train-only source-disjoint gates before code or metrics.
