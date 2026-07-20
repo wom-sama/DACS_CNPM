@@ -14,6 +14,44 @@ full train. A negative result closes the exact projection, rank, iteration,
 descriptor, and readout route on this keeper without claiming that every NMF
 architecture is impossible.
 
+## Prospective Provenance Erratum - 2026-07-20
+
+The first no-output preflight stopped before model loading, dataset pixels,
+descriptor construction, or candidate metrics because the official
+`seg/HamNet/hamburger/ham.py` SHA-256 had one transcribed character out of
+place. Direct `Get-FileHash`, the pinned clean repository, and a second hash
+check agree on
+`c6a261aa8fd7f932246b6e57addde4c3e971dbaa1f6a42e9a70bcbebeecc2829`.
+This erratum corrects only that provenance string. It does not change the
+source file, projection, cohort, token selection, NMF equation, descriptor,
+readout, seed, gate, resource limit, or stop rule.
+
+## Prospective Token-Support Erratum - 2026-07-20
+
+The first two-row engineering forward stopped before projection,
+decomposition, labels/readouts, or candidate metrics because the second row
+had no final token with the ordinary keeper `patch_bbox_prior >= 0.5`. A
+geometry-only diagnostic established that this keeper receives source-image
+`bbox` coordinates for its ordinary forward, while `crop_bbox` contains the
+same object rectangle after object-crop resize and square padding. For the two
+fixed rows, the ordinary keeper prior selected `104/0` valid tokens; an
+independently reconstructed transformed-crop prior selected `160/32`.
+
+Keep the ordinary keeper forward exactly unchanged with source `bbox`, so its
+logits, pruning, and final patch tokens remain faithful to the checkpoint.
+After that forward, independently build a second audit-only overlap prior from
+`crop_bbox` on the original `16x16` grid using the keeper's locked bbox margin
+ratio `0.04`, per-row min-max normalization with denominator clamp `1e-6`, and
+gather by the final `patch_indices`. Use this transformed-crop audit prior,
+intersected with the unchanged key-padding validity mask, for the locked
+`>=0.5` support rule. Persist both the ordinary keeper prior and the audit-only
+prior. The at-least-16 requirement and no-fallback rule remain unchanged.
+
+This correction aligns support geometry without changing any model input or
+output. It adds no label, segmentation, top-k selection, adaptive dilation, or
+metric-dependent choice. All projection, NMF, descriptor, readout, seed, gate,
+resource, and stop settings remain unchanged.
+
 ## Research Question
 
 Does a compact nonnegative low-rank reconstruction of the frozen keeper's
@@ -48,7 +86,7 @@ another attention selector, post-hoc probability sweep, or background mask.
   - GPL-3.0 `LICENSE` SHA-256
     `230184f60bae2feaf244f10a8bac053c8ff33a183bcc365b4d8b876d2b7f4809`;
   - reference `seg/HamNet/hamburger/ham.py` SHA-256
-    `c6a261aa8fd7f932246b6e57addde4c3e971dbaa1f6a42e9a70bcebeecc2829`.
+    `c6a261aa8fd7f932246b6e57addde4c3e971dbaa1f6a42e9a70bcbebeecc2829`.
 - Independent licensed numerical reference: installed scikit-learn `1.6.1`:
   - BSD-3-Clause `COPYING` SHA-256
     `1b74e02d0cb8e6502091124787fc91695b9dd92c9cb146d9d34830f9a300ab3c`;
@@ -142,10 +180,13 @@ metric access is fatal. Fit and held source stems must have zero overlap.
 ## Frozen Token Extraction
 
 Run the ordinary metadata-aware keeper path in evaluation mode and float32,
-with unchanged `image_mask` and object `bbox`. Persist five logits,
-probabilities, final post-pruning `patches`, aligned `patch_indices`,
-`patch_bbox_prior`, and `memory_key_padding_mask`. Model state before and after
-each condition must be bit-identical.
+with unchanged `image_mask` and source object `bbox`. Persist five logits,
+probabilities, final post-pruning `patches`, aligned `patch_indices`, ordinary
+keeper `patch_bbox_prior`, transformed-crop audit prior, and
+`memory_key_padding_mask`. Model state before and after each condition must be
+bit-identical. The prospective token-support erratum supersedes the ambiguous
+"aligned normalized object-bbox prior" wording below: selection uses only the
+independently reconstructed transformed-crop audit prior.
 
 For each row:
 

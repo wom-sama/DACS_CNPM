@@ -4181,10 +4181,17 @@
 - [x] Pin the ICLR-2021 paper and authors' official repository at commit/tree
   `d9b51f6...57c08`/`a399506...02c2e`, plus the independent BSD scikit-learn
   numerical reference. Prospectively lock the 750-row train-only
-  Hamburger-NMF surface A0 at protocol SHA `c2c36323...7f7c9` before auditor
+  Hamburger-NMF surface A0 at protocol SHA `9f1f1216...54061` before auditor
   implementation or candidate metrics.
-- [ ] Implement the isolated rank-8/six-step NMF auditor, equal-dimensional
+- [x] Implement the isolated rank-8/six-step NMF auditor, equal-dimensional
   raw/SVD controls, seed-repeat/source-deranged placebos, independent NumPy
   replay, fixed component/residual XAI sheet, focused tests, and VS Code-safe
-  launcher. Commit/push all infrastructure and pass engineering preflight
-  before opening the sole formal candidate metrics.
+  launcher. Correct only two pre-metric locks: the transcribed official-source
+  hash and transformed-crop token support. Compile/pyflakes, PowerShell parse,
+  focused `15/15`, full pytest `1659/1659`, no-output launcher preflight, and
+  two-row real engineering forward all pass; workers are effective `4`, token
+  support is `32/160`, state is bit-exact, and peak CUDA is `80.58 MiB`.
+- [ ] Commit/push the final Hamburger-NMF A0 infrastructure, rerun the clean
+  synced preflight, then execute the sole formal train-only audit, independent
+  second-process replay, and fixed visual review. Open lighting only after the
+  complete clean gate passes; never open validation/test or training otherwise.

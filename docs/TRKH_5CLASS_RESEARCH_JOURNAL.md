@@ -19815,10 +19815,32 @@ Date: 2026-07-02
   segmentation/image-generation results with large backbones and long
   iteration schedules, not five-class scratch mango classification. No claimed
   accuracy or schedule transfers to TRKH.
-- Prospectively lock protocol SHA `c2c36323...7f7c9` before auditor code or any
+- Prospectively lock protocol SHA `9f1f1216...54061` before auditor code or any
   candidate metric. Use the exact 750-row CIDT train cohort, final object-bbox
   tokens, fixed `256 -> 32` QR projection, rank 8, six NMF updates, equal 290D
   raw/SVD/NMF roles, seed-repeat and source-deranged placebos, five-fold OOF
   readouts, precision-first gates, independent replay, and a fixed 12-row XAI
   sheet. Validation/test, model/trainer edits, smoke/probe/full train, and
   current-best command updates remain forbidden.
+- The first no-output provenance preflight stops before model/data because one
+  official-source hash character was transcribed incorrectly. Correct only
+  `ham.py` to observed SHA `c6a261aa...cc2829`, record the pre-metric erratum,
+  and re-lock the protocol; every scientific setting is
+  byte-for-byte unchanged.
+- A two-row geometry forward then stops before projection/decomposition because
+  ordinary source-coordinate bbox prior supports are `104/0`. The unchanged
+  final tokens gathered against independently reconstructed transformed
+  `crop_bbox` priors support `160/32`. Lock this post-forward, margin-`0.04`
+  audit-only prior at final protocol SHA `9f1f1216...54061`; keep ordinary
+  keeper logits/pruning unchanged and prohibit fallback/top-k selection.
+- Implement the isolated auditor, independent NumPy oracle, raw/SVD controls,
+  seed repeat, source-deranged placebo, clean-fitted lighting replay, fixed
+  component/residual XAI sheet, artifact manifest, and direct-native
+  PowerShell launcher. Auditor/test/launcher SHAs are
+  `f562963e...cd219e`/`4f38ce8d...89834e`/`38578a51...d9dc8`.
+- Pycompile, pyflakes, PowerShell parse, focused `15/15`, full pytest
+  `1659/1659`, and launcher no-output preflight pass. The real two-row forward
+  uses requested/effective workers `4/4`, selects `32/160` transformed-crop
+  tokens, preserves model state exactly, allocates only `80.58 MiB` peak CUDA,
+  and produces median two-seed descriptor cosine `0.977130`. No formal output,
+  readout metric, validation/test access, model edit, or train was produced.
