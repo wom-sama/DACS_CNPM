@@ -4215,10 +4215,18 @@
   train metadata and persisted CIDT clean predictions. All seven gates pass;
   exact replay SHA is `ab073792...25a51f`, and retention passes 800 directories
   with no blocker. This authorizes one natural-only scratch smoke only.
-- [ ] If A0 passes, run the five-epoch natural-only smoke with scheduler horizon
-  30, full validation, one trace per class, and complete XAI/robustness. Do not
-  integrate deferred weighting unless every prospective Stage-B gate passes.
-- [ ] If Stage B passes, implement default-off natural-sampler deferred
-  effective-number weighting with resume/history telemetry and disabled
-  equivalence. Compare epoch-5 forks through epoch 8 with natural, seed, and
-  activation-placebo controls before any probe or full train.
+- [x] Run the locked five-epoch natural-only smoke with scheduler horizon 30,
+  full validation, one trace per class, independent FP32 reload, full
+  robustness, and fixed 12-case paired XAI. Clean macro/class1 F1 is
+  `0.767070/0.291262`; class1 P/R is `0.545455/0.198675`, with only `30/151`
+  TP. Natural sampling suppresses class1 rather than selectively removing FP.
+- [x] Reject Stage B and close deferred effective-number integration on this
+  recipe. Candidate loses all `5/5` keeper robustness conditions and class1 TP
+  by `33..89`; XAI stays foreground-focused but all four fixed class1 FN remain
+  wrong. No Stage C, probe/full train, test, or current-best update is allowed.
+  Closure SHA is `d66554b5...a35b31`.
+- [ ] Screen the next accepted-primary, officially licensed,
+  equation-distinct class1 representation route against the closure matrix.
+  Reject pure prior/classifier normalization neighbors unless they add a
+  train-time minority-specific representation mechanism with explicit TP
+  protection; lock a no-test A0 before any new trainer integration.

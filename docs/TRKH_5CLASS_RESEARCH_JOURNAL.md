@@ -19932,3 +19932,43 @@ Date: 2026-07-02
   deferred integration, probe/full train, and current-best updates remain
   unauthorized. Full details are in
   `TRKH_5CLASS_DEFERRED_REWEIGHT_A0_RESULT_20260720.md`.
+
+## Deferred Reweight Stage-B Closure - 2026-07-21
+
+- The exact random-init natural-only smoke completes five epochs over all
+  9,215 train rows with scheduler horizon 30, seed 42, no class weights, full
+  validation, no test, and one architecture trace per class. Independent FP32
+  macro/class1 F1 is `0.767070/0.291262`; class1 P/R is
+  `0.545455/0.198675`, with confusion row `[70,30,40,0,11]` and only `30/151`
+  TP. Low FP (`25`) is broad class1 suppression, not selective precision.
+- Three prospective clean gates fail: macro F1, class1 F1, and class1 recall.
+  All four nonfocus F1 safety gates and the trace gate pass. Relative to the
+  strict epoch-5 reference, natural sampling raises class1 precision by
+  `+0.171753` but lowers recall by `-0.516557` and F1 by `-0.199647`.
+- Full robustness loses macro F1 to the keeper in all five conditions. Clean/
+  occlusion/dim/bright/low-contrast deltas are
+  `-0.115855/-0.116979/-0.057421/-0.149919/-0.084162`; class1 TP losses are
+  `-87/-89/-33/-74/-66`. This fails both existing robustness gates.
+- Paired XAI over the locked 12-case corrected object-crop cohort passes
+  attribution safety: Grad-CAM/grad-rollout foreground deltas are
+  `+0.020441/+0.009902`, and background gray/blur drop deltas are
+  `-0.011803/-0.012459`. Manual review is still negative: all four class1 FN
+  remain wrong, only two of four class1 FP are corrected, and only one of four
+  `3->2` rows is corrected. Cleaner object focus does not recover the missing
+  class1 decision region.
+- Fix paired contact-sheet provenance at commit `4cab65d`: historical keeper
+  maps are now labeled `feature-map fallback`, while candidate maps are native
+  block-7 MHSA probabilities. The final paired/gate summary SHAs are
+  `4d5133b0...f1ecba`/`adbf785a...51efc2`; gate manifest SHA is
+  `07615634...4fe4f2`. The first mislabeled paired artifact remains superseded,
+  not authoritative.
+- Epoch 2 was a `1678.7 s` runtime outlier while an unowned GUI process used
+  material GPU time; epochs 3-5 returned to `202.9/189.8/183.0 s` once that
+  contention ended. `py-spy` confirmed active CUDA backward, with no OOM,
+  paging, spill, or throttle. Future autonomous full train must defer when a
+  non-workflow process materially uses GPU; never terminate unknown GUI apps.
+- Reject and close natural-first deferred reweighting for this recipe. Do not
+  implement Stage C, sweep its switch epoch/beta/horizon, run probe/full train,
+  open test, or update current-best commands. Closure SHA is
+  `d66554b5...a35b31`; complete details are in
+  `TRKH_5CLASS_DEFERRED_REWEIGHT_STAGE_B_CLOSURE_20260721.md`.
