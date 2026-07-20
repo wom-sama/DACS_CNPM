@@ -20251,3 +20251,41 @@ Date: 2026-07-02
   update is authorized. Full closure is
   `TRKH_5CLASS_QUATERNION_COLOR_ROTATION_A0_CLOSURE_20260721.md`, SHA-256
   `d3b68bcbd6750406a067239d5fe901bbe0e8920c8266ba91f9467765f339b26d`.
+
+## Research Lock 2026-07-21 - Sparse Class-Evidence A0
+
+- Re-screened accepted sparse-evidence, ensemble, edge, part, and specialist
+  routes against the local closure matrix. PiDiNet/PDC and shallow gradients,
+  WILDCAT/MIL, part selection, RSC/SIFER, covariance/frequency, stock BagNet,
+  and shared-body output ensembles repeat failed mechanisms. BatchEnsemble and
+  Packed-Ensembles add member capacity but supply no direct class1-TP versus
+  restricted-FP local-evidence hypothesis, so they are rejected at this stage.
+- Selected Djoumessi et al., *Sparse Activations for Interpretable Disease
+  Grading*, MIDL 2023 Oral. Its Eq. (1) exposes class-specific `1x1` evidence
+  maps whose spatial means are logits; Eq. (2) applies L1 directly to those
+  maps. The official repository is MIT licensed and pinned at commit/tree
+  `2b3731f...f9a60c`/`d9d5454...229a5`; the accepted paper is pinned locally
+  at SHA-256 `0fe7a832...a10ca`.
+- Preserve adverse evidence: the paper's sparse binary model improved
+  specificity from `0.991` to `1.0` but reduced sensitivity from `0.779` to
+  `0.750`, and its sparse multiclass model lost accuracy. The official
+  `train.py` regularizes only `linear_fts[0]`; TRKH must independently apply
+  the equation to every valid map element and protect TP recall conjunctively.
+- Prospectively locked
+  `TRKH_5CLASS_SPARSE_CLASS_EVIDENCE_A0_PROTOCOL_20260721.md` at SHA-256
+  `c046891266bd07b59723b8f4d1a8f5db52e070404f0f3c8d71db1c415f286a7b`
+  before auditor code, feature extraction, fit, or candidate metric access.
+  The sole cohort has 763 train-only CIDT rows: 528 keeper TP, 13 keeper FN,
+  and 222 restricted `0/2/4 -> 1` FP over five immutable source folds.
+- Every role copies the keeper's third stem block and receives byte-identical
+  cropped block-2 features. The map-L1 candidate must beat matched dense,
+  global-logit-L1, trained channel-dephased, and same-weight dephased controls.
+  Fold-safe thresholds retain at least 97% fit class1; clean gates require
+  AUROC `>=0.85`, AUPRC `>=0.90`, TP retention `>=0.95`, at least `8/13` FN
+  supports, FP rejection `>=0.25`, causal-control margins, sparse-map gains,
+  exact replay/export/resource checks, and fixed faithful XAI.
+- Formal extraction workers are locked to requested/effective `4/4` from the
+  same-machine benchmark (`196.346 images/s`, `10.85%` wait, versus
+  `107.006 images/s`, `52.48%` wait for workers 2). Validation/test, production
+  edits, image-model smoke/probe/full train, and current-best command updates
+  remain closed until the complete prospective gate chain authorizes them.

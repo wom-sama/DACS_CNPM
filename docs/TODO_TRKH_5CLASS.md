@@ -4363,8 +4363,29 @@
   expected-absent originals with `blockers=[]` at SHA
   `1e04726b...cc00b5`. Closure SHA is `d3b68bcb...39b26d`; current-best
   commands remain unchanged.
-- [ ] Screen and prospectively lock the next accepted-primary,
-  equation-distinct route that directly learns sparse lesion/boundary evidence
-  without repeating color mixing, covariance, frequency, part selection,
-  attention, prototypes, or post-hoc routing. Require a causal spatial placebo
-  and train-only TP protection before any integration.
+- [x] Screen the next accepted-primary, equation-distinct route that directly
+  learns sparse class evidence without repeating color mixing, covariance,
+  frequency, part selection, attention, prototypes, or post-hoc routing.
+  Select Djoumessi et al.'s MIDL-2023 class-evidence-map equation and explicit
+  map-L1 constraint; retain the paper's sensitivity loss as adverse evidence.
+- [x] Prospectively lock the sole 763-row train-only Sparse Class-Evidence A0
+  before auditor code, feature extraction, fit, or candidate metric access.
+  Protocol SHA-256 is
+  `c046891266bd07b59723b8f4d1a8f5db52e070404f0f3c8d71db1c415f286a7b`.
+  Require matched dense/logit-L1/trained-dephased roles, a same-weight causal
+  dephasing intervention, 97% fit-TP fold thresholds, sparse-map statistics,
+  exact replay, static export, resource checks, and fixed faithful XAI.
+- [ ] Implement and push the isolated Sparse Class-Evidence A0 auditor,
+  independent NumPy/FP64 equation oracle, deterministic cache/dephasing,
+  exact replay, fixed 15-row XAI sheet, VS Code-safe launcher, and focused
+  tests. Run compile, pyflakes, PowerShell parse, focused tests, full pytest,
+  and a no-output two-row engineering forward before the sole formal audit.
+- [ ] Run the sole five-fold clean A0 from a clean pushed commit with formal
+  workers `4/4`; evaluate every conjunctive gate and manually review XAI.
+  Open shifted conditions only after all clean automatic gates pass. Never
+  open validation/test, trainer integration, smoke/probe/full train, or
+  current-best command promotion from an A0 failure.
+- [ ] If and only if A0 fully passes, add one default-off native parallel
+  sparse-evidence branch and run the locked no-test smoke/probe sequence. A
+  full train of at most 30 epochs with patience 3 is authorized only after
+  the validation milestone passes; benchmark and record effective workers.
