@@ -20317,3 +20317,34 @@ Date: 2026-07-02
   worktree-divergent implementation blobs and requires requested/effective
   workers `4/4`. No candidate metric, run directory, current-best command
   change, validation/test access, smoke, probe, or full train has occurred.
+
+## Sparse Class-Evidence A0 Closure - 2026-07-21
+
+- Execute the sole 763-row train-only formal from clean pushed HEAD `7d667c5`.
+  Requested/effective workers are `4/4`, extraction throughput is `27.3945`
+  images/s, candidate/dense runtime ratio is `1.07768`, and all 18 structural,
+  numeric, resource, replay, and static-export gates pass. Validation/test and
+  raw data remain untouched.
+- Reject after only `8/24` mechanism gates pass. Sparse candidate AUROC/AUPRC/
+  TP retention/FP rejection is `0.626959/0.811392/0.945076/0.058559`, versus
+  dense `0.623187/0.811417/0.952652/0.076577` and global-logit-L1
+  `0.634103/0.815743/0.945076/0.103604`.
+- The action is net harmful: candidate supports `10/13` keeper FN and rejects
+  13 restricted FP but breaks 29 keeper TP. The separately trained dephased
+  role rejects 54 FP only by breaking 70 TP; same-weight dephasing changes
+  candidate AUROC by merely `0.013147`, below the causal gate.
+- Map-L1 does not establish its intended mechanism. Hoyer/top-10 mass improve
+  only `+0.024617/+0.016993` over dense and candidate border mass worsens to
+  `0.390825`. Fixed direct and feature-gradient XAI review fails because broad
+  color, silhouette, object-background borders, stems, hands, shadows, and
+  context transitions dominate stable lesion/texture evidence.
+- Exact second-process replay has zero score, threshold, action, and analysis
+  difference. Preserve final summary/manifest/direct-XAI/gradient-XAI/ONNX
+  SHAs `52d623f6...e58ec`/`06a6addc...e97c4`/
+  `328e1c7c...48f8d`/`5dc23db7...bb48`/`d79732b7...9a51`.
+- Keep the complete 26.980 MiB formal. Read-only retention passes 813 run
+  directories, 51 object-schema compaction manifests, and all 233 expected-
+  absent originals with no deletion or blocker at SHA `aebdc14c...2cba2`.
+  Close nearby map-L1/width/grid/layer/epoch/seed/fold/threshold/dephasing
+  sweeps. Closure SHA is `7eb6985e...f259562`; no integration, smoke, probe,
+  full train, validation/test, or current-best command update is authorized.

@@ -4384,12 +4384,27 @@
   `1734/1734`. Engineering verifies exact hook/keeper state, every trainable
   parameter gradient/update, 5% lambda calibration, FP64/FP32/BF16 numeric
   gates, and verified temporary-cache deletion.
-- [ ] Run the sole five-fold clean A0 from a clean pushed commit with formal
-  workers `4/4`; evaluate every conjunctive gate and manually review XAI.
-  Open shifted conditions only after all clean automatic gates pass. Never
-  open validation/test, trainer integration, smoke/probe/full train, or
-  current-best command promotion from an A0 failure.
-- [ ] If and only if A0 fully passes, add one default-off native parallel
-  sparse-evidence branch and run the locked no-test smoke/probe sequence. A
-  full train of at most 30 epochs with patience 3 is authorized only after
-  the validation milestone passes; benchmark and record effective workers.
+- [x] Run the sole five-fold clean A0 from clean pushed HEAD `7d667c5` with
+  formal workers `4/4`, exact second-process replay, static ONNX export, and
+  fixed 15-row direct/gradient XAI. All 18 structural gates pass, but only
+  `8/24` clean mechanism gates pass, so shifted conditions remain closed.
+- [x] Reject sparse class evidence before integration. Candidate AUROC/AUPRC/
+  TP retention/FP rejection is `0.626959/0.811392/0.945076/0.058559`, below
+  global-logit-L1 `0.634103/0.815743/0.945076/0.103604`. It supports 10 FN and
+  rejects 13 FP but breaks 29 TP; same-weight dephasing changes AUROC by only
+  `0.013147`.
+- [x] Record manual XAI fail: the map-L1 branch raises Hoyer sparsity only
+  `+0.024617`, raises top-10% mass only `+0.016993`, and worsens border mass to
+  `0.390825`. Maps/gradients emphasize broad color, silhouette, fruit-background
+  boundaries, stems, hands, and shadows rather than stable lesion evidence.
+- [x] Preserve the 26.980 MiB replayable formal at summary/manifest SHAs
+  `52d623f6...e58ec`/`06a6addc...e97c4`. Read-only retention passes 813 run
+  directories, 51 object manifests, and all 233 expected-absent originals
+  with `blockers=[]` at SHA `aebdc14c...2cba2`. Closure SHA is
+  `7eb6985e...f259562`; no smoke/full train/current-command update is
+  authorized.
+- [ ] Screen the next accepted-primary, licensed, equation-distinct route for
+  class-conditional lesion/texture evidence before spatial averaging. It must
+  beat a matched non-spatial control and explicit boundary/context placebos,
+  retain class-1 TP, and avoid every closed color/covariance/frequency/part/
+  attention/evidence-map family before any trainer integration.
