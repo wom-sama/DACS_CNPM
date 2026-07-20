@@ -8,7 +8,7 @@ import math
 import re
 from collections import Counter
 from pathlib import Path
-from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
+from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
@@ -297,6 +297,24 @@ def _grad_rollout_title(
     return f"{name} grad-rollout"
 
 
+def _attention_title(
+    name: str,
+    cases: Mapping[str, Mapping[str, object]],
+    keys: Sequence[str],
+) -> str:
+    sources = []
+    for key in keys:
+        viz = cases[key].get("viz")
+        source = viz.get("attention_source", "") if isinstance(viz, Mapping) else ""
+        sources.append(str(source))
+    fallback_count = sum(source == "feature_map_fallback" for source in sources)
+    if keys and fallback_count == len(keys):
+        return f"{name} feature-map fallback"
+    if fallback_count:
+        return f"{name} attention (mixed)"
+    return f"{name} native attention"
+
+
 def _render_contact_sheet(
     *,
     category: str,
@@ -313,8 +331,8 @@ def _render_contact_sheet(
     header_height = 42
     columns = (
         ("crop", "crop", "crop"),
-        (f"{left_name} native attention", "left", "attention"),
-        (f"{right_name} native attention", "right", "attention"),
+        (_attention_title(left_name, left_cases, keys), "left", "attention"),
+        (_attention_title(right_name, right_cases, keys), "right", "attention"),
         (f"{left_name} Grad-CAM", "left", "gradcam"),
         (f"{right_name} Grad-CAM", "right", "gradcam"),
         (_grad_rollout_title(left_name, left_cases, keys), "left", "grad_rollout"),

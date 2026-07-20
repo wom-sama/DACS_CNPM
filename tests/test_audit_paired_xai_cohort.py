@@ -3,6 +3,7 @@ import math
 import pytest
 
 from trkh.tools.audit_paired_xai_cohort import (
+    _attention_title,
     _delta_means,
     _grad_rollout_title,
     _known_attention_source,
@@ -64,6 +65,24 @@ def test_grad_rollout_title_discloses_fallback() -> None:
     assert _grad_rollout_title("candidate", cases, ["7"]) == (
         "candidate rollout fallback"
     )
+
+
+def test_attention_title_discloses_feature_map_fallback() -> None:
+    fallback = {"7": _case(7, 0.9, 0.12)}
+    native_case = _case(8, 0.9, 0.12)
+    native_case["viz"]["attention_source"] = (
+        "forward_features.return_attention.blocks[7].mhsa_probability"
+    )
+    native = {"8": native_case}
+    mixed = {**fallback, **native}
+
+    assert _attention_title("keeper", fallback, ["7"]) == (
+        "keeper feature-map fallback"
+    )
+    assert _attention_title("candidate", native, ["8"]) == (
+        "candidate native attention"
+    )
+    assert _attention_title("pair", mixed, ["7", "8"]) == "pair attention (mixed)"
 
 
 def test_delta_means_is_right_minus_left_and_ignores_nonfinite() -> None:
