@@ -4112,8 +4112,8 @@
   object-schema manifests. All 219 compacted originals remain absent with no
   deletion/blocker at retention SHA `4c7133c4...c9e33`; closure SHA is
   `ab643811...b5324`.
-- [ ] Write, verify, commit, and push the PMG closure; keep current-best command
-  and update history byte-identical.
+- [x] Write, verify, commit, and push the PMG closure at `91725b1`; keep
+  current-best command and update history byte-identical.
 - [ ] Screen the next accepted-primary, officially licensed, equation-distinct
   route for a precision-selective class-1 signal. Lock source-disjoint train-only
   TP-versus-restricted-FP and placebo gates before model/trainer edits; avoid
