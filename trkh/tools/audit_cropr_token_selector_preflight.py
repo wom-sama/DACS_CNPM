@@ -72,7 +72,7 @@ LOCKED_HASHES = {
     "command_history": "39bd2879ce66fddf36a953021ea1e40f8d9de6cb4334b9b825011b2b8dc98f53",
     "v8_launcher": "8512df324c1ddb196f8b579f2c1a268ead588799941ef236de237ac8c1b42f5a",
     "selector_runtime": "0d9debc76f957cc638d11d442d915badeadcbaa0d400c049a018fb04c67192b3",
-    "model_runtime": "924d3e6433e75681320cc08adbad9fa6afe5f6886bdb609cc2c210916994c380",
+    "model_runtime": "ea3002bbb25d1fa1a30e6390e29dfd5c7c93a02838cf744c5c53f86ed97cd595",
     "train_runtime": "763073051fe62dfac43eb5f509abad04991d03ccbcd893244d501720b7030c32",
     "config_runtime": "72b32a160ab6be2aecdd87670e2da325976f79ac1803a63d0b06b7f1f931e2fa",
     "selector_tests": "47209a4722d134e541c87f771f96e769d09941a2f71b76e0be5549279fe0f8bc",

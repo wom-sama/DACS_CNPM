@@ -19462,8 +19462,8 @@ Date: 2026-07-02
 - A real 32-row train-only batch has the required `32x256x32x32` final stem map,
   finite counts/activations, exact per-block geometry, and monotonic valid-mask
   fractions `0.778931 -> 0.808701 -> 0.844849 -> 0.902039`. A full keeper ONNX
-  wrapper exports `images`, `image_valid_mask`, and `bbox` with dynamic batch,
-  no custom operator, and batch-2 replay error `8.94e-8`.
+  wrapper exports `images`, `image_valid_mask`, and `bbox`; the actual dynamic-
+  batch replay is verified in the incident correction below.
 - Add a conjunctive Stage-A auditor, persisted gate inputs, disk/external-process
   replay, artifact manifest, fixed five-class mechanism sheet, and direct-native
   PowerShell launcher with process/GPU isolation. Pycompile/pyflakes,
@@ -19474,3 +19474,34 @@ Date: 2026-07-02
   used. Keeper and current-best command/history hashes remain
   `1f49d577...2677`, `36b9aa1a...0faf`, and `39bd2879...8f53`. Commit/push and
   a clean formal Stage A remain mandatory before the matched adaptation smoke.
+
+## Validity Partial-Conv Stage-A Export Incident 2026-07-20
+
+- Commit/push the initial implementation at `f457426` and start the sole clean
+  formal Stage A. It reaches export after train-only dataset, equation,
+  geometry, gradient, AMP/resource, and sheet execution, then aborts before
+  `summary.json`, gate persistence, metric inspection, or smoke authorization.
+  ONNX traces batch 1 but batch-2 replay first fails a reshape from `{2}` to
+  `{1,1}`.
+- Root cause one is an existing export defect in
+  `pairwise_margin_route_weights`: `int(like_logits.size(0))` freezes route
+  allocation to trace batch 1. Replace it with tensor-sized allocation; eager
+  equations and state remain unchanged. Add a focused ONNX regression that
+  exports batch 1 and replays batch 2 exactly.
+- Root cause two is audit-only: `_CandidateExportWrapper` was not itself set to
+  eval. The exporter restores the wrapper's original training state after
+  tracing and recursively switches the child model to train before the
+  PyTorch/ORT comparison, creating dropout/BN differences. Keep both wrapper
+  and child in eval. Full keeper dynamic batch-2 replay then reaches maximum
+  absolute error `1.862645e-7`, exact argmax, and no custom operator.
+- The aborted output contains only a 29,983,650-byte ONNX at SHA
+  `f4c360c4...1c70` and a 1,924,771-byte mechanism sheet at SHA
+  `b1c4b1ba...8502`; total `31,908,421` bytes. Neither is a complete audit or
+  valid reference, so record their identity and remove only this incomplete
+  directory before the clean rerun. No checkpoint, validation/test access,
+  model metric, raw-data change, smoke, probe, full train, or current-best
+  update occurred.
+- Post-correction verification passes sequential no-output preflight, focused
+  tests `21/21`, full pytest `1594/1594`, pycompile/pyflakes, PowerShell parse,
+  and diff checks. The current-best checkpoint/command/history hashes remain
+  `1f49d577...2677`, `36b9aa1a...0faf`, and `39bd2879...8f53`.

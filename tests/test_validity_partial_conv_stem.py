@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+import tempfile
 
+import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
@@ -231,3 +233,46 @@ def test_validity_partial_cli_and_v8_launcher_roundtrip() -> None:
     assert '[ValidateSet("standard", "validity_partial")]' in launcher
     assert '"--stem-convolution", "$StemConvolution"' in launcher
     assert launcher.count("stem_convolution = $StemConvolution") == 2
+
+
+def test_pairwise_margin_route_export_preserves_dynamic_batch() -> None:
+    import onnxruntime as ort
+
+    class RouteWrapper(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.model = VisionTransformerWithRegisters(
+                image_size=32,
+                patch_size=16,
+                stem_channels=4,
+                embed_dim=16,
+                depth=1,
+                num_heads=4,
+                num_registers=1,
+                pairwise_margin_head=True,
+                pairwise_margin_routing=True,
+                num_classes=5,
+            ).eval()
+
+        def forward(self, logits: torch.Tensor) -> torch.Tensor:
+            return self.model.pairwise_margin_route_weights(logits)
+
+    wrapper = RouteWrapper().eval()
+    batch1 = torch.tensor([[3.0, 2.8, 0.1, -0.2, -0.4]])
+    batch2 = torch.cat((batch1, batch1.flip(1)), dim=0)
+    with tempfile.TemporaryDirectory(prefix="trkh_pairroute_onnx_") as directory:
+        path = Path(directory) / "route.onnx"
+        torch.onnx.export(
+            wrapper,
+            batch1,
+            path,
+            input_names=["logits"],
+            output_names=["route_weights"],
+            dynamic_axes={"logits": {0: "batch"}, "route_weights": {0: "batch"}},
+            opset_version=17,
+        )
+        session = ort.InferenceSession(str(path), providers=["CPUExecutionProvider"])
+        observed = session.run(None, {"logits": batch2.numpy()})[0]
+    expected = wrapper(batch2).detach().numpy()
+    np.testing.assert_allclose(observed, expected, rtol=0.0, atol=1e-6)
+    assert observed.shape == (2, len(wrapper.model.pairwise_margin_pairs))

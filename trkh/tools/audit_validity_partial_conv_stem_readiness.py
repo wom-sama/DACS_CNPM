@@ -640,7 +640,7 @@ def _export_candidate(model: nn.Module, output_dir: Path) -> Dict[str, object]:
     import onnxruntime as ort
 
     export_path = output_dir / "validity_partial_keeper_dynamic_batch.onnx"
-    wrapper = _CandidateExportWrapper(model.cpu().eval())
+    wrapper = _CandidateExportWrapper(model.cpu().eval()).eval()
     image = torch.linspace(-1.0, 1.0, 3 * 256 * 256).reshape(1, 3, 256, 256)
     image_mask = torch.ones(1, 256, 256, dtype=torch.bool)
     image_mask[:, :, :37] = False

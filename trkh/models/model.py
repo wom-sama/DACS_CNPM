@@ -11009,10 +11009,8 @@ class VisionTransformerWithRegisters(nn.Module):
     def pairwise_margin_route_weights(self, like_logits: Tensor) -> Tensor:
         pair_count = len(self.pairwise_margin_pairs)
         if like_logits.ndim != 2:
-            batch_size = 0
-        else:
-            batch_size = int(like_logits.size(0))
-        route_weights = like_logits.new_zeros((batch_size, pair_count))
+            return like_logits.new_zeros((0, pair_count))
+        route_weights = like_logits.new_zeros((like_logits.size(0), pair_count))
         if pair_count == 0:
             return route_weights
         if not self.pairwise_margin_routing:

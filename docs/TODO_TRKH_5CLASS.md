@@ -4014,10 +4014,19 @@
 - [x] Pass pycompile/pyflakes, PowerShell parse, v8 no-output preflight,
   focused `15/15`, full pytest `1593/1593`, and direct keeper engineering
   checks. All-valid stem/logits are bit exact, maximum gradient delta is
-  `5.82e-11`, candidate masked-fill delta is `0.0`, real mask fractions are
-  monotonic `0.779 -> 0.809 -> 0.845 -> 0.902`, and batch-2 ONNX replay error
-  is `8.94e-8` with all three dynamic inputs.
-- [ ] Stage only the dependency-coherent implementation, inspect the cached
-  diff, commit/push, rerun clean no-output preflight, and complete the sole
-  formal Stage A. Do not run the matched smoke unless every persisted gate and
-  independent replay passes.
+  `5.82e-11`, candidate masked-fill delta is `0.0`, and real mask fractions are
+  monotonic `0.779 -> 0.809 -> 0.845 -> 0.902`.
+- [x] Commit/push the initial infrastructure at `f457426` and run clean formal.
+  It aborts before `summary.json` or any gate/metric because the batch-2 ONNX
+  replay exposes an existing static pairwise-route batch allocation; the export
+  comparison wrapper also restores its child to train mode after tracing.
+- [x] Make pairwise route allocation dynamic, add an isolated batch `1 -> 2`
+  ONNX regression, and keep the full export wrapper in eval mode. The actual
+  full keeper batch-2 replay now passes at `1.86e-7`, with exact argmax and no
+  custom operator. Record and remove only the two incomplete 31.9 MB artifacts.
+- [x] Re-run sequential no-output preflight, focused tests `21/21`, full pytest
+  `1594/1594`, pycompile/pyflakes, PowerShell parse, and diff checks after the
+  export correction; all pass while current-best hashes remain unchanged.
+- [ ] Commit/push the export correction, rerun clean no-output preflight, and
+  complete the sole formal Stage A. Do not run the matched smoke unless every
+  persisted gate and independent replay passes.
