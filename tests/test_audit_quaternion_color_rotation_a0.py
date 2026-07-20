@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import math
 from pathlib import Path
 
@@ -38,6 +39,7 @@ from trkh.tools.audit_quaternion_color_rotation_a0 import (
     locked_cohort,
     parameter_count,
     positive_threshold,
+    reconcile_finalized_review,
     replay_artifacts,
     rgb_grid_covariance_features,
     rodrigues_rotation_matrix_numpy,
@@ -322,6 +324,7 @@ def test_visual_pass_cannot_rescue_failed_automatic_gate(tmp_path: Path) -> None
             "status": "complete_pending_visual_review",
             "pre_manual_passed": False,
             "manual_visual_review": {"decision": "pending"},
+            "xai": {"manual_review": "pending"},
             "passed": False,
             "advancement_authorized": False,
         },
@@ -335,3 +338,30 @@ def test_visual_pass_cannot_rescue_failed_automatic_gate(tmp_path: Path) -> None
     )
     assert not result["passed"]
     assert not result["advancement_authorized"]
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    assert summary["xai"]["manual_review"] == "pass"
+
+
+def test_reconcile_only_mirrors_locked_visual_decision(tmp_path: Path) -> None:
+    summary_path = tmp_path / "summary.json"
+    _write_json(
+        summary_path,
+        {
+            "status": "complete_rejected",
+            "pre_manual_passed": False,
+            "manual_visual_review": {"decision": "fail"},
+            "xai": {"manual_review": "pending"},
+            "passed": False,
+            "advancement_authorized": False,
+        },
+    )
+    _write_manifest(tmp_path)
+    expected = _sha256(summary_path)
+    result = reconcile_finalized_review(
+        summary_path=summary_path,
+        expected_summary_sha256=expected,
+    )
+    assert result["passed"]
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    assert summary["xai"]["manual_review"] == "fail"
+    assert not summary["artifact_reconciliation"]["scientific_fields_changed"]

@@ -169,6 +169,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--engineering-forward", action="store_true")
     parser.add_argument("--replay-summary", type=Path)
     parser.add_argument("--finalize-visual-review", choices=("pass", "fail"))
+    parser.add_argument("--reconcile-finalized-review", action="store_true")
     parser.add_argument("--expected-summary-sha256")
     return parser.parse_args(argv)
 
@@ -2883,6 +2884,7 @@ def finalize_visual_review(
         "reviewer": "codex_visual_inspection",
         "summary_sha256_before_decision": observed_sha256,
     }
+    summary["xai"]["manual_review"] = decision
     summary["status"] = "complete_passed" if passed and summary["pre_manual_passed"] else "complete_rejected"
     summary["passed"] = bool(passed and summary["pre_manual_passed"])
     summary["advancement_authorized"] = bool(summary["passed"])
@@ -2898,10 +2900,62 @@ def finalize_visual_review(
     }
 
 
+def reconcile_finalized_review(
+    *,
+    summary_path: Path,
+    expected_summary_sha256: str,
+) -> Dict[str, object]:
+    resolved = Path(summary_path).expanduser().resolve()
+    observed_sha256 = _sha256(resolved)
+    if observed_sha256 != str(expected_summary_sha256).strip().casefold():
+        raise ValueError(
+            "Quaternion summary changed before review reconciliation: "
+            f"{observed_sha256} != {expected_summary_sha256}"
+        )
+    _verify_manifest(resolved.parent)
+    summary = json.loads(resolved.read_text(encoding="utf-8"))
+    decision = str(summary.get("manual_visual_review", {}).get("decision", ""))
+    nested = str(summary.get("xai", {}).get("manual_review", ""))
+    if decision not in {"pass", "fail"}:
+        raise ValueError("Top-level quaternion visual decision is not finalized")
+    if nested != "pending":
+        raise ValueError(
+            f"Nested quaternion XAI review is not the repairable pending value: {nested}"
+        )
+    summary["xai"]["manual_review"] = decision
+    summary["artifact_reconciliation"] = {
+        "kind": "nested_xai_manual_review_mirror",
+        "source_decision": decision,
+        "summary_sha256_before_reconciliation": observed_sha256,
+        "scientific_fields_changed": False,
+    }
+    _write_json(resolved, summary)
+    manifest_path = _write_manifest(resolved.parent)
+    return {
+        "summary": str(resolved),
+        "summary_sha256": _sha256(resolved),
+        "manifest_sha256": _sha256(manifest_path),
+        "decision": decision,
+        "scientific_fields_changed": False,
+        "passed": True,
+    }
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parse_args(argv)
     if args.replay_summary is not None:
         replay = replay_summary(Path(args.replay_summary))
+        if args.reconcile_finalized_review:
+            if not args.expected_summary_sha256:
+                raise ValueError(
+                    "Review reconciliation requires --expected-summary-sha256"
+                )
+            result = reconcile_finalized_review(
+                summary_path=Path(args.replay_summary),
+                expected_summary_sha256=str(args.expected_summary_sha256),
+            )
+            print(json.dumps(to_serializable(result), indent=2, sort_keys=True))
+            return 0
         if args.finalize_visual_review is not None:
             if not args.expected_summary_sha256:
                 raise ValueError(
@@ -2916,8 +2970,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             return 0
         print(json.dumps(to_serializable(replay), indent=2, sort_keys=True))
         return 0 if bool(replay["passed"]) else 1
-    if args.finalize_visual_review is not None:
-        raise ValueError("Visual finalization requires --replay-summary")
+    if args.finalize_visual_review is not None or args.reconcile_finalized_review:
+        raise ValueError("Visual finalization/reconciliation requires --replay-summary")
     if args.preflight_only:
         result = preflight(args)
         print(json.dumps(to_serializable(result), indent=2, sort_keys=True))

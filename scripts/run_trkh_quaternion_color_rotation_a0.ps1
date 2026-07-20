@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet("Preflight", "Engineering", "Formal", "Replay", "VisualPass", "VisualFail", "All")]
+    [ValidateSet("Preflight", "Engineering", "Formal", "Replay", "VisualPass", "VisualFail", "Reconcile", "All")]
     [string]$Phase = "All",
     [string]$Python = "D:\DataAI\.venv\Scripts\python.exe",
     [string]$OutputDir = "D:\DataAI\AIEx\TRKH\runs\audit_quaternion_color_rotation_a0_20260721",
@@ -168,6 +168,18 @@ function Invoke-VisualFinalization {
     )
 }
 
+function Invoke-ReviewReconciliation {
+    if ([string]::IsNullOrWhiteSpace($ExpectedSummarySha256)) {
+        throw "Review reconciliation requires -ExpectedSummarySha256."
+    }
+    Invoke-PythonChecked -Arguments @(
+        "-m", $Module,
+        "--replay-summary", $SummaryPath,
+        "--reconcile-finalized-review",
+        "--expected-summary-sha256", $ExpectedSummarySha256
+    )
+}
+
 Push-Location $RepoRoot
 try {
     switch ($Phase) {
@@ -191,6 +203,9 @@ try {
         }
         "VisualFail" {
             Invoke-VisualFinalization -Decision "fail"
+        }
+        "Reconcile" {
+            Invoke-ReviewReconciliation
         }
         "All" {
             Invoke-StaticPreflight
