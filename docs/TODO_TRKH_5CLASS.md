@@ -4000,8 +4000,14 @@
   compacted originals remain absent, nothing is deleted, and `blockers=[]` at
   retention SHA `03f66d1e...e389b`; closure SHA is
   `cd94d434...9e6f6` and protected user files remain unstaged.
-- [ ] Screen and prospectively lock the next accepted-primary, licensed,
-  equation-distinct route. Prefer validity-aware CNN stem feature formation
-  such as partial convolution, with a matched mask-shape placebo and explicit
-  class-1 precision/TP/FP/lighting gates; do not infer benefit from the failed
-  frozen attention intervention.
+- [x] Screen and prospectively lock the next accepted-primary, licensed,
+  equation-distinct route. Select validity-aware three-block partial
+  convolution from Liu et al. and NVIDIA's BSD-3-Clause source, pinned at
+  commit/tree `610d373...808ec`/`39e37de...cd5f`; protocol SHA is
+  `a4b1eeb2...2be7`. The source's zero-trained cross-test failure explicitly
+  forbids a frozen metric intervention and requires matched adaptation.
+- [ ] Implement the default-off, state-compatible `stem_convolution` option and
+  the train-only Stage-A readiness auditor. Require external-source equation
+  replay, all-valid standard equivalence, masked-fill invariance, mask geometry,
+  strict checkpoint/gradient/AMP/export/resource gates, fixed five-class stem
+  sheet, focused/full tests, and a committed/pushed Stage-A pass before smoke.

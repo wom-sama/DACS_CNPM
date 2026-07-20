@@ -19410,3 +19410,29 @@ Date: 2026-07-02
   `blockers=[]` at summary SHA `03f66d1e...e389b`. Closure SHA is
   `cd94d434...9e6f6`; keeper/current-best command hashes stay
   `1f49d577...2677`, `36b9aa1a...0faf`, and `39bd2879...8f53`.
+
+## Validity Partial-Conv Stem Protocol 2026-07-20 - Prospectively Locked
+
+- Select the accepted ECCV-2018 irregular-hole partial-convolution equation and
+  NVIDIA's 1.3k-star BSD-3-Clause implementation after the attention-mask
+  closure. Pin paper SHAs `6b6d1cee...c93f`/`9d902b16...c73b`, official
+  commit/tree `610d373...808ec`/`39e37de...cd5f`, source SHA
+  `ca92d642...5116`, and license SHA `8dc73b75...d3d0`.
+- The padding paper reports that switching zero-padding-trained ResNet-50 to
+  partial convolution only at inference loses `16.357` top-1 points. Treat
+  this as a hard design constraint: no frozen-keeper candidate metric or
+  inference-only rejection is valid; use a matched training adaptation only
+  after an equation/readiness pass.
+- Lock protocol SHA `a4b1eeb2...2be7`. Add no parameters and preserve strict
+  keeper state keys. Apply the external valid mask in all three CNN stem
+  convolutions, update it after each convolution and masked max pool, use
+  epsilon `1e-6`, and treat only the true tensor exterior as legacy-valid so an
+  all-valid mask remains exactly equivalent to the current standard stem.
+- Stage A must prove official-equation replay, all-valid/logit/gradient
+  equivalence, masked-fill invariance, geometry, strict load, AMP, runtime,
+  memory, export, and fixed five-class mechanism-sheet gates without validation
+  or test. Only a complete pass authorizes one two-epoch/120-batch matched
+  keeper adaptation with full validation, workers `4/2`, scheduler horizon 10,
+  source-aware mask-shape placebo, complete clean audit, and no final test.
+- Smoke/probe/full escalation is precision-first and conjunctive. Current-best
+  commands remain unchanged until a locked independent-reload validation win.
