@@ -20486,3 +20486,50 @@ Date: 2026-07-02
   conjunctive.
 - No validation/test, production model/trainer edit, smoke/probe/full train,
   or current-best command update is authorized by the protocol lock.
+
+## Attention-MaxSep Prototype A0 Closure - 2026-07-21
+
+- Implement and push the independent MaxSep/prototype auditor, NumPy/FP64
+  oracle, source-disjoint OOF trainer, causal controls, replay, static export,
+  resource audit, fixed XAI, tests, and VS Code-safe launcher at `53c6786`.
+  Commit `6412e84` corrects only extraction shape/telemetry classification;
+  no scientific setting changes. Focused/full tests pass `13/13` and
+  `1764/1764`.
+- Execute the sole 9,215-row train-only formal from clean pushed HEAD with
+  requested/effective workers `4/4`. Extraction reaches `86.0991` images/s,
+  head training takes `464.807` s, batch-32 latency is `1.32895 ms`, and the
+  temporary 1,207,828,608-byte train cache is deleted. Validation/test, raw
+  data, and the production image model remain untouched.
+- Reject after only `4/25` mechanism gates pass. Candidate AUROC/AUPRC/TP
+  retention/FP rejection is `0.671488/0.773264/0.988636/0.076577`, versus
+  keeper `0.796540/0.910144/0.984848/0.121622` and cluster-only
+  `0.792043/0.906768/0.984848/0.112613`. It supports 5/13 FN, rejects 17 FP,
+  breaks six TP, misses precision `0.75`, and wins no required control/fold
+  pattern.
+- The intended representation collapses: effective rank is `5.3739/32`, only
+  `12/25` prototypes are used with per-class groups `[3,4,3,0,2]`, class-1
+  prototype-margin AUROC is `0.488793`, nearest-patch purity is `0.228411`,
+  and `294/763` attention maps are all-zero/low-peak. Same-weight roll/cycle
+  and trained dephasing do not establish causal aligned local evidence.
+- Fixed XAI review fails because candidate/self/cluster maps are often blank
+  and prototype/gradient maps broadly follow fruit color, silhouette, or
+  isolated edges without stable TP/FN/FP separation. Automatic XAI is finite,
+  repeatable, state-exact, and padding-clean, but batch-1 score reconstruction
+  differs by `0.00258765` from batch-64 formal features and fails the locked
+  `1e-5` gate.
+- In-process and external replay preserve exact states/actions/analysis but
+  retain honest batch-shape reconstruction errors: output/descriptor
+  `8.58307e-6`, score `1.67261e-7`, threshold `4.26299e-8`. Do not relax or
+  rerun the A0 after metric access. Numeric precision, ONNX, and resource gates
+  independently pass.
+- Preserve the complete 107.824 MiB formal at final summary/manifest/XAI SHAs
+  `ef5a6d25...3888`/`1acbc568...5e66`/`56d9f829...f81`. All 12 manifest
+  payloads verify byte-exact. Corrected all-51 read-only retention covers 817
+  run directories and all 233 expected-absent originals with no deletion or
+  blocker at SHA `9884a8c2...fbb1b0`.
+- Close prototype count/width/loss weights/LR/schedule/epochs/seed/fold/
+  readout/threshold/layer/normalization/placebo and image-trainer integration
+  neighbors on this keeper. Closure SHA is
+  `4620203e10fe999e7619b8988a202ba6f0b0db1df0ef43b76514cdbc094b3538`.
+  No robustness, smoke/probe/full train, validation/test, or current-best
+  command/history update is authorized.

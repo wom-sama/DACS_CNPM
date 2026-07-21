@@ -4471,6 +4471,36 @@
   resource, anti-collapse, and fixed XAI controls. Validation/test, production
   integration, smoke/probe/full train, and current-command updates remain
   forbidden until every prospective A0 gate passes.
-- [ ] Implement, test, and push the independent Attention-MaxSep auditor,
+- [x] Implement, test, and push the independent Attention-MaxSep auditor,
   NumPy/FP64 oracle, exact replay, static export, fixed contact sheet, and VS
-  Code-safe launcher before the sole formal train-only A0.
+  Code-safe launcher before the sole formal train-only A0. Infrastructure is
+  pushed at `53c6786`; extraction telemetry-only correction is `6412e84`;
+  focused/full tests pass `13/13` and `1764/1764`.
+- [x] Run the sole clean 9,215-row formal with requested/effective workers
+  `4/4`. Extraction reaches `86.0991` images/s, head training takes `464.807`
+  s, and the temporary 1,207,828,608-byte feature cache is deleted. No
+  validation/test, raw-data edit, image checkpoint, or production trainer edit
+  occurs.
+- [x] Reject Attention-MaxSep after only `4/25` mechanism gates pass. Candidate
+  AUROC/AUPRC/TP retention/FP rejection is
+  `0.671488/0.773264/0.988636/0.076577`, below keeper and cluster-only
+  controls; it supports 5 FN, rejects 17 FP, and breaks six TP.
+- [x] Record anti-collapse and XAI failure. Effective rank is `5.3739/32`, only
+  `12/25` prototypes are used, one class group is unused, class-1 margin AUROC
+  is `0.488793`, nearest-patch purity is `0.228411`, and 294/763 attention maps
+  are blank/low-peak. Fixed maps do not provide stable class-1 surface evidence.
+- [x] Preserve strict replay/XAI failures instead of changing gates after
+  metrics. States/actions/analysis are exact, but replay output error is
+  `8.58307e-6`; batch-1 XAI score reconstruction differs by `0.00258765` from
+  batch-64 formal features. Numeric, ONNX, resource, and dataset-isolation
+  checks otherwise pass.
+- [x] Keep all 12 formal payloads (`107.824 MiB`) at summary/manifest SHAs
+  `ef5a6d25...3888`/`1acbc568...5e66`. Corrected all-51 retention covers 817
+  directories and all 233 compacted originals with no blocker at SHA
+  `9884a8c2...fbb1b0`; closure SHA is `4620203e...b3538`. Current-best
+  commands remain unchanged.
+- [ ] Screen the next accepted-primary, equation-distinct supervised
+  class-conditional route against the full closure matrix. It must beat keeper
+  confidence and a matched simple control, protect class-1 TP while rejecting
+  restricted FP, and include a prospective anti-collapse/causal placebo before
+  any trainer integration.
