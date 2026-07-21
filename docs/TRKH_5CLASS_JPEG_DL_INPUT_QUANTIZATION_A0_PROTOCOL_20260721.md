@@ -336,8 +336,8 @@ Each contact-sheet row contains:
 Also render Y/CbCr initial/final/delta q heatmaps in natural 8x8 frequency
 layout for every executed fold. Automatic checks require finite deterministic
 maps, zero attribution in padding, exact row selection, unchanged keeper
-state, and score reconstruction within the prospectively declared batch-shape
-tolerance. Manual review passes only if aligned JPEG-DL consistently preserves
+state, exact argmax, and batch-1 versus formal batch-32 probability error at
+most `3e-3`. Manual review passes only if aligned JPEG-DL consistently preserves
 or sharpens fruit-surface/lesion/ripeness evidence while reducing distractor
 texture; broad blur, silhouette-only response, background removal, global
 color suppression, checkerboard artifacts, or indistinguishable placebos fail.
@@ -382,4 +382,3 @@ historical cleanup manifest before closure.
   and a separately measured worker count. It is authorized only after the
   integrated smoke/probe beats the existing gate with higher class-1 precision
   and no material all-class regression.
-
