@@ -4451,7 +4451,26 @@
   directories, all 51 object manifests, and all 233 expected-absent originals
   with `blockers=[]` at SHA `1f857ada...f5e7a`. Closure SHA is
   `f6d55e53...b7c6c9`; current-best commands remain unchanged.
-- [ ] Screen and prospectively lock the next accepted-primary, licensed,
+- [x] Screen and prospectively lock the next accepted-primary, licensed,
   equation-distinct route that learns class-conditional lesion/ripeness
   evidence. It must include an anti-collapse/placebo control and beat keeper
   confidence plus bbox/shape/context before any trainer integration.
+- [x] Screen CAL, DFL-CNN, MAMC, ProtoPNet, and ACCV-2020 maximal separation
+  against the no-repeat matrix. Reject CAL/DFL/MAMC before code; select only
+  the attention-aware local prototype attraction plus wrong-class separation
+  equation, with ProtoPNet MIT as the licensed architecture reference and no
+  reuse of the unlicensed ACCV source.
+- [x] Prospectively lock the sole 9,215-row source-disjoint train-only
+  Attention-MaxSep Prototype A0 in
+  `docs/TRKH_5CLASS_ATTENTION_MAXSEP_PROTOTYPE_A0_PROTOCOL_20260721.md` before
+  pixel access, feature extraction, head fitting, or candidate metric access.
+  Protocol SHA-256 is
+  `43a965074e1a9dc2f9074598fdedd0810ed3977a3b60df19bc4a88a0f3b5907b`.
+  Require self-attention, cluster-only, separately trained channel-dephased,
+  same-weight attention-roll/class-cycle, keeper, bbox, GAP, replay, export,
+  resource, anti-collapse, and fixed XAI controls. Validation/test, production
+  integration, smoke/probe/full train, and current-command updates remain
+  forbidden until every prospective A0 gate passes.
+- [ ] Implement, test, and push the independent Attention-MaxSep auditor,
+  NumPy/FP64 oracle, exact replay, static export, fixed contact sheet, and VS
+  Code-safe launcher before the sole formal train-only A0.

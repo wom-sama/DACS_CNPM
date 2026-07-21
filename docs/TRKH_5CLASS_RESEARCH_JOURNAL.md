@@ -20455,3 +20455,34 @@ Date: 2026-07-02
   `f6d55e5394592bf7f3a9b6e01d02da28131b2ed7ed34712917da47d181b7c6c9`.
   No integration, robustness, smoke/probe/full train, validation/test, or
   current-best command/history update is authorized.
+
+## Research Lock 2026-07-21 - Attention-MaxSep Local Prototypes
+
+- Re-screen accepted fine-grained class-conditional routes against the full
+  no-repeat matrix. Reject DFL-CNN before code because its positive grouped
+  GMP filters require ImageNet initialization in the paper, the available
+  community recipe reports 120 epochs/448 px, and its mechanism repeats closed
+  WILDCAT/MIL/sparse-map evidence without an explicit FP-separation term.
+  Reject MAMC because its 60-epoch pretrained OSME plus N-pair recipe overlaps
+  closed multi-attention, SupCon, and contrastive deep-supervision families.
+  CAL remains closed by the earlier prospective screen.
+- Select Nakka and Salzmann's accepted ACCV-2020 attentional prototype
+  attraction plus wrong-class separation equation. It directly tests whether
+  local class-specific morphology can separate true class 1 from restricted
+  `0/2/4 -> 1` FP. The authors' source is pinned at commit/tree
+  `2093938...fe431`/`5d26bc4...e949b` but has no license, so it is provenance
+  only; implementation must be independent. ProtoPNet's authors' MIT source is
+  pinned at `81bf2b7...59321`/`b6275c5...ae01` as the licensed architecture
+  reference.
+- Prospectively lock the single train-only A0 in
+  `TRKH_5CLASS_ATTENTION_MAXSEP_PROTOTYPE_A0_PROTOCOL_20260721.md` before any
+  pixel, feature, or candidate metric access. Protocol SHA-256 is
+  `43a965074e1a9dc2f9074598fdedd0810ed3977a3b60df19bc4a88a0f3b5907b`.
+  Four byte-identically initialized
+  source-held roles isolate cross-sample attention, self-attention,
+  wrong-class separation, and aligned channel conjunctions. Same-weight
+  attention rolling/class cycling plus keeper, bbox, GAP, no-keeper,
+  anti-collapse, replay, export, resource, and fixed faithful-XAI gates are
+  conjunctive.
+- No validation/test, production model/trainer edit, smoke/probe/full train,
+  or current-best command update is authorized by the protocol lock.
