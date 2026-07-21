@@ -65,6 +65,9 @@ def test_parse_defaults_and_locked_arguments() -> None:
     assert args.batch_size == audit.BATCH_SIZE
     assert args.num_workers == audit.NUM_WORKERS
     assert args.seed == audit.SEED
+    assert audit.KEEPER_COMPATIBILITY_BATCH_SIZE == 64
+    assert audit.KEEPER_COMPATIBILITY_PROBABILITY_TOLERANCE == 1e-6
+    assert audit.FORMAL_BATCH32_CIDT_TELEMETRY_TOLERANCE == 0.015
     args.num_workers += 1
     with pytest.raises(ValueError, match="differ from prospective lock"):
         audit._validate_locked_args(args)

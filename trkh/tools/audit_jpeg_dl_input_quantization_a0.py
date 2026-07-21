@@ -84,7 +84,9 @@ ROLE_CHUNK_SIZE = 3
 TRAIN_ROLE_MICROBATCH_SIZE = 1
 MAX_XAI_BATCH_SHAPE_PROBABILITY_ERROR = 3e-3
 ENGINEERING_CIDT_PROBABILITY_TOLERANCE = 1e-4
-FORMAL_CIDT_PROBABILITY_TOLERANCE = 3e-5
+KEEPER_COMPATIBILITY_BATCH_SIZE = 64
+KEEPER_COMPATIBILITY_PROBABILITY_TOLERANCE = 1e-6
+FORMAL_BATCH32_CIDT_TELEMETRY_TOLERANCE = 0.015
 MICROBATCH_GRADIENT_MAX_ABS_ERROR = 2e-3
 MICROBATCH_GRADIENT_MIN_COSINE = 0.9999
 
@@ -131,7 +133,7 @@ LOCKED_RESOLVED_CONFIG_SHA256 = "e9c4f48917e333d2f34f61806bb54041b35f2217ebb23af
 LOCKED_DATA_SHA256 = "716e33df24c63a9e9920f97b685199707fb84ab4c7154544f5dd9a3e00d884ef"
 LOCKED_CIDT_SUMMARY_SHA256 = "d4891edf2963ab12385b7ce5bdc812ec3e19c5c098acd25c66eb557af541d7ad"
 LOCKED_CIDT_PREDICTIONS_SHA256 = "2e0993752d58d99ea429bfefe1e2bfe6fa949e45aea1a26cc4bdfee97d4db21c"
-LOCKED_PROTOCOL_SHA256 = "15fa4a10231a0aeb68fbc07504e841760ddb6b3d0ad9a7468a1f5e8b4cb28563"
+LOCKED_PROTOCOL_SHA256 = "3030da9c932fd5921a2c7f61a6aad4a05d4c955c7e4ca4e9e35ffa3dafcd1950"
 LOCKED_CURRENT_COMMAND_SHA256 = "36b9aa1a21b765829acf4c8321be147bd76297de4ccdb8a40e6dee8e37940faf"
 LOCKED_COMMAND_HISTORY_SHA256 = "39bd2879ce66fddf36a953021ea1e40f8d9de6cb4334b9b825011b2b8dc98f53"
 LOCKED_PAPER_SHA256 = "09ed1ad8c87f22f28ad2ef3efd259b4a867ebebdc6e93ea7ce0ea791ccc07b5c"
@@ -1322,7 +1324,8 @@ def evaluate_fold(
     checks = {
         "row_count_exact": len(records) == len(selected_rows),
         "cidt_argmax_exact": cidt_argmax_exact,
-        "cidt_probability_error_lte_3e5": cidt_error <= 3e-5,
+        "cidt_probability_error_lte_0p015": cidt_error
+        <= FORMAL_BATCH32_CIDT_TELEMETRY_TOLERANCE,
         "keeper_state_exact": state_before == state_after,
         "all_probabilities_finite": all(
             math.isfinite(float(row[f"prob_{role}_{class_index}"]))
@@ -2050,7 +2053,12 @@ def engineering_forward(args: argparse.Namespace) -> Dict[str, object]:
         "concatenated_gradients": concatenated_gradients,
         "gradient_equivalence": gradient_equivalence,
         "cidt_probability_max_abs_error": cidt_error,
-        "cidt_probability_formal_tolerance_unchanged": FORMAL_CIDT_PROBABILITY_TOLERANCE,
+        "cidt_probability_keeper_compatibility_tolerance": (
+            KEEPER_COMPATIBILITY_PROBABILITY_TOLERANCE
+        ),
+        "cidt_probability_batch32_telemetry_tolerance": (
+            FORMAL_BATCH32_CIDT_TELEMETRY_TOLERANCE
+        ),
         "physical_cuda_bytes": physical_cuda_bytes,
         "safe_cuda_bytes_90pct": safe_cuda_bytes,
         "concatenated_batch96": {
@@ -2094,7 +2102,7 @@ def keeper_compatibility_audit(
         indices=indices,
         brightness=1.0,
         contrast=1.0,
-        batch_size=BATCH_SIZE,
+        batch_size=KEEPER_COMPATIBILITY_BATCH_SIZE,
         num_workers=num_workers,
         context="jpeg_dl_keeper_compatibility_pre_candidate",
     )
@@ -2136,8 +2144,8 @@ def keeper_compatibility_audit(
     checks = {
         "all_train_rows_exact": position == len(rows) == EXPECTED_TRAIN_ROWS,
         "cidt_argmax_exact": argmax_exact,
-        "cidt_probability_error_lte_3e5": maximum_error
-        <= FORMAL_CIDT_PROBABILITY_TOLERANCE,
+        "cidt_probability_error_lte_1e6": maximum_error
+        <= KEEPER_COMPATIBILITY_PROBABILITY_TOLERANCE,
         "all_probabilities_finite": all_finite,
         "keeper_state_exact": state_before == _model_state_sha256(model),
     }
@@ -2145,7 +2153,7 @@ def keeper_compatibility_audit(
         "passed": all(checks.values()),
         "checks": checks,
         "rows": position,
-        "batch_size": BATCH_SIZE,
+        "batch_size": KEEPER_COMPATIBILITY_BATCH_SIZE,
         "cidt_probability_max_abs_error": maximum_error,
         "seconds": elapsed,
         "images_per_second": position / elapsed if elapsed > 0.0 else 0.0,

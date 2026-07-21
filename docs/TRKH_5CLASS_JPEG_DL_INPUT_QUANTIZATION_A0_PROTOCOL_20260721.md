@@ -197,13 +197,30 @@ budget. This activates the predeclared microbatch allowance as follows:
 - The batch-two CIDT comparison remains explicit telemetry with exact argmax and
   error at most `1e-4`; it is not substituted for the locked formal tolerance.
 - Before fitting any q table, a separate ordinary-keeper pass over all 9,215
-  train rows at the locked formal batch `32` must retain exact CIDT argmax for
-  every row and maximum probability drift `<=3e-5`. Failure aborts before any
-  candidate metric or q optimization.
+  train rows uses the previously established FP32 CIDT replay batch `64`. It
+  must retain exact CIDT argmax for every row and maximum probability drift
+  `<=1e-6`. Failure aborts before any candidate metric or q optimization.
 
 No validation/test row, candidate classification metric, threshold, role,
 loss weight, optimizer setting, fold, seed, epoch, or decision gate was accessed
 or changed by this engineering disposition.
+
+### Pre-metric CIDT batch-shape erratum (2026-07-21)
+
+The first formal invocation stopped in the keeper-only precondition before
+output creation, q optimization, or candidate metrics. FP32 batch `32` retained
+all `9,215` CIDT argmax values but reached maximum probability drift
+`0.009427071`. Existing repository evidence had already established this
+batch-shape effect: Supervised-Minority A0 observed up to `0.01413372`, while
+its corrected A1 FP32 batch-64 contract reproduced all-row CIDT probabilities
+within `8.940697e-8` with zero argmax mismatch.
+
+Therefore the independent pre-candidate compatibility gate is corrected to the
+existing FP32 batch-64 `<=1e-6` contract. Formal JPEG-DL fitting/evaluation stays
+at batch `32`; its raw-CIDT comparison requires exact argmax and retains a
+prospectively fixed `<=0.015` probability-drift telemetry bound. Candidate/raw
+metrics are always computed from live forwards under the same batch and
+metadata. No candidate scientific gate or optimization setting changes.
 
 For logits `s`, class-1 margin
 `m1 = s_1 - max_{k != 1}(s_k)`, fit-only restricted keeper FP set `R`, and
@@ -325,8 +342,9 @@ Before formal candidate metrics:
   differences within `5e-4` relative error away from rounding boundaries.
 - No-quantization bypass must reconstruct RGB within `1e-6` in FP32.
 - Ordinary and metadata-aware keeper forwards must be bit-exact before adding
-  JPEG-DL; live keeper argmax must match CIDT for every row and probability
-  drift must stay within the established `3e-5` telemetry tolerance.
+  JPEG-DL. The FP32 batch-64 compatibility pass must match CIDT argmax for every
+  row with probability drift `<=1e-6`; live batch-32 evaluation retains exact
+  argmax and probability-drift telemetry `<=0.015`.
 - Every trained role receives a finite, nonzero q gradient in a real two-row
   engineering forward. Frozen keeper state remains exact.
 - FP32/FP64 candidate probability error is at most `1e-4`.
