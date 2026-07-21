@@ -20410,3 +20410,48 @@ Date: 2026-07-02
   access, model/trainer edit, smoke/probe/full train, or current-command update
   has occurred. Formal remains blocked until these implementation files are
   committed and pushed byte-exact.
+
+## BoxInst Foreground-Mask A0 Closure - 2026-07-21
+
+- Execute the sole formal from clean pushed implementation HEAD `1b72f8b` on
+  all 9,215 source-held `yolo_f/train` rows and the locked 763-row class-1
+  cohort. Requested/effective workers are `4/4`, extraction throughput is
+  `71.842895 images/s`, and validation/test/raw data remain untouched.
+- Reject after only `6/18` mechanism and `13/17` structural gates pass.
+  Candidate AUROC/AUPRC/TP retention/FP rejection is
+  `0.793068/0.910206/0.975379/0.144144`; it supports 4/13 FN and rejects 32 FP
+  while breaking 13 TP. Keeper log-probability AUROC is higher at `0.796540`,
+  and the same-weight rolled mask rejects more FP at `0.157658`.
+- The intended mask mechanism collapses. Candidate valid mass is `0.99999936`,
+  bbox-area ratio is `1.19221830`, outside-bbox mass is `0.16039238`, all 9,215
+  rows exceed 99.5% saturation, and 5,091 are constant all-one masks. The
+  dephased role collapses similarly. Positive-only affinity reaches near-zero
+  loss through uniform labeling while projection cannot counter it.
+- Projection-only geometry remains credible (`0.727165` bbox area,
+  `0.015898` outside mass, no degenerate rows) but has lower AUROC and weak
+  class-1 action balance. This separates foreground localization from the
+  missing class-conditional disease/ripeness signal.
+- Resource ratio `1.917497`, FP32/FP64 score error `2.82996e-5`, BF16/FP32
+  score error `0.347777`, ONNX score error `0.00486332`, and one all-NaN rolled
+  gradient map remain honest structural failures. Do not relax the prospective
+  thresholds after observation.
+- Fixed direct-mask XAI shows projection following fruit but candidate and
+  dephased masks filling valid support. Feature gradients remain similar across
+  roles and emphasize silhouette, stems/hands, boundaries, broad peel, and
+  context rather than candidate-specific lesion evidence. Manual review fails.
+- The first external replay exposed missing standalone deterministic CUDA/TF32
+  setup. Commit `2258da0` fixes only replay environment parity and adds a
+  regression test; focused/full tests pass `17/17` and `1751/1751`. Corrected
+  second-process replay is exact for masks/descriptors/actions/analysis with
+  score/threshold errors `4.44e-16/5.55e-17`; no scientific metric changed.
+- Preserve the complete 457.257 MiB formal at final summary/manifest/XAI SHAs
+  `80a80391...b8bd09`/`98368287...c2102`/
+  `11520c96...43cea`/`b3f539de...db0d24d`. Both temporary multi-gigabyte
+  caches are absent. Read-only retention passes 814 directories, all 51 valid
+  manifests, and all 233 expected-absent originals with no deletion/blocker at
+  SHA `1f857ada...f5e7a` and `100.099 GiB` free.
+- Close nearby class-agnostic BoxInst loss/head/width/neighborhood/threshold/
+  seed/fold/epoch sweeps on this keeper. Closure SHA is
+  `f6d55e5394592bf7f3a9b6e01d02da28131b2ed7ed34712917da47d181b7c6c9`.
+  No integration, robustness, smoke/probe/full train, validation/test, or
+  current-best command/history update is authorized.

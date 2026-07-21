@@ -4425,12 +4425,33 @@
   safe launcher. Preflight and two-row engineering pass; focused/full tests are
   `16/16` and `1750/1750`. Commit/push all infrastructure before extracting
   formal features or viewing a candidate metric.
-- [ ] Commit/push the BoxInst A0 infrastructure, rerun locked preflight and
+- [x] Commit/push the BoxInst A0 infrastructure, rerun locked preflight and
   no-output engineering from the clean pushed state, then execute exactly one
   formal train-only audit and independent replay. Treat the synthetic `1.61x`
   runtime warning as adverse evidence, not a post-hoc reason to change the
-  locked `1.15x` gate.
-- [ ] Run the sole clean A0 with requested/effective workers `4/4`. Open
+  locked `1.15x` gate. Infrastructure commit is `1b72f8b`; focused/full tests
+  pass `16/16` and `1750/1750` before formal execution.
+- [x] Run the sole clean A0 with requested/effective workers `4/4`. Open
   shifted conditions only on a complete clean pass; never open validation/test,
   trainer integration, smoke/probe/full train, or current-command promotion
-  from an A0 failure.
+  from an A0 failure. Only `6/18` mechanism and `13/17` structural gates pass,
+  so clean failure correctly keeps every downstream stage closed.
+- [x] Reject the locked BoxInst adaptation. Candidate AUROC/AUPRC/TP retention/
+  FP rejection is `0.793068/0.910206/0.975379/0.144144`; it supports 4 FN,
+  rejects 32 FP, and breaks 13 TP. All 9,215 candidate masks exceed 99.5%
+  saturation, mean valid mass is `0.99999936`, and 5,091 rows are constant
+  all-one masks. Projection-only geometry is healthy but less selective.
+- [x] Record manual direct-mask and feature-gradient XAI failure. Add the
+  deterministic CUDA/TF32 replay correction at `2258da0` after the initial
+  external-process mismatch; focused/full tests pass `17/17` and `1751/1751`.
+  Corrected replay has exact masks/descriptors/actions/analysis and only
+  `4.44e-16` maximum score error, without changing scientific metrics.
+- [x] Preserve the complete 457.257 MiB formal at final summary/manifest SHAs
+  `80a80391...b8bd09`/`98368287...c2102`. Read-only retention passes 814
+  directories, all 51 object manifests, and all 233 expected-absent originals
+  with `blockers=[]` at SHA `1f857ada...f5e7a`. Closure SHA is
+  `f6d55e53...b7c6c9`; current-best commands remain unchanged.
+- [ ] Screen and prospectively lock the next accepted-primary, licensed,
+  equation-distinct route that learns class-conditional lesion/ripeness
+  evidence. It must include an anti-collapse/placebo control and beat keeper
+  confidence plus bbox/shape/context before any trainer integration.
