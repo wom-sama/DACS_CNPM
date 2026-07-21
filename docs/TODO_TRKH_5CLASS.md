@@ -4419,11 +4419,17 @@
   `cb6335e787df64eb624db4abe1c677e16eaf248d8ab74d3b28a5db6ac3643425`.
   Candidate must beat uniform/bbox/projection-only/affinity-dephased/mask-roll
   controls before any trainer integration.
-- [ ] Implement the isolated BoxInst foreground-mask A0 auditor, independent
+- [x] Implement the isolated BoxInst foreground-mask A0 auditor, independent
   projection/pairwise/LAB oracles, source-held mask training, exact replay,
   static export, resource gates, fixed mask/gradient XAI, tests, and VS Code-
-  safe launcher. Commit/push all infrastructure before extracting formal
-  features or viewing a candidate metric.
+  safe launcher. Preflight and two-row engineering pass; focused/full tests are
+  `16/16` and `1750/1750`. Commit/push all infrastructure before extracting
+  formal features or viewing a candidate metric.
+- [ ] Commit/push the BoxInst A0 infrastructure, rerun locked preflight and
+  no-output engineering from the clean pushed state, then execute exactly one
+  formal train-only audit and independent replay. Treat the synthetic `1.61x`
+  runtime warning as adverse evidence, not a post-hoc reason to change the
+  locked `1.15x` gate.
 - [ ] Run the sole clean A0 with requested/effective workers `4/4`. Open
   shifted conditions only on a complete clean pass; never open validation/test,
   trainer integration, smoke/probe/full train, or current-command promotion

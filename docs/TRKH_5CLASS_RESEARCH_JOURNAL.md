@@ -20380,3 +20380,33 @@ Date: 2026-07-02
   replay/export/resource checks, and fixed manual XAI. No validation/test,
   production edit, smoke/probe/full train, or command update is authorized by
   the protocol alone.
+
+## BoxInst Foreground-Mask A0 Infrastructure And Engineering - 2026-07-21
+
+- Independently implement the paper projection Dice, same-label pairwise
+  probability, LAB affinity, source-held three-role mask trainer, fixed
+  descriptor/readout, exact state/mask/descriptor/score/action replay, ONNX
+  export, numeric/resource gates, and direct-mask plus feature-gradient XAI.
+  The official AdelaiDet package remains hash-only provenance and is never
+  imported.
+- The no-pixel preflight reproduces all 9,215 train rows, class counts
+  `[1941,541,1920,2520,2293]`, holdouts `[1843,1830,1828,1851,1863]`, and the
+  locked 763-row class-1 cohort with both ordered-index hashes exact. Torch and
+  independent NumPy FP64 projection/pairwise errors are at most `2.22e-16`;
+  Torch/NumPy LAB differ from scikit-image by only `5.260085e-5`.
+- A two-row no-output engineering forward on real `yolo_f/train` pixels keeps
+  hooked and ordinary keeper probabilities bit-exact (`0.0` error), preserves
+  keeper state, reconstructs every bbox inside valid letterbox support, gives
+  every parameter in all three matched heads a finite nonzero gradient, and
+  deletes both temporary caches. Historical CIDT drift is `7.364154e-5` with
+  exact argmax and remains telemetry only.
+- Static ONNX/ONNX Runtime dry-run errors are `8.940697e-8` mask,
+  `5.960464e-7` descriptor, and `0.0` score with no custom domain. FP32/FP64
+  and BF16 checks pass. A synthetic branch-only runtime dry-run is about
+  `1.61x` bbox-descriptor time, above the prospective `1.15x` gate; retain it
+  as adverse pre-metric evidence and measure the formal cohort unchanged.
+- Compile, pyflakes, PowerShell parse, focused tests, and full regression pass
+  `16/16` and `1750/1750`. No formal cache, candidate metric, validation/test
+  access, model/trainer edit, smoke/probe/full train, or current-command update
+  has occurred. Formal remains blocked until these implementation files are
+  committed and pushed byte-exact.
