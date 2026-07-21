@@ -179,6 +179,32 @@ threshold, fold, seed, or epoch sweep is allowed after metric access.
 - Persist and hash each epoch order and q state. Every fit source must be
   absent from its held fold.
 
+### Pre-metric engineering disposition (2026-07-21)
+
+The first real two-row engineering forward accessed only locked train pixels and
+reported no candidate decision metric. It found live keeper/CIDT probability
+drift `7.596612e-5` at batch two with exact argmax, and a concatenated
+three-role backward peak of `8.798651 GiB`, above the RTX 4060 physical-memory
+budget. This activates the predeclared microbatch allowance as follows:
+
+- Training roles are executed sequentially (`role_microbatch=1`) for the same
+  natural batch, followed by one optimizer step over the accumulated independent
+  q gradients. Keeper eval mode and every sample order remain unchanged.
+- On the two-row engineering cohort, sequential and concatenated q gradients
+  must be finite/nonzero, have cosine similarity at least `0.9999`, and maximum
+  absolute difference at most `0.002`. A batch-32 sequential forward/backward
+  must peak below `90%` of physical CUDA memory.
+- The batch-two CIDT comparison remains explicit telemetry with exact argmax and
+  error at most `1e-4`; it is not substituted for the locked formal tolerance.
+- Before fitting any q table, a separate ordinary-keeper pass over all 9,215
+  train rows at the locked formal batch `32` must retain exact CIDT argmax for
+  every row and maximum probability drift `<=3e-5`. Failure aborts before any
+  candidate metric or q optimization.
+
+No validation/test row, candidate classification metric, threshold, role,
+loss weight, optimizer setting, fold, seed, epoch, or decision gate was accessed
+or changed by this engineering disposition.
+
 For logits `s`, class-1 margin
 `m1 = s_1 - max_{k != 1}(s_k)`, fit-only restricted keeper FP set `R`, and
 fit-only keeper class-1 TP set `T`:
