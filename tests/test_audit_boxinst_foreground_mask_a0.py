@@ -285,6 +285,34 @@ def test_oof_readout_states_replay_scores_and_actions() -> None:
         assert np.array_equal(actions[role], replay_actions[role])
 
 
+def test_external_replay_restores_locked_deterministic_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    calls = []
+    monkeypatch.setattr(
+        audit,
+        "set_seed",
+        lambda seed, deterministic: calls.append((seed, deterministic)),
+    )
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+    monkeypatch.setattr(
+        audit,
+        "_read_prediction_artifact",
+        lambda path: (_ for _ in ()).throw(RuntimeError("runtime configured")),
+    )
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.allow_tf32 = True
+
+    with pytest.raises(RuntimeError, match="runtime configured"):
+        audit.replay_artifacts(tmp_path)
+
+    assert calls == [(audit.SEED, True)]
+    assert audit.os.environ["CUBLAS_WORKSPACE_CONFIG"] == ":4096:8"
+    assert torch.backends.cuda.matmul.allow_tf32 is False
+    assert torch.backends.cudnn.allow_tf32 is False
+
+
 def test_role_metrics_separates_tp_fn_and_restricted_fp() -> None:
     targets = np.asarray([1, 1, 0, 2] * 5, dtype=np.int64)
     keeper = np.asarray([1, 0, 1, 1] * 5, dtype=np.int64)

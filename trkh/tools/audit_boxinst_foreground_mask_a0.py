@@ -15,6 +15,9 @@ import hashlib
 import json
 import math
 import os
+
+os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
+
 from pathlib import Path
 import subprocess
 import tempfile
@@ -2592,6 +2595,9 @@ def replay_artifacts(
     *,
     expected_analysis: Optional[Mapping[str, object]] = None,
 ) -> Dict[str, object]:
+    set_seed(SEED, deterministic=True)
+    torch.backends.cuda.matmul.allow_tf32 = False
+    torch.backends.cudnn.allow_tf32 = False
     root = Path(output_dir).resolve()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     prediction_rows, persisted_scores, persisted_actions = _read_prediction_artifact(
