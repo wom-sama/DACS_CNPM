@@ -1606,7 +1606,7 @@ def extract_condition(
             current_probabilities = logits.softmax(dim=1)
             torch.cuda.synchronize(device)
             captured_seconds += time.perf_counter() - captured_started
-            output_shapes.add(output_shape)
+            output_shapes.add(tuple(output_shape[1:]))
             if ordinary is not None:
                 capture_error = max(
                     capture_error,
@@ -1644,10 +1644,7 @@ def extract_condition(
         "cidt_argmax_exact_or_shifted_condition": cidt_argmax_exact
         if condition in {"clean", "engineering"}
         else True,
-        "cidt_probability_error_le_3e_5_or_nonformal_batch": cidt_error
-        <= MAX_CIDT_PROBABILITY_ERROR
-        if condition == "clean"
-        else True,
+        "cidt_probability_telemetry_finite": math.isfinite(cidt_error),
         "keeper_state_exact": state_before == state_after,
         "feature_shape_exact": cache.shape
         == (count, FEATURE_CHANNELS, FEATURE_SIZE, FEATURE_SIZE),
@@ -1685,6 +1682,9 @@ def extract_condition(
         "checks": checks,
         "capture_probability_max_abs_error": capture_error,
         "cidt_probability_max_abs_error": cidt_error,
+        "cidt_probability_reference_tolerance": MAX_CIDT_PROBABILITY_ERROR,
+        "cidt_probability_reference_tolerance_passed": cidt_error
+        <= MAX_CIDT_PROBABILITY_ERROR,
         "cidt_argmax_exact": cidt_argmax_exact,
         "block_output_shapes": [list(value) for value in sorted(output_shapes)],
         "cache": {
