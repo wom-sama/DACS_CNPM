@@ -133,7 +133,7 @@ LOCKED_RESOLVED_CONFIG_SHA256 = "e9c4f48917e333d2f34f61806bb54041b35f2217ebb23af
 LOCKED_DATA_SHA256 = "716e33df24c63a9e9920f97b685199707fb84ab4c7154544f5dd9a3e00d884ef"
 LOCKED_CIDT_SUMMARY_SHA256 = "d4891edf2963ab12385b7ce5bdc812ec3e19c5c098acd25c66eb557af541d7ad"
 LOCKED_CIDT_PREDICTIONS_SHA256 = "2e0993752d58d99ea429bfefe1e2bfe6fa949e45aea1a26cc4bdfee97d4db21c"
-LOCKED_PROTOCOL_SHA256 = "3030da9c932fd5921a2c7f61a6aad4a05d4c955c7e4ca4e9e35ffa3dafcd1950"
+LOCKED_PROTOCOL_SHA256 = "160dc501daf6375ce6f94c4a02fcf47e02639111cb74220a953eca1fd4763642"
 LOCKED_CURRENT_COMMAND_SHA256 = "36b9aa1a21b765829acf4c8321be147bd76297de4ccdb8a40e6dee8e37940faf"
 LOCKED_COMMAND_HISTORY_SHA256 = "39bd2879ce66fddf36a953021ea1e40f8d9de6cb4334b9b825011b2b8dc98f53"
 LOCKED_PAPER_SHA256 = "09ed1ad8c87f22f28ad2ef3efd259b4a867ebebdc6e93ea7ce0ea791ccc07b5c"
@@ -786,6 +786,24 @@ def _canonical_sha256(value: object) -> str:
         to_serializable(value), sort_keys=True, separators=(",", ":"), ensure_ascii=True
     ).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
+
+
+def _numeric_runtime_state() -> Dict[str, bool]:
+    return {
+        "cuda_matmul_allow_tf32": bool(torch.backends.cuda.matmul.allow_tf32),
+        "cudnn_allow_tf32": bool(torch.backends.cudnn.allow_tf32),
+        "cudnn_deterministic": bool(torch.backends.cudnn.deterministic),
+        "cudnn_benchmark": bool(torch.backends.cudnn.benchmark),
+    }
+
+
+def _numeric_runtime_matches_cidt() -> bool:
+    return _numeric_runtime_state() == {
+        "cuda_matmul_allow_tf32": False,
+        "cudnn_allow_tf32": True,
+        "cudnn_deterministic": True,
+        "cudnn_benchmark": False,
+    }
 
 
 def _write_json(path: Path, payload: Mapping[str, object]) -> None:
@@ -1797,7 +1815,7 @@ def engineering_forward(args: argparse.Namespace) -> Dict[str, object]:
     device = torch.device("cuda")
     set_seed(SEED, deterministic=True)
     torch.backends.cuda.matmul.allow_tf32 = False
-    torch.backends.cudnn.allow_tf32 = False
+    torch.backends.cudnn.allow_tf32 = True
     model, checkpoint, _ = load_model(args.checkpoint, device)
     model.eval()
     for parameter in model.parameters():
@@ -2019,6 +2037,7 @@ def engineering_forward(args: argparse.Namespace) -> Dict[str, object]:
     model_state_after = _model_state_sha256(model)
     checks = {
         "provenance_verified": bool(provenance),
+        "numeric_runtime_matches_cidt": _numeric_runtime_matches_cidt(),
         "two_real_rows_exact": int(targets.numel()) == 2,
         "cidt_argmax_exact": torch.equal(
             raw_probabilities.argmax(dim=1), cidt_probabilities.argmax(dim=1)
@@ -2077,6 +2096,7 @@ def engineering_forward(args: argparse.Namespace) -> Dict[str, object]:
         },
         "dataset": dataset_summary,
         "loader": loader_summary,
+        "numeric_runtime": _numeric_runtime_state(),
     }
     for layer in microbatch_layers.values():
         layer.cpu()
@@ -2148,6 +2168,7 @@ def keeper_compatibility_audit(
         <= KEEPER_COMPATIBILITY_PROBABILITY_TOLERANCE,
         "all_probabilities_finite": all_finite,
         "keeper_state_exact": state_before == _model_state_sha256(model),
+        "numeric_runtime_matches_cidt": _numeric_runtime_matches_cidt(),
     }
     return {
         "passed": all(checks.values()),
@@ -2160,6 +2181,7 @@ def keeper_compatibility_audit(
         "candidate_pixels_used": False,
         "candidate_metrics_used": False,
         "loader": loader_summary,
+        "numeric_runtime": _numeric_runtime_state(),
     }
 
 
@@ -3004,7 +3026,7 @@ def run_audit(args: argparse.Namespace) -> Dict[str, object]:
         )
     set_seed(SEED, deterministic=True)
     torch.backends.cuda.matmul.allow_tf32 = False
-    torch.backends.cudnn.allow_tf32 = False
+    torch.backends.cudnn.allow_tf32 = True
     device = torch.device("cuda")
     gpu_before = _gpu_snapshot()
     dataset_before = _dataset_stat_snapshot(args.data.parent)

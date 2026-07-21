@@ -222,6 +222,17 @@ prospectively fixed `<=0.015` probability-drift telemetry bound. Candidate/raw
 metrics are always computed from live forwards under the same batch and
 metadata. No candidate scientific gate or optimization setting changes.
 
+A second keeper-only attempt at batch `64` produced the same `0.009427071`
+maximum error and again stopped before q fitting. Runtime comparison then
+identified the missing invariant: the authoritative CIDT summary records
+`cuda_matmul_allow_tf32=false` and `cudnn_allow_tf32=true`, whereas the first
+JPEG-DL implementation had disabled both. The corrected runtime locks CUDA
+matmul TF32 off, cuDNN TF32 on, cuDNN deterministic on, and cuDNN benchmark off
+for engineering and formal execution. The batch-64 `<=1e-6` compatibility gate
+must pass under that exact runtime before any output, q update, or candidate
+metric. This is runtime parity with the immutable comparator, not a relaxed
+candidate gate.
+
 For logits `s`, class-1 margin
 `m1 = s_1 - max_{k != 1}(s_k)`, fit-only restricted keeper FP set `R`, and
 fit-only keeper class-1 TP set `T`:
@@ -332,6 +343,8 @@ checks remain active.
 
 Before formal candidate metrics:
 
+- Runtime parity is exact: CUDA matmul TF32 is disabled, cuDNN TF32 is enabled,
+  cuDNN deterministic mode is enabled, and cuDNN benchmark mode is disabled.
 - Torch FP64 DCT/IDCT must match an independent NumPy matrix oracle within
   `1e-10`, with round-trip error at most `1e-10`.
 - Torch FP64 RGB/YCbCr round trip must be within `1e-10`.
