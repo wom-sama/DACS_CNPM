@@ -205,10 +205,12 @@ def _installed_runtime_manifest(
     requirements_path: Path,
     *,
     hash_distribution_files: bool,
+    import_runtime: bool,
 ) -> Dict[str, object]:
     pins = parse_requirement_pins(requirements_path)
     packages: List[Dict[str, object]] = []
     mismatches: List[Dict[str, str]] = []
+    installed_versions: Dict[str, str] = {}
     prefix = Path(sys.prefix).resolve()
     for name in sorted(pins):
         expected = pins[name]
@@ -227,6 +229,7 @@ def _installed_runtime_manifest(
             "expected_version": expected,
             "actual_version": actual,
         }
+        installed_versions[name] = actual
         if distribution is not None:
             metadata_path = Path(distribution._path).resolve()  # type: ignore[attr-defined]
             row["metadata_path"] = str(metadata_path)
@@ -286,15 +289,58 @@ def _installed_runtime_manifest(
         "torch": "2.6.0+cu124",
         "torchvision": "0.21.0+cu124",
     }
-    runtime_versions = {"python": platform.python_version()}
-    for module_name in ("torch", "torchvision"):
-        module = __import__(module_name)
-        runtime_versions[module_name] = str(module.__version__)
+    runtime_versions = {
+        "python": platform.python_version(),
+        "torch": installed_versions.get("torch", "<missing>"),
+        "torchvision": installed_versions.get("torchvision", "<missing>"),
+    }
     for name, expected in protocol_versions.items():
         actual = runtime_versions[name]
         if actual != expected:
             mismatches.append(
                 {"package": name, "expected": expected, "actual": actual}
+            )
+    runtime_import: Dict[str, object] = {
+        "attempted": import_runtime,
+        "cuda_available": None,
+        "pipeline_class": None,
+    }
+    if import_runtime:
+        import torch
+        import torchvision
+        from diffusers import BlipDiffusionControlNetPipeline
+
+        runtime_import = {
+            "attempted": True,
+            "torch_version": str(torch.__version__),
+            "torchvision_version": str(torchvision.__version__),
+            "cuda_version": str(torch.version.cuda),
+            "cuda_available": bool(torch.cuda.is_available()),
+            "pipeline_class": BlipDiffusionControlNetPipeline.__name__,
+        }
+        if str(torch.__version__) != protocol_versions["torch"]:
+            mismatches.append(
+                {
+                    "package": "torch import",
+                    "expected": protocol_versions["torch"],
+                    "actual": str(torch.__version__),
+                }
+            )
+        if str(torchvision.__version__) != protocol_versions["torchvision"]:
+            mismatches.append(
+                {
+                    "package": "torchvision import",
+                    "expected": protocol_versions["torchvision"],
+                    "actual": str(torchvision.__version__),
+                }
+            )
+        if not torch.cuda.is_available():
+            mismatches.append(
+                {
+                    "package": "CUDA runtime",
+                    "expected": "available",
+                    "actual": "unavailable",
+                }
             )
     isolation = {
         "prefix": str(prefix),
@@ -336,6 +382,7 @@ def _installed_runtime_manifest(
         "schema": "trkh_saspa_a0_environment_manifest_v1",
         "python_executable": str(Path(sys.executable).resolve()),
         "runtime_versions": runtime_versions,
+        "runtime_import": runtime_import,
         "isolation": isolation,
         "requirements": _verify_hash(
             requirements_path, LOCKED_REQUIREMENTS_SHA256, "SaSPA requirements"
@@ -1289,7 +1336,9 @@ def run_formal_f0(args: argparse.Namespace) -> Dict[str, object]:
                 "F0 start resource gates failed: {}".format(start_gates["checks"])
             )
         environment = _installed_runtime_manifest(
-            args.requirements, hash_distribution_files=True
+            args.requirements,
+            hash_distribution_files=True,
+            import_runtime=False,
         )
         if not environment["passed"]:
             raise RuntimeError("Isolated runtime manifest failed")
@@ -1522,13 +1571,16 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         print(json.dumps(result, indent=2, sort_keys=True))
     elif args.runtime_check_only:
         result = _installed_runtime_manifest(
-            args.requirements, hash_distribution_files=False
+            args.requirements,
+            hash_distribution_files=False,
+            import_runtime=True,
         )
         display = {
             "schema": result["schema"],
             "passed": result["passed"],
             "python_executable": result["python_executable"],
             "runtime_versions": result["runtime_versions"],
+            "runtime_import": result["runtime_import"],
             "isolation": result["isolation"],
             "requirements": result["requirements"],
             "package_count": len(result["packages"]),

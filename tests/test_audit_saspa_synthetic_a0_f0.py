@@ -256,6 +256,15 @@ def test_f0_pipeline_loader_has_no_generation_call() -> None:
     assert '"synthetic_pixels_generated": False' in source
 
 
+def test_formal_hashes_runtime_without_premature_torch_import() -> None:
+    source = inspect.getsource(audit.run_formal_f0)
+    assert "hash_distribution_files=True" in source
+    assert "import_runtime=False" in source
+    runtime_source = inspect.getsource(audit.main)
+    assert "hash_distribution_files=False" in runtime_source
+    assert "import_runtime=True" in runtime_source
+
+
 def test_artifact_manifest_excludes_itself(tmp_path: Path) -> None:
     (tmp_path / "summary.json").write_text("{}\n", encoding="utf-8")
     (tmp_path / "source.csv").write_text("a,b\n1,2\n", encoding="utf-8")

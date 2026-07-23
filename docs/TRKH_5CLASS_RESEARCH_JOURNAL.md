@@ -20736,3 +20736,33 @@ Date: 2026-07-02
   `allowed_runtime_launchers` and no external workflow. Focused/full tests
   pass `7/7` and `1783/1783`. Do not lower the locked 4-GiB physical-RAM gate;
   wait for post-test memory recovery before the next formal attempt.
+
+## SaSPA F0 RAM Scheduling And Deferred Import - 2026-07-24
+
+- A second fail-closed attempt runs focused/full tests successfully but starts
+  formal while Windows still reports less than 4 GiB available physical RAM.
+  Preserve the no-output resource failure at
+  `runs\audit_saspa_dual_view_synthetic_a0_f0_resourcegate_fail_20260724`,
+  SHA-256
+  `72b306219d9a48e5ff8c3edbe9c819c1fd8e96ca2e8eb0c2b112b7abf09fc8f0`.
+  The corrected process gate passes; no model cache or pipeline exists.
+- A separately scheduled clean formal then passes the initial gate and hashes
+  all 36 distributions, but the environment manifest imports
+  `torch/torchvision` solely to read versions. That legitimate 0.5-GiB
+  working set drops available RAM below the unchanged pre-download gate.
+  Preserve this third fail-closed record at
+  `runs\audit_saspa_dual_view_synthetic_a0_f0_predownload_ram_fail_20260724`,
+  SHA-256
+  `f22d34031f32fa577595d191f87b66cb1aef7cd7251b1795712a5460448bd64c`.
+  It also records no model download, pipeline call, or synthetic pixel.
+- Correct scheduling and import timing rather than scientific thresholds.
+  Run full tests as a completed prerequisite, wait for host RAM recovery, and
+  launch formal without repeating pytest immediately. During formal package
+  hashing, read exact torch/torchvision versions from installed distribution
+  metadata without importing them. Keep real module import, CUDA availability,
+  and `BlipDiffusionControlNetPipeline` import in the separate runtime check;
+  the F0 pipeline loader imports CUDA only after the pre-load resource gate.
+- An isolated regression proves the formal environment manifest passes with
+  both `torch` and `torchvision` absent from `sys.modules` and without reducing
+  available RAM. Focused/full tests pass `8/8` and `1784/1784`. The 4-GiB
+  physical, 15-GiB virtual, and all other prospective gates remain unchanged.

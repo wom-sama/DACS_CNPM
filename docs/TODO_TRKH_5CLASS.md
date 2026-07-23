@@ -4539,7 +4539,7 @@
   VS Code-safe launchers, package/model/source manifests, resource/process
   gates, model-CPU-offload construction, fail-closed summary, independent
   replay, and deterministic train-only selector. Focused/full tests pass
-  `7/7` and `1783/1783`; PowerShell setup/preflight passes. The final
+  `8/8` and `1784/1784`; PowerShell setup/preflight passes. The final
   pre-formal cohort SHA is `206ff06b...fa28b` over ten rows and 20 unique
   leakage groups. Model pixels, validation/test, and generation remain
   unopened.
@@ -4549,6 +4549,12 @@
   external. Allow only the parent PID whose executable, command tail, and
   creation time exactly match the current isolated invocation; keep every
   other Python/TensorRT process rejected. Add positive and adversarial tests.
+- [x] Preserve the post-suite and pre-download RAM fail-closed artifacts at
+  SHAs `72b30621...fc8f0` and `f22d3403...bd64c`. Keep the physical-RAM gate
+  unchanged. Do not schedule formal immediately after the full suite, and do
+  not import `torch/torchvision` merely to read versions before pre-load;
+  formal now verifies distribution metadata/content first, while the separate
+  runtime check and pipeline loader still perform real CUDA imports.
 - [ ] Run the RTX 4060 8-GB F0 no-output gate from the clean pushed lock. Only
   if model CPU offload, package/model hashes, deterministic source selection,
   resource ceilings, and pipeline construction all pass may F1 invoke the
