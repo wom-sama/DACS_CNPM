@@ -20830,3 +20830,46 @@ Date: 2026-07-02
   correction only: protocol, model/data hashes, source cohort, prompts,
   seeds, generation/filter settings, leakage gates, validation/test boundary,
   production trainer, and current-best command/history are unchanged.
+
+## SaSPA Synthetic F0 Formal Pass And Replay - 2026-07-24
+
+- Execute formal F0 from clean pushed commit
+  `51efa72bb0dde01ab8d2a70159d6ecbb420fdfae`; HEAD equals upstream and only
+  the three protected user-owned paths remain untracked. The run completes in
+  `385.8 s` without opening validation/test pixels or labels and without
+  invoking the generation pipeline.
+- All start, pre-download, pre-load, and final resource checks pass. The exact
+  36-package manifest passes at SHA
+  `9fc7705ab48eb32fb261105ac9e678e7704c69fa00263f327ca2972db9a37aca`;
+  the pinned model snapshot remains `7,688,436,558` bytes at manifest SHA
+  `5a83e80ad0dfd8c5a2937d4cd61efe96fd39ade22e2615d4ab397581f9c8628d`.
+- Pipeline construction uses the isolated runtime, pinned `.bin` weights,
+  FP16, model CPU offload, automatic attention slicing, and
+  `pipeline.vae.enable_slicing`. Five model components carry offload hooks;
+  load time is `9.2834 s`, peak process RSS/VMS are
+  `6.7938/8.9172 GiB`, peak NVML use is `556 MiB`, maximum host virtual-memory
+  fraction is `0.34102`, and no unknown Python/TensorRT PID is sampled.
+- Source selection reproduces eligible class counts
+  `[1507,347,1118,1256,764]`, exactly ten rows, 20 unique leakage groups, and
+  selection SHA
+  `206ff06b64abb289c451816ca07f28e78f592cba272df67f6a84694ae87fa28b`.
+- Formal summary/manifest SHAs are
+  `cf9046c929fda8bb0698c1a9a55e4aa0484856adf3664980371a0e8528fe257a`
+  and
+  `682f2c8b205104b72a8581be4d8ef85fea0177dbe60f23f9672d20e0859aa712`.
+  Independent replay passes with `failures=[]`; replay/final-manifest SHAs are
+  `27beea013ca9434968a89f2b45bfd9d456bf73558d870fb93775c8b76e2836ba`
+  and
+  `57003d4a9357b6e34d408fac164886c24a228f078891dbc51b0153521585dd63`.
+  The final manifest verifies all 12 covered artifacts.
+- F0 authorizes only the prospectively locked F1 generation of ten train-only
+  images, two per class. It does not authorize an improvement claim, A1 pool,
+  trainer/model edit, validation/test metric, full train, raw-data change, or
+  current-best command/history update. Every F1 output must still pass
+  provenance, resource, class-fidelity, blind-review, exact/pHash/DINO
+  duplicate, and fixed XAI gates before A1 can be considered.
+- Update the reproducible process/status report to revision 4. JSON/DOCX
+  SHA-256 values are `047d1450...47bc4` and `1a1b1877...21f0c`.
+  LibreOffice render review passes all nine `1224x1584` pages with no
+  clipping, overlap, broken continuation header, or footer defect; the DOCX
+  accessibility audit reports high/medium/low findings `0/0/0`.

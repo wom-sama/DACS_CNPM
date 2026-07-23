@@ -4573,11 +4573,15 @@
   peak RSS/VRAM about `7.61 GiB/549 MiB`, no unknown Python/TensorRT PID, and
   parent RSS about `29 MiB` after exit. All thresholds and scientific inputs
   remain unchanged.
-- [ ] Run the RTX 4060 8-GB F0 no-output gate from the clean pushed lock. Only
-  if model CPU offload, package/model hashes, deterministic source selection,
-  resource ceilings, and pipeline construction all pass may F1 invoke the
-  generator for the locked ten images (`2` per class). Sequential CPU offload
-  is the sole pre-output fallback.
+- [x] Run and independently replay the RTX 4060 8-GB F0 no-output gate from
+  clean pushed commit `51efa72b`. All start/pre-download/pre-load/final gates,
+  36-package and model hashes, deterministic ten-row train-only cohort, five
+  CPU-offload hooks, and pipeline construction pass. Load time is `9.28 s`;
+  peak RSS/VMS/NVML are `6.794/8.917 GiB/556 MiB`, with no unknown worker PID.
+  Summary/manifest/replay/final-manifest SHAs are
+  `cf9046c9...e257a`/`682f2c8b...aa712`/`27beea01...836ba`/
+  `57003d4a...5dd63`. F1 is authorized only for the locked ten images
+  (`2` per class); no improvement/training/current-command claim is authorized.
 - [ ] If all ten F1 outputs pass resource, class-fidelity, blind-review,
   exact/pHash/DINO duplicate, provenance, and fixed XAI checks, prospectively
   lock an A1 pool at `5%` independently per class and compare it with a matched

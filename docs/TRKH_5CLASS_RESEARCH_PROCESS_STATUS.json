@@ -2,10 +2,10 @@
   "document": {
     "title": "TRKH 5-class",
     "subtitle": "Quy trình nghiên cứu, trạng thái bằng chứng và kế hoạch cải tiến",
-    "revision": "3",
-    "updated": "2026-07-23",
+    "revision": "4",
+    "updated": "2026-07-24",
     "branch": "classification-only-research",
-    "status": "Đang nghiên cứu - JPEG-DL A0 đã bị loại; synthetic A0 là hướng kế tiếp",
+    "status": "Đang nghiên cứu - SaSPA F0 đã pass; F1 giới hạn 10 ảnh train-only",
     "owner": "TRKH classification-only research"
   },
   "executive_metrics": [
@@ -25,9 +25,9 @@
       "detail": "Validation macro-F1; precision class 1 còn thấp"
     },
     {
-      "label": "JPEG-DL A0",
-      "value": "Rejected",
-      "detail": "Replay exact; metric và XAI đều không đạt gate"
+      "label": "SaSPA synthetic F0",
+      "value": "Pass (no-output)",
+      "detail": "Replay pass; F1 chỉ được sinh 10 ảnh train-only"
     }
   ],
   "sections": [
@@ -37,7 +37,7 @@
         {
           "type": "callout",
           "label": "Quyết định",
-          "text": "Giữ nguyên keeper hiện tại và file lệnh full-train tốt nhất. Full train random-init 30 epoch không thắng validation gate; JPEG-DL A0 đã bị loại sau formal, replay độc lập và duyệt XAI. Hướng kế tiếp là một synthetic-data feasibility/A0 source-disjoint, chưa phải full generation hay full train."
+          "text": "Giữ nguyên keeper hiện tại và file lệnh full-train tốt nhất. Full train random-init 30 epoch không thắng validation gate; JPEG-DL A0 đã bị loại. SaSPA synthetic F0 no-output đã pass formal và replay, chỉ mở quyền F1 sinh đúng 10 ảnh train-only; đây chưa phải bằng chứng cải thiện mô hình hay quyền full generation/full train."
         },
         {
           "type": "paragraph",
@@ -167,7 +167,7 @@
             ["Validation/test shift", "Nhiều verifier tăng validation nhưng giảm final test.", "Bắt buộc source-disjoint, replay và không tune test."],
             ["Context không quyết định", "XAI sạch hơn khi ép foreground nhưng metric thường không tăng.", "Không đồng nhất focus đẹp với bằng chứng phân lớp."],
             ["Numeric/runtime drift", "Batch shape, BF16/FP32, TF32 và deterministic flags có thể đổi xác suất nhỏ.", "Compatibility phải chạy đúng runtime trước XAI."],
-            ["Giới hạn máy", "RTX 4060 8 GB, RAM 15,6 GB và Windows loader có thể nghẽn.", "Feasibility/memory gate trước diffusion hoặc full train."],
+            ["Giới hạn máy", "RTX 4060 8 GB, RAM 15,6 GB; SaSPA F0 pass với peak RSS 6,794 GiB và NVML 556 MiB.", "Dùng worker cô lập và resource gate trước diffusion hoặc full train."],
             ["Synthetic fidelity", "Fine-grained label dễ đổi khi generator sửa màu/bề mặt.", "Lọc fold-safe, tỷ lệ thấp và audit near-duplicate bắt buộc."],
             ["Worktree bẩn", "Có payload người dùng chưa theo dõi và nhiều artifact lịch sử.", "Stage theo path rõ ràng; không xóa/revert nội dung không xác định."]
           ]
@@ -252,6 +252,14 @@
           "text": "Được sinh synthetic data từ train hiện có và được áp dụng preprocessing/augmentation online hoặc offline. Raw class_f/yolo_f vẫn bất biến; synthetic phải nằm trong run artifact riêng và không được lẫn với source dataset."
         },
         {
+          "type": "paragraph",
+          "text": "SaSPA F0 đã pass từ clean pushed commit 51efa72b. Formal xác minh 36 package, snapshot 7.688.436.558 byte, cohort 10 hàng train-only với 20 leakage group duy nhất và pipeline CPU-offload không sinh pixel. Load time là 9,28 giây; peak RSS/VMS/NVML là 6,794/8,917 GiB/556 MiB. Replay độc lập và final manifest đều pass."
+        },
+        {
+          "type": "note",
+          "text": "F0 chỉ cho phép F1 sinh 10 ảnh, 2 ảnh mỗi lớp, theo source/prompt/seed đã khóa. F1 vẫn phải pass provenance, resource, class-fidelity, blind review, exact hash, pHash, DINO near-duplicate và XAI trước khi được cân nhắc A1 5%."
+        },
+        {
           "type": "numbered",
           "items": [
             "Khóa split và source_group_id trước khi sinh. A0 dùng source-disjoint train folds; generator chỉ thấy fitting fold.",
@@ -286,7 +294,8 @@
             ["Command governance", "Current-best command và history chỉ đổi cùng promotion commit.", "Người dùng luôn có lệnh VS Code chạy được và truy vết được."],
             ["Retention có manifest", "Hash/tóm tắt trước khi xóa chính xác artifact obsolete.", "Giải phóng dung lượng mà không mất bằng chứng."],
             ["Song song CPU/GPU", "Trong lúc formal/train chạy, dùng CPU cho research, docs và static checks.", "Giảm thời gian chết, không tranh VRAM."],
-            ["Báo cáo tái tạo", "DOCX sinh từ JSON + script, render toàn bộ trang trước khi phát hành.", "Cập nhật thường xuyên, diff được và ít lỗi Word thủ công."]
+            ["Báo cáo tái tạo", "DOCX sinh từ JSON + script, render toàn bộ trang trước khi phát hành.", "Cập nhật thường xuyên, diff được và ít lỗi Word thủ công."],
+            ["Process isolation cho diffusion", "Dựng pipeline trong worker con, giữ peak telemetry rồi gate parent sau khi worker thoát.", "Trả RAM ổn định, tránh false failure và vẫn phát hiện PID lạ."]
           ]
         }
       ]
@@ -298,9 +307,9 @@
           "type": "numbered",
           "items": [
             "Giữ nguyên bộ JPEG-DL formal 2,614 MiB. Retention đã pass 822 thư mục, đủ 51 compaction manifests, 233 originals expected-absent và blockers=[]; chỉ cleanup tiếp theo bằng manifest riêng.",
-            "Viết protocol synthetic A0 dựa trên SaSPA/BOB/DiffuseMix trước khi sinh ảnh: khóa source folds, generator revision, filter, duplicate thresholds, tỷ lệ và failure criteria.",
-            "Chạy no-output hoặc tiny-output feasibility trên RTX 4060 8 GB để đo VRAM, offload, thời gian và license; không dùng validation/test và chưa full generation.",
-            "Nếu feasibility pass, sinh một tập train-only nhỏ 5-10% theo source-disjoint fold, chạy hash/pHash/embedding near-duplicate, class-fidelity/XAI manual review và matched real-only A0.",
+            "Giữ protocol SaSPA A0 revision 2 và F0 formal/replay đã pass làm khóa đầu vào; không thay source, generator revision, prompt, seed, filter hoặc threshold sau khi xem output.",
+            "Triển khai F1 fail-closed và sinh đúng 10 ảnh train-only, 2 ảnh mỗi lớp, tuần tự bằng model CPU offload; ghi đầy đủ provenance, latency, RAM/VRAM và output hash.",
+            "Chạy class-fidelity, blind review, exact-hash, pHash, DINO near-duplicate và fixed XAI trên đủ 10 ảnh. Chỉ khi tất cả pass mới khóa A1 ở 5% mỗi lớp và matched real-only equal-iteration control.",
             "Giữ ưu tiên precision lớp 1 nhưng đặt recall-loss budget rõ ràng; không chấp nhận giảm false positive bằng cách phá quá nhiều true positive.",
             "Tiếp tục làm sạch worktree theo manifest và commit theo stage; không đụng BaoCao hoặc deep-research-report chưa theo dõi.",
             "Chỉ cập nhật lệnh full-train tốt nhất và history khi một candidate thắng validation, replay và XAI gate."
@@ -329,7 +338,7 @@
         },
         {
           "type": "paragraph",
-          "text": "Revision 1: tạo báo cáo Word tái lập; ghi nhận full train 30e, trạng thái JPEG-DL formal, nghiên cứu competition và chính sách synthetic train-only chống leak. Revision 2: khóa JPEG-DL A0 ở VisualFail với replay exact, ghi metric/XAI/SHAs cuối và chuyển kế hoạch sang synthetic feasibility source-disjoint. Revision 3: retention pass trên 822 thư mục/51 manifests, giữ formal 2,614 MiB; sửa odd/even header-footer và reset numbering theo từng block sau render QA."
+          "text": "Revision 1: tạo báo cáo Word tái lập; ghi nhận full train 30e, trạng thái JPEG-DL formal, nghiên cứu competition và chính sách synthetic train-only chống leak. Revision 2: khóa JPEG-DL A0 ở VisualFail với replay exact, ghi metric/XAI/SHAs cuối và chuyển kế hoạch sang synthetic feasibility source-disjoint. Revision 3: retention pass trên 822 thư mục/51 manifests, giữ formal 2,614 MiB; sửa odd/even header-footer và reset numbering theo từng block sau render QA. Revision 4: SaSPA F0 no-output pass formal/replay trên RTX 4060 8 GB; ghi telemetry, process isolation, hash artifact và chỉ mở quyền F1 10 ảnh train-only."
         }
       ]
     },
