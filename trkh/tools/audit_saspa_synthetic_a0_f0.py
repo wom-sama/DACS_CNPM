@@ -1235,6 +1235,19 @@ def _pipeline_component_state(pipe: object) -> List[Dict[str, object]]:
     return states
 
 
+def _enable_locked_vae_slicing(pipe: object) -> str:
+    pipeline_hook = getattr(pipe, "enable_vae_slicing", None)
+    if callable(pipeline_hook):
+        pipeline_hook()
+        return "pipeline.enable_vae_slicing"
+    vae = getattr(pipe, "vae", None)
+    component_hook = getattr(vae, "enable_slicing", None)
+    if callable(component_hook):
+        component_hook()
+        return "pipeline.vae.enable_slicing"
+    raise RuntimeError("Pipeline and VAE do not expose a slicing hook")
+
+
 def _load_pipeline_no_output(
     snapshot_manifest: Mapping[str, object],
 ) -> Tuple[Dict[str, object], Dict[str, object]]:
@@ -1255,12 +1268,11 @@ def _load_pipeline_no_output(
             torch_dtype=torch.float16,
             local_files_only=True,
             low_cpu_mem_usage=True,
+            use_safetensors=False,
         )
         pipe.enable_model_cpu_offload()
         pipe.enable_attention_slicing("auto")
-        if not hasattr(pipe, "enable_vae_slicing"):
-            raise RuntimeError("Pipeline does not expose the locked VAE slicing hook")
-        pipe.enable_vae_slicing()
+        vae_slicing_api = _enable_locked_vae_slicing(pipe)
         components = _pipeline_component_state(pipe)
         hook_count = sum(bool(item["has_hf_hook"]) for item in components)
         if hook_count == 0:
@@ -1273,6 +1285,8 @@ def _load_pipeline_no_output(
             "offload_mode": "enable_model_cpu_offload",
             "attention_slicing": "auto",
             "vae_slicing": True,
+            "vae_slicing_api": vae_slicing_api,
+            "weight_serialization": "pinned SHA-256 PyTorch .bin files",
             "component_states": components,
             "offload_hook_count": hook_count,
             "load_seconds": load_seconds,

@@ -4539,7 +4539,7 @@
   VS Code-safe launchers, package/model/source manifests, resource/process
   gates, model-CPU-offload construction, fail-closed summary, independent
   replay, and deterministic train-only selector. Focused/full tests pass
-  `8/8` and `1784/1784`; PowerShell setup/preflight passes. The final
+  `9/9` and `1785/1785`; PowerShell setup/preflight passes. The final
   pre-formal cohort SHA is `206ff06b...fa28b` over ten rows and 20 unique
   leakage groups. Model pixels, validation/test, and generation remain
   unopened.
@@ -4555,6 +4555,15 @@
   not import `torch/torchvision` merely to read versions before pre-load;
   formal now verifies distribution metadata/content first, while the separate
   runtime check and pipeline loader still perform real CUDA imports.
+- [x] Preserve the complete-snapshot VAE-hook fail-closed artifact at SHA
+  `c3b9b788...bdac10`. The pinned snapshot is complete at 38 files and
+  7,688,436,558 bytes with no incomplete download; model CPU offload and
+  pipeline construction succeeded, but this BLIP-Diffusion pipeline exposes
+  VAE slicing on `pipe.vae.enable_slicing()` rather than the pipeline
+  convenience method. Use that component hook, explicitly load the pinned
+  SHA-256 `.bin` weights, and record the selected API/serialization. No
+  pipeline invocation, synthetic pixel, gate relaxation, dataset access
+  change, or command promotion occurred.
 - [ ] Run the RTX 4060 8-GB F0 no-output gate from the clean pushed lock. Only
   if model CPU offload, package/model hashes, deterministic source selection,
   resource ceilings, and pipeline construction all pass may F1 invoke the

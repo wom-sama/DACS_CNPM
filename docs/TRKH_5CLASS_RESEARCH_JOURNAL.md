@@ -20766,3 +20766,31 @@ Date: 2026-07-02
   both `torch` and `torchvision` absent from `sys.modules` and without reducing
   available RAM. Focused/full tests pass `8/8` and `1784/1784`. The 4-GiB
   physical, 15-GiB virtual, and all other prospective gates remain unchanged.
+
+## SaSPA F0 VAE-Slicing API Fail-Closed - 2026-07-24
+
+- The fourth clean formal passes process/resource/package/source/model checks,
+  downloads the complete pinned snapshot, and constructs the model-CPU-
+  offloaded BLIP-Diffusion pipeline. The cache contains exactly 38 files and
+  `7,688,436,558` bytes with no `.incomplete` file.
+- Preserve the no-output failure at
+  `runs\audit_saspa_dual_view_synthetic_a0_f0_vae_hook_fail_20260724\failure.json`,
+  SHA-256
+  `c3b9b788ed2015e1c7fe55496d59fe67b6ce950cfcdbbd6d8c1a5efaaebdac10`.
+  It records `pipeline_invoked=false`, `synthetic_pixels_generated=false`,
+  and `f1_authorized=false`.
+- The pinned Diffusers BLIP-Diffusion pipeline has no
+  `pipe.enable_vae_slicing()` convenience method, while its `AutoencoderKL`
+  component exposes the equivalent public `pipe.vae.enable_slicing()` API.
+  Correct only this integration mismatch: prefer the pipeline hook when
+  present, otherwise require the VAE component hook, and fail closed if
+  neither exists.
+- Set `use_safetensors=False` explicitly because the hash-pinned model
+  revision contains PyTorch `.bin` weights, then record both the selected
+  slicing API and serialization in F0 telemetry. Model revision, hashes,
+  CPU-offload mode, attention slicing, resource limits, source cohort,
+  generation settings, and all scientific/leakage gates remain unchanged.
+- Compile and pyflakes pass. Focused/full tests pass `9/9` and `1785/1785`
+  with 295 existing warnings. No validation/test access, pipeline invocation,
+  synthetic pixel, trainer edit, full train, or current-best command/history
+  update is authorized by this engineering correction.

@@ -250,10 +250,28 @@ def test_f0_pipeline_loader_has_no_generation_call() -> None:
     assert "BlipDiffusionControlNetPipeline.from_pretrained" in source
     assert "enable_model_cpu_offload" in source
     assert "enable_attention_slicing" in source
-    assert "enable_vae_slicing" in source
+    assert "_enable_locked_vae_slicing(pipe)" in source
     assert "pipe(" not in source
     assert '"pipeline_invoked": False' in source
     assert '"synthetic_pixels_generated": False' in source
+
+
+def test_vae_component_slicing_is_valid_pipeline_fallback() -> None:
+    class FakeVae:
+        def __init__(self) -> None:
+            self.enabled = False
+
+        def enable_slicing(self) -> None:
+            self.enabled = True
+
+    class FakePipeline:
+        def __init__(self) -> None:
+            self.vae = FakeVae()
+
+    pipeline = FakePipeline()
+    api = audit._enable_locked_vae_slicing(pipeline)
+    assert api == "pipeline.vae.enable_slicing"
+    assert pipeline.vae.enabled is True
 
 
 def test_formal_hashes_runtime_without_premature_torch_import() -> None:
