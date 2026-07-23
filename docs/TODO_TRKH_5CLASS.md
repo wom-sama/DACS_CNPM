@@ -4534,6 +4534,15 @@
   review gates, and exact/pHash/embedding exclusion against every split. No
   synthetic pixel, validation/test statistic, trainer edit, or command update
   exists at lock time.
+- [x] Implement and verify the isolated F0 no-output infrastructure before
+  formal execution: exact 36-package lock (`f218aaa0...04764`), setup and
+  VS Code-safe launchers, package/model/source manifests, resource/process
+  gates, model-CPU-offload construction, fail-closed summary, independent
+  replay, and deterministic train-only selector. Focused/full tests pass
+  `6/6` and `1782/1782`; PowerShell setup/preflight passes. The final
+  pre-formal cohort SHA is `206ff06b...fa28b` over ten rows and 20 unique
+  leakage groups. Model pixels, validation/test, and generation remain
+  unopened.
 - [ ] Run the RTX 4060 8-GB F0 no-output gate from the clean pushed lock. Only
   if model CPU offload, package/model hashes, deterministic source selection,
   resource ceilings, and pipeline construction all pass may F1 invoke the

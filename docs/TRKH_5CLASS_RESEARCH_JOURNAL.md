@@ -20674,3 +20674,39 @@ Date: 2026-07-02
   `81e479b68d22daebed769c31e43b378a96a6c14c1d183545398658100ca77477` /
   `ae2f390246c62994fdaa2ccdedf3308defff7dd278a47f4ad88e987f6ed76167`.
   No current-best command/history update is authorized.
+
+## SaSPA Synthetic F0 Infrastructure And Preflight - 2026-07-23
+
+- Add a fully pinned 36-distribution runtime lock at
+  `requirements/trkh_saspa_a0.txt`, SHA-256
+  `f218aaa00ed1a22530862bc626ac0a36277cec2edb78dcfd8c4fc22d29604764`.
+  The standalone setup script creates no-system-site-packages Python 3.11.9
+  with `torch==2.6.0+cu124`; `pip check`, CUDA discovery, all version checks,
+  all distribution RECORD checks, and BLIP-ControlNet pipeline import pass.
+- Implement a self-contained F0 auditor plus VS Code-safe PowerShell launcher.
+  It hash-checks the protocol, current command/history, dataset metadata,
+  official SaSPA paper/repository, package distributions, remote model
+  revision/files, and downloaded snapshot. It records process/RAM/disk/GPU
+  telemetry, rejects external Python/TensorRT workflows, constructs only
+  model-CPU-offloaded pipeline components, and has no F0 pipeline invocation
+  path. Formal execution and replay both fail closed.
+- Fix two pre-formal review defects without opening model pixels or metrics:
+  correct the copied current-command SHA from a missing-character typo to the
+  actual unchanged `36b9aa1a...940faf`, and derive the seed from the first
+  63 SHA bits by right-shifting the first 64-bit word instead of masking its
+  high bit. Add direct regression assertions for both.
+- Focused compile/pyflakes/tests pass `6/6`; the full repository suite passes
+  `1782/1782` with only existing warnings. Both setup and
+  `run_trkh_saspa_synthetic_a0_f0.ps1 -Phase Preflight` execute successfully
+  under Windows PowerShell without the prior native-stderr failure mode.
+- The real train-only scan reproduces eligible counts
+  `[1507,347,1118,1256,764]` and selects exactly ten rows using 20 distinct
+  leakage groups. Final pre-formal selection SHA-256 is
+  `206ff06b64abb289c451816ca07f28e78f592cba272df67f6a84694ae87fa28b`.
+  The pinned Hugging Face metadata resolves exactly to
+  `e9e2aafc...a68593` and `7,688,436,558` bytes.
+- At this stage the model snapshot is not downloaded, the pipeline is not
+  constructed or called, no synthetic pixel exists, validation/test is
+  unopened, raw data and production code are unchanged, and current-best
+  command/history content remains unchanged. Formal F0 must run only after
+  this infrastructure is committed and pushed from a clean tracked state.
