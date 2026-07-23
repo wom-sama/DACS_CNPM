@@ -1,0 +1,113 @@
+{
+  "schema": "trkh_saspa_f1_duplicate_audit_lock_v1",
+  "state": "prospective_before_validation_or_test_pixels_are_opened",
+  "created_local_date": "2026-07-24",
+  "generation_root": "runs/audit_saspa_dual_view_synthetic_a0_20260723/f1_tiny_output_v2",
+  "locked_generation_artifacts": {
+    "generation_summary.json": "b5d45349b67c35f14c32dfd4ecc9ae3fb56a2428f86921e58dfb39a1235fdf88",
+    "generation_manifest.json": "e44b746560c3265be0b85a0b5d56f6acfaf9573e9644d3ffd2e937e0e5edd5e4",
+    "generation_replay.json": "93bf7a33133fae41900a41c629a0c708424c013fe5c63cba5c4428cb5364f237",
+    "generation_final_manifest.json": "ce3254ed410d54d5757ae967014e2fb65e6f8942a19805c8d6415926c382d4fe",
+    "blind_review_decisions.locked.json": "35ba007a1b07e9859797a5d002d40145016c2bd8a714baf7c3bac838b62f1eaf",
+    "blind_review_unblinded.json": "c530985b0aa8f80943d03e677d2cc9a0bf64a4d5e651e68cc5d6bf2d71bf006e"
+  },
+  "reference_scopes": [
+    {
+      "scope": "yolo_f/train",
+      "root": "D:/DataAI/AIEx/newdataset/yolo_f/images/train",
+      "locked_file_count": 8064
+    },
+    {
+      "scope": "yolo_f/val",
+      "root": "D:/DataAI/AIEx/newdataset/yolo_f/images/val",
+      "locked_file_count": 2577
+    },
+    {
+      "scope": "yolo_f/test",
+      "root": "D:/DataAI/AIEx/newdataset/yolo_f/images/test",
+      "locked_file_count": 1267
+    },
+    {
+      "scope": "class_f/train",
+      "root": "D:/DataAI/AIEx/newdataset/class_f/train",
+      "locked_file_count": 9215
+    },
+    {
+      "scope": "class_f/val",
+      "root": "D:/DataAI/AIEx/newdataset/class_f/val",
+      "locked_file_count": 2606
+    },
+    {
+      "scope": "class_f/test",
+      "root": "D:/DataAI/AIEx/newdataset/class_f/test",
+      "locked_file_count": 1267
+    }
+  ],
+  "enumeration": {
+    "extensions": [".bmp", ".jpeg", ".jpg", ".png", ".webp"],
+    "sort": "case-insensitive absolute path",
+    "total_reference_files": 24996,
+    "labels_or_metadata_opened": false
+  },
+  "exact_decoded_rgb": {
+    "representation": "contiguous RGB uint8 bytes plus exact height and width",
+    "digest": "SHA256",
+    "reject": "same height, width, and digest"
+  },
+  "phash": {
+    "grayscale": "PIL RGB image converted to L",
+    "resize": "32x32 PIL LANCZOS",
+    "dct": "OpenCV float32 DCT",
+    "block": "top-left 8x8",
+    "bit_rule": "coefficient > median of the 64 coefficients",
+    "bit_order": "row-major",
+    "distance": "Hamming distance over 64 booleans",
+    "reject_max": 4
+  },
+  "dinov2": {
+    "repository": "facebook/dinov2-small",
+    "revision": "ed25f3a31f01632728cabb09d1542f84ab7b0056",
+    "model_license": "apache-2.0",
+    "safetensors_bytes": 88249960,
+    "loader": "AutoImageProcessor and AutoModel with local_files_only after snapshot preparation",
+    "model_dtype": "float32",
+    "embedding": "float32 L2-normalized last_hidden_state[:,0,:]",
+    "batch_size": 32,
+    "cosine_reject_min": 0.995
+  },
+  "execution": {
+    "process_isolation": "A dedicated process runs only after generation and blind decisions are immutable.",
+    "network_during_audit": false,
+    "device": "CUDA when available; fail rather than silently change the locked implementation",
+    "raw_dataset_write": false,
+    "regeneration": false
+  },
+  "streaming_output": {
+    "per_output_only": true,
+    "allowed_reference_fields": [
+      "relative_path",
+      "scope",
+      "file_sha256",
+      "decoded_rgb_sha256",
+      "height",
+      "width",
+      "phash_hamming",
+      "dinov2_cosine"
+    ],
+    "forbidden": [
+      "reference embeddings",
+      "reference images",
+      "labels",
+      "class aggregates",
+      "split aggregates",
+      "nearest-neighbor contact sheets"
+    ],
+    "other_synthetic_outputs": "Evaluate every unordered output pair with the same three rules."
+  },
+  "gate": {
+    "logic": "Reject if any exact match, pHash Hamming <=4, or DINO cosine >=0.995 occurs against any reference or another synthetic output.",
+    "a1_authorized": false,
+    "training_authorized": false,
+    "current_best_command_update": false
+  }
+}
