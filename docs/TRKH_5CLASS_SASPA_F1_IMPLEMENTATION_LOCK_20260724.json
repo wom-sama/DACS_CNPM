@@ -1,0 +1,155 @@
+{
+  "schema": "trkh_saspa_f1_implementation_lock_v1",
+  "lock_state": "prospective_before_any_f1_output",
+  "created_local_date": "2026-07-24",
+  "parent_protocol": {
+    "path": "docs/TRKH_5CLASS_SASPA_SYNTHETIC_A0_PROTOCOL_20260723.json",
+    "sha256": "81e479b68d22daebed769c31e43b378a96a6c14c1d183545398658100ca77477",
+    "revision": 2
+  },
+  "f0_prerequisite": {
+    "output_root": "runs/audit_saspa_dual_view_synthetic_a0_20260723",
+    "clean_commit": "51efa72bb0dde01ab8d2a70159d6ecbb420fdfae",
+    "summary_sha256": "cf9046c929fda8bb0698c1a9a55e4aa0484856adf3664980371a0e8528fe257a",
+    "manifest_sha256": "682f2c8b205104b72a8581be4d8ef85fea0177dbe60f23f9672d20e0859aa712",
+    "replay_sha256": "27beea013ca9434968a89f2b45bfd9d456bf73558d870fb93775c8b76e2836ba",
+    "final_manifest_sha256": "57003d4a9357b6e34d408fac164886c24a228f078891dbc51b0153521585dd63",
+    "source_selection_sha256": "bca9852568d372f9589a278ca09f9858d6cc3988ca0f5700ceb063cda94744e9",
+    "selection_content_sha256": "206ff06b64abb289c451816ca07f28e78f592cba272df67f6a84694ae87fa28b"
+  },
+  "source_code_locks": {
+    "saspa_commit": "054230411863e8152ce475d48c1869e600a60f0c",
+    "saspa_utils_sha256": "5462c1df96f375cb475f49a5588836598e5267887b5cde349d640de17529ca6c",
+    "saspa_run_aug_sha256": "3581ebb323d133715de3e164dc35e6737ba0f4873348ffc6b8f4b666a0458ba9",
+    "pinned_diffusers_pipeline_sha256": "47bdc9e5073233bbb98e34fcdc54c50ef0d34dbd16b15d387538c144ffc11baf"
+  },
+  "generation": {
+    "output_count": 10,
+    "order": "ascending class_index, then edge_rank",
+    "worker_lifecycle": "one isolated child loads one pipeline and generates all outputs in locked order",
+    "primary_offload_mode": "enable_model_cpu_offload",
+    "fallback_offload_mode": "enable_sequential_cpu_offload",
+    "fallback_limit": 1,
+    "fallback_allowed_only_before_first_synthetic_file_is_saved": true,
+    "native_full_gpu_placement_forbidden": true,
+    "torch_generator": "fresh CPU torch.Generator per output, manual_seed(locked_seed)",
+    "determinism": {
+      "CUBLAS_WORKSPACE_CONFIG": ":4096:8",
+      "torch_deterministic_algorithms": true,
+      "cuda_matmul_tf32": false,
+      "cudnn_tf32": false,
+      "cudnn_benchmark": false
+    },
+    "pipeline_arguments": {
+      "width": 512,
+      "height": 512,
+      "num_inference_steps": 30,
+      "guidance_scale": 7.5,
+      "source_subject_category": "mango",
+      "target_subject_category": "mango",
+      "negative_prompt_source": "parent_protocol.generator.inference.negative_prompt",
+      "prompt_strength": 1.0,
+      "prompt_reps": 20,
+      "output_type": "pil"
+    },
+    "final_tensor_finiteness": "A VAE forward hook rejects any non-finite decoded tensor before save.",
+    "output_encoding": {
+      "format": "PNG",
+      "mode": "RGB",
+      "size": [512, 512],
+      "optimize": false,
+      "compress_level": 6,
+      "metadata": "none"
+    },
+    "resource_sampling_seconds": 0.5,
+    "resource_gate_source": "parent_protocol.phase_f1_tiny_output.resource_gates",
+    "partial_output_policy": "Preserve a fail-closed artifact and any already-saved outputs; never regenerate or change parameters."
+  },
+  "canny_preprocessing": {
+    "algorithm": "Exact local transcription of SaSPA all_utils.utils.resize_image, HWC3, and preprocess_canny.",
+    "input": "decoded RGB uint8 full yolo_f train frame",
+    "smaller_side_resolution": 512,
+    "maximum_resized_area_pixels": 1200000,
+    "dimension_rounding": "nearest multiple of 64",
+    "resize_up_interpolation": "cv2.INTER_LANCZOS4",
+    "resize_down_interpolation": "cv2.INTER_AREA",
+    "canny_low_threshold": 120,
+    "canny_high_threshold": 200,
+    "canny_channel_behavior": "cv2.Canny on the resized RGB uint8 array, then replicate the single output channel to RGB",
+    "pipeline_control_resize": "Pinned Diffusers image processor resizes the control image to 512x512 without center crop.",
+    "regression_requirement": "The local transcription must be byte-identical to the three function bodies at the locked SaSPA source SHA on deterministic fixtures."
+  },
+  "train_only_fidelity_reference": {
+    "selected_group_exclusion": "Exclude all 20 edge and subject leakage groups in the locked F1 cohort.",
+    "eligible_population": "Reuse the parent protocol tiny_cohort eligibility scan over yolo_f train only.",
+    "ranking": "SHA256('fidelity|' + protocol_id + '|' + class_index + '|' + leakage_group + '|' + edge_relative_path + '|' + subject_relative_path)",
+    "unique_leakage_group": true,
+    "pairs_per_class": 256,
+    "reference_pair": "The yolo_f bbox crop and corresponding same-source class_f crop for one eligible non-selected train group.",
+    "threshold_quantile": 0.95,
+    "quantile_method": "higher",
+    "candidate_pair": "The generated image crop at its locked normalized bbox and its locked source-disjoint subject crop.",
+    "normalization": {
+      "bbox_pixels": "floor left/top, ceil right/bottom, clip to image, reject empty",
+      "subject_padding_trim": "Estimate fill from four 8x8 corners; trim only contiguous outer rows/columns with at least 98 percent pixels within max-channel distance 4 of that fill; retain the original if the crop would be below 32x32 or below 25 percent area.",
+      "metric_size": [256, 256],
+      "resize_up_interpolation": "cv2.INTER_LANCZOS4",
+      "resize_down_interpolation": "cv2.INTER_AREA"
+    },
+    "statistics": {
+      "lab_histogram_js": "OpenCV RGB-to-LAB; 16 bins independently for each uint8 channel; concatenate three unit-mass histograms divided by three; square-root Jensen-Shannon distance with natural logarithms and epsilon 1e-12.",
+      "hsv_hue_circular_w1": "OpenCV RGB-to-HSV; 36 hue bins over [0,180), using pixels with saturation>=32 and value>=32 or all pixels if fewer than 5 percent qualify; circular discrete Wasserstein-1 equals sum(abs(CDF(p-q)-median(CDF(p-q))))/36.",
+      "lbp_texture_chi_square": "Grayscale uint8; standard 8-neighbor radius-1 LBP with bit order clockwise from top-left and neighbor>=center; 256-bin unit-mass histogram; symmetric chi-square distance 0.5*sum((p-q)^2/(p+q+1e-12)).",
+      "edge_density_ratio": "Canny 120/200 on grayscale; ratio (max(d1,d2)+1e-6)/(min(d1,d2)+1e-6), where d is edge-pixel fraction."
+    },
+    "gate": "Every candidate statistic must be <= its class-specific locked 95th-percentile threshold."
+  },
+  "blind_review": {
+    "order": "Ascending SHA256('blind|' + protocol_id + '|' + output_id)",
+    "cell_labels": "A through J only",
+    "reviewer_visible": "output image, five class definitions, and severe-artifact rubric",
+    "reviewer_hidden": "target class, source paths, source images, prompt, seed, and blind-to-output mapping",
+    "decision_fields": ["blind_id", "assigned_class_index", "severe_artifact", "note"],
+    "unblind_only_after_all_decisions_are_hash-locked": true,
+    "gate_source": "parent_protocol.fidelity_and_leakage_gates.manual_blind_review"
+  },
+  "near_duplicate_audit": {
+    "process_isolation": "Run only after all ten outputs are final and the generation worker has exited.",
+    "exact_decoded_rgb_sha256": "SHA256 of contiguous RGB uint8 bytes; equal spatial shape and digest reject.",
+    "phash": "Convert to grayscale, resize 32x32 with LANCZOS, OpenCV float32 DCT, take top-left 8x8, compare coefficients to their median, pack 64 row-major bits; Hamming distance <=4 rejects.",
+    "dinov2": {
+      "repository": "facebook/dinov2-small",
+      "revision": "ed25f3a31f01632728cabb09d1542f84ab7b0056",
+      "safetensors_bytes": 88249960,
+      "processor_and_model": "Pinned Hugging Face AutoImageProcessor and AutoModel, local_files_only after verified snapshot.",
+      "embedding": "FP32 L2-normalized CLS token from last_hidden_state[:,0,:].",
+      "batch_size": 32,
+      "cosine_reject_min": 0.995
+    },
+    "streaming_policy": "Keep only per-output nearest path, scope, exact hash, pHash distance, and DINO cosine; never persist reference embeddings, labels, images, class aggregates, or split statistics.",
+    "other_synthetic_outputs": "Compare every unordered output pair.",
+    "regeneration_after_reject": false
+  },
+  "contact_sheets_and_xai": {
+    "paired_sheet": "For every output show full edge source, Canny control, subject crop, output, and generated bbox crop with provenance-safe IDs.",
+    "blind_sheet": "Show only blind IDs and outputs in locked blind order.",
+    "xai_policy": "Run the frozen TRKH keeper XAI on all ten outputs only after fidelity, blind, and duplicate decisions are fixed. It is diagnostic and may not filter, regenerate, rank, tune, or authorize A1.",
+    "xai_required_views": ["Grad-CAM", "input gradient", "background perturbation", "object desaturation"],
+    "xai_interpretation": "Record whether evidence is fruit/surface/boundary focused and whether synthetic artifacts dominate; do not equate a clean heatmap with model improvement."
+  },
+  "replay": {
+    "generation_replay": "Verify locks, source and output hashes, provenance completeness, order, gate arithmetic, contact-sheet mapping, blind unblinding, duplicate report, and manifests without regenerating pixels.",
+    "raw_dataset_mutation_check": "Re-hash every selected edge, label, and subject file plus immutable YAML/manifest inputs after generation.",
+    "validation_test_generation_access": false,
+    "current_best_command_update": false,
+    "full_train": false
+  },
+  "stop_conditions": [
+    "Stop and preserve failure if F0 locks or source hashes differ.",
+    "Stop before generation if train-only thresholds cannot be computed exactly as locked.",
+    "Stop on unknown Python/TensorRT process, native full-GPU placement, OOM, non-finite decoded tensor, resource-gate failure, or raw-input mutation.",
+    "After any synthetic file is saved, never retry a mode, seed, prompt, image, threshold, or generation parameter.",
+    "Reject A0 if any provenance, resource, fidelity, blind-review, diversity, or leakage gate fails.",
+    "Never use validation/test labels, aggregates, embeddings, or images outside the isolated duplicate exclusion process."
+  ]
+}
