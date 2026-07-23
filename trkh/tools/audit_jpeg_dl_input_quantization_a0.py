@@ -2511,6 +2511,12 @@ def _normalize_heat(value: Tensor) -> Tensor:
     return (value - minimum) / (maximum - minimum).clamp_min(1e-9)
 
 
+def _materialize_xai_input(images: Tensor, device: torch.device) -> Tensor:
+    # XAI rows are selected under inference_mode; clone outside it to restore autograd.
+    value = images.detach().to(device=device, dtype=torch.float32).clone()
+    return value.requires_grad_(True)
+
+
 def _gradcam_and_input_gradient(
     *,
     model: nn.Module,
@@ -2518,7 +2524,7 @@ def _gradcam_and_input_gradient(
     metadata: Mapping[str, object],
     device: torch.device,
 ) -> Dict[str, object]:
-    value = images.detach().to(device=device, dtype=torch.float32).requires_grad_(True)
+    value = _materialize_xai_input(images, device)
     captured: Dict[str, Tensor] = {}
 
     def hook(_module, _inputs, output):

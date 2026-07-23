@@ -117,6 +117,19 @@ def test_frequency_permutation_is_exact_active_same_weight_placebo() -> None:
     assert not torch.equal(direct, placebo)
 
 
+def test_xai_input_materialization_restores_autograd_after_inference_mode() -> None:
+    with torch.inference_mode():
+        images = torch.linspace(-1.0, 1.0, 3 * 8 * 8).reshape(1, 3, 8, 8)
+    assert images.is_inference()
+    value = audit._materialize_xai_input(images, torch.device("cpu"))
+    assert value.requires_grad
+    assert value.is_leaf
+    assert not value.is_inference()
+    value.square().mean().backward()
+    assert value.grad is not None
+    assert torch.isfinite(value.grad).all()
+
+
 def test_precision_loss_selects_restricted_fp_and_protected_tp() -> None:
     logits = torch.tensor(
         [
