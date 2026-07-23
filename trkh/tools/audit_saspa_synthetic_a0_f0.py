@@ -14,6 +14,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import traceback
@@ -23,6 +24,7 @@ from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Set, Tuple
 
 METHOD = "saspa_dual_view_synthetic_a0_f0"
 SCHEMA = "trkh_saspa_dual_view_synthetic_a0_f0_v1"
+PIPELINE_WORKER_SCHEMA = "trkh_saspa_a0_f0_pipeline_load_worker_v1"
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PROTOCOL_PATH = (
     REPO_ROOT
@@ -120,6 +122,28 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     mode.add_argument("--runtime-check-only", action="store_true")
     mode.add_argument("--formal-f0", action="store_true")
     mode.add_argument("--replay-summary", type=Path)
+    mode.add_argument(
+        "--pipeline-load-worker",
+        action="store_true",
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
+        "--worker-snapshot-manifest",
+        type=Path,
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
+        "--worker-result",
+        type=Path,
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
+        "--worker-allowed-pid",
+        action="append",
+        type=int,
+        default=[],
+        help=argparse.SUPPRESS,
+    )
     return parser.parse_args(argv)
 
 
@@ -951,9 +975,13 @@ def _is_known_venv_redirector(
     )
 
 
-def resource_snapshot() -> Dict[str, object]:
+def resource_snapshot(
+    *,
+    allowed_process_ids: Optional[Set[int]] = None,
+) -> Dict[str, object]:
     import psutil
 
+    explicitly_allowed = set(allowed_process_ids or ())
     physical = psutil.virtual_memory()
     swap = psutil.swap_memory()
     virtual_total = int(physical.total + swap.total)
@@ -972,6 +1000,18 @@ def resource_snapshot() -> Dict[str, object]:
             if name not in ("python.exe", "pythonw.exe", "trtexec.exe"):
                 continue
             if int(item.info["pid"]) == os.getpid():
+                continue
+            if int(item.info["pid"]) in explicitly_allowed:
+                allowed_runtime_launchers.append(
+                    {
+                        "pid": int(item.info["pid"]),
+                        "name": item.info["name"],
+                        "executable": item.info["exe"],
+                        "create_time": item.info["create_time"],
+                        "command_line": list(item.info["cmdline"] or ()),
+                        "reason": "exact parent process of the isolated F0 load worker",
+                    }
+                )
                 continue
             if _is_known_venv_redirector(
                 item.info,
@@ -1064,8 +1104,14 @@ def evaluate_f0_resource_gates(
 
 
 class ResourceSampler:
-    def __init__(self, interval_seconds: float = 2.0) -> None:
+    def __init__(
+        self,
+        interval_seconds: float = 2.0,
+        *,
+        allowed_process_ids: Optional[Set[int]] = None,
+    ) -> None:
         self.interval_seconds = interval_seconds
+        self.allowed_process_ids = set(allowed_process_ids or ())
         self.samples: List[Dict[str, object]] = []
         self._stop_event = threading.Event()
         self._thread = threading.Thread(target=self._run, daemon=True)
@@ -1081,7 +1127,9 @@ class ResourceSampler:
     def _run(self) -> None:
         while not self._stop_event.is_set():
             try:
-                snapshot = resource_snapshot()
+                snapshot = resource_snapshot(
+                    allowed_process_ids=self.allowed_process_ids
+                )
                 try:
                     import torch
 
@@ -1121,6 +1169,14 @@ class ResourceSampler:
             if isinstance(item.get("nvidia"), dict)
             and item["nvidia"].get("memory_used_mib") is not None
         ]
+        external_process_ids = sorted(
+            {
+                int(process["pid"])
+                for item in self.samples
+                for process in item.get("external_python_or_trtexec", [])
+                if isinstance(process, dict) and process.get("pid") is not None
+            }
+        )
         return {
             "sample_count": len(self.samples),
             "max_process_rss_bytes": maximum("process_rss_bytes"),
@@ -1131,6 +1187,7 @@ class ResourceSampler:
             ),
             "max_torch_cuda_reserved_bytes": maximum("torch_cuda_reserved_bytes"),
             "max_nvml_used_mib": max(nvidia_values) if nvidia_values else None,
+            "external_python_or_trtexec_pids": external_process_ids,
         }
 
 
@@ -1250,6 +1307,8 @@ def _enable_locked_vae_slicing(pipe: object) -> str:
 
 def _load_pipeline_no_output(
     snapshot_manifest: Mapping[str, object],
+    *,
+    allowed_process_ids: Optional[Set[int]] = None,
 ) -> Tuple[Dict[str, object], Dict[str, object]]:
     os.environ["HF_HUB_OFFLINE"] = "1"
     os.environ["TRANSFORMERS_OFFLINE"] = "1"
@@ -1262,7 +1321,10 @@ def _load_pipeline_no_output(
     torch.cuda.empty_cache()
     torch.cuda.reset_peak_memory_stats()
     start = time.perf_counter()
-    with ResourceSampler(interval_seconds=2.0) as sampler:
+    with ResourceSampler(
+        interval_seconds=2.0,
+        allowed_process_ids=allowed_process_ids,
+    ) as sampler:
         pipe = BlipDiffusionControlNetPipeline.from_pretrained(
             str(snapshot_manifest["snapshot_path"]),
             torch_dtype=torch.float16,
@@ -1306,6 +1368,137 @@ def _load_pipeline_no_output(
     return state, telemetry
 
 
+def _run_pipeline_load_worker(args: argparse.Namespace) -> Dict[str, object]:
+    if args.worker_snapshot_manifest is None or args.worker_result is None:
+        raise ValueError(
+            "Pipeline worker requires snapshot manifest and result paths"
+        )
+    started_unix = time.time()
+    try:
+        snapshot = _read_json(args.worker_snapshot_manifest)
+        if not isinstance(snapshot, dict):
+            raise TypeError("Worker snapshot manifest must be a JSON object")
+        if int(snapshot.get("total_bytes", -1)) != LOCKED_MODEL_REMOTE_BYTES:
+            raise ValueError("Worker snapshot byte count differs from the lock")
+        pipeline, telemetry = _load_pipeline_no_output(
+            snapshot,
+            allowed_process_ids=set(args.worker_allowed_pid),
+        )
+        result = {
+            "schema": PIPELINE_WORKER_SCHEMA,
+            "passed": True,
+            "started_unix": started_unix,
+            "finished_unix": time.time(),
+            "pipeline": pipeline,
+            "resource_telemetry": telemetry,
+            "pipeline_invoked": False,
+            "synthetic_pixels_generated": False,
+        }
+        _write_json(args.worker_result, result)
+        return result
+    except Exception as exc:
+        failure = {
+            "schema": PIPELINE_WORKER_SCHEMA,
+            "passed": False,
+            "started_unix": started_unix,
+            "finished_unix": time.time(),
+            "error_type": type(exc).__name__,
+            "error": str(exc),
+            "traceback": traceback.format_exc(),
+            "pipeline_invoked": False,
+            "synthetic_pixels_generated": False,
+        }
+        _write_json(args.worker_result, failure)
+        raise
+
+
+def _load_pipeline_no_output_isolated(
+    snapshot_manifest: Mapping[str, object],
+    output_dir: Path,
+    *,
+    timeout_seconds: float,
+) -> Dict[str, object]:
+    allowed_parent_pids = sorted({os.getpid(), os.getppid()})
+    with tempfile.TemporaryDirectory(
+        prefix=".saspa_f0_pipeline_worker_",
+        dir=str(output_dir),
+    ) as temporary_directory:
+        temporary_root = Path(temporary_directory)
+        snapshot_path = temporary_root / "snapshot_manifest.json"
+        result_path = temporary_root / "worker_result.json"
+        _write_json(snapshot_path, dict(snapshot_manifest))
+        command = [
+            sys.executable,
+            "-m",
+            "trkh.tools.audit_saspa_synthetic_a0_f0",
+            "--pipeline-load-worker",
+            "--worker-snapshot-manifest",
+            str(snapshot_path),
+            "--worker-result",
+            str(result_path),
+        ]
+        for process_id in allowed_parent_pids:
+            command.extend(["--worker-allowed-pid", str(process_id)])
+        environment = os.environ.copy()
+        existing_python_path = environment.get("PYTHONPATH")
+        environment["PYTHONPATH"] = str(REPO_ROOT)
+        if existing_python_path:
+            environment["PYTHONPATH"] += os.pathsep + existing_python_path
+        environment["HF_HUB_OFFLINE"] = "1"
+        environment["TRANSFORMERS_OFFLINE"] = "1"
+        environment["DIFFUSERS_OFFLINE"] = "1"
+        try:
+            completed = subprocess.run(
+                command,
+                cwd=str(REPO_ROOT),
+                env=environment,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=timeout_seconds,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as exc:
+            return {
+                "schema": PIPELINE_WORKER_SCHEMA,
+                "passed": False,
+                "worker_process": {
+                    "mode": "isolated_subprocess",
+                    "python_executable": sys.executable,
+                    "allowed_parent_pids": allowed_parent_pids,
+                    "timeout_seconds": timeout_seconds,
+                },
+                "error_type": type(exc).__name__,
+                "error": "Pipeline load worker exceeded the locked timeout",
+                "pipeline_invoked": False,
+                "synthetic_pixels_generated": False,
+            }
+        payload = _read_json(result_path) if result_path.is_file() else {}
+        if not isinstance(payload, dict):
+            payload = {}
+        worker_process = {
+            "mode": "isolated_subprocess",
+            "python_executable": sys.executable,
+            "allowed_parent_pids": allowed_parent_pids,
+            "timeout_seconds": timeout_seconds,
+            "return_code": completed.returncode,
+        }
+        payload["worker_process"] = worker_process
+        if payload.get("schema") != PIPELINE_WORKER_SCHEMA:
+            payload["passed"] = False
+            payload["error"] = "Pipeline load worker returned an invalid schema"
+        if completed.returncode != 0 or not payload.get("passed"):
+            payload["passed"] = False
+            payload.setdefault(
+                "error",
+                "Pipeline load worker failed without a structured error",
+            )
+            payload["stdout_tail"] = completed.stdout[-4000:]
+            payload["stderr_tail"] = completed.stderr[-4000:]
+        return payload
+
+
 def _artifact_manifest(output_dir: Path, filename: str) -> Dict[str, object]:
     rows = []
     for path in sorted(output_dir.iterdir(), key=lambda item: item.name.lower()):
@@ -1335,56 +1528,139 @@ def run_formal_f0(args: argparse.Namespace) -> Dict[str, object]:
         )
     output_dir.mkdir(parents=True)
     start_time = time.time()
+    resource_gate_context: Dict[str, object] = {}
+    resource_snapshot_context: Dict[str, object] = {}
+    failure_context: Dict[str, object] = {
+        "stage": "repo_state",
+        "resource_gates": resource_gate_context,
+        "resource_snapshots": resource_snapshot_context,
+    }
     try:
         repo = _repo_state()
+        failure_context["repo_state"] = repo
         if not repo["passed"]:
             raise RuntimeError("Formal F0 requires clean pushed implementation state")
+        failure_context["stage"] = "static_inputs"
         static = verify_static_inputs(args.protocol, args.requirements)
+        failure_context["static_inputs_passed"] = static["passed"]
         protocol = _read_json(args.protocol)
         if not isinstance(protocol, dict):
             raise TypeError("Protocol must be a JSON object")
+        failure_context["stage"] = "start_resource_gate"
         start_resources = resource_snapshot()
         start_gates = evaluate_f0_resource_gates(protocol, start_resources)
+        resource_snapshot_context["start"] = start_resources
+        resource_gate_context["start"] = start_gates
         if not start_gates["passed"]:
             raise RuntimeError(
                 "F0 start resource gates failed: {}".format(start_gates["checks"])
             )
+        failure_context["stage"] = "environment_manifest"
         environment = _installed_runtime_manifest(
             args.requirements,
             hash_distribution_files=True,
             import_runtime=False,
         )
+        failure_context["environment"] = {
+            "passed": environment["passed"],
+            "package_count": len(environment["packages"]),
+        }
         if not environment["passed"]:
             raise RuntimeError("Isolated runtime manifest failed")
+        failure_context["stage"] = "source_selection"
         selection = select_tiny_cohort(protocol)
+        failure_context["source_selection"] = {
+            "row_count": selection["row_count"],
+            "selection_sha256": selection["selection_sha256"],
+            "eligible_counts": selection["population"]["eligible_counts"],
+        }
         if tuple(selection["population"]["eligible_counts"]) != EXPECTED_ELIGIBLE_COUNTS:
             raise RuntimeError(
                 "Eligible population changed: {}".format(
                     selection["population"]["eligible_counts"]
                 )
             )
+        failure_context["stage"] = "remote_model_metadata"
         remote = _remote_model_metadata(protocol)
+        failure_context["remote_model"] = {
+            "revision": remote["resolved_revision"],
+            "total_bytes": remote["total_bytes"],
+        }
+        failure_context["stage"] = "pre_download_resource_gate"
+        pre_download_resources = resource_snapshot()
         size_gates = evaluate_f0_resource_gates(
             protocol,
-            resource_snapshot(),
+            pre_download_resources,
             model_snapshot_bytes=int(remote["total_bytes"]),
         )
+        resource_snapshot_context["pre_download"] = pre_download_resources
+        resource_gate_context["pre_download"] = size_gates
         if not size_gates["passed"]:
             raise RuntimeError("Pre-download F0 gates failed")
+        failure_context["stage"] = "snapshot_manifest"
         snapshot = _download_and_hash_snapshot(
             protocol, Path(args.cache_root), remote
         )
+        failure_context["snapshot"] = {
+            "passed": snapshot["passed"],
+            "total_bytes": snapshot["total_bytes"],
+            "file_manifest_sha256": snapshot["file_manifest_sha256"],
+        }
         if not snapshot["passed"]:
             raise RuntimeError("Pinned model snapshot manifest failed")
+        failure_context["stage"] = "pre_load_resource_gate"
         pre_load_resources = resource_snapshot()
         pre_load_gates = evaluate_f0_resource_gates(
             protocol,
             pre_load_resources,
             model_snapshot_bytes=int(snapshot["total_bytes"]),
         )
+        resource_snapshot_context["pre_load"] = pre_load_resources
+        resource_gate_context["pre_load"] = pre_load_gates
         if not pre_load_gates["passed"]:
             raise RuntimeError("Pre-load F0 resource gates failed")
-        pipeline, telemetry = _load_pipeline_no_output(snapshot)
+        failure_context["stage"] = "isolated_pipeline_load"
+        pipeline_timeout_seconds = (
+            float(
+                protocol["phase_f0_no_output"]["resource_gates"][
+                    "pipeline_load_minutes_max"
+                ]
+            )
+            * 60.0
+            + 60.0
+        )
+        worker_result = _load_pipeline_no_output_isolated(
+            snapshot,
+            output_dir,
+            timeout_seconds=pipeline_timeout_seconds,
+        )
+        failure_context["pipeline_worker"] = worker_result
+        if not worker_result.get("passed"):
+            raise RuntimeError(
+                "Isolated pipeline load worker failed: {}".format(
+                    worker_result.get("error", "unknown error")
+                )
+            )
+        if worker_result.get("pipeline_invoked") or worker_result.get(
+            "synthetic_pixels_generated"
+        ):
+            raise RuntimeError("Pipeline worker violated the F0 no-output boundary")
+        pipeline = worker_result.get("pipeline")
+        telemetry = worker_result.get("resource_telemetry")
+        if not isinstance(pipeline, dict) or not isinstance(telemetry, dict):
+            raise TypeError("Pipeline worker returned an invalid payload")
+        if pipeline.get("pipeline_invoked") or pipeline.get(
+            "synthetic_pixels_generated"
+        ):
+            raise RuntimeError("Pipeline state violated the F0 no-output boundary")
+        pipeline["worker_process"] = worker_result["worker_process"]
+        failure_context["pipeline_worker"] = {
+            "passed": True,
+            "worker_process": worker_result["worker_process"],
+            "pipeline": pipeline,
+            "resource_telemetry": telemetry,
+        }
+        failure_context["stage"] = "final_resource_gate"
         end_resources = resource_snapshot()
         final_gates = evaluate_f0_resource_gates(
             protocol,
@@ -1403,9 +1679,23 @@ def run_formal_f0(args: argparse.Namespace) -> Dict[str, object]:
                 )
             )
             final_gates["passed"] = all(final_gates["checks"].values())
+        telemetry_external_pids = telemetry["summary"].get(
+            "external_python_or_trtexec_pids", []
+        )
+        final_gates["checks"][
+            "telemetry_no_unknown_python_or_trtexec"
+        ] = not bool(telemetry_external_pids)
+        final_gates["passed"] = all(final_gates["checks"].values())
+        resource_snapshot_context["final"] = end_resources
+        resource_gate_context["final"] = final_gates
         if not final_gates["passed"]:
-            raise RuntimeError("Final F0 resource gates failed")
+            raise RuntimeError(
+                "Final F0 resource gates failed: {}".format(
+                    final_gates["checks"]
+                )
+            )
 
+        failure_context["stage"] = "artifact_write"
         shutil.copy2(args.protocol, output_dir / "locked_protocol.json")
         _write_json(output_dir / "static_inputs.json", static)
         _write_json(output_dir / "environment_manifest.json", environment)
@@ -1498,6 +1788,8 @@ def run_formal_f0(args: argparse.Namespace) -> Dict[str, object]:
             "error_type": type(exc).__name__,
             "error": str(exc),
             "traceback": traceback.format_exc(),
+            "failure_stage": failure_context.get("stage"),
+            "failure_context": failure_context,
             "pipeline_invoked": False,
             "synthetic_pixels_generated": False,
             "f1_authorized": False,
@@ -1604,6 +1896,8 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         print(json.dumps(display, indent=2, sort_keys=True))
         if not result["passed"]:
             raise RuntimeError("Runtime check failed")
+    elif args.pipeline_load_worker:
+        _run_pipeline_load_worker(args)
     elif args.formal_f0:
         run_formal_f0(args)
     else:

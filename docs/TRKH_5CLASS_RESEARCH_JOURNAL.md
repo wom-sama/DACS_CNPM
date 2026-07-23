@@ -20794,3 +20794,39 @@ Date: 2026-07-02
   with 295 existing warnings. No validation/test access, pipeline invocation,
   synthetic pixel, trainer edit, full train, or current-best command/history
   update is authorized by this engineering correction.
+
+## SaSPA F0 Final-Gate Observability And Process Isolation - 2026-07-24
+
+- A fifth formal reaches successful model-CPU-offloaded pipeline construction
+  and then fails closed at the aggregate final resource gate. Preserve its
+  682-byte record at
+  `runs\audit_saspa_dual_view_synthetic_a0_f0_final_resource_fail_20260724\failure.json`,
+  SHA-256
+  `36902dcccc8843c19a829d7266fa310c5be61ed2fdbd0d6078c7190a4ef1070e`.
+  It records no pipeline invocation, no synthetic pixel, and no F1
+  authorization.
+- The old failure schema retained only the aggregate error, so it cannot
+  identify the exact failed final check. Do not infer a scientific or GPU
+  failure from that incomplete record. A subsequent same-process no-output
+  diagnostic passes all eight final checks with load time `12.31 s`, five
+  offload hooks, peak RSS about `8.44 GiB`, peak NVML use `551 MiB`, and
+  maximum host virtual-memory fraction `0.35349`.
+- Correct observability by storing the current stage, all collected resource
+  snapshots/gates, worker result, pipeline state, and telemetry in every
+  future fail-closed artifact. The error text also includes the individual
+  final checks.
+- Isolate pipeline construction in a child process. The child still uses the
+  exact locked snapshot, FP16, model CPU offload, attention slicing, and VAE
+  slicing, then exits without invoking the pipeline. The parent performs the
+  final gate only after all child allocations are returned. Worker telemetry
+  permits only the exact formal parent/redirector PIDs and now makes any other
+  sampled Python/TensorRT PID a conjunctive final failure.
+- The real isolated no-output diagnostic passes: load `9.34 s`, five offload
+  hooks, peak RSS/VMS `7.61/9.51 GiB`, peak NVML use `549 MiB`, maximum host
+  virtual-memory fraction `0.34967`, and no unknown worker PID. After worker
+  exit the parent is about `29 MiB` RSS with `8.31 GiB` physical RAM free.
+- Compile, pyflakes, focused tests, and the full suite pass `10/10` and
+  `1786/1786` with 295 existing warnings. This is a lifecycle/observability
+  correction only: protocol, model/data hashes, source cohort, prompts,
+  seeds, generation/filter settings, leakage gates, validation/test boundary,
+  production trainer, and current-best command/history are unchanged.

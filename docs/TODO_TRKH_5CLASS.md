@@ -4539,7 +4539,7 @@
   VS Code-safe launchers, package/model/source manifests, resource/process
   gates, model-CPU-offload construction, fail-closed summary, independent
   replay, and deterministic train-only selector. Focused/full tests pass
-  `9/9` and `1785/1785`; PowerShell setup/preflight passes. The final
+  `10/10` and `1786/1786`; PowerShell setup/preflight passes. The final
   pre-formal cohort SHA is `206ff06b...fa28b` over ten rows and 20 unique
   leakage groups. Model pixels, validation/test, and generation remain
   unopened.
@@ -4564,6 +4564,15 @@
   SHA-256 `.bin` weights, and record the selected API/serialization. No
   pipeline invocation, synthetic pixel, gate relaxation, dataset access
   change, or command promotion occurred.
+- [x] Preserve the generic final-resource fail-closed artifact at SHA
+  `36902dcc...1070e`. Because that artifact did not retain the exact failed
+  check, add stage/resource/worker context to every future failure. Run
+  pipeline construction in an isolated child so its allocations are returned
+  before the parent final gate while retaining worker peak telemetry. Real
+  no-output diagnostic load passes in `9.34 s`, records five CPU-offload hooks,
+  peak RSS/VRAM about `7.61 GiB/549 MiB`, no unknown Python/TensorRT PID, and
+  parent RSS about `29 MiB` after exit. All thresholds and scientific inputs
+  remain unchanged.
 - [ ] Run the RTX 4060 8-GB F0 no-output gate from the clean pushed lock. Only
   if model CPU offload, package/model hashes, deterministic source selection,
   resource ceilings, and pipeline construction all pass may F1 invoke the

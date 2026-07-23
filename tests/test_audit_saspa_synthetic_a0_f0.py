@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import csv
 import inspect
+import subprocess
 from pathlib import Path
 
 from trkh.tools import audit_saspa_synthetic_a0_f0 as audit
@@ -274,10 +275,58 @@ def test_vae_component_slicing_is_valid_pipeline_fallback() -> None:
     assert pipeline.vae.enabled is True
 
 
+def test_pipeline_load_isolated_worker_contract(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    worker_payload = {
+        "schema": audit.PIPELINE_WORKER_SCHEMA,
+        "passed": True,
+        "pipeline": {
+            "load_seconds": 12.0,
+            "pipeline_invoked": False,
+            "synthetic_pixels_generated": False,
+        },
+        "resource_telemetry": {
+            "samples": [],
+            "summary": {
+                "max_virtual_used_fraction": 0.5,
+                "external_python_or_trtexec_pids": [],
+            },
+        },
+        "pipeline_invoked": False,
+        "synthetic_pixels_generated": False,
+    }
+
+    def fake_run(command, **kwargs):
+        assert "--pipeline-load-worker" in command
+        assert kwargs["capture_output"] is True
+        result_path = Path(command[command.index("--worker-result") + 1])
+        audit._write_json(result_path, worker_payload)
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(audit.subprocess, "run", fake_run)
+    result = audit._load_pipeline_no_output_isolated(
+        {
+            "snapshot_path": str(tmp_path / "snapshot"),
+            "total_bytes": audit.LOCKED_MODEL_REMOTE_BYTES,
+        },
+        tmp_path,
+        timeout_seconds=120.0,
+    )
+    assert result["passed"] is True
+    assert result["worker_process"]["mode"] == "isolated_subprocess"
+    assert result["worker_process"]["return_code"] == 0
+    assert result["pipeline"]["pipeline_invoked"] is False
+    assert not list(tmp_path.glob(".saspa_f0_pipeline_worker_*"))
+
+
 def test_formal_hashes_runtime_without_premature_torch_import() -> None:
     source = inspect.getsource(audit.run_formal_f0)
     assert "hash_distribution_files=True" in source
     assert "import_runtime=False" in source
+    assert "_load_pipeline_no_output_isolated(" in source
+    assert '"failure_context": failure_context' in source
     runtime_source = inspect.getsource(audit.main)
     assert "hash_distribution_files=False" in runtime_source
     assert "import_runtime=True" in runtime_source
