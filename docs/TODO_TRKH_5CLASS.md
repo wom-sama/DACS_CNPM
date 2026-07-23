@@ -4666,16 +4666,20 @@
 - [x] Select the ECCV-2022 NSA source-gradient Poisson equation after
   rejecting exact DRAEM, SimpleNet, and diffusion anomaly recipes. Lock the
   independent class-pair adaptation before implementation at
-  `docs/TRKH_5CLASS_NSA_CLASS_PAIR_POISSON_A0_PROTOCOL_20260724.md`, SHA-256
-  Original lock SHA is `03df792f...4273e7e`; the prospective geometry
-  geometry erratum SHA is `8647a74d...80290`; the formal-detail lock below
-  makes the current protocol SHA
-  `e7e2794794a7059379060ffc10579b8b63f6288d3f50d187f8f62d36ce69fa18`.
+  `docs/TRKH_5CLASS_NSA_CLASS_PAIR_POISSON_A0_PROTOCOL_20260724.md`.
+  Original lock SHA is `03df792f...4273e7e`; the reviewed geometry lineage
+  SHA is `8647a74d...80290`; support eligibility, deterministic blend retry,
+  exact 19-row visual panel, no-query scoring, and worker selection make the
+  current prospective formal SHA `fbd7788c...6254f`.
   Keep raw data immutable and use only fit-fold `yolo_f/train` target/donor
   tensors; no validation/test construction or five-class synthetic labels.
-- [ ] Implement and test the locked geometry preview, frozen-stem
+- [x] Implement and test the locked geometry preview, frozen-stem
   query-conditioned adapter, clean-only/no-query/permuted-query controls,
-  source-held readouts, fixed mismatch-map sheet, replay, and manifest.
+  source-held readouts, fixed mismatch-map sheet, fresh-process replay,
+  recursive manifest, and formal/manual finalizers. Compile, pyflakes,
+  PowerShell parse, actual-data mini-forward, NPZ/contact round-trip, and
+  focused tests pass; the full suite passes `1850/1850` before the final
+  retry-only focused test, which passes in `26/26`.
 - [x] Run the first 24-row geometry-only preview before loading the keeper.
   Preserve summary/contact/row SHAs `59a0faec...1a426`,
   `2e332448...21fa`, and `13240025...e941`. Structural row checks pass,
@@ -4696,6 +4700,22 @@
 - [x] Prospectively lock formal seed/order/query-control details and exactly
   75 synthetic held diagnostics per fold (`15` per class) before adapter
   construction. Diagnostic rows never update a model/readout/threshold.
-- [ ] Complete the candidate/control training engine, clean 750-row
+- [x] Complete the candidate/control training engine, clean 750-row
   source-held readout, 375-row held synthetic localization audit, exact
-  replay, fixed mismatch-map sheet, and formal launcher.
+  replay, fixed mismatch-map sheet, and VS Code-safe formal launcher.
+- [x] Run a complete train-only transformed-support scan before metrics.
+  Exactly one row is non-2D: sample `7373`, class 3/fold 4, support
+  `11x204`; the `0.1%` minimum-extent quantile is already `44 px`. Lock
+  `min_extent=16`, exclude only this row from synthetic target/donor/
+  diagnostic pools, and retain it unchanged in classification data. Scan
+  SHA is `3aa2d4e6...8d248`.
+- [x] Fix deterministic blend exhaustion exposed by the worker benchmark.
+  Retry a new rectangle at most 32 times after OpenCV/empty-intensity failure;
+  same and first cross retain matched geometry. Select four workers from
+  symmetric trials: `14.4234` versus `13.1546` stem images/s (`+9.65%`) at
+  equal `1099.66 MiB` peak CUDA. Benchmark SHA is `e437d84c...25492`.
+- [ ] Commit/push the formal engine from a clean worktree, run the sole A0,
+  inspect every metric/audit plus the fixed 19-row sheet, run fresh-process
+  replay, finalize pass/reject conjunctively, and only then consider a
+  default-off trainer smoke. Validation/test and command promotion remain
+  forbidden before a complete A0 pass.

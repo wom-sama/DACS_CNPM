@@ -1,6 +1,14 @@
 param(
     [string]$Python = "D:\DataAI\.venv\Scripts\python.exe",
-    [ValidateSet("GeometryPreview", "GeometryPass", "GeometryReject", "Formal", "Replay")]
+    [ValidateSet(
+        "GeometryPreview",
+        "GeometryPass",
+        "GeometryReject",
+        "Formal",
+        "Replay",
+        "FormalPass",
+        "FormalReject"
+    )]
     [string]$Phase = "GeometryPreview",
     [string]$OutputDir = "runs\audit_nsa_class_pair_poisson_a0_geometry_preview_20260724",
     [string]$ReviewNote = "",
@@ -78,12 +86,14 @@ Assert-PowerShellParse
 Invoke-LockedPython -Arguments @(
     "-m", "py_compile",
     "trkh\tools\nsa_class_pair_poisson.py",
+    "trkh\tools\nsa_class_pair_poisson_a0_engine.py",
     "trkh\tools\audit_nsa_class_pair_poisson_a0.py",
     "tests\test_nsa_class_pair_poisson.py"
 )
 Invoke-LockedPython -Arguments @(
     "-m", "pyflakes",
     "trkh\tools\nsa_class_pair_poisson.py",
+    "trkh\tools\nsa_class_pair_poisson_a0_engine.py",
     "trkh\tools\audit_nsa_class_pair_poisson_a0.py",
     "tests\test_nsa_class_pair_poisson.py"
 )
@@ -123,13 +133,37 @@ if ($Phase -eq "Replay") {
     if (-not (Test-Path -LiteralPath $SummaryPath -PathType Leaf)) {
         throw "Formal summary is missing: $SummaryPath"
     }
+    $OldReplayMultiprocessing = $env:TRKH_ALLOW_WINDOWS_MULTIPROCESSING
+    $OldReplayPinMemory = $env:TRKH_ALLOW_WINDOWS_PIN_MEMORY
+    $OldReplayPersistentWorkers = $env:TRKH_ALLOW_WINDOWS_PERSISTENT_WORKERS
+    try {
+        $env:TRKH_ALLOW_WINDOWS_MULTIPROCESSING = "1"
+        $env:TRKH_ALLOW_WINDOWS_PIN_MEMORY = "1"
+        $env:TRKH_ALLOW_WINDOWS_PERSISTENT_WORKERS = "1"
+        Invoke-LockedPython -Arguments @(
+            "-m", "trkh.tools.audit_nsa_class_pair_poisson_a0",
+            "--replay-summary", $SummaryPath,
+            "--output-dir", $OutputDir,
+            "--device", "cuda",
+            "--batch-size", "16",
+            "--num-workers", "4"
+        )
+    } finally {
+        $env:TRKH_ALLOW_WINDOWS_MULTIPROCESSING = $OldReplayMultiprocessing
+        $env:TRKH_ALLOW_WINDOWS_PIN_MEMORY = $OldReplayPinMemory
+        $env:TRKH_ALLOW_WINDOWS_PERSISTENT_WORKERS = $OldReplayPersistentWorkers
+    }
+    exit 0
+}
+
+if ($Phase -in @("FormalPass", "FormalReject")) {
+    $Decision = if ($Phase -eq "FormalPass") { "pass" } else { "reject" }
     Invoke-LockedPython -Arguments @(
         "-m", "trkh.tools.audit_nsa_class_pair_poisson_a0",
-        "--replay-summary", $SummaryPath,
-        "--output-dir", $OutputDir,
-        "--device", "cuda",
-        "--batch-size", "16",
-        "--num-workers", "4"
+        "--finalize-formal-review",
+        "--decision", $Decision,
+        "--review-note", $ReviewNote,
+        "--output-dir", $OutputDir
     )
     exit 0
 }
@@ -161,7 +195,6 @@ try {
     $env:TRKH_ALLOW_WINDOWS_MULTIPROCESSING = "1"
     $env:TRKH_ALLOW_WINDOWS_PIN_MEMORY = "1"
     $env:TRKH_ALLOW_WINDOWS_PERSISTENT_WORKERS = "1"
-    Invoke-LockedPython -Arguments @("-m", "pytest", "-q")
     Invoke-LockedPython -Arguments @(
         "-m", "trkh.tools.audit_nsa_class_pair_poisson_a0",
         "--run-a0",

@@ -73,6 +73,9 @@ and
 `ddc49b219f423aceb9c5bc3b29398f07b3040e28a0d495477d1b7339391c5a96`.
 The reviewed row-20 crop SHA is
 `d23d8782506a88106679e5ea0318a7545d4616dc3d2e906d760a982315edabfb`.
+The preview's recorded geometry-protocol SHA remains
+`8647a74d5a3941570ab1e91e0feb63bdbaccc2cee106612a8989d2c447380290`;
+later formal-detail locks do not relabel that already generated evidence.
 
 Lock the remaining formal details before adapter construction:
 
@@ -80,10 +83,11 @@ Lock the remaining formal details before adapter construction:
   `20260724+h` and deep-copy its exact state into all four roles;
 - sort every balanced fit panel by SHA-256 of
   `20260724|fit-order|h|sample_index|source_stem`; do not shuffle it;
-- use the five role-specific AdamW optimizers in fixed order candidate,
+- use the four role-specific AdamW optimizers in fixed order candidate,
   clean-only, no-query, permuted-query, with one step per target batch;
 - the no-query control always supplies embedding ID zero while retaining all
-  five embedding parameters for exact capacity parity;
+  five embedding parameters for exact capacity parity; it also uses embedding
+  ID zero, never the class-1 ID, for clean held scoring and fixed maps;
 - query permutation must change every original query ID through a local
   sample/epoch/view-seeded derangement; labels and masks remain unchanged;
 - after clean held scoring, select exactly 75 synthetic diagnostic targets
@@ -97,6 +101,20 @@ Lock the remaining formal details before adapter construction:
   support-pixel mismatch rate at probability `>=0.5` over all 375 held
   diagnostic targets. No diagnostic subset, threshold, or aggregation may be
   changed after model scores exist.
+- a complete train-only support scan found exactly one non-2D outlier:
+  sample `7373`, source `image_7885`, class 3/fold 4, support `11x204`.
+  Require minimum support extent `16 px` for synthetic targets/donors and
+  exclude only this sample from the auxiliary fit/donor/diagnostic pools; it
+  remains unchanged in the classification dataset. The scan is locked in
+  `docs/TRKH_5CLASS_NSA_SUPPORT_GEOMETRY_SCAN_20260724.json`;
+- when a valid rectangle still produces an OpenCV failure or empty intensity
+  target, retry a new deterministic rectangle up to the already locked
+  32-attempt ceiling. Same-class and first cross-class views share each retry;
+  the second cross-class view retries independently. Exhaustion is fatal.
+- the symmetric 128-target worker benchmark selected four workers:
+  `14.4234` versus `13.1546` stem images/s for two workers (`+9.65%`) at
+  equal `1099.66 MiB` peak CUDA. Lock the four trials in
+  `docs/TRKH_5CLASS_NSA_WORKER_BENCHMARK_20260724.json`.
 
 These details do not alter the already passed geometry, training epochs,
 optimizer hyperparameters, clean cohort, readout, or mechanism gates. The
@@ -344,13 +362,16 @@ The clean-only and no-query controls use `L_clean` and
 the candidate equation. Use `BCEWithLogitsLoss`, AdamW
 `lr=3e-4, weight_decay=1e-4`, batch size 16 target rows, requested workers 4,
 two epochs, no scheduler, no gradient accumulation, gradient norm cap `5.0`,
-and full-FP32 adapter updates. Each role receives exactly the same number of
+and full-FP32 adapter updates. Limit OpenCV to one thread inside each worker
+so four workers do not create an oversubscribed 80-thread clone pool, and
+record the effective setting. Each role receives exactly the same number of
 optimizer steps. Non-finite loss/gradient is fatal.
 
 ## Held Scoring And Matched Readouts
 
 For each adapter and clean image, query class 1 and compute mismatch
-probabilities inside the downsampled support. Persist:
+probabilities inside the downsampled support; the no-query control remains on
+its locked constant embedding ID zero. Persist:
 
 - support mean;
 - top-quintile mean, using exactly `ceil(0.20*n_valid)` pixels;
@@ -383,10 +404,12 @@ class for diagnostic metrics. No threshold or adapter may be exported.
 
 ## Fixed Maps, Replay, And Resource Audit
 
-Render a fixed contact sheet covering class-1 TP and target-`0/2/4` false
-positives from every fold. Show clean RGB/support, same/cross composites and
-targets, candidate/query controls, and candidate maps for all five queries.
-Manual review cannot rescue an automatic failure.
+Render exactly 19 SHA-ranked rows, chosen before scores: one class-1 TP and one
+target-0/2 false positive in every fold, plus one target-4 false positive in
+folds 0/2/3/4. Fold 1 has zero target-4 false positives in the locked cohort,
+so no synthetic placeholder is allowed. Show clean RGB/support, same/cross
+composites and targets, candidate/query controls, and candidate maps for all
+five queries. Manual review cannot rescue an automatic failure.
 
 Persist fit panels, donor plans, geometry, masks, losses, gradients, adapter
 states, readout states, row scores/actions, fold/class summaries, timing,

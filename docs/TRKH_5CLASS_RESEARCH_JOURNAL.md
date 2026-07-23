@@ -21201,3 +21201,44 @@ Date: 2026-07-02
   Geometry is authorized; adapter metrics, validation/test, production
   integration, smoke/probe/full train, and current-best command/history
   updates are still unopened.
+
+## NSA Poisson Formal Engine And Resource Lock - 2026-07-24
+
+- Implement the four capacity-matched adapter roles, deterministic balanced
+  fit panels, exact four-class cross schedule over two epochs, clean
+  750-row source-held scoring, saved logistic readouts, 375 held synthetic
+  diagnostics, fixed 19-row maps, recursive manifests, fresh-process replay,
+  and conjunctive manual finalization. The no-query role now uses constant
+  embedding ID zero in both training and scoring; every candidate query must
+  have nonzero gradient and measured parameter update.
+- Actual-data preflight found two fail-closed geometry cases before optimizer
+  use. Sample `1926` had an empty second-cross intensity target under its
+  first rectangle and passed after the next deterministic rectangle.
+  Sample `7373` exposed a transformed support only `11x204`; repeated
+  `4-6 px`-high rectangles caused OpenCV 4.13 failures or empty targets.
+- Scan all `9,215` transformed train supports with four workers and no model
+  forward. Sample `7373` is the only row below `20 px` minimum extent; the
+  `0.1%/0.5%/1%` quantiles are `44/74.14/88 px`. Lock minimum extent `16`,
+  exclude exactly this class-3/fold-4 row from synthetic auxiliary pools, and
+  leave its raw/classification membership unchanged. Evidence SHA is
+  `3aa2d4e6f3caa2331af413911d78d5b5771fe7f3ead58b1ab7b22fa34358d248`.
+- Limit OpenCV to one thread per DataLoader worker. Symmetric 128-target
+  trials select four workers at mean `14.42344` stem images/s versus
+  `13.15461` for two (`+9.645%`), both at `1099.66 MiB` peak CUDA. Benchmark
+  SHA is
+  `e437d84c9d47a4b7757fb03169e3bf99b6ae4c1b7b3b7a423bee85a97b825492`.
+- Prospectively clarify the impossible visual cell: locked fold 1 contains
+  no target-4 restricted FP, so the score-independent panel has exactly 19
+  available fold/category rows, never a placeholder. Current protocol SHA is
+  `fbd7788c5ddba0e08a8b4cf680c427674f68bb9744198f41c6c1c7e6f146254f`.
+- Compile, pyflakes, PowerShell parse, keeper-state hash, actual-data
+  mini-forward, serialization/contact checks, and focused tests pass. The
+  repository suite passes `1850/1850` with 295 existing warnings before the
+  final retry-only test; the focused suite then passes `26/26`. Formal A0,
+  replay, validation/test, trainer integration, and current-best command
+  promotion remain unopened until the implementation commit is clean/pushed.
+- Delete only two temporary debug PNGs after recording their hashes in
+  `runs/cleanup_manifest_20260724_nsa_temporary_diagnostics.json`; retain the
+  passed geometry v2 evidence and best keeper. Current-best command/history
+  remain byte-identical at `36b9aa1a...940faf` and
+  `39bd2879...98f53`.
