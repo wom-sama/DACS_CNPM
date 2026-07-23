@@ -20533,3 +20533,79 @@ Date: 2026-07-02
   `4620203e10fe999e7619b8988a202ba6f0b0db1df0ef43b76514cdbc094b3538`.
   No robustness, smoke/probe/full train, validation/test, or current-best
   command/history update is authorized.
+
+## JPEG-DL Input Quantization A0 Closure - 2026-07-23
+
+- Implement and push the locked ICLR-2025 JPEG-inspired train-only information
+  gate, independent equations/replay, exact numeric runtime, ONNX/resource
+  checks, fixed q heatmaps, Grad-CAM/input-gradient/placebo XAI, tests, and a
+  VS Code-safe launcher. The final inference-tensor XAI repair is commit
+  `6c0062e`; focused/full tests pass `12/12` and `1776/1776`.
+- Pre-candidate keeper compatibility passes on all `9,215` `yolo_f/train`
+  object rows at probability error `8.940697e-8`, exact argmax, bit-exact
+  keeper state, and `72.2486 images/s`. Validation/test, raw data, production
+  model/trainer, and current-best commands remain untouched.
+- Reject Stage A before robustness or integration. On the sole source-held
+  fold, keeper raw macro/class1 F1 is `0.949323/0.849206`; the aligned
+  precision-full candidate falls to `0.706342/0.157895`, class1 P/R
+  `0.279070/0.110092`, removes 28 restricted FP, and breaks 95 keeper TP.
+  Fixed-q1 collapses to macro/class1 F1 `0.491959/0.033898`.
+- Reconstruction fails the intended label-preserving mechanism: mean PSNR is
+  `16.675904`, mean absolute RGB change `0.116067`, and maximum mean channel
+  shift `0.275087`. The paper-CE, scalar, aligned, frequency-permuted, and
+  phase-shifted roles all remain far below keeper and do not establish a
+  causal aligned-frequency benefit.
+- Keep structural failures honest. FP32/BF16 probability error is `0.022766`
+  against the locked `0.005` tolerance. XAI repeat error is
+  `3.725290e-9`, not exact zero, while batch-1/batch-32 probability error
+  `0.001571` still passes its `0.003` tolerance. Do not loosen either gate
+  after metric access.
+- Independent replay passes every state, prediction, analysis, quantizer,
+  gate, and manifest check. Manual XAI fails: strong grid/chroma changes
+  replace subtle peel evidence, candidate maps are not consistently sharper,
+  and the frequency-permuted/phase-shifted placebos are visually
+  indistinguishable from the candidate.
+- Finalize `VisualFail` at summary/manifest SHAs
+  `7acb6918202cc6932dd1d92f30435bef7ae4bd59962dfcbd958a326896660aa3` /
+  `654e1b7eb3114b2196f1e8bcaeb8388ef25cb5dca530149e8cd6d6399cbcf34b`.
+  Close this exact q initialization, alpha, support, fold, seed, epoch, LR,
+  scalar, permutation, and phase-shift neighborhood. No integration, smoke,
+  probe, full train, validation/test, or command/history update is authorized.
+- Keep all nine replayable JPEG-DL payloads (`2.614 MiB`). Read-only retention
+  passes 822 run directories, all 51 object-schema compaction manifests, and
+  all 233 expected-absent originals with `blockers=[]` and `103.301 GiB` free.
+  Retention summary SHA is
+  `6254ef69a6cab00732e6524de89bb45930e0e6607d628a1f9d16694ef2f8008d`;
+  no deletion is performed.
+
+## Synthetic Data Allowance And External-Evidence Screen - 2026-07-23
+
+- User authorization now explicitly permits preprocessing, online/offline
+  augmentation, and synthetic images derived from the existing immutable raw
+  datasets. This does not permit editing raw pixels/labels/splits or using
+  validation/test information during generation, filtering, ratio selection,
+  architecture selection, or thresholding.
+- SaSPA (NeurIPS 2024) is the leading next-route reference because it conditions
+  generation on subject and edge structure and studies synthetic proportion in
+  full-dataset fine-grained training. DiffuseMix (CVPR 2024) provides a
+  label-preserving hybrid-image alternative. BOB (CVPR 2026) adds the useful
+  principle of class-agnostic background/pose conditioning to reduce unintended
+  class-context association.
+- Competition evidence is advisory, not a recipe. Plant Pathology 2020/2021
+  used folds, OOF repair, non-square inputs, pretrained ensembles, TTA, and
+  multi-label label-union mixing; direct OOF soft-target and image-mixing
+  neighborhoods have already failed or are invalid for TRKH single-label
+  grading. Cassava's domain-pretrained CropNet result is not protocol-equivalent
+  to scratch and reinforces external-prior/overlap disclosure.
+- Before any image generation, lock immutable source folds and a manifest schema
+  containing source IDs, generator/model revision, prompt/config hash, seed,
+  output SHA-256, preprocessing hash, label, license, and filter provenance.
+  Exact-hash, pHash, and embedding near-duplicate checks against every split
+  are conjunctive; any synthetic too close to validation/test is removed and
+  reported.
+- Generator fitting and quality/class-fidelity filtering must be fitting-fold
+  only or cross-fit on train. Start with a prospective `5-10%` synthetic ratio
+  because class1 semantics are color/surface sensitive. First run an 8-GB
+  feasibility gate and a tiny source-disjoint fidelity/XAI audit; no full
+  generation, validation/test, smoke/probe/full train, or command update is
+  authorized by this research screen alone.

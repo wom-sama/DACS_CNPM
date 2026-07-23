@@ -4504,3 +4504,33 @@
   confidence and a matched simple control, protect class-1 TP while rejecting
   restricted FP, and include a prospective anti-collapse/causal placebo before
   any trainer integration.
+- [x] Screen and prospectively lock ICLR-2025 JPEG-inspired input
+  quantization as the next train-only representation gate. Pin the paper,
+  official repository commit, exact q roles, reconstruction/numeric/resource
+  thresholds, causal frequency/phase placebos, replay, and fixed XAI before
+  candidate metrics.
+- [x] Implement, test, commit, and push the isolated JPEG-DL auditor and
+  VS Code-safe launcher. Repair only pre-metric runtime/batch/XAI materialization
+  defects through commit `6c0062e`; focused/full tests pass `12/12` and
+  `1776/1776`.
+- [x] Run the sole formal Stage A, exact external replay, and hash-locked
+  VisualFail. Keeper macro/class1 F1 is `0.949323/0.849206`; precision-full
+  falls to `0.706342/0.157895`, removes 28 restricted FP, and breaks 95 TP.
+  Reconstruction PSNR `16.6759`, BF16 error `0.02277`, and visually
+  indistinguishable placebos independently reject the mechanism.
+- [x] Preserve the final JPEG-DL formal at summary/manifest SHAs
+  `7acb6918...60aa3`/`654e1b7e...cf34b`. Validation/test, production model,
+  smoke/probe/full train, and current-best command/history remain unchanged.
+- [x] Run the read-only all-manifest retention audit after JPEG-DL closure.
+  It passes 822 directories, all 51 object manifests, and 233 expected-absent
+  originals with `blockers=[]` and `103.301 GiB` free. Keep all nine JPEG-DL
+  payloads (`2.614 MiB`); summary SHA is `6254ef69...f8008d`.
+- [ ] Write and hash-lock a synthetic-data leakage/fidelity A0 protocol before
+  generation. Base it on SaSPA/BOB/DiffuseMix evidence, immutable source folds,
+  train-only generator/filter fitting, provenance hashes, external-prior
+  disclosure, and exact/pHash/embedding duplicate exclusion across all splits.
+- [ ] Run only an RTX 4060 8-GB no-output/tiny-output feasibility gate first.
+  If it passes, generate a small `5-10%` source-disjoint train-only set and
+  compare with a matched real-only A0 after blinded fidelity/XAI review. Do not
+  open validation/test, smoke/probe/full train, or command promotion before
+  every prospective leakage and mechanism gate passes.
