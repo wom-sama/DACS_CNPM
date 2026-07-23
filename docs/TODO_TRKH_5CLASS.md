@@ -4525,12 +4525,21 @@
   It passes 822 directories, all 51 object manifests, and 233 expected-absent
   originals with `blockers=[]` and `103.301 GiB` free. Keep all nine JPEG-DL
   payloads (`2.614 MiB`); summary SHA is `6254ef69...f8008d`.
-- [ ] Write and hash-lock a synthetic-data leakage/fidelity A0 protocol before
-  generation. Base it on SaSPA/BOB/DiffuseMix evidence, immutable source folds,
-  train-only generator/filter fitting, provenance hashes, external-prior
-  disclosure, and exact/pHash/embedding duplicate exclusion across all splits.
-- [ ] Run only an RTX 4060 8-GB no-output/tiny-output feasibility gate first.
-  If it passes, generate a small `5-10%` source-disjoint train-only set and
-  compare with a matched real-only A0 after blinded fidelity/XAI review. Do not
-  open validation/test, smoke/probe/full train, or command promotion before
-  every prospective leakage and mechanism gate passes.
+- [x] Write and hash-lock the SaSPA-inspired dual-view synthetic leakage and
+  fidelity A0 before generation. The canonical JSON/Markdown SHAs are
+  `d32131b0...150155`/`5dab3ed2...03016`. The lock fixes immutable train-only
+  source selection, full-frame Canny plus source-disjoint crop conditioning,
+  ten outputs, generator/DINO revisions, provenance, resource/fidelity/blind-
+  review gates, and exact/pHash/embedding exclusion against every split. No
+  synthetic pixel, validation/test statistic, trainer edit, or command update
+  exists at lock time.
+- [ ] Run the RTX 4060 8-GB F0 no-output gate from the clean pushed lock. Only
+  if model CPU offload, package/model hashes, deterministic source selection,
+  resource ceilings, and pipeline construction all pass may F1 invoke the
+  generator for the locked ten images (`2` per class). Sequential CPU offload
+  is the sole pre-output fallback.
+- [ ] If all ten F1 outputs pass resource, class-fidelity, blind-review,
+  exact/pHash/DINO duplicate, provenance, and fixed XAI checks, prospectively
+  lock an A1 pool at `5%` independently per class and compare it with a matched
+  real-only equal-iteration control. Do not open validation/test metrics,
+  smoke/probe/full train, or command promotion before every prior gate passes.

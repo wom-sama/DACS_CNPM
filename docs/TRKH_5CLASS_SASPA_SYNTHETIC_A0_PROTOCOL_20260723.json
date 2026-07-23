@@ -1,0 +1,344 @@
+{
+  "schema_version": 1,
+  "protocol_id": "trkh_saspa_dual_view_synthetic_a0_20260723",
+  "created_local_date": "2026-07-23",
+  "lock_state": "prospective_pre_generation",
+  "objective": "Test whether SaSPA-style edge and subject conditioning can create label-faithful, diverse TRKH mango images from immutable train data while fitting an RTX 4060 Laptop GPU with 8 GB VRAM.",
+  "hypothesis": "A full-frame yolo_f train image supplies structure and context through Canny edges, while a different-source same-class class_f crop supplies fine-grained surface and ripeness information through BLIP-Diffusion subject conditioning. The combination may preserve the class-defining fruit signal while varying context more safely than direct image mixing.",
+  "claims_not_authorized": [
+    "No model improvement claim is authorized by feasibility or tiny generation alone.",
+    "No no-pretrain end-to-end claim is authorized because the generator and duplicate-audit encoder are pretrained external priors.",
+    "No validation or test metric may be used to tune generation, prompts, filtering, thresholds, architecture, or synthetic ratio.",
+    "No current-best checkpoint, full-train command, command history, production model, raw dataset, or split may change from this A0."
+  ],
+  "immutable_inputs": {
+    "yolo_data_yaml": {
+      "path": "D:\\DataAI\\AIEx\\newdataset\\yolo_f\\data.yaml",
+      "sha256": "716e33df24c63a9e9920f97b685199707fb84ab4c7154544f5dd9a3e00d884ef"
+    },
+    "balance_yaml": {
+      "path": "D:\\DataAI\\AIEx\\newdataset\\yolo_f\\canbang.yaml",
+      "sha256": "05808224579a5f73a31f8655056a9a4727f9185076019f7175242e374f0b5227"
+    },
+    "source_manifest": {
+      "path": "D:\\DataAI\\AIEx\\newdataset\\yolo_f\\manifest.csv",
+      "sha256": "eb16e09cd20fff8480b50aa79e7d5fec779e4614398911e2e257ba6a37642ff2",
+      "rows": {
+        "train": 8064,
+        "val": 2577,
+        "test": 1267
+      },
+      "source_group_column": "leakage_group"
+    },
+    "yolo_train_images": "D:\\DataAI\\AIEx\\newdataset\\yolo_f\\images\\train",
+    "yolo_train_labels": "D:\\DataAI\\AIEx\\newdataset\\yolo_f\\labels\\train",
+    "classification_train_root": "D:\\DataAI\\AIEx\\newdataset\\class_f\\train",
+    "generation_split_allowlist": [
+      "train"
+    ],
+    "generation_split_denylist": [
+      "val",
+      "test"
+    ],
+    "raw_mutation_allowed": false
+  },
+  "external_evidence": {
+    "selected": {
+      "name": "SaSPA",
+      "paper": {
+        "venue": "NeurIPS 2024",
+        "url": "https://papers.nips.cc/paper_files/paper/2024/file/27c8b849acba6793f0b73f7ee7ea7397-Paper-Conference.pdf",
+        "local_reference": "D:\\DataAI\\Tools\\research_sources\\papers\\SaSPA_NeurIPS_2024.pdf",
+        "sha256": "4bf2b451fe720882bc3c0e7d7a80fa87e3fc53406832063cd08c3ed4ded3cfb7",
+        "reported_native_peak_vram_gb": 10.0,
+        "reported_seconds_per_image_rtx3090": 2.96
+      },
+      "repository": {
+        "url": "https://github.com/EyalMichaeli/SaSPA-Aug",
+        "commit": "054230411863e8152ce475d48c1869e600a60f0c",
+        "license": "MIT",
+        "environment_sha256": "20a0ebf450cab6ca3a15a9480e18aeda99dacc4d58beb81472f2af6b42f328f7",
+        "license_sha256": "0f530a5c6cfa2464d836f185b26a48e92a09b66a000f327cfe7934f224f4a40d",
+        "run_aug_sha256": "3581ebb323d133715de3e164dc35e6737ba0f4873348ffc6b8f4b666a0458ba9"
+      }
+    },
+    "deferred_or_rejected": [
+      {
+        "name": "DiffuseMix",
+        "paper_url": "https://openaccess.thecvf.com/content/CVPR2024/papers/Islam_DiffuseMix_Label-Preserving_Data_Augmentation_with_Diffusion_Models_CVPR_2024_paper.pdf",
+        "paper_sha256": "bb1d0063ee175c75e0d39823eff8c0a54e83a5a3249b5fc17e30bcf3bc8e09c2",
+        "repository_url": "https://github.com/khawar-islam/diffuseMix",
+        "repository_commit": "e58418d15d2ea5179dbedc2fcac80fe393dc6ec0",
+        "disposition": "Not selected for A0: the official code depends on InstructPix2Pix plus an external fractal dataset, the repository has no explicit license file, and its color/style prompts can alter TRKH ripeness semantics."
+      },
+      {
+        "name": "BOB",
+        "paper_url": "https://openaccess.thecvf.com/content/CVPR2026/papers/Yang_Beyond_Objects_Contextual_Synthetic_Data_Generation_for_Fine-Grained_Classification_CVPR_2026_paper.pdf",
+        "paper_sha256": "e82cee0f09693b9c8234a59ada32a4c3c01e5cf4393253d3cfc0eb65c90efa59",
+        "disposition": "Deferred: the method fine-tunes a text-to-image model for 400 epochs with batch size 80 and targets low-shot generation. Keep its class-agnostic context principle, but do not implement its training route on this machine."
+      }
+    ]
+  },
+  "generator": {
+    "model_repository": "Salesforce/blipdiffusion-controlnet",
+    "model_revision": "e9e2aafc154c6a9d1593c8e4fb94c6a9a8a68593",
+    "model_license": "apache-2.0",
+    "remote_snapshot_bytes": 7688436558,
+    "pipeline_class": "BlipDiffusionControlNetPipeline",
+    "external_prior": true,
+    "cache_root": "D:\\DataAI\\Tools\\hf_cache\\trkh_saspa_a0",
+    "offline_after_snapshot": true,
+    "runtime": {
+      "python": "3.11.9",
+      "torch": "2.0.1+cu118",
+      "torchvision": "0.15.2+cu118",
+      "diffusers": "0.32.2",
+      "transformers": "4.48.3",
+      "accelerate": "1.3.0",
+      "huggingface_hub": "0.28.1",
+      "tokenizers": "0.21.0",
+      "safetensors": "0.5.2",
+      "environment_policy": "isolated venv with system torch/torchvision; do not modify D:\\DataAI\\.venv"
+    },
+    "inference": {
+      "dtype": "float16",
+      "width": 512,
+      "height": 512,
+      "num_inference_steps": 30,
+      "guidance_scale": 7.5,
+      "canny_low_threshold": 120,
+      "canny_high_threshold": 200,
+      "source_subject_category": "mango",
+      "target_subject_category": "mango",
+      "negative_prompt": "over-exposure, under-exposure, saturated, duplicate, out of frame, lowres, cropped, worst quality, low quality, jpeg artifacts, morbid, mutilated, out of frame, ugly, bad anatomy, bad proportions, deformed, blurry, duplicate",
+      "attention_slicing": "auto",
+      "vae_slicing": true,
+      "native_pipeline_to_cuda_forbidden": true
+    },
+    "resource_mode_ladder": [
+      {
+        "order": 1,
+        "mode": "enable_model_cpu_offload",
+        "condition": "Primary mode. It must pass model-load F0 before producing pixels."
+      },
+      {
+        "order": 2,
+        "mode": "enable_sequential_cpu_offload",
+        "condition": "Allowed once only if primary mode fails before any output is saved. Delete partial state and restart from the same locked snapshot and sample order."
+      }
+    ],
+    "resource_mode_changes_after_saved_output_forbidden": true
+  },
+  "duplicate_audit_encoder": {
+    "model_repository": "facebook/dinov2-small",
+    "model_revision": "ed25f3a31f01632728cabb09d1542f84ab7b0056",
+    "model_license": "apache-2.0",
+    "safetensors_bytes": 88249960,
+    "use": "Leakage audit only. Embeddings, similarities, and split identities must never enter generator prompts, filters, training inputs, or model selection."
+  },
+  "classes": [
+    {
+      "index": 0,
+      "folder": "Xoai_Song_Chua_KhoDap",
+      "english_descriptor": "raw unripe mango that is firm and resistant to bruising"
+    },
+    {
+      "index": 1,
+      "folder": "Xoai_Song_ChuaNhe_CoNguyCo",
+      "english_descriptor": "slightly underripe mango with some risk of bruising during transport"
+    },
+    {
+      "index": 2,
+      "folder": "Xoai_Chin_NgotThanh_DeDap",
+      "english_descriptor": "ripe sweet firm mango suitable for careful transport"
+    },
+    {
+      "index": 3,
+      "folder": "Xoai_ChinGia_NgotGat_KhongVanChuyen",
+      "english_descriptor": "overripe very sweet soft mango unsuitable for transport"
+    },
+    {
+      "index": 4,
+      "folder": "Xoai_Hu_KhongAnDuoc",
+      "english_descriptor": "spoiled damaged inedible mango"
+    }
+  ],
+  "prompt_templates": [
+    "A documentary agricultural photograph of one {subclass}, natural farm context, neutral diffuse daylight, realistic natural color.",
+    "A close agricultural inspection photograph of one {subclass}, simple produce-handling context, soft overcast daylight, realistic natural color."
+  ],
+  "tiny_cohort": {
+    "outputs_per_class": 2,
+    "total_outputs": 10,
+    "selection_seed_namespace": "trkh_saspa_dual_view_synthetic_a0_20260723",
+    "edge_view": "Full yolo_f train frame; Canny edges retain object layout and wide context.",
+    "subject_view": "Corresponding class_f train crop from a different leakage_group but the same class.",
+    "eligibility": {
+      "source_split": "train",
+      "objects_per_yolo_image": 1,
+      "bbox_area_ratio_min": 0.08,
+      "bbox_area_ratio_max": 0.7,
+      "bbox_normalized_border_margin_min": 0.02,
+      "classification_crop_must_exist": true,
+      "edge_and_subject_leakage_group_must_differ": true,
+      "edge_and_subject_image_stem_must_differ": true,
+      "reuse_any_leakage_group": false
+    },
+    "selection_algorithm": [
+      "Join manifest.csv to yolo_f train images by output_image and use leakage_group as source identity.",
+      "Parse YOLO labels and keep only the fixed eligibility cohort.",
+      "For edge candidates, sort each class by SHA256('edge|' + protocol_id + '|' + leakage_group + '|' + relative_yolo_path) and take the first two without group reuse.",
+      "For each edge candidate, sort same-class class_f candidates by SHA256('subject|' + protocol_id + '|' + edge_leakage_group + '|' + subject_leakage_group + '|' + relative_crop_path) and take the first candidate satisfying all distinctness rules.",
+      "Assign prompt template by zero-based edge rank modulo two.",
+      "Derive the per-output seed from the first unsigned 63 bits of SHA256('seed|' + protocol_id + '|' + edge_relative_path + '|' + subject_relative_path + '|' + prompt_index).",
+      "No visual cherry-picking, replacement, or regeneration is allowed after output inspection."
+    ]
+  },
+  "phase_f0_no_output": {
+    "network_allowed": true,
+    "may_generate_pixels": false,
+    "checks": [
+      "Recompute all protocol input, paper, repository, and model metadata hashes or revisions.",
+      "Create the isolated runtime without changing the TRKH training environment.",
+      "Record package versions and distribution hashes.",
+      "Download only the pinned model snapshot and then set offline/local-files-only mode.",
+      "Construct the float16 pipeline and install the primary offload hooks without calling the pipeline.",
+      "Run sample selection and write only a source manifest; do not decode validation or test pixels."
+    ],
+    "resource_gates": {
+      "d_drive_free_gib_min": 25.0,
+      "free_physical_ram_gib_min": 4.0,
+      "free_virtual_memory_gib_min": 15.0,
+      "model_snapshot_gib_max": 8.0,
+      "host_virtual_memory_fraction_max": 0.9,
+      "pipeline_load_minutes_max": 20.0,
+      "unknown_python_or_trtexec_gpu_processes_allowed": false
+    },
+    "failure_behavior": "Fail closed with no output generation. Do not loosen a gate after observing a failure."
+  },
+  "phase_f1_tiny_output": {
+    "prerequisite": "F0 passed and the selected source manifest hash is locked.",
+    "generation_order": "Ascending class index, then ascending locked edge hash rank.",
+    "first_output_resource_probe": true,
+    "resource_gates": {
+      "torch_peak_allocated_gib_max": 6.5,
+      "torch_peak_reserved_gib_max": 7.0,
+      "nvml_total_used_gib_max": 7.5,
+      "host_virtual_memory_fraction_max": 0.9,
+      "first_output_seconds_max": 180.0,
+      "ten_output_estimated_minutes_max": 30.0,
+      "cuda_oom_allowed": false,
+      "nonfinite_tensor_allowed": false
+    },
+    "fallback_behavior": "If the primary offload mode fails before a saved output, restart once with sequential CPU offload. If either mode violates a locked gate after saving an output, reject A0 without retrying parameters or seeds.",
+    "output_root": "runs\\audit_saspa_dual_view_synthetic_a0_20260723",
+    "raw_dataset_write_forbidden": true
+  },
+  "fidelity_and_leakage_gates": {
+    "train_only_reference_statistics": {
+      "pair_count_per_class": 256,
+      "pair_selection": "Deterministic SHA256 ranking from eligible non-selected train groups.",
+      "statistics": [
+        "Lab color-histogram Jensen-Shannon distance",
+        "HSV hue-histogram circular distance",
+        "local-binary-pattern texture distance",
+        "edge-density ratio"
+      ],
+      "candidate_limit": "Synthetic bbox crop versus its subject crop must remain within the class-specific 95th percentile for every statistic. Thresholds are fitted from train only."
+    },
+    "manual_blind_review": {
+      "reviewer_sees_target_label": false,
+      "reviewer_assigns_one_of_five_classes": true,
+      "minimum_correct_overall": 9,
+      "required_correct_class1": 2,
+      "maximum_severe_artifacts_overall": 1,
+      "maximum_severe_artifacts_class1": 0
+    },
+    "near_duplicate_audit": {
+      "execution_time": "After all ten outputs are final and before any downstream training.",
+      "scope": [
+        "yolo_f train",
+        "yolo_f val",
+        "yolo_f test",
+        "class_f train",
+        "class_f val",
+        "class_f test",
+        "other synthetic outputs in this A0"
+      ],
+      "exact_decoded_rgb_sha256_match_reject": true,
+      "phash_size": 8,
+      "phash_hamming_reject_max": 4,
+      "dinov2_cosine_reject_min": 0.995,
+      "validation_test_access_isolation": "The audit process may read validation/test pixels and split names only for duplicate exclusion. It writes only pass/fail, nearest path, distance, and hash. It may not expose embeddings, labels, images, or aggregate statistics to generation or training.",
+      "regenerate_rejected_output": false
+    },
+    "diversity": {
+      "source_or_subject_phash_hamming_min": 5,
+      "source_or_subject_dinov2_cosine_max": 0.994999,
+      "failure_limit": 0
+    },
+    "gate_logic": "All resource, provenance, fidelity, manual-review, diversity, and leakage gates are conjunctive."
+  },
+  "required_artifacts": [
+    "protocol copy and SHA256 lock",
+    "environment and package manifest",
+    "model snapshot manifest with file SHA256 values",
+    "locked source-selection manifest",
+    "per-output provenance JSONL",
+    "edge, subject, output, and randomized blind-review contact sheets",
+    "resource telemetry sampled during load and generation",
+    "train-only fidelity statistics and thresholds",
+    "isolated cross-split duplicate report",
+    "manual review decisions",
+    "final summary and independent replay manifest"
+  ],
+  "per_output_provenance_fields": [
+    "protocol_id",
+    "output_id",
+    "target_class_index",
+    "target_class_folder",
+    "edge_relative_path",
+    "edge_leakage_group",
+    "edge_file_sha256",
+    "edge_label_file_sha256",
+    "bbox_xywh_normalized",
+    "subject_relative_path",
+    "subject_leakage_group",
+    "subject_file_sha256",
+    "prompt_template_index",
+    "prompt_sha256",
+    "seed",
+    "generator_repository",
+    "generator_revision",
+    "runtime_versions",
+    "offload_mode",
+    "generation_seconds",
+    "torch_peak_allocated_bytes",
+    "torch_peak_reserved_bytes",
+    "nvml_peak_used_bytes",
+    "output_sha256",
+    "decoded_rgb_sha256",
+    "preprocessing_sha256",
+    "license_provenance"
+  ],
+  "downstream_policy_if_a0_passes": {
+    "next_stage": "A1 proportional train-only pool, not full train.",
+    "pool_fraction_per_class": 0.05,
+    "training_replacement_probability": 0.1,
+    "class1_global_oversampling": false,
+    "matched_real_only_equal_iteration_control": true,
+    "validation_allowed_only_after": "The full generated pool, leakage audit, fidelity audit, fixed training recipe, and matched real-only control are hash-locked.",
+    "test_allowed": false,
+    "full_train_allowed": false,
+    "current_best_command_update_allowed": false
+  },
+  "stop_conditions": [
+    "Reject if native full-GPU placement is attempted.",
+    "Reject if any raw dataset file changes.",
+    "Reject if validation/test information influences generation, filtering, thresholds, retries, or selection.",
+    "Reject if package/model/input revision differs from the lock.",
+    "Reject if both prospective offload modes fail.",
+    "Reject if any conjunctive F1 fidelity, diversity, leakage, provenance, or manual-review gate fails.",
+    "Reject rather than tuning adjacent prompts, seeds, Canny thresholds, inference steps, guidance, or duplicate thresholds after output inspection."
+  ]
+}

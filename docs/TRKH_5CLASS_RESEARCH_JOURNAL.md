@@ -20609,3 +20609,47 @@ Date: 2026-07-02
   feasibility gate and a tiny source-disjoint fidelity/XAI audit; no full
   generation, validation/test, smoke/probe/full train, or command update is
   authorized by this research screen alone.
+
+## SaSPA Dual-View Synthetic A0 Prospective Lock - 2026-07-23
+
+- Select a single SaSPA-inspired dual-view route: `yolo_f/train` full-frame
+  Canny supplies structure/context and a same-class `class_f/train` crop from a
+  different `leakage_group` supplies the subject. The edge source and subject
+  cannot share a stem or group, and no group may be reused in the ten-output
+  cohort. Deterministic SHA-256 ranking replaces manual cherry-picking.
+- Pin the official SaSPA repository at
+  `054230411863e8152ce475d48c1869e600a60f0c` (MIT), the external pretrained
+  `Salesforce/blipdiffusion-controlnet` generator at
+  `e9e2aafc154c6a9d1593c8e4fb94c6a9a8a68593` (Apache-2.0), and the
+  copy-audit-only `facebook/dinov2-small` model at
+  `ed25f3a31f01632728cabb09d1542f84ab7b0056` (Apache-2.0). DiffuseMix is not
+  selected because its repository has no explicit license, uses external
+  fractals, and applies color/style prompts that can alter ripeness semantics;
+  BOB's 400-epoch generator fine-tuning is infeasible here.
+- The SaSPA paper reports about 10 GB peak VRAM while the local RTX 4060 has
+  8,188 MiB. Forbid the official direct `.to("cuda")` path. F0/F1 may use
+  model CPU offload and exactly one pre-output sequential-offload fallback.
+  F0 cannot invoke the pipeline; F1 is limited to two outputs per class.
+- Hash-lock the accepted dataset metadata:
+  `yolo_f/data.yaml=716e33df...884ef`,
+  `canbang.yaml=05808224...b5227`, and
+  `manifest.csv=eb16e09c...2ff2`. The eligible train-only single-object paired
+  population is `[1507,347,1118,1256,764]` for classes `0..4`; no matching
+  `class_f` crop is missing.
+- Fix generation at `512x512`, FP16, 30 steps, guidance `7.5`, Canny
+  `120/200`, class-agnostic context templates, immutable prompts, and
+  hash-derived seeds. Fix F0/F1 disk, RAM, virtual-memory, load-time, latency,
+  Torch/NVML memory, and no-unknown-process stop conditions before runtime.
+- Require train-only color/texture/edge fidelity envelopes, hidden-label blind
+  review (`>=9/10`, class 1 `2/2`), immutable provenance, exact decoded-RGB
+  exclusion, pHash Hamming `>4`, and DINOv2 cosine `<0.995` against every
+  `class_f`/`yolo_f` split and every output. Validation/test pixels may appear
+  only inside the final isolated copy audit; its fixed result cannot alter or
+  regenerate an output.
+- Canonical protocol JSON SHA-256 is
+  `d32131b0d643d15bc0365abd3dd6a4772a699a4fec55ebb600cbc7dcfb150155`;
+  readable Markdown SHA-256 is
+  `5dab3ed24c051dff8be42f776340df3db5f16d277506a5b0bcbb712041003016`.
+  At lock time no synthetic pixel has been generated, validation/test is
+  unopened, production code/checkpoints are unchanged, and current-best
+  command/history hashes remain unchanged.
