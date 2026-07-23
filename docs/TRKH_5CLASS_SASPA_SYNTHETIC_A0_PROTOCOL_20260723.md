@@ -42,6 +42,24 @@ direct `.to("cuda")` path is forbidden. The only prospective runtime ladder is:
 
 No third mode or post-output resource tuning is allowed.
 
+## Prospective Runtime Correction
+
+Revision 2 replaces only the pre-F0 runtime. A first isolated engineering
+import showed that `diffusers==0.32.2` reaches a quantizer path referencing
+`torch.float8_e4m3fn`, which does not exist in the initially recorded
+`torch==2.0.1+cu118`. Inheriting global site packages also exposed unrelated
+dependency conflicts.
+
+The corrected runtime is a fully isolated Python 3.11.9 venv with its own
+`torch==2.6.0+cu124` and `torchvision==0.21.0+cu124`. It passed `pip check`,
+CUDA discovery, and import of `BlipDiffusionControlNetPipeline`. It does not
+inherit from or modify `D:\DataAI\.venv`.
+
+This correction occurred before model download, pipeline construction, source
+selection, validation/test access, or synthetic-pixel generation. It does not
+change the dataset hashes, generator/model revision, prompts, seeds, ten-output
+cohort, resource/fidelity/leakage gates, or downstream policy.
+
 ## External-Evidence Screen
 
 ### SaSPA: selected

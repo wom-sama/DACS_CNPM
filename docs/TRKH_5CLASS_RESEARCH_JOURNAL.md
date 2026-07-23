@@ -20646,10 +20646,31 @@ Date: 2026-07-02
   `class_f`/`yolo_f` split and every output. Validation/test pixels may appear
   only inside the final isolated copy audit; its fixed result cannot alter or
   regenerate an output.
-- Canonical protocol JSON SHA-256 is
-  `d32131b0d643d15bc0365abd3dd6a4772a699a4fec55ebb600cbc7dcfb150155`;
-  readable Markdown SHA-256 is
-  `5dab3ed24c051dff8be42f776340df3db5f16d277506a5b0bcbb712041003016`.
-  At lock time no synthetic pixel has been generated, validation/test is
-  unopened, production code/checkpoints are unchanged, and current-best
-  command/history hashes remain unchanged.
+- Revision-1 protocol JSON/Markdown SHA-256 values were
+  `d32131b0...150155`/`5dab3ed2...03016`. They were superseded prospectively
+  by the runtime-only correction below. At lock time no synthetic pixel had
+  been generated, validation/test was unopened, production code/checkpoints
+  were unchanged, and current-best command/history hashes remained unchanged.
+
+## SaSPA A0 Runtime-Only Prospective Correction - 2026-07-23
+
+- Reject the initially recorded Python 3.11 plus `torch==2.0.1+cu118`
+  environment before F0. `diffusers==0.32.2` imports a quantizer path that
+  references `torch.float8_e4m3fn`, which torch 2.0.1 does not expose.
+  `--system-site-packages` also inherited unrelated `gradio`/OpenCV dependency
+  conflicts, so that environment is not reproducible enough for formal use.
+- Build a separate, fully isolated Python 3.11.9 environment at
+  `D:\DataAI\Tools\venvs\trkh_saspa_a0_torch26` with its own
+  `torch==2.6.0+cu124` and `torchvision==0.21.0+cu124`. It passes `pip check`,
+  CUDA discovery, and import of `BlipDiffusionControlNetPipeline` with the
+  locked Diffusers/Transformers/Accelerate stack. `D:\DataAI\.venv` is not
+  modified or inherited.
+- This is a prospective compatibility correction before model download,
+  pipeline construction, source selection, validation/test access, or
+  synthetic-pixel generation. Dataset/model revisions, prompts, seeds,
+  generation settings, the ten-output cohort, all scientific gates, and
+  downstream authorization are byte-for-byte unchanged in meaning.
+- Revision-2 canonical JSON/Markdown SHA-256 values are
+  `81e479b68d22daebed769c31e43b378a96a6c14c1d183545398658100ca77477` /
+  `ae2f390246c62994fdaa2ccdedf3308defff7dd278a47f4ad88e987f6ed76167`.
+  No current-best command/history update is authorized.

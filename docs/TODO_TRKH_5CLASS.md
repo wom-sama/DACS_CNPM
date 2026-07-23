@@ -4526,8 +4526,9 @@
   originals with `blockers=[]` and `103.301 GiB` free. Keep all nine JPEG-DL
   payloads (`2.614 MiB`); summary SHA is `6254ef69...f8008d`.
 - [x] Write and hash-lock the SaSPA-inspired dual-view synthetic leakage and
-  fidelity A0 before generation. The canonical JSON/Markdown SHAs are
-  `d32131b0...150155`/`5dab3ed2...03016`. The lock fixes immutable train-only
+  fidelity A0 before generation. Revision 2 corrects only the pre-F0 isolated
+  runtime; canonical JSON/Markdown SHAs are
+  `81e479b6...77477`/`ae2f3902...76167`. The lock fixes immutable train-only
   source selection, full-frame Canny plus source-disjoint crop conditioning,
   ten outputs, generator/DINO revisions, provenance, resource/fidelity/blind-
   review gates, and exact/pHash/embedding exclusion against every split. No

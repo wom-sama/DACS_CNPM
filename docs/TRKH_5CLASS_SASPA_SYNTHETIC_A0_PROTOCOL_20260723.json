@@ -1,5 +1,6 @@
 {
   "schema_version": 1,
+  "protocol_revision": 2,
   "protocol_id": "trkh_saspa_dual_view_synthetic_a0_20260723",
   "created_local_date": "2026-07-23",
   "lock_state": "prospective_pre_generation",
@@ -90,15 +91,28 @@
     "offline_after_snapshot": true,
     "runtime": {
       "python": "3.11.9",
-      "torch": "2.0.1+cu118",
-      "torchvision": "0.15.2+cu118",
+      "torch": "2.6.0+cu124",
+      "torchvision": "0.21.0+cu124",
       "diffusers": "0.32.2",
       "transformers": "4.48.3",
       "accelerate": "1.3.0",
       "huggingface_hub": "0.28.1",
       "tokenizers": "0.21.0",
       "safetensors": "0.5.2",
-      "environment_policy": "isolated venv with system torch/torchvision; do not modify D:\\DataAI\\.venv"
+      "numpy": "1.26.4",
+      "einops": "0.8.1",
+      "sentencepiece": "0.2.0",
+      "opencv_python_headless": "4.8.1.78",
+      "psutil": "7.2.2",
+      "setuptools": "69.5.1",
+      "environment_root": "D:\\DataAI\\Tools\\venvs\\trkh_saspa_a0_torch26",
+      "environment_policy": "fully isolated venv with its own CUDA torch/torchvision; do not modify or inherit packages from D:\\DataAI\\.venv or global site-packages",
+      "pre_f0_engineering_correction": {
+        "superseded_runtime": "Python 3.11.9, torch 2.0.1+cu118, torchvision 0.15.2+cu118, system-site-packages inheritance",
+        "observed_failure": "diffusers 0.32.2 imports a quantizer path that references torch.float8_e4m3fn, which is absent in torch 2.0.1; inherited unrelated global packages also fail pip check",
+        "correction_scope": "Runtime compatibility and isolation only. Dataset, source selection, model revision, prompts, seeds, generation settings, outputs, gates, and downstream policy are unchanged.",
+        "pixel_or_model_access_before_correction": false
+      }
     },
     "inference": {
       "dtype": "float16",
