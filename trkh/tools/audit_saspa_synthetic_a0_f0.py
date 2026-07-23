@@ -867,6 +867,43 @@ def _nvidia_snapshot() -> Dict[str, object]:
     }
 
 
+def _is_known_venv_redirector(
+    candidate: Mapping[str, object],
+    *,
+    current_parent_pid: int,
+    current_command_line: Sequence[str],
+    current_create_time: float,
+    runtime_prefix: Path,
+) -> bool:
+    if int(candidate["pid"]) != int(current_parent_pid):
+        return False
+    if str(candidate.get("name") or "").lower() not in (
+        "python.exe",
+        "pythonw.exe",
+    ):
+        return False
+    executable = candidate.get("exe")
+    if not executable:
+        return False
+    expected = runtime_prefix / "Scripts" / "python.exe"
+    if os.path.normcase(os.path.abspath(str(executable))) != os.path.normcase(
+        os.path.abspath(str(expected))
+    ):
+        return False
+    candidate_command_line = [
+        str(value) for value in candidate.get("cmdline") or ()
+    ]
+    if candidate_command_line[1:] != [
+        str(value) for value in current_command_line[1:]
+    ]:
+        return False
+    candidate_create_time = float(candidate.get("create_time") or 0.0)
+    return (
+        candidate_create_time <= current_create_time
+        and current_create_time - candidate_create_time <= 10.0
+    )
+
+
 def resource_snapshot() -> Dict[str, object]:
     import psutil
 
@@ -875,9 +912,13 @@ def resource_snapshot() -> Dict[str, object]:
     virtual_total = int(physical.total + swap.total)
     virtual_free = int(physical.available + swap.free)
     process = psutil.Process()
+    current_command_line = process.cmdline()
+    current_create_time = process.create_time()
+    current_parent_pid = process.ppid()
     external_workflows = []
+    allowed_runtime_launchers = []
     for item in psutil.process_iter(
-        attrs=("pid", "name", "create_time", "cmdline")
+        attrs=("pid", "name", "exe", "create_time", "cmdline")
     ):
         try:
             name = str(item.info["name"] or "").lower()
@@ -885,10 +926,29 @@ def resource_snapshot() -> Dict[str, object]:
                 continue
             if int(item.info["pid"]) == os.getpid():
                 continue
+            if _is_known_venv_redirector(
+                item.info,
+                current_parent_pid=current_parent_pid,
+                current_command_line=current_command_line,
+                current_create_time=current_create_time,
+                runtime_prefix=Path(sys.prefix),
+            ):
+                allowed_runtime_launchers.append(
+                    {
+                        "pid": int(item.info["pid"]),
+                        "name": item.info["name"],
+                        "executable": item.info["exe"],
+                        "create_time": item.info["create_time"],
+                        "command_line": list(item.info["cmdline"] or ()),
+                        "reason": "exact Windows venv redirector parent for this invocation",
+                    }
+                )
+                continue
             external_workflows.append(
                 {
                     "pid": int(item.info["pid"]),
                     "name": item.info["name"],
+                    "executable": item.info["exe"],
                     "create_time": item.info["create_time"],
                     "command_line": list(item.info["cmdline"] or ()),
                 }
@@ -913,6 +973,7 @@ def resource_snapshot() -> Dict[str, object]:
         "d_drive_free_bytes": int(disk.free),
         "process_rss_bytes": int(memory.rss),
         "process_vms_bytes": int(memory.vms),
+        "allowed_runtime_launchers": allowed_runtime_launchers,
         "external_python_or_trtexec": external_workflows,
         "nvidia": _nvidia_snapshot(),
     }

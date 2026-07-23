@@ -201,6 +201,50 @@ def test_f0_resource_gates_are_conjunctive() -> None:
     assert rejected["checks"]["no_unknown_python_or_trtexec"] is False
 
 
+def test_only_exact_venv_redirector_parent_is_allowed(tmp_path: Path) -> None:
+    runtime = tmp_path / "runtime"
+    executable = runtime / "Scripts" / "python.exe"
+    current_command = [
+        str(tmp_path / "base-python.exe"),
+        "-m",
+        "trkh.tools.audit_saspa_synthetic_a0_f0",
+        "--formal-f0",
+    ]
+    candidate = {
+        "pid": 40,
+        "name": "python.exe",
+        "exe": str(executable),
+        "create_time": 100.0,
+        "cmdline": [str(executable)] + current_command[1:],
+    }
+    assert audit._is_known_venv_redirector(
+        candidate,
+        current_parent_pid=40,
+        current_command_line=current_command,
+        current_create_time=101.0,
+        runtime_prefix=runtime,
+    )
+    wrong_pid = dict(candidate, pid=41)
+    assert not audit._is_known_venv_redirector(
+        wrong_pid,
+        current_parent_pid=40,
+        current_command_line=current_command,
+        current_create_time=101.0,
+        runtime_prefix=runtime,
+    )
+    wrong_command = dict(
+        candidate,
+        cmdline=[str(executable), "-m", "unrelated.training"],
+    )
+    assert not audit._is_known_venv_redirector(
+        wrong_command,
+        current_parent_pid=40,
+        current_command_line=current_command,
+        current_create_time=101.0,
+        runtime_prefix=runtime,
+    )
+
+
 def test_f0_pipeline_loader_has_no_generation_call() -> None:
     source = inspect.getsource(audit._load_pipeline_no_output)
     assert "BlipDiffusionControlNetPipeline.from_pretrained" in source

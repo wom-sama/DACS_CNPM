@@ -4539,10 +4539,16 @@
   VS Code-safe launchers, package/model/source manifests, resource/process
   gates, model-CPU-offload construction, fail-closed summary, independent
   replay, and deterministic train-only selector. Focused/full tests pass
-  `6/6` and `1782/1782`; PowerShell setup/preflight passes. The final
+  `7/7` and `1783/1783`; PowerShell setup/preflight passes. The final
   pre-formal cohort SHA is `206ff06b...fa28b` over ten rows and 20 unique
   leakage groups. Model pixels, validation/test, and generation remain
   unopened.
+- [x] Preserve the first formal F0 fail-closed artifact at SHA
+  `e2ecc58e...c2ee2`. The no-unknown-process gate correctly stopped before
+  model download, but classified the exact Windows venv redirector parent as
+  external. Allow only the parent PID whose executable, command tail, and
+  creation time exactly match the current isolated invocation; keep every
+  other Python/TensorRT process rejected. Add positive and adversarial tests.
 - [ ] Run the RTX 4060 8-GB F0 no-output gate from the clean pushed lock. Only
   if model CPU offload, package/model hashes, deterministic source selection,
   resource ceilings, and pipeline construction all pass may F1 invoke the

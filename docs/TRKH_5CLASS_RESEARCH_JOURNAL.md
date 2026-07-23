@@ -20710,3 +20710,29 @@ Date: 2026-07-02
   unopened, raw data and production code are unchanged, and current-best
   command/history content remains unchanged. Formal F0 must run only after
   this infrastructure is committed and pushed from a clean tracked state.
+
+## SaSPA F0 Windows Redirector Fail-Closed - 2026-07-23
+
+- The first clean-pushed formal invocation stops at the initial resource gate
+  before package hashing, model metadata access, snapshot download, pipeline
+  construction, or pixel generation. All disk/RAM/virtual-memory checks pass;
+  only `no_unknown_python_or_trtexec` fails.
+- Root cause is the standard Windows venv redirector pair. The visible
+  `D:\DataAI\Tools\venvs\trkh_saspa_a0_torch26\Scripts\python.exe` remains as
+  the direct parent while the base Python 3.11 process executes the module.
+  The original gate treated that exact parent as an unrelated workflow.
+- Preserve the 952-byte fail-closed record at
+  `runs\audit_saspa_dual_view_synthetic_a0_f0_processgate_fail_20260723`
+  with SHA-256
+  `e2ecc58ef5d9a0ff9d9b510db018de4f395fac6741b7c7a5454dc81d31bc2ee2`.
+  It records `pipeline_invoked=false`, `synthetic_pixels_generated=false`,
+  and `f1_authorized=false`; the pinned model cache did not yet exist.
+- Correct only process identity handling. Permit one Python process iff it is
+  the current PID's direct parent, its executable is exactly the isolated
+  venv redirector, its command tail is identical, and its creation time is
+  within ten seconds before the child. Unknown PID, command, executable, or
+  TensorRT cases remain rejected.
+- Isolated live inspection now reports the redirector under
+  `allowed_runtime_launchers` and no external workflow. Focused/full tests
+  pass `7/7` and `1783/1783`. Do not lower the locked 4-GiB physical-RAM gate;
+  wait for post-test memory recovery before the next formal attempt.
