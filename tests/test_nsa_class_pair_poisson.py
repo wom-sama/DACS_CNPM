@@ -14,6 +14,7 @@ from trkh.tools.nsa_class_pair_poisson import (
     TargetGeometry,
     array_sha256,
     deterministic_deranged_queries,
+    exclude_entering_chromatic_occluders,
     geometry_sha256,
     make_poisson_view,
     map_summaries,
@@ -280,3 +281,20 @@ def test_preview_plan_is_fixed_distinct_and_source_disjoint() -> None:
         }
         assert target_source not in same_sources
         assert target_source not in cross_sources
+
+
+def test_occluder_filter_removes_only_entering_component() -> None:
+    rgb = np.zeros((80, 80, 3), dtype=np.uint8)
+    rgb[:] = np.array([80, 170, 70], dtype=np.uint8)
+    support = np.zeros((80, 80), dtype=bool)
+    support[20:65, 20:65] = True
+    hand_color = np.array([180, 138, 157], dtype=np.uint8)
+    rgb[25:50, 0:32] = hand_color
+    rgb[52:59, 52:59] = hand_color
+    final, record = exclude_entering_chromatic_occluders(rgb, support)
+    assert record["selected_component_count"] == 1
+    assert record["excluded_support_pixels"] > 0
+    assert not final[30:45, 20:30].any()
+    assert final[52:59, 52:59].all()
+    assert final[30, 40]
+    assert final.sum() < support.sum()

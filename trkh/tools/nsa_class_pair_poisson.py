@@ -121,6 +121,90 @@ def geometry_sha256(geometry: PoissonGeometry) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
+def exclude_entering_chromatic_occluders(
+    rgb: np.ndarray,
+    support: np.ndarray,
+) -> Tuple[np.ndarray, Dict[str, object]]:
+    image = _validate_rgb(rgb, "occluder_rgb")
+    base = _as_bool_mask(support)
+    if image.shape[:2] != base.shape:
+        raise ValueError("occluder RGB and support shapes differ")
+    hue, saturation, _value = cv2.split(cv2.cvtColor(image, cv2.COLOR_RGB2HSV))
+    luminance, red_chroma, blue_chroma = cv2.split(
+        cv2.cvtColor(image, cv2.COLOR_RGB2YCrCb)
+    )
+    chromatic = (
+        (luminance >= 70)
+        & (red_chroma >= 138)
+        & (red_chroma <= 175)
+        & (blue_chroma >= 105)
+        & (blue_chroma <= 135)
+        & (saturation <= 120)
+        & ((hue <= 18) | (hue >= 160))
+    )
+    component_count, labels, statistics, _centroids = cv2.connectedComponentsWithStats(
+        chromatic.astype(np.uint8),
+        connectivity=8,
+    )
+    selected_labels = []
+    component_records = []
+    for label in range(1, int(component_count)):
+        component = labels == label
+        inside = int(np.count_nonzero(component & base))
+        outside = int(np.count_nonzero(component & ~base))
+        total = int(inside + outside)
+        outside_fraction = float(outside / total) if total else 0.0
+        selected = bool(
+            inside >= 20 and total >= 50 and outside_fraction >= 0.35
+        )
+        if selected:
+            selected_labels.append(label)
+        if inside > 0 or selected:
+            component_records.append(
+                {
+                    "label": label,
+                    "inside_support_pixels": inside,
+                    "outside_support_pixels": outside,
+                    "total_pixels": total,
+                    "outside_fraction": outside_fraction,
+                    "selected": selected,
+                    "left": int(statistics[label, cv2.CC_STAT_LEFT]),
+                    "top": int(statistics[label, cv2.CC_STAT_TOP]),
+                    "width": int(statistics[label, cv2.CC_STAT_WIDTH]),
+                    "height": int(statistics[label, cv2.CC_STAT_HEIGHT]),
+                }
+            )
+    selected = np.isin(labels, selected_labels)
+    dilated = cv2.dilate(
+        selected.astype(np.uint8),
+        np.ones((7, 7), dtype=np.uint8),
+        iterations=1,
+    ).astype(bool)
+    exclusion = dilated & base
+    final = base & ~exclusion
+    if int(final.sum()) < 64:
+        raise RuntimeError("occluder exclusion leaves fewer than 64 support pixels")
+    return np.ascontiguousarray(final), {
+        "base_support_pixels": int(base.sum()),
+        "chromatic_pixels": int(chromatic.sum()),
+        "component_count": int(component_count - 1),
+        "selected_component_count": len(selected_labels),
+        "selected_labels": selected_labels,
+        "selected_component_pixels": int(selected.sum()),
+        "excluded_support_pixels": int(exclusion.sum()),
+        "final_support_pixels": int(final.sum()),
+        "excluded_support_fraction": float(exclusion.sum() / base.sum()),
+        "base_support_sha256": array_sha256(base),
+        "chromatic_mask_sha256": array_sha256(chromatic),
+        "selected_component_mask_sha256": array_sha256(selected),
+        "dilated_exclusion_sha256": array_sha256(dilated),
+        "final_support_sha256": array_sha256(final),
+        "components": component_records,
+        "selected_component_mask": np.ascontiguousarray(selected),
+        "dilated_exclusion_mask": np.ascontiguousarray(dilated),
+    }
+
+
 def _as_bool_mask(mask: np.ndarray) -> np.ndarray:
     value = np.asarray(mask, dtype=bool)
     if value.ndim != 2 or not bool(value.any()):

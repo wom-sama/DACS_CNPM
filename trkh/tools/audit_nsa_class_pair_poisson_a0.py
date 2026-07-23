@@ -29,6 +29,7 @@ from trkh.tools.nsa_class_pair_poisson import (
     PoissonView,
     TargetGeometry,
     array_sha256,
+    exclude_entering_chromatic_occluders,
     geometry_sha256,
     make_poisson_view,
     rng_snapshot,
@@ -85,7 +86,7 @@ LOCKED = {
     "data": "716e33df24c63a9e9920f97b685199707fb84ab4c7154544f5dd9a3e00d884ef",
     "cidt_summary": "d4891edf2963ab12385b7ce5bdc812ec3e19c5c098acd25c66eb557af541d7ad",
     "cidt_predictions": "2e0993752d58d99ea429bfefe1e2bfe6fa949e45aea1a26cc4bdfee97d4db21c",
-    "protocol": "03df792f26f60e47ff709095960b7650664fecc2fcc9a73bbe6efaa1e4273e7e",
+    "protocol": "8647a74d5a3941570ab1e91e0feb63bdbaccc2cee106612a8989d2c447380290",
     "paper": "fdd14c4ee81f353d6f279f71b9516825fd84e4f603b050dc869db03dba474e44",
     "supplement": "5804ae0202b74149441baee1151d52da83fc1864a454e17fedcdfaaacf8d32da",
     "nsa_license": "7f86283e43b5c69fe93ff2c73ddb2bd89f1dbb718995ece3a7b5fa41b2435aaa",
@@ -356,12 +357,20 @@ def _load_preview_sample(
         metadata["crop_bbox"],
         metadata["image_mask"],
     )
+    rgb = _tensor_rgb_uint8(tensor, semantics)
+    base_support = support.numpy().astype(bool)
+    final_support, exclusion = exclude_entering_chromatic_occluders(
+        rgb,
+        base_support,
+    )
     return {
         "tensor": tensor,
         "label": int(label),
         "metadata": metadata,
-        "rgb": _tensor_rgb_uint8(tensor, semantics),
-        "support": support.numpy().astype(bool),
+        "rgb": rgb,
+        "base_support": base_support,
+        "support": final_support,
+        "occluder_exclusion": exclusion,
     }
 
 
@@ -458,7 +467,8 @@ def render_preview_contact_sheet(
     tile = 144
     label_height = 40
     headers = (
-        "target/support",
+        "target/base support",
+        "target/excluded",
         "same donor",
         "same Poisson",
         "cross donor",
@@ -477,8 +487,14 @@ def render_preview_contact_sheet(
         images = [
             _mask_overlay(
                 np.asarray(visual["target_rgb"]),
-                np.asarray(visual["target_support"]),
+                np.asarray(visual["target_base_support"]),
                 color=(20, 220, 60),
+            ),
+            _mask_overlay(
+                np.asarray(visual["target_rgb"]),
+                np.asarray(visual["target_exclusion"]),
+                color=(255, 30, 30),
+                alpha=0.65,
             ),
             _draw_geometry(
                 _mask_overlay(
@@ -666,6 +682,60 @@ def run_geometry_preview(args: argparse.Namespace) -> Dict[str, object]:
             "target_support_pixels": int(np.asarray(target["support"]).sum()),
             "same_support_pixels": int(np.asarray(same["support"]).sum()),
             "cross_support_pixels": int(np.asarray(cross["support"]).sum()),
+            "target_base_support_pixels": int(
+                target["occluder_exclusion"]["base_support_pixels"]
+            ),
+            "target_excluded_support_pixels": int(
+                target["occluder_exclusion"]["excluded_support_pixels"]
+            ),
+            "target_selected_occluder_components": int(
+                target["occluder_exclusion"]["selected_component_count"]
+            ),
+            "target_base_support_sha256": str(
+                target["occluder_exclusion"]["base_support_sha256"]
+            ),
+            "target_exclusion_sha256": str(
+                target["occluder_exclusion"]["dilated_exclusion_sha256"]
+            ),
+            "target_final_support_sha256": str(
+                target["occluder_exclusion"]["final_support_sha256"]
+            ),
+            "same_base_support_pixels": int(
+                same["occluder_exclusion"]["base_support_pixels"]
+            ),
+            "same_excluded_support_pixels": int(
+                same["occluder_exclusion"]["excluded_support_pixels"]
+            ),
+            "same_selected_occluder_components": int(
+                same["occluder_exclusion"]["selected_component_count"]
+            ),
+            "same_base_support_sha256": str(
+                same["occluder_exclusion"]["base_support_sha256"]
+            ),
+            "same_exclusion_sha256": str(
+                same["occluder_exclusion"]["dilated_exclusion_sha256"]
+            ),
+            "same_final_support_sha256": str(
+                same["occluder_exclusion"]["final_support_sha256"]
+            ),
+            "cross_base_support_pixels": int(
+                cross["occluder_exclusion"]["base_support_pixels"]
+            ),
+            "cross_excluded_support_pixels": int(
+                cross["occluder_exclusion"]["excluded_support_pixels"]
+            ),
+            "cross_selected_occluder_components": int(
+                cross["occluder_exclusion"]["selected_component_count"]
+            ),
+            "cross_base_support_sha256": str(
+                cross["occluder_exclusion"]["base_support_sha256"]
+            ),
+            "cross_exclusion_sha256": str(
+                cross["occluder_exclusion"]["dilated_exclusion_sha256"]
+            ),
+            "cross_final_support_sha256": str(
+                cross["occluder_exclusion"]["final_support_sha256"]
+            ),
             "same_geometry_sha256": geometry_sha256(same_view.geometry),
             "cross_geometry_sha256": geometry_sha256(cross_view.geometry),
             "same_composite_sha256": array_sha256(same_view.composite_rgb),
@@ -688,7 +758,12 @@ def run_geometry_preview(args: argparse.Namespace) -> Dict[str, object]:
         visual_rows.append(
             {
                 "target_rgb": target["rgb"],
+                "target_base_support": target["base_support"],
                 "target_support": target["support"],
+                "target_exclusion": target["occluder_exclusion"][
+                    "dilated_exclusion_mask"
+                ]
+                & target["base_support"],
                 "same_rgb": same["rgb"],
                 "same_support": same["support"],
                 "cross_rgb": cross["rgb"],
@@ -734,9 +809,9 @@ def run_geometry_preview(args: argparse.Namespace) -> Dict[str, object]:
         "global_rng_unchanged": rng_snapshot_equal(before_rng, after_rng),
         "keeper_checkpoint_not_loaded": True,
         "model_forward_count_zero": True,
-        "validation_split_used": False,
-        "test_split_used": False,
-        "raw_dataset_modified": False,
+        "validation_split_unused": True,
+        "test_split_unused": True,
+        "raw_dataset_unchanged": True,
     }
     summary = {
         "mode": f"{METHOD}_geometry_preview",
