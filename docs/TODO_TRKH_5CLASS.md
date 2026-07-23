@@ -4657,9 +4657,22 @@
   Post-cleanup retention passes `845` run directories with `blockers=[]` and
   `89.204 GiB` free; compile, pyflakes, focused, and full tests pass
   `9/9` and `1825/1825`.
-- [ ] Screen the next licensed, accepted-primary, equation-distinct route
+- [x] Screen the next licensed, accepted-primary, equation-distinct route
   whose perturbation has structured surface/lesion semantics rather than
   unconstrained pixel noise. Reject KeepAugment/AugMax/PRIME before code
   unless a new class-pair causal target makes them distinct; require a
   train-only source-held placebo, class-1 precision gain with explicit TP
   budget, fixed visual/XAI evidence, and no global class-1 oversampling.
+- [x] Select the ECCV-2022 NSA source-gradient Poisson equation after
+  rejecting exact DRAEM, SimpleNet, and diffusion anomaly recipes. Lock the
+  independent class-pair adaptation before implementation at
+  `docs/TRKH_5CLASS_NSA_CLASS_PAIR_POISSON_A0_PROTOCOL_20260724.md`, SHA-256
+  `03df792f26f60e47ff709095960b7650664fecc2fcc9a73bbe6efaa1e4273e7e`.
+  Keep raw data immutable and use only fit-fold `yolo_f/train` target/donor
+  tensors; no validation/test construction or five-class synthetic labels.
+- [ ] Implement and test the locked geometry preview, frozen-stem
+  query-conditioned adapter, clean-only/no-query/permuted-query controls,
+  source-held readouts, fixed mismatch-map sheet, replay, and manifest.
+- [ ] Run the 24-row geometry-only preview before loading the keeper. Commit
+  any strictly geometric erratum before metric access; otherwise run the sole
+  two-epoch-per-fold A0 and enforce every class-1 TP/FP causal gate.

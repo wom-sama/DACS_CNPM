@@ -21093,3 +21093,47 @@ Date: 2026-07-02
   temporary LibreOffice profile under a separate manifest. This removes
   180 temporary files (`11,211,374` bytes) while retaining the final PDF,
   page rasters, accessibility report, source JSON, builder, and DOCX.
+
+## NSA Class-Pair Poisson A0 Prospective Lock - 2026-07-24
+
+- Re-screen structured synthetic anomaly methods against the complete
+  no-repeat matrix and the newly explicit permission for train-derived
+  synthetic data. Exact DRAEM is rejected because its official recipe uses
+  external DTD textures, a large reconstruction/segmentation stack, and 700
+  epochs. SimpleNet and recent diffusion anomaly routes require pretrained or
+  external representations and overlap closed hyperspherical/SaSPA evidence.
+- Select the accepted ECCV-2022 NSA source-gradient Poisson equation. Pin the
+  authors' MIT repository at commit
+  `919591685307ce030fe27cb77687509dc277189c`, tree
+  `6eebd6e9d7ce9ff77d7d0aa9a2640da7f304cd06`; paper/supplement/license/
+  official-task SHAs are `fdd14c4e...74e44`,
+  `5804ae02...32da`, `7f86283e...5aaa`, and
+  `14f75136...4552`.
+- Do not reproduce the original 320/560-epoch anomaly detector. The locked
+  TRKH adaptation uses the frozen keeper stem and a small class-query local
+  mismatch head for two epochs per source fold. Same-class Poisson composites
+  are zero-mask artefact controls, cross-class composites use the official
+  Hazelnut logistic-intensity target, and clean true/all-false queries expose
+  whether the head learns class compatibility.
+- Prospectively lock
+  `docs/TRKH_5CLASS_NSA_CLASS_PAIR_POISSON_A0_PROTOCOL_20260724.md` at SHA-256
+  `03df792f26f60e47ff709095960b7650664fecc2fcc9a73bbe6efaa1e4273e7e`
+  before generator code, pixel preview, keeper forward, adapter training, or
+  candidate metric access.
+- The only authorized data are source-held `yolo_f/images/train` tensors.
+  Fit panels downsample majority classes without duplicating class 1; every
+  donor and target stays in the fit folds and has a different source stem.
+  Validation/test pixels, labels, prompts, embeddings, checkpoints, and
+  statistics are forbidden. Raw `class_f`/`yolo_f` files remain immutable.
+- Require clean-only, no-query, and independently permuted-query heads with
+  matched capacity and optimizer steps. Candidate promotion requires OOF
+  AUROC `>=0.855`, explicit gains over all controls, class-1 TP retention
+  `>=0.98`, restricted-FP rejection `>=0.12`, source-fold stability, causal
+  query use, fixed maps, exact replay, and visual rejection of seam/background
+  shortcuts.
+- Current-best command/history remain byte-identical at
+  `36b9aa1a21b765829acf4c8321be147bd76297de4ccdb8a40e6dee8e37940faf`
+  and
+  `39bd2879ce66fddf36a953021ea1e40f8d9de6cb4334b9b825011b2b8dc98f53`.
+  No validation/test access, trainer integration, smoke/probe/full train, or
+  command promotion is authorized by this protocol lock.
