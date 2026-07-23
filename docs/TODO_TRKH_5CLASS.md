@@ -4582,8 +4582,84 @@
   `cf9046c9...e257a`/`682f2c8b...aa712`/`27beea01...836ba`/
   `57003d4a...5dd63`. F1 is authorized only for the locked ten images
   (`2` per class); no improvement/training/current-command claim is authorized.
-- [ ] If all ten F1 outputs pass resource, class-fidelity, blind-review,
-  exact/pHash/DINO duplicate, provenance, and fixed XAI checks, prospectively
-  lock an A1 pool at `5%` independently per class and compare it with a matched
-  real-only equal-iteration control. Do not open validation/test metrics,
-  smoke/probe/full train, or command promotion before every prior gate passes.
+- [x] Run the locked SaSPA F1 generation once from clean pushed code. The
+  isolated model-CPU-offload worker produces exactly ten outputs with no
+  fallback; generation/replay and resource/provenance checks pass. Preserve
+  summary/manifest/replay/final-manifest SHAs
+  `b5d45349...3fdf88`/`e44b7465...edd5e4`/
+  `93bf7a33...4f237`/`ce3254ed...2d4fe`.
+- [x] Reject F1 before A1 or training. Locked class-specific fidelity passes
+  `0/10`; blind review passes only `7/10`, class 1 `1/2`, with `4` severe
+  artifacts overall and `1` for class 1. Do not relax thresholds, blind
+  limits, prompt, seed, steps/guidance, or synthetic ratio after seeing the
+  outputs.
+- [x] Complete the isolated all-split duplicate audit without retaining
+  reference pixels, embeddings, labels, or aggregates. All ten outputs pass
+  exact decoded-RGB, pHash Hamming `>4`, and DINOv2 cosine `<0.995` against
+  `24,996` references; all 45 synthetic pairs also pass. This proves
+  non-duplication, not class fidelity.
+- [x] Run the frozen keeper Grad-CAM, input-gradient, background-gray/blur,
+  and object-desaturation audit on all ten outputs after prior decisions were
+  fixed. Keeper accuracy is `6/10`, class 1 `1/2`, class 2 `0/2`; mean
+  Grad-CAM/input-gradient bbox mass is `0.40158/0.39721`. Only `4/10`
+  Grad-CAM maps place at least half their mass inside the locked bbox, and all
+  top-1 confidences are below `0.4`.
+- [x] Finalize and replay SaSPA F1 as `Rejected`. Final
+  summary/replay/manifest SHAs are
+  `44d95687...5c9f4`/`507e64f6...607e2`/
+  `509ef679...bc98a`; failures are exactly fidelity and blind review.
+  A1, trainer integration, validation/test, smoke/probe/full train, and
+  current-best command/history updates remain unauthorized.
+- [x] Screen the next licensed, equation-distinct train-only route that
+  preserves real mango pixels and labels rather than asking diffusion to
+  reconstruct fine-grained maturity/lesion semantics. Prospectively require
+  a source-held causal control, class-1 TP protection, restricted-FP
+  rejection, no global class-1 oversampling, and no validation/test access
+  before implementation or candidate metrics.
+- [x] Select the NeurIPS-2022 LP-A3 hard-positive equation after rejecting
+  KeepAugment as too close to closed saliency-view work and AugMax/PRIME as
+  too close to closed AugMix/photometric robustness. Record that the official
+  LP-A3 repository exposed no visible license; independently implement only
+  the paper equation and do not copy, import, or vendor its code.
+- [x] Prospectively lock the train-only LP-A3-inspired A0 at
+  `docs/TRKH_LPA3_HARD_POSITIVE_A0_PROTOCOL_20260724.md`. Keep the same
+  eroded bbox and RGB `2/255` radius as FriendlyAdv, use five projected
+  pooled-feature steps with true-label log-probability drop at most `0.05`,
+  and require matched random-feasible and feature-only controls.
+- [x] Implement the isolated hard-positive primitive, train-only source-fold
+  auditor, deterministic replay, fixed clean/candidate/control delta sheet,
+  hash-locked manual finalizer, and nine focused tests. Do not wire production
+  trainer/config/launcher flags before A0 passes.
+- [x] Run the sole full A0 over all `9,215` train rows and the locked
+  `734`-row cohort (`256` class-1 TP, `256` near-boundary clean rivals, all
+  `222` restricted FP). Validation/test are never built; source crossings,
+  replay error, outside-mask delta, and candidate constraint violations are
+  all zero.
+- [x] Reject LP-A3-inspired hard positives after only `19/23` automated gates
+  pass. Candidate TP/rival retention/FP rejection is
+  `0.992188/0.964844/0.031532`; it removes seven restricted FP but creates
+  nine and breaks two class-1 TP. Source-fold stability is only `3/5`.
+- [x] Record the causal and visual failure. Candidate and feature-only differ
+  on only `6/734` rows and have identical TP retention and FP rejection;
+  fixed amplified deltas are dense high-frequency bbox speckle rather than
+  stable lesion, ripeness, stem, or boundary evidence. Close nearby epsilon,
+  steps, label margin, lambda schedule, initial noise, pooled layer, and bbox
+  erosion variants.
+- [x] Preserve final summary/rows/contact/visual/decision/manifest SHAs
+  `7ea4683b...d0d1b57`/`bfc05196...61b5b1`/
+  `a3743855...6ce39`/`6a9b823d...1091e6`/
+  `849763e2...3d931`/`d3bb8243...bff4d3`. No trainer integration,
+  validation/test, smoke/probe/full train, or current-best command/history
+  update is authorized.
+- [x] Rebuild and inspect all ten pages of process-report revision 6; DOCX
+  accessibility is `0/0/0`. Delete only the superseded 128-row LP-A3
+  preflight after writing its seven-file/565,196-byte cleanup manifest.
+  Post-cleanup retention passes `845` run directories with `blockers=[]` and
+  `89.204 GiB` free; compile, pyflakes, focused, and full tests pass
+  `9/9` and `1825/1825`.
+- [ ] Screen the next licensed, accepted-primary, equation-distinct route
+  whose perturbation has structured surface/lesion semantics rather than
+  unconstrained pixel noise. Reject KeepAugment/AugMax/PRIME before code
+  unless a new class-pair causal target makes them distinct; require a
+  train-only source-held placebo, class-1 precision gain with explicit TP
+  budget, fixed visual/XAI evidence, and no global class-1 oversampling.

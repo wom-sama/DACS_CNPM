@@ -2,10 +2,10 @@
   "document": {
     "title": "TRKH 5-class",
     "subtitle": "Quy trình nghiên cứu, trạng thái bằng chứng và kế hoạch cải tiến",
-    "revision": "4",
+    "revision": "6",
     "updated": "2026-07-24",
     "branch": "classification-only-research",
-    "status": "Đang nghiên cứu - SaSPA F0 đã pass; F1 giới hạn 10 ảnh train-only",
+    "status": "Đang nghiên cứu - LP-A3 A0 đã bị loại; chưa có checkpoint mới",
     "owner": "TRKH classification-only research"
   },
   "executive_metrics": [
@@ -25,9 +25,9 @@
       "detail": "Validation macro-F1; precision class 1 còn thấp"
     },
     {
-      "label": "SaSPA synthetic F0",
-      "value": "Pass (no-output)",
-      "detail": "Replay pass; F1 chỉ được sinh 10 ảnh train-only"
+      "label": "LP-A3 hard-positive A0",
+      "value": "Rejected",
+      "detail": "TP 0,9922; rival 0,9648; FP reject 0,0315"
     }
   ],
   "sections": [
@@ -37,7 +37,7 @@
         {
           "type": "callout",
           "label": "Quyết định",
-          "text": "Giữ nguyên keeper hiện tại và file lệnh full-train tốt nhất. Full train random-init 30 epoch không thắng validation gate; JPEG-DL A0 đã bị loại. SaSPA synthetic F0 no-output đã pass formal và replay, chỉ mở quyền F1 sinh đúng 10 ảnh train-only; đây chưa phải bằng chứng cải thiện mô hình hay quyền full generation/full train."
+          "text": "Giữ nguyên keeper hiện tại và file lệnh full-train tốt nhất. Full train random-init 30 epoch không thắng validation gate; JPEG-DL, SaSPA synthetic và LP-A3-inspired hard-positive A0 đều đã bị loại. LP-A3 dùng đủ 9.215 train rows, không mở validation/test và replay exact, nhưng chỉ loại 7/222 restricted FP, tạo 9 FP mới, phá 2 TP và không chứng minh tác dụng nhân quả của label hinge; trainer và full train không được mở."
         },
         {
           "type": "paragraph",
@@ -64,7 +64,9 @@
             ["Full 30e random-init", "validation raw FP32", "0.874172", "0.535865 / 0.841060 / 0.654639", "Không thắng keeper"],
             ["Full 30e random-init", "final test raw FP32", "0.873884", "0.553398 / 0.780822 / 0.647727", "Chỉ báo cáo; không dùng để tune"],
             ["AIDT pretrained", "mapped final test", "0.8575", "- / - / 0.5806", "Thấp hơn TRKH ở phép đối chiếu này"],
-            ["Top-5 pretrained TTA", "final test, giao thức khác", "0.9248", "- / - / 0.7786", "Upper bound representation, không phải scratch"]
+            ["Top-5 pretrained TTA", "final test, giao thức khác", "0.9248", "- / - / 0.7786", "Upper bound representation, không phải scratch"],
+            ["SaSPA synthetic F1", "10 ảnh train-only, không train", "N/A", "Fidelity 0/10; blind 7/10; XAI 6/10", "Rejected trước A1"],
+            ["LP-A3 hard-positive A0", "9.215 train; cohort 734; không train", "N/A", "TP/rival/FP reject 0,9922 / 0,9648 / 0,0315", "Rejected trước integration"]
           ]
         },
         {
@@ -167,8 +169,9 @@
             ["Validation/test shift", "Nhiều verifier tăng validation nhưng giảm final test.", "Bắt buộc source-disjoint, replay và không tune test."],
             ["Context không quyết định", "XAI sạch hơn khi ép foreground nhưng metric thường không tăng.", "Không đồng nhất focus đẹp với bằng chứng phân lớp."],
             ["Numeric/runtime drift", "Batch shape, BF16/FP32, TF32 và deterministic flags có thể đổi xác suất nhỏ.", "Compatibility phải chạy đúng runtime trước XAI."],
-            ["Giới hạn máy", "RTX 4060 8 GB, RAM 15,6 GB; SaSPA F0 pass với peak RSS 6,794 GiB và NVML 556 MiB.", "Dùng worker cô lập và resource gate trước diffusion hoặc full train."],
-            ["Synthetic fidelity", "Fine-grained label dễ đổi khi generator sửa màu/bề mặt.", "Lọc fold-safe, tỷ lệ thấp và audit near-duplicate bắt buộc."],
+            ["Giới hạn máy", "RTX 4060 8 GB, RAM 15,6 GB; SaSPA F0/F1 chạy ổn bằng worker cô lập và model CPU offload.", "Dùng process/resource gate trước diffusion hoặc full train."],
+            ["Synthetic fidelity", "SaSPA F1 không bị trùng/leak nhưng 0/10 ảnh vượt fidelity; blind review có 4 severe artifacts.", "Không đồng nhất duplicate-safety với bảo toàn nhãn fine-grained."],
+            ["Nhiễu hard-positive", "LP-A3 candidate chỉ khác feature-only 6/734 hàng; delta khuếch đại là speckle cao tần phủ bbox.", "Ràng buộc nhãn số học không bảo đảm tín hiệu bề mặt có cấu trúc hay cải thiện precision."],
             ["Worktree bẩn", "Có payload người dùng chưa theo dõi và nhiều artifact lịch sử.", "Stage theo path rõ ràng; không xóa/revert nội dung không xác định."]
           ]
         }
@@ -185,7 +188,8 @@
             "MixStyle, patch-objectness, high-frequency texture expert, interior/boundary variants và sparse targeted margin: không tạo tín hiệu bề mặt ổn định.",
             "AIDT/top-5 KD, focus KD, DKD, rescue-margin, in-sample disagreement weighting và TRKH-logit router: không chuyển được representation advantage theo cách fold-safe.",
             "Patch verifier, directional gate, stacked verifier và recall restore threshold: có cải thiện validation cục bộ nhưng không generalize đủ; không tiếp tục sweep lân cận.",
-            "OOF soft-label/label-repair trực tiếp: đã thử nhiều biến thể và bị loại; kết quả competition không đủ lý do để lặp lại nếu không có tín hiệu mới."
+            "OOF soft-label/label-repair trực tiếp: đã thử nhiều biến thể và bị loại; kết quả competition không đủ lý do để lặp lại nếu không có tín hiệu mới.",
+            "LP-A3-inspired hard positive: giữ TP cao nhưng FP rejection thấp, rival retention dưới gate và label hinge không hơn feature-only; không sweep radius/step/margin/lambda/noise/layer/erosion."
           ]
         },
         {
@@ -232,9 +236,10 @@
             ["Plant Pathology 2021", "EfficientNetV2 5-fold, OOF correction, multi-label CutMix/mosaic label-union, late balancing, TTA.", "Label-union không phù hợp bài toán single-label; late balancing chỉ đáng thử khi có gate prospective."],
             ["Cassava 2020, hạng 2", "CropNet domain-pretrained, resize/rescale nhẹ, EarlyStopping/ReduceLROnPlateau.", "Giải thích lợi thế pretrained; phải công bố protocol và nguy cơ overlap, không so trực tiếp với scratch."],
             ["iCassava 2019", "Ảnh hiện trường có nền, ánh sáng, focus và bệnh đồng thời; winner tận dụng unlabeled data.", "Củng cố source/context audit; TRKH không có pool unlabeled độc lập nên không giả định lợi ích tương tự."],
-            ["SaSPA, NeurIPS 2024", "Sinh ảnh giữ structure và subject bằng edge/subject conditioning; tỷ lệ synthetic tối ưu phụ thuộc lượng real data.", "Ứng viên synthetic chính, nhưng phải feasibility 8 GB, tỷ lệ thấp và filter fold-safe trước."],
+            ["SaSPA, NeurIPS 2024", "Sinh ảnh giữ structure và subject bằng edge/subject conditioning; tỷ lệ synthetic tối ưu phụ thuộc lượng real data.", "Exact F1 đã bị loại: resource/duplicate pass nhưng fidelity, blind và XAI không đạt."],
             ["DiffuseMix, CVPR 2024", "Ghép phần ảnh thật với bản diffusion rồi blend fractal để giữ nhãn.", "Có thể giảm label ambiguity, nhưng cần audit bề mặt xoài và overhead; chưa ưu tiên hơn SaSPA A0."],
-            ["BOB, CVPR 2026", "Condition background/pose class-agnostic khi fine-tune generator, marginalize khi sinh để giảm class-context association.", "Hữu ích cho context bias; độ phức tạp cao, dùng làm nguyên tắc thiết kế hơn là triển khai full ngay."]
+            ["BOB, CVPR 2026", "Condition background/pose class-agnostic khi fine-tune generator, marginalize khi sinh để giảm class-context association.", "Hữu ích cho context bias; độ phức tạp cao, dùng làm nguyên tắc thiết kế hơn là triển khai full ngay."],
+            ["LP-A3, NeurIPS 2022", "Tối đa khoảng cách feature của hard positive dưới ràng buộc log-prob nhãn thật; chọn mẫu theo time consistency.", "A0 độc lập đã bị loại: hinge gần như không khác feature-only và delta không có cấu trúc bề mặt."]
           ]
         },
         {
@@ -253,11 +258,11 @@
         },
         {
           "type": "paragraph",
-          "text": "SaSPA F0 đã pass từ clean pushed commit 51efa72b. Formal xác minh 36 package, snapshot 7.688.436.558 byte, cohort 10 hàng train-only với 20 leakage group duy nhất và pipeline CPU-offload không sinh pixel. Load time là 9,28 giây; peak RSS/VMS/NVML là 6,794/8,917 GiB/556 MiB. Replay độc lập và final manifest đều pass."
+          "text": "SaSPA F0 đã pass từ clean pushed commit 51efa72b và F1 sau đó sinh đúng 10 ảnh train-only bằng model CPU offload. Generation, provenance, resource và replay đều pass; duplicate audit cũng pass exact decoded-RGB, pHash và DINOv2 trên 24.996 file của mọi split mà không lưu reference pixels/embeddings."
         },
         {
           "type": "note",
-          "text": "F0 chỉ cho phép F1 sinh 10 ảnh, 2 ảnh mỗi lớp, theo source/prompt/seed đã khóa. F1 vẫn phải pass provenance, resource, class-fidelity, blind review, exact hash, pHash, DINO near-duplicate và XAI trước khi được cân nhắc A1 5%."
+          "text": "F1 bị loại trước A1: class-fidelity pass 0/10; blind review đúng 7/10, class 1 là 1/2, có 4 severe artifacts; frozen keeper đúng 6/10 và chỉ 4/10 Grad-CAM đặt ít nhất nửa khối lượng trong bbox. Không được đổi prompt, seed, steps/guidance, threshold, blind limit hoặc synthetic ratio sau kết quả này."
         },
         {
           "type": "numbered",
@@ -295,7 +300,9 @@
             ["Retention có manifest", "Hash/tóm tắt trước khi xóa chính xác artifact obsolete.", "Giải phóng dung lượng mà không mất bằng chứng."],
             ["Song song CPU/GPU", "Trong lúc formal/train chạy, dùng CPU cho research, docs và static checks.", "Giảm thời gian chết, không tranh VRAM."],
             ["Báo cáo tái tạo", "DOCX sinh từ JSON + script, render toàn bộ trang trước khi phát hành.", "Cập nhật thường xuyên, diff được và ít lỗi Word thủ công."],
-            ["Process isolation cho diffusion", "Dựng pipeline trong worker con, giữ peak telemetry rồi gate parent sau khi worker thoát.", "Trả RAM ổn định, tránh false failure và vẫn phát hiện PID lạ."]
+            ["Process isolation cho diffusion", "Dựng pipeline trong worker con, giữ peak telemetry rồi gate parent sau khi worker thoát.", "Trả RAM ổn định, tránh false failure và vẫn phát hiện PID lạ."],
+            ["Gate synthetic nhiều tầng", "Khóa fidelity, blind review, duplicate-safety và XAI theo thứ tự; XAI không được cứu gate đã fail.", "Phân biệt rõ không trùng dữ liệu với bảo toàn semantics và giá trị huấn luyện."],
+            ["Causal control cho augmentation", "Khớp radius/mask với baseline, seed theo sample index, so random-feasible và objective ablation trước trainer.", "Phát hiện LP-A3 hinge không tạo khác biệt dù metric feature-distance cao hơn random."]
           ]
         }
       ]
@@ -306,10 +313,10 @@
         {
           "type": "numbered",
           "items": [
-            "Giữ nguyên bộ JPEG-DL formal 2,614 MiB. Retention đã pass 822 thư mục, đủ 51 compaction manifests, 233 originals expected-absent và blockers=[]; chỉ cleanup tiếp theo bằng manifest riêng.",
-            "Giữ protocol SaSPA A0 revision 2 và F0 formal/replay đã pass làm khóa đầu vào; không thay source, generator revision, prompt, seed, filter hoặc threshold sau khi xem output.",
-            "Triển khai F1 fail-closed và sinh đúng 10 ảnh train-only, 2 ảnh mỗi lớp, tuần tự bằng model CPU offload; ghi đầy đủ provenance, latency, RAM/VRAM và output hash.",
-            "Chạy class-fidelity, blind review, exact-hash, pHash, DINO near-duplicate và fixed XAI trên đủ 10 ảnh. Chỉ khi tất cả pass mới khóa A1 ở 5% mỗi lớp và matched real-only equal-iteration control.",
+            "Giữ nguyên các closure JPEG-DL, SaSPA F1 và LP-A3 A0 có giá trị tái lập; cleanup artifact tạm bằng manifest riêng.",
+            "Đóng exact SaSPA và LP-A3 neighborhoods đã khóa; không mở lại bằng sweep prompt/seed hoặc radius/step/margin/lambda.",
+            "Tra cứu và prospectively khóa một cơ chế train-only mới có biến đổi bề mặt/tổn thương có cấu trúc, licensed và equation-distinct; không lặp KeepAugment/AugMax/PRIME nếu thiếu class-pair causal target mới.",
+            "Trước trainer integration, candidate mới phải bảo vệ class-1 TP, loại restricted FP tốt hơn matched simple control và không dùng validation/test để fit/chọn tham số.",
             "Giữ ưu tiên precision lớp 1 nhưng đặt recall-loss budget rõ ràng; không chấp nhận giảm false positive bằng cách phá quá nhiều true positive.",
             "Tiếp tục làm sạch worktree theo manifest và commit theo stage; không đụng BaoCao hoặc deep-research-report chưa theo dõi.",
             "Chỉ cập nhật lệnh full-train tốt nhất và history khi một candidate thắng validation, replay và XAI gate."
@@ -338,7 +345,7 @@
         },
         {
           "type": "paragraph",
-          "text": "Revision 1: tạo báo cáo Word tái lập; ghi nhận full train 30e, trạng thái JPEG-DL formal, nghiên cứu competition và chính sách synthetic train-only chống leak. Revision 2: khóa JPEG-DL A0 ở VisualFail với replay exact, ghi metric/XAI/SHAs cuối và chuyển kế hoạch sang synthetic feasibility source-disjoint. Revision 3: retention pass trên 822 thư mục/51 manifests, giữ formal 2,614 MiB; sửa odd/even header-footer và reset numbering theo từng block sau render QA. Revision 4: SaSPA F0 no-output pass formal/replay trên RTX 4060 8 GB; ghi telemetry, process isolation, hash artifact và chỉ mở quyền F1 10 ảnh train-only."
+          "text": "Revision 1: tạo báo cáo Word tái lập; ghi nhận full train 30e, trạng thái JPEG-DL formal, nghiên cứu competition và chính sách synthetic train-only chống leak. Revision 2: khóa JPEG-DL A0 ở VisualFail với replay exact, ghi metric/XAI/SHAs cuối và chuyển kế hoạch sang synthetic feasibility source-disjoint. Revision 3: retention pass trên 822 thư mục/51 manifests, giữ formal 2,614 MiB; sửa odd/even header-footer và reset numbering theo từng block sau render QA. Revision 4: SaSPA F0 no-output pass formal/replay trên RTX 4060 8 GB; ghi telemetry, process isolation, hash artifact và chỉ mở quyền F1 10 ảnh train-only. Revision 5: đóng SaSPA F1 ở Rejected sau fidelity 0/10, blind 7/10, duplicate-safety pass và frozen-keeper XAI 6/10; giữ nguyên keeper/lệnh full-train tốt nhất; bỏ running header-footer để khóa lề 1 inch ổn định giữa Word và LibreOffice sau render QA. Revision 6: đóng LP-A3-inspired A0 sau audit train-only 9.215 hàng, replay exact, 19/23 automated gates và manual delta review; ghi causal-control fail 6/734, không integration hoặc command update."
         }
       ]
     },
@@ -397,6 +404,16 @@
               "title": "Beyond Objects: Contextual Synthetic Data Generation, CVPR 2026",
               "url": "https://openaccess.thecvf.com/content/CVPR2026/html/Yang_Beyond_Objects_Contextual_Synthetic_Data_Generation_for_Fine-Grained_Classification_CVPR_2026_paper.html",
               "detail": "Class-agnostic context/pose conditioning cho fine-grained synthetic data."
+            },
+            {
+              "title": "Adversarial Auto-Augment with Label Preservation, NeurIPS 2022",
+              "url": "https://proceedings.neurips.cc/paper_files/paper/2022/hash/8a1c4a54d73728d4d61701e320687c6d-Abstract-Conference.html",
+              "detail": "Nguồn phương trình hard-positive và label-preserving constraint cho LP-A3 A0."
+            },
+            {
+              "title": "LP-A3 official reference repository",
+              "url": "https://github.com/kai-wen-yang/LPA3",
+              "detail": "Pin commit 7059ca393b5cdfa04cf3304bb86c4c79712adfa3; không thấy license nên không copy/import code."
             }
           ]
         }

@@ -20873,3 +20873,223 @@ Date: 2026-07-02
   LibreOffice render review passes all nine `1224x1584` pages with no
   clipping, overlap, broken continuation header, or footer defect; the DOCX
   accessibility audit reports high/medium/low findings `0/0/0`.
+
+## SaSPA Synthetic F1 Generation And Fidelity Failure - 2026-07-24
+
+- Implement and push the hash-locked F1 generator from clean code. The first
+  formal attempt fails before pipeline invocation because Hugging Face
+  snapshot symlinks resolve from `snapshots/<revision>` into the same model
+  cache's sibling `blobs` directory. Preserve the no-output failure at SHA
+  `8bc4b1e6...ede3`; it contains no worker result, attempt artifact, or
+  synthetic pixel.
+- Prospectively authorize one no-output retry that changes only the symlink
+  validator: a link target may resolve inside the same pinned model cache root
+  but may not be absolute or contain `..`. Recheck all 19 snapshot files,
+  `7,688,436,558` bytes, at files SHA
+  `5a83e80a...628d`; generator/data/prompt/seed/resource/fidelity gates remain
+  unchanged.
+- The retry from clean pushed commit `a1478dd` produces exactly ten images,
+  two per class, using model CPU offload without fallback. Generation
+  resource/provenance checks and independent replay pass; no validation/test
+  pixel or label is opened during generation. Summary/manifest/replay/final-
+  manifest SHAs are
+  `b5d45349b67c35f14c32dfd4ecc9ae3fb56a2428f86921e58dfb39a1235fdf88`,
+  `e44b746560c3265be0b85a0b5d56f6acfaf9573e9644d3ffd2e937e0e5edd5e4`,
+  `93bf7a33133fae41900a41c629a0c708424c013fe5c63cba5c4428cb5364f237`,
+  and
+  `ce3254ed410d54d5757ae967014e2fb65e6f8942a19805c8d6415926c382d4fe`.
+- Reject the locked fidelity mechanism. All `10/10` outputs fail at least one
+  class-specific train-only 95th-percentile envelope, so the pass count is
+  `0/10`. LAB mean/covariance and LBP distances are broadly too large; several
+  edge-ratio values are also far outside the real same-class reference.
+  This is not a marginal threshold miss and does not authorize relaxing or
+  sweeping fidelity limits after observing the images.
+- Complete hidden-label blind review before unblinding. Overall correctness is
+  `7/10` versus required `>=9/10`; class 1 is `1/2` versus required `2/2`;
+  severe artifacts are `4` versus maximum `1`, including `1` class-1 severe
+  case versus maximum `0`. All four blind checks fail. The locked decision
+  file SHA is `35ba007a...f1eaf`; unblind SHA is
+  `c530985b...f006e`.
+
+## SaSPA F1 Duplicate Safety, Frozen-Keeper XAI, And Closure - 2026-07-24
+
+- Run the independently locked duplicate audit from clean pushed commit
+  `6a56909`. Compare all ten outputs against `24,996` files spanning both
+  `class_f` and `yolo_f` train/validation/test. Do not retain reference
+  images, embeddings, labels, class aggregates, or split aggregates.
+- Duplicate safety passes: no exact decoded-RGB match; nearest pHash distances
+  are `14..16` against the reject threshold `<=4`; nearest DINOv2 cosine is
+  at most `0.812681` against reject threshold `>=0.995`. Across all 45
+  synthetic pairs, minimum pHash distance is `22`, maximum DINO cosine is
+  `0.658513`, and no exact pair exists. Report/final-manifest SHAs are
+  `d39ec317...3cf52`/`c67645f8...dce4`. This rules out copying but cannot
+  repair semantic or visual failure.
+- Add and push a dedicated frozen-keeper XAI auditor at commit `6987ff3`.
+  Its prospective lock fixes FP32, stem Grad-CAM, input-gradient objective,
+  source bbox prior, outside-bbox gray/blur, inside-bbox desaturation, and
+  diagnostic-only authority. Focused/full tests pass `27/27` and
+  `1813/1813` before formal execution.
+- Keeper top-1 accuracy on the ten generated images is only `6/10`; per-class
+  correct counts are `[1,1,0,2,2]`. The four errors are `0->4`, `1->4`,
+  `2->4`, and `2->1`. Mean confidence is `0.303044`; every confidence is
+  below `0.4`, mean top-two margin is `0.09298`, and the minimum margin is
+  `0.007978`.
+- Mean Grad-CAM/input-gradient mass inside the locked source bbox is only
+  `0.401582/0.397213`; just `4/10` Grad-CAM maps place at least half their
+  mass inside. Mean clean-prediction drops are `0.030074` for background gray,
+  `0.010992` for background blur, and `0.071557` for object desaturation.
+  Color remains more causal on average, but many maps emphasize adjacent
+  fruit, hands, leaves, boundaries, sparse high-frequency points, or generated
+  context.
+- Manual all-row review independently fails the intended mechanism. The two
+  class-4 outputs are classified correctly while Grad-CAM bbox mass is only
+  `0.039451/0.023395` and object-desaturation drops are
+  `0.001819/0.001418`, showing context/silhouette/generated texture rather
+  than stable object-surface evidence. The class-2 pair is `0/2`; the
+  class-1 failure is driven toward class 4 by dense lesion-like speckling.
+- XAI summary/manifest/replay/final-manifest SHAs are
+  `d99474b9...4025e`/`c570e4c4...ce5a5`/
+  `af71f6b7...99f3a`/`c570e4c4...ce5a5`. The 102-artifact replay passes
+  without regenerating outputs, replaying inference, or opening source/val/
+  test pixels.
+- Finalize from clean pushed commit `1b6aaed`. The closure recomputes
+  `Rejected` with failures exactly `fidelity_passed` and
+  `blind_review_passed`; generation, duplicate, XAI execution/replay, and
+  visual-review completeness pass. Final summary/replay/manifest SHAs are
+  `44d956875d372f641f49f73b26eba4cc373db28a9a18333bc54e246024e5c9f4`,
+  `507e64f6f627832d2cd1696897ed9eb434e1ed5872503e6d42ebcd085a0607e2`,
+  and
+  `509ef679e4e2e91164f47f1d88eb2ab60f3aa346f254915e1b45ad31d33bc98a`.
+- Close this exact SaSPA prompt/seed/steps/guidance/fidelity/blind-limit/
+  synthetic-ratio neighborhood. Do not open A1, trainer integration,
+  validation/test, smoke/probe/full train, or current-best command/history
+  update. The next route must preserve real pixels and fine-grained labels
+  under a source-held causal control rather than reconstruct them through this
+  diffusion configuration.
+
+## Research Process Report Revision 5 QA - 2026-07-24
+
+- Rebuild the process/status Word report from its structured JSON source after
+  recording the final SaSPA F1 rejection. JSON/DOCX SHA-256 values are
+  `b9461295676961fa8067f70b0b6c61cc9f8fc51bb36bb5fcaa1624f07fbce81f`
+  and
+  `4d351a5f9fdc464f770c4c9fbd931e8984582fef66b357b3bdf3f95e5207bbc5`.
+- Cross-render QA exposes a LibreOffice dynamic header/footer-spacing failure
+  on dense continuation pages: the PDF retains the header objects, but body
+  content can visually cover that region. Remove the decorative running
+  header/footer and use fixed one-inch page margins; title, branch, revision,
+  status, and scope remain explicit on the first page.
+- Re-render all ten pages through LibreOffice 26.2.4 and inspect every page.
+  Extracted content remains within `74.6..715.6 pt` on a `792 pt` page, with
+  no clipping, overlap, broken table continuation, or damaged Vietnamese
+  glyph. Keep the sparse final source page instead of reducing text size.
+- The DOCX accessibility audit reports high/medium/low findings `0/0/0`.
+  Builder/audit-report SHAs are
+  `911534cb3e260e6a5637267c7ffdffff9ae32ef541b8c2f6aaec78dd1e8abe12`
+  and
+  `75a44389bb9c36dac37b24cff83da8d7de26050f4822d783c07cf6143b19bdb7`.
+- Current-best command/history remain byte-identical at
+  `36b9aa1a21b765829acf4c8321be147bd76297de4ccdb8a40e6dee8e37940faf`
+  and
+  `39bd2879ce66fddf36a953021ea1e40f8d9de6cb4334b9b825011b2b8dc98f53`.
+
+## LP-A3-Inspired Hard-Positive A0 Rejected - 2026-07-24
+
+- Re-read the NeurIPS-2022 LP-A3 paper and supplement before implementation.
+  The paper maximizes intermediate-feature distance under a true-label
+  log-probability constraint and uses five steps with an increasing Lagrange
+  multiplier. Main/supplement SHAs are
+  `32e812a0...7334e`/`9e08ddb1...a1e0a`; official reference commit is
+  `7059ca3`. Because no license was visible in that repository, no source was
+  copied, imported, vendored, or installed.
+- Lock `docs/TRKH_LPA3_HARD_POSITIVE_A0_PROTOCOL_20260724.md` before candidate
+  metrics. The independent adaptation uses the same eroded bbox and RGB
+  `2/255` radius as rejected FriendlyAdv, five projected steps, normalized
+  keeper pooled features, maximum true-label log-probability drop `0.05`, and
+  best-feasible iterate selection. Matched controls are five random feasible
+  views and feature-only projected ascent.
+- Implement only an isolated primitive and audit path. Nine focused tests
+  cover bounds, outside-mask zero, nonempty masks, exact replay independent of
+  batch order, cohort metrics, gates, and hash-locked closure. Production
+  trainer/config/launchers remain untouched.
+- Full FP32 A0 evaluates all `9,215` `yolo_f/train` rows and then the locked
+  `734`-row cohort: `256` clean-correct class-1 boundary rows, `256`
+  clean-correct restricted rivals, and all `222` restricted class-1 false
+  positives. No validation/test dataset object is built; source-fold
+  crossings, replay error, outside-mask delta, empty masks, and candidate
+  label-constraint violations are all zero.
+- Candidate class-1 TP retention is `0.992188` (`2` broken), restricted-rival
+  retention is only `0.964844` (`9` class-1 FP created), and restricted-FP
+  rejection is only `0.031532` (`7/222`, all corrected to their true class).
+  Random-feasible removes `0` FP but creates `8`; feature-only removes the
+  same `7` FP, creates `10`, and breaks the same two TP.
+- The intended label hinge is not causally active enough. Candidate and
+  feature-only differ on only `6/734` rows; their TP-retention and
+  FP-rejection deltas are exactly zero. Candidate median feature distance is
+  `1.67364x` random, but source-fold safety/FP gain passes only `3/5` folds.
+  Automated permission is therefore `False` at `19/23` locked checks.
+- Manual review of all 12 fixed panels confirms natural-scale identity but
+  rejects the mechanism: amplified deltas are dense high-frequency speckle
+  spread through the bbox, with no stable lesion, ripeness patch, stem, or
+  boundary concentration. Reviewed transitions include useful FP corrections
+  as well as class-1 TP breaks and clean-rival-to-class1 creations. Further
+  Grad-CAM escalation is not opened because causal and safety gates already
+  fail.
+- Final summary/rows/contact/visual-review/decision/manifest SHAs are
+  `7ea4683b...d0d1b57`, `bfc05196...61b5b1`,
+  `a3743855...6ce39`, `6a9b823d...1091e6`,
+  `849763e2...3d931`, and `d3bb8243...bff4d3`.
+  Close nearby radius/step/margin/lambda/noise/layer/erosion variants. Do not
+  open trainer integration, validation/test, smoke/probe/full train, or
+  current-best command/history update.
+
+## Research Process Report Revision 6 QA - 2026-07-24
+
+- Rebuild the process/status Word report from the revision-6 JSON after
+  recording the prospectively locked LP-A3 A0, all control results, manual
+  delta review, closure, synthetic anti-leak rules, and the next
+  structured-surface research requirement. JSON/DOCX SHA-256 values are
+  `a6be33369c3d7071fc1e2cae8c8bc13fd7618c47eb7bfd4befe17d9e9397328`
+  and
+  `cac286b64b638844b33a1cc9f2a0a11e04e2109c7d9a52f7bbf4020e6543f6af`.
+- Render the final DOCX through LibreOffice 26.2.4 to a ten-page PDF at SHA
+  `2868bea3be59374adc30d4c6c0c367f17e2c39fb852168f5f527a732ee626b32`.
+  Inspect every page at original raster detail: no clipping, overlap, broken
+  table continuation, damaged Vietnamese glyph, or malformed link is visible.
+  The final ten page rasters are pixel-identical to the already reviewed
+  revision-6 render after the JSON-only comma-layout cleanup.
+- The DOCX accessibility audit again reports high/medium/low findings
+  `0/0/0`; audit-report SHA is
+  `75a44389bb9c36dac37b24cff83da8d7de26050f4822d783c07cf6143b19bdb7`.
+  Builder SHA after removing the now-unreachable running-header/footer
+  helpers is
+  `eddc40a636cfbfdecec3515c23c76619a9fe033b7e6abd60c54dd14301c35f57`.
+- Current-best command/history remain byte-identical at
+  `36b9aa1a21b765829acf4c8321be147bd76297de4ccdb8a40e6dee8e37940faf`
+  and
+  `39bd2879ce66fddf36a953021ea1e40f8d9de6cb4334b9b825011b2b8dc98f53`;
+  revision 6 is a research/audit closure, not a promoted training recipe.
+
+## LP-A3 Cleanup And Regression Closure - 2026-07-24
+
+- Delete only
+  `runs/preflight_lpa3_hard_positive_a0_128_20260724` after preserving its
+  seven-file, 565,196-byte inventory and summary/manifest SHAs
+  `3784e6e9...e98b15`/`d14c479f...7ce96` in
+  `runs/cleanup_manifest_20260724_lpa3_preflight_deleted.json`. The preflight
+  contained no restricted false-positive support and is superseded by the
+  retained full formal run; raw data and formal evidence are unchanged.
+- Post-cleanup retention audit passes `845` run directories with
+  `blockers=[]`, all protected anchors present, all compacted originals absent,
+  and `89.204 GiB` free. It only nominates seven historical directories
+  totaling `31.602 MiB` for a future evidence-preserving review and deletes
+  nothing itself.
+- Compile and pyflakes pass on every new/modified Python path. Focused LP-A3
+  tests pass `9/9`; the complete repository suite passes `1825/1825` with 295
+  existing warnings. No Python, LibreOffice, TensorRT, or training worker is
+  left running.
+- After proving the final revision-6 raster is pixel-identical on all ten
+  pages, delete three superseded renders, the one-use renderer copy, and the
+  temporary LibreOffice profile under a separate manifest. This removes
+  180 temporary files (`11,211,374` bytes) while retaining the final PDF,
+  page rasters, accessibility report, source JSON, builder, and DOCX.

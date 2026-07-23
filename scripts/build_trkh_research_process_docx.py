@@ -8,7 +8,7 @@ from typing import Any, Iterable, Sequence
 from docx import Document
 from docx.enum.section import WD_ORIENT
 from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT
-from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK, WD_LINE_SPACING
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Inches, Pt, RGBColor
@@ -204,23 +204,6 @@ def _keep_with_next(paragraph: Any) -> None:
     paragraph.paragraph_format.keep_with_next = True
 
 
-def _add_page_field(paragraph: Any) -> None:
-    run = paragraph.add_run()
-    begin = OxmlElement("w:fldChar")
-    begin.set(qn("w:fldCharType"), "begin")
-    instr = OxmlElement("w:instrText")
-    instr.set(qn("xml:space"), "preserve")
-    instr.text = " PAGE "
-    separate = OxmlElement("w:fldChar")
-    separate.set(qn("w:fldCharType"), "separate")
-    text = OxmlElement("w:t")
-    text.text = "1"
-    end = OxmlElement("w:fldChar")
-    end.set(qn("w:fldCharType"), "end")
-    run._r.extend([begin, instr, separate, text, end])
-    _set_run_font(run, size=9, color=MUTED)
-
-
 def _add_hyperlink(paragraph: Any, text: str, url: str) -> None:
     relationship_id = paragraph.part.relate_to(
         url,
@@ -357,9 +340,10 @@ def _apply_numbering(paragraph: Any, num_id: int) -> None:
 
 
 def _configure_page(document: Document) -> None:
-    # Explicit odd/even content avoids LibreOffice creating a margin-less left
-    # page style when only a default header/footer relationship is present.
-    document.settings.odd_and_even_pages_header_footer = True
+    # A single page style keeps Word and LibreOffice pagination consistent.
+    # LibreOffice 26 can remap explicit even-page parts to a mirrored left-page
+    # style, which drops the header and pushes the footer beyond the page edge.
+    document.settings.odd_and_even_pages_header_footer = False
 
     section = document.sections[0]
     title_page = section._sectPr.find(qn("w:titlePg"))
@@ -375,44 +359,6 @@ def _configure_page(document: Document) -> None:
     section.right_margin = Inches(MARGIN_IN)
     section.header_distance = Inches(0.42)
     section.footer_distance = Inches(0.42)
-
-
-def _populate_header(header: Any, metadata: dict[str, Any]) -> None:
-    header.is_linked_to_previous = False
-    p = header.paragraphs[0]
-    p.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    p.paragraph_format.space_after = Pt(0)
-    p.paragraph_format.tab_stops.add_tab_stop(
-        Inches(6.5), WD_ALIGN_PARAGRAPH.RIGHT
-    )
-    left = p.add_run("TRKH 5-CLASS RESEARCH")
-    _set_run_font(left, size=8.5, color=MUTED, bold=True)
-    right = p.add_run(f"\t{metadata['branch']}")
-    _set_run_font(right, size=8.5, color=MUTED)
-
-
-def _populate_footer(footer: Any) -> None:
-    footer.is_linked_to_previous = False
-    fp = footer.paragraphs[0]
-    fp.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    fp.paragraph_format.space_before = Pt(0)
-    fp.paragraph_format.space_after = Pt(0)
-    fp.paragraph_format.tab_stops.add_tab_stop(
-        Inches(6.5), WD_ALIGN_PARAGRAPH.RIGHT
-    )
-    left_footer = fp.add_run("Research process & status")
-    _set_run_font(left_footer, size=9, color=MUTED)
-    page_label = fp.add_run("\tTrang ")
-    _set_run_font(page_label, size=9, color=MUTED)
-    _add_page_field(fp)
-
-
-def _add_header_footer(document: Document, metadata: dict[str, Any]) -> None:
-    section = document.sections[0]
-    _populate_header(section.header, metadata)
-    _populate_header(section.even_page_header, metadata)
-    _populate_footer(section.footer)
-    _populate_footer(section.even_page_footer)
 
 
 def _add_title_block(document: Document, metadata: dict[str, Any]) -> None:
@@ -659,7 +605,6 @@ def build_document(source: Path, output: Path) -> None:
     bullet_num_id = _add_numbering_definition(document, bullet=True)
     decimal_num_id = _add_numbering_definition(document, bullet=False)
     metadata = payload["document"]
-    _add_header_footer(document, metadata)
     _add_title_block(document, metadata)
     _add_metric_strip(document, payload["executive_metrics"])
 
