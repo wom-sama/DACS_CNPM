@@ -4667,12 +4667,24 @@
   rejecting exact DRAEM, SimpleNet, and diffusion anomaly recipes. Lock the
   independent class-pair adaptation before implementation at
   `docs/TRKH_5CLASS_NSA_CLASS_PAIR_POISSON_A0_PROTOCOL_20260724.md`, SHA-256
-  `03df792f26f60e47ff709095960b7650664fecc2fcc9a73bbe6efaa1e4273e7e`.
+  Original lock SHA is `03df792f...4273e7e`; the prospective geometry
+  erratum below makes the current protocol SHA
+  `8647a74d5a3941570ab1e91e0feb63bdbaccc2cee106612a8989d2c447380290`.
   Keep raw data immutable and use only fit-fold `yolo_f/train` target/donor
   tensors; no validation/test construction or five-class synthetic labels.
 - [ ] Implement and test the locked geometry preview, frozen-stem
   query-conditioned adapter, clean-only/no-query/permuted-query controls,
   source-held readouts, fixed mismatch-map sheet, replay, and manifest.
-- [ ] Run the 24-row geometry-only preview before loading the keeper. Commit
-  any strictly geometric erratum before metric access; otherwise run the sole
-  two-epoch-per-fold A0 and enforce every class-1 TP/FP causal gate.
+- [x] Run the first 24-row geometry-only preview before loading the keeper.
+  Preserve summary/contact/row SHAs `59a0faec...1a426`,
+  `2e332448...21fa`, and `13240025...e941`. Structural row checks pass,
+  but reject visual row 20 because its rectangle crosses fingers occluding
+  `sample_index=3633`; also correct the aggregate sign of three desired
+  negative-state checks without changing their observations.
+- [x] Prospectively lock the sole geometric erratum before another preview:
+  remove only fixed HSV/YCrCb hand-like 8-connected components with at least
+  20 support pixels, 50 total pixels, and outside-support fraction `>=0.35`,
+  then dilate three pixels. Keep isolated in-fruit lesion components and all
+  scientific/model gates unchanged.
+- [ ] Run and manually review the corrected fixed 24-row preview. Only a full
+  geometry pass may unlock the sole two-epoch-per-fold A0.

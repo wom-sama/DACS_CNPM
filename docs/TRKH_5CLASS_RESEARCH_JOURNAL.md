@@ -21137,3 +21137,39 @@ Date: 2026-07-02
   `39bd2879ce66fddf36a953021ea1e40f8d9de6cb4334b9b825011b2b8dc98f53`.
   No validation/test access, trainer integration, smoke/probe/full train, or
   command promotion is authorized by this protocol lock.
+
+## NSA Poisson Geometry Preview Failure And Prospective Erratum - 2026-07-24
+
+- Implement only the source-local Gamma/resize/`NORMAL_CLONE` primitive,
+  intensity target, fixed 24-row preview, visual finalizer, and query-adapter
+  equation scaffolding. A focused test exposes that OpenCV mutates the mask
+  passed to `seamlessClone`; pass a copy and retain the locked mask rather than
+  weakening the outside-change gate. Compile/pyflakes/PowerShell parse,
+  focused, and full tests pass `9/9` and `1834/1834`.
+- Run the first geometry-only preview from clean pushed commit `045278b`.
+  It opens all `9,215` train declarations but only the 24 fixed train images
+  and their source-disjoint donors. The keeper checkpoint is hash-verified but
+  not loaded; model forwards and candidate metrics are zero. All row/source/
+  support/change/RNG/hash checks pass.
+- The aggregate flag is incorrectly false because the implementation applies
+  `all()` directly to the desired false observations
+  `validation_split_used`, `test_split_used`, and `raw_dataset_modified`.
+  Correct only their predicate direction to unused/unused/unchanged; the
+  underlying observations remain false/false/false.
+- Manual inspection independently rejects the preview. Row 20, target
+  `sample_index=3633`, places its valid rectangle through fingers lying over
+  the mango. Preserve summary/contact/row SHAs
+  `59a0faec...1a426`, `2e332448...21fa`, and
+  `13240025...e941`; do not overwrite or reinterpret this failed preview.
+- Prospectively append one geometry erratum before any keeper load. Starting
+  from the reviewed CutPaste support, select only fixed HSV/YCrCb hand-like
+  8-connected components with at least 20 pixels inside support, at least 50
+  pixels total, and outside-support fraction `>=0.35`; dilate once with
+  `7x7` and subtract from support. This targets chromatic occluders entering
+  from outside the fruit support while preserving isolated in-fruit brown or
+  lesion components.
+- Current protocol SHA after the erratum is
+  `8647a74d5a3941570ab1e91e0feb63bdbaccc2cee106612a8989d2c447380290`.
+  No pair, source plan, sampler, Poisson equation, adapter, optimizer, score,
+  threshold, metric gate, validation/test access, trainer edit, or
+  current-best command/history change is authorized.

@@ -13,6 +13,55 @@ ephemeral train-derived tensors and auditable run artifacts only. A synthetic
 image never receives a five-class classification label and is never written
 back into either dataset.
 
+## Prospective Geometry Erratum - 2026-07-24
+
+The first 24-row geometry-only preview was executed after the original
+protocol lock and before keeper loading, model forward, adapter construction,
+or candidate metric access. All row, source, hash, RNG, train-only, and
+changed-pixel checks passed, but the aggregate implementation flag was
+incorrectly false because three desired negative states
+(`validation_split_used=false`, `test_split_used=false`, and
+`raw_dataset_modified=false`) were passed directly into `all()`. More
+importantly, manual review rejected row 20 (`sample_index=3633`) because its
+otherwise valid target rectangle crossed fingers occluding the mango.
+
+Preserve the failed preview at summary/contact/row SHAs
+`59a0faecf42e66f738e5897fa9038615e9295f9662e593974785c65271d1a426`,
+`2e33244840da8bb629b855a6ad0cdc199cd4912573eda686b5b36a261daa21fa`,
+and
+`13240025e330f569ff2d05c8fd827e65f10726b08958659c0db17f7277b4e941`.
+It generated no model score and authorizes no scientific conclusion.
+
+Before a second geometry preview, apply exactly one additional deterministic
+occluder exclusion after the original support intersection:
+
+1. convert evaluation RGB uint8 to OpenCV HSV and YCrCb without changing RGB;
+2. mark a pixel chromatically hand-like only when `Y>=70`,
+   `138<=Cr<=175`, `105<=Cb<=135`, `S<=120`, and
+   (`H<=18` or `H>=160`) on OpenCV's integer channel scales;
+3. find 8-connected components in that mask;
+4. select only components with at least 20 pixels inside original support,
+   at least 50 pixels overall, and at least `0.35` of their pixels outside
+   original support;
+5. dilate selected components once with a `7x7` all-one kernel and subtract
+   only their intersection with original support;
+6. require at least 64 support pixels after exclusion; never fall back to the
+   unfiltered support for an invalid target or donor.
+
+The outside-support fraction prevents an isolated brown/lesion component
+inside the mango from being removed, while the fixed dilation gives a
+three-pixel placement margin around an entering occluder. Persist original,
+selected-component, dilated-exclusion, and final-support hashes and areas for
+every preview/formal row.
+
+Correct the aggregate checks only by renaming the three negative states to
+the positive predicates `validation_split_unused`,
+`test_split_unused`, and `raw_dataset_unchanged`; their underlying observed
+values remain false/false/false. No source plan, class pair, sampler
+distribution, donor search, Poisson equation, adapter, optimizer, score,
+threshold, or gate changes. A second fixed 24-row preview and manual review
+must pass before the keeper may be loaded.
+
 ## Research Question
 
 Can a small class-query-conditioned local head learn a surface compatibility
