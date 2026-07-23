@@ -62,6 +62,46 @@ distribution, donor search, Poisson equation, adapter, optimizer, score,
 threshold, or gate changes. A second fixed 24-row preview and manual review
 must pass before the keeper may be loaded.
 
+## Prospective Formal Detail Lock - 2026-07-24
+
+The corrected second preview passes every automatic and manual geometry check
+before keeper loading. Its summary/contact/row/visual-review SHAs are
+`83a1622ebf5db934de83fb3f68baede87a498ec536657505a60d19bd6358c2a5`,
+`8237878cfc1f9febf9603f2297ca1e7c4bef36ec25707f98068d8125e9742ee4`,
+`e69e4c0453add9df44c8889e81bf46223778e6adaea2fe12619bed01eda68f30`,
+and
+`ddc49b219f423aceb9c5bc3b29398f07b3040e28a0d495477d1b7339391c5a96`.
+The reviewed row-20 crop SHA is
+`d23d8782506a88106679e5ea0318a7545d4616dc3d2e906d760a982315edabfb`.
+
+Lock the remaining formal details before adapter construction:
+
+- for held fold `h`, initialize one adapter with Torch seed
+  `20260724+h` and deep-copy its exact state into all four roles;
+- sort every balanced fit panel by SHA-256 of
+  `20260724|fit-order|h|sample_index|source_stem`; do not shuffle it;
+- use the five role-specific AdamW optimizers in fixed order candidate,
+  clean-only, no-query, permuted-query, with one step per target batch;
+- the no-query control always supplies embedding ID zero while retaining all
+  five embedding parameters for exact capacity parity;
+- query permutation must change every original query ID through a local
+  sample/epoch/view-seeded derangement; labels and masks remain unchanged;
+- after clean held scoring, select exactly 75 synthetic diagnostic targets
+  per held fold, 15 from each class, by SHA-256 rank. Diagnostic target and
+  donor are both in the held fold, have different source stems, and are never
+  used for an update, scaler, readout, or threshold;
+- each diagnostic target receives one same-class and one cross-class view;
+  cross donor class is the first cyclic class after the target under the
+  sample-index-seeded class order. Use query equal to target class;
+- compute cross-map mass inside the positive intensity mask and same-class
+  support-pixel mismatch rate at probability `>=0.5` over all 375 held
+  diagnostic targets. No diagnostic subset, threshold, or aggregation may be
+  changed after model scores exist.
+
+These details do not alter the already passed geometry, training epochs,
+optimizer hyperparameters, clean cohort, readout, or mechanism gates. The
+formal run remains forbidden until this revision is committed and pushed.
+
 ## Research Question
 
 Can a small class-query-conditioned local head learn a surface compatibility

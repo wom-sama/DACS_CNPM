@@ -4668,8 +4668,9 @@
   independent class-pair adaptation before implementation at
   `docs/TRKH_5CLASS_NSA_CLASS_PAIR_POISSON_A0_PROTOCOL_20260724.md`, SHA-256
   Original lock SHA is `03df792f...4273e7e`; the prospective geometry
-  erratum below makes the current protocol SHA
-  `8647a74d5a3941570ab1e91e0feb63bdbaccc2cee106612a8989d2c447380290`.
+  geometry erratum SHA is `8647a74d...80290`; the formal-detail lock below
+  makes the current protocol SHA
+  `e7e2794794a7059379060ffc10579b8b63f6288d3f50d187f8f62d36ce69fa18`.
   Keep raw data immutable and use only fit-fold `yolo_f/train` target/donor
   tensors; no validation/test construction or five-class synthetic labels.
 - [ ] Implement and test the locked geometry preview, frozen-stem
@@ -4686,5 +4687,15 @@
   20 support pixels, 50 total pixels, and outside-support fraction `>=0.35`,
   then dilate three pixels. Keep isolated in-fruit lesion components and all
   scientific/model gates unchanged.
-- [ ] Run and manually review the corrected fixed 24-row preview. Only a full
-  geometry pass may unlock the sole two-epoch-per-fold A0.
+- [x] Run and manually review the corrected fixed 24-row preview. Every
+  automatic check passes and all 24 rows are manually accepted at
+  summary/contact/row/visual SHAs `83a1622e...8c2a5`,
+  `8237878c...42ee4`, `e69e4c04...68f30`, and
+  `ddc49b21...c5a96`. Row 20 now excludes the entering fingers and places
+  both rectangles on visible mango surface.
+- [x] Prospectively lock formal seed/order/query-control details and exactly
+  75 synthetic held diagnostics per fold (`15` per class) before adapter
+  construction. Diagnostic rows never update a model/readout/threshold.
+- [ ] Complete the candidate/control training engine, clean 750-row
+  source-held readout, 375-row held synthetic localization audit, exact
+  replay, fixed mismatch-map sheet, and formal launcher.

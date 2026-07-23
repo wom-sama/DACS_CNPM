@@ -86,7 +86,7 @@ LOCKED = {
     "data": "716e33df24c63a9e9920f97b685199707fb84ab4c7154544f5dd9a3e00d884ef",
     "cidt_summary": "d4891edf2963ab12385b7ce5bdc812ec3e19c5c098acd25c66eb557af541d7ad",
     "cidt_predictions": "2e0993752d58d99ea429bfefe1e2bfe6fa949e45aea1a26cc4bdfee97d4db21c",
-    "protocol": "8647a74d5a3941570ab1e91e0feb63bdbaccc2cee106612a8989d2c447380290",
+    "protocol": "e7e2794794a7059379060ffc10579b8b63f6288d3f50d187f8f62d36ce69fa18",
     "paper": "fdd14c4ee81f353d6f279f71b9516825fd84e4f603b050dc869db03dba474e44",
     "supplement": "5804ae0202b74149441baee1151d52da83fc1864a454e17fedcdfaaacf8d32da",
     "nsa_license": "7f86283e43b5c69fe93ff2c73ddb2bd89f1dbb718995ece3a7b5fa41b2435aaa",

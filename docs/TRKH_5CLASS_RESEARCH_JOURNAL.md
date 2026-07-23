@@ -21173,3 +21173,31 @@ Date: 2026-07-02
   No pair, source plan, sampler, Poisson equation, adapter, optimizer, score,
   threshold, metric gate, validation/test access, trainer edit, or
   current-best command/history change is authorized.
+
+## NSA Poisson Geometry V2 Pass And Formal Detail Lock - 2026-07-24
+
+- Run the corrected 24-row preview from clean pushed commit `e58cfe3`.
+  Every hash/source/support/change/RNG predicate now passes with the corrected
+  positive predicate direction. The keeper remains unloaded, forward count is
+  zero, and no candidate metric exists.
+- Inspect the complete eight-column sheet and a full-detail row-20 crop. The
+  fixed component rule removes the fingers on `sample_index=3633`; both
+  destination rectangles move to visible mango surface. Other selected
+  exclusions stay on entering hand/finger regions, donor rectangles remain on
+  fruit, intensity masks match changed support, and there is no systematic
+  Poisson halo, padding, basket, or background shortcut.
+- Lock manual pass at summary/contact/row/visual/crop SHAs
+  `83a1622e...8c2a5`, `8237878c...42ee4`,
+  `e69e4c04...68f30`, `ddc49b21...c5a96`, and
+  `d23d8782...abfb`. The final preview manifest SHA is
+  `eff84c11...00c7`.
+- Before constructing adapters, lock seed `20260724+held_fold`, exact
+  SHA-ranked fit ordering, deep-copied role initialization, deterministic
+  query derangement, and a 75-row-per-fold held synthetic diagnostic panel
+  (`15` per class). The 375 held diagnostic rows are evaluation-only and
+  cannot affect updates, scaling, readouts, or thresholds.
+- Current protocol SHA after this prospective formal-detail revision is
+  `e7e2794794a7059379060ffc10579b8b63f6288d3f50d187f8f62d36ce69fa18`.
+  Geometry is authorized; adapter metrics, validation/test, production
+  integration, smoke/probe/full train, and current-best command/history
+  updates are still unopened.
