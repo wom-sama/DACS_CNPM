@@ -39,8 +39,14 @@ IMPLEMENTATION_LOCK_SHA_PATH = (
     / "docs"
     / "TRKH_5CLASS_SASPA_F1_IMPLEMENTATION_LOCK_20260724.sha256"
 )
+NO_OUTPUT_RETRY_LOCK_PATH = (
+    REPO_ROOT
+    / "docs"
+    / "TRKH_5CLASS_SASPA_F1_NO_OUTPUT_RETRY_20260724.json"
+)
 F0_ROOT = f0.DEFAULT_OUTPUT_DIR
-DEFAULT_OUTPUT_DIR = F0_ROOT / "f1_tiny_output"
+FAILED_NO_OUTPUT_DIR = F0_ROOT / "f1_tiny_output"
+DEFAULT_OUTPUT_DIR = F0_ROOT / "f1_tiny_output_v2"
 
 LOCKED_IMPLEMENTATION_JSON_SHA256 = (
     "e7d9f868bdca078a08502d525b115704d7909db4018e3f297728acf1196c4cf3"
@@ -50,6 +56,12 @@ LOCKED_IMPLEMENTATION_MD_SHA256 = (
 )
 LOCKED_IMPLEMENTATION_SHA_FILE_SHA256 = (
     "7c9741f44fd93ff5a4bbb52071a05ae9405d8dec077e6f730835ac80db230adb"
+)
+LOCKED_NO_OUTPUT_RETRY_SHA256 = (
+    "0e0164b271fe9aabb8e14311578b114a5942592bb9a8e09c824da00312330284"
+)
+LOCKED_NO_OUTPUT_FAILURE_SHA256 = (
+    "8bc4b1e631422a170080b3825552e8d440820b6faf17c9473387bc6788f9ede3"
 )
 LOCKED_F0_SUMMARY_SHA256 = (
     "cf9046c929fda8bb0698c1a9a55e4aa0484856adf3664980371a0e8528fe257a"
@@ -270,13 +282,19 @@ def verify_model_snapshot(
         raise RuntimeError("Model snapshot manifest content hash differs")
     checked = []
     total_bytes = 0
+    model_cache_root = snapshot_root.parents[1]
     for row in rows:
         if not isinstance(row, dict):
             raise TypeError("Model snapshot contains a non-object row")
         relative_path = Path(str(row["path"]))
-        path = (snapshot_root / relative_path).resolve()
-        if not f0._path_within(path, snapshot_root):
-            raise RuntimeError("Model snapshot path escaped its root")
+        if relative_path.is_absolute() or ".." in relative_path.parts:
+            raise RuntimeError("Model snapshot manifest path is unsafe")
+        path = snapshot_root / relative_path
+        resolved_path = path.resolve()
+        if not f0._path_within(resolved_path, model_cache_root):
+            raise RuntimeError(
+                "Model snapshot symlink escaped its model cache root"
+            )
         if not path.is_file():
             raise FileNotFoundError(
                 "Model snapshot file is missing: {}".format(relative_path)
@@ -309,6 +327,7 @@ def verify_model_snapshot(
     return {
         "schema": "trkh_saspa_f1_model_snapshot_check_v1",
         "snapshot_path": str(snapshot_root),
+        "model_cache_root": str(model_cache_root),
         "file_count": len(checked),
         "total_bytes": total_bytes,
         "files_sha256": _canonical_sha256(checked),
@@ -349,6 +368,16 @@ def verify_static_locks(
             LOCKED_IMPLEMENTATION_SHA_FILE_SHA256,
             "F1 implementation SHA lock",
         ),
+        "no_output_retry": _verify_file(
+            NO_OUTPUT_RETRY_LOCK_PATH,
+            LOCKED_NO_OUTPUT_RETRY_SHA256,
+            "F1 no-output retry lock",
+        ),
+        "no_output_failure": _verify_file(
+            f0_root / "f1_tiny_output" / "failure.json",
+            LOCKED_NO_OUTPUT_FAILURE_SHA256,
+            "F1 preserved no-output failure",
+        ),
         "f0_summary": _verify_file(
             f0_root / "summary.json",
             LOCKED_F0_SUMMARY_SHA256,
@@ -387,14 +416,31 @@ def verify_static_locks(
     }
     protocol = _read_json(protocol_path)
     implementation = _read_json(implementation_lock_path)
+    retry_lock = _read_json(NO_OUTPUT_RETRY_LOCK_PATH)
+    no_output_failure = _read_json(
+        f0_root / "f1_tiny_output" / "failure.json"
+    )
     summary = _read_json(f0_root / "summary.json")
     replay = _read_json(f0_root / "replay.json")
     selection = _read_json(f0_root / "source_selection.json")
     if not all(
         isinstance(value, dict)
-        for value in (protocol, implementation, summary, replay, selection)
+        for value in (
+            protocol,
+            implementation,
+            retry_lock,
+            no_output_failure,
+            summary,
+            replay,
+            selection,
+        )
     ):
         raise TypeError("Locked F1 inputs must all be JSON objects")
+    failed_tree = sorted(
+        path.relative_to(f0_root / "f1_tiny_output").as_posix()
+        for path in (f0_root / "f1_tiny_output").rglob("*")
+        if path.is_file()
+    )
     checks = {
         "protocol_revision": protocol["protocol_revision"] == 2,
         "implementation_state": implementation["lock_state"]
@@ -411,6 +457,17 @@ def verify_static_locks(
         "selection_no_validation_test": not bool(
             selection["validation_test_pixels_opened"]
         ),
+        "retry_lock_state": retry_lock["state"]
+        == "prospective_before_retry_and_before_any_f1_synthetic_output",
+        "retry_output": retry_lock["retry"]["output_directory"].endswith(
+            "/f1_tiny_output_v2"
+        ),
+        "no_output_failure_stage": no_output_failure["failure_context"][
+            "stage"
+        ]
+        == "model_snapshot_verify",
+        "no_output_failure_status": no_output_failure["passed"] is False,
+        "no_output_failure_tree": failed_tree == ["failure.json"],
     }
     if not all(checks.values()):
         raise RuntimeError("F1 static lock checks failed: {}".format(checks))

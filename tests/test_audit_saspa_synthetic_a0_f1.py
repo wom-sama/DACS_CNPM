@@ -33,6 +33,15 @@ def test_f1_implementation_and_f0_hashes_are_locked() -> None:
         audit._sha256(audit.F0_ROOT / "source_selection.json")
         == audit.LOCKED_SOURCE_SELECTION_SHA256
     )
+    assert (
+        audit._sha256(audit.NO_OUTPUT_RETRY_LOCK_PATH)
+        == audit.LOCKED_NO_OUTPUT_RETRY_SHA256
+    )
+    assert (
+        audit._sha256(audit.FAILED_NO_OUTPUT_DIR / "failure.json")
+        == audit.LOCKED_NO_OUTPUT_FAILURE_SHA256
+    )
+    assert audit.DEFAULT_OUTPUT_DIR.name == "f1_tiny_output_v2"
 
 
 def _official_hwc3_fixture(value: np.ndarray) -> np.ndarray:
@@ -284,6 +293,42 @@ def test_model_snapshot_verification_is_hash_and_path_locked(
     assert result["passed"] is True
     assert result["file_count"] == 2
     assert result["total_bytes"] == total
+    assert result["files_sha256"] == audit._canonical_sha256(rows)
+
+
+def test_model_snapshot_rejects_parent_traversal(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    snapshot = tmp_path / "snapshot"
+    snapshot.mkdir()
+    outside = tmp_path / "outside.bin"
+    outside.write_bytes(b"outside")
+    rows = [
+        {
+            "path": "../outside.bin",
+            "size_bytes": outside.stat().st_size,
+            "sha256": audit._sha256(outside),
+        }
+    ]
+    monkeypatch.setattr(
+        audit.f0,
+        "LOCKED_MODEL_REMOTE_BYTES",
+        outside.stat().st_size,
+    )
+    try:
+        audit.verify_model_snapshot(
+            {
+                "snapshot_path": str(snapshot),
+                "files": rows,
+                "file_manifest_sha256": audit._canonical_sha256(rows),
+                "total_bytes": outside.stat().st_size,
+            }
+        )
+    except RuntimeError as exc:
+        assert "manifest path is unsafe" in str(exc)
+    else:
+        raise AssertionError("Parent traversal was not rejected")
 
 
 def test_locked_source_order_and_replay_have_no_premature_authorization() -> None:

@@ -4,7 +4,7 @@ param(
     [string]$Phase = "Preflight",
     [string]$TestPython = "D:\DataAI\.venv\Scripts\python.exe",
     [string]$RuntimePython = "D:\DataAI\Tools\venvs\trkh_saspa_a0_torch26\Scripts\python.exe",
-    [string]$OutputDir = "D:\DataAI\AIEx\TRKH\runs\audit_saspa_dual_view_synthetic_a0_20260723\f1_tiny_output"
+    [string]$OutputDir = "D:\DataAI\AIEx\TRKH\runs\audit_saspa_dual_view_synthetic_a0_20260723\f1_tiny_output_v2"
 )
 
 Set-StrictMode -Version Latest
@@ -71,6 +71,7 @@ function Assert-PushedTrackedState {
         "docs/TRKH_5CLASS_SASPA_F1_IMPLEMENTATION_LOCK_20260724.json",
         "docs/TRKH_5CLASS_SASPA_F1_IMPLEMENTATION_LOCK_20260724.md",
         "docs/TRKH_5CLASS_SASPA_F1_IMPLEMENTATION_LOCK_20260724.sha256",
+        "docs/TRKH_5CLASS_SASPA_F1_NO_OUTPUT_RETRY_20260724.json",
         "trkh/tools/audit_saspa_synthetic_a0_f1.py",
         "tests/test_audit_saspa_synthetic_a0_f1.py",
         "scripts/run_trkh_saspa_synthetic_a0_f1.ps1"
