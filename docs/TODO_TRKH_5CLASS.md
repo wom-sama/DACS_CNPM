@@ -4815,8 +4815,24 @@
   object-schema manifests, verifies 220/220 compacted originals absent,
   deletes nothing, and passes at SHA `b48ebd82...5510`. Research-process DOCX
   revision 10 renders cleanly over 12 pages and passes accessibility `0/0/0`.
-- [ ] Screen and prospectively lock one equation- and
-  representation-distinct train-only A0. It must use sample-conditional local
-  evidence, include FN-versus-restricted-FP causal controls, and prove
-  simultaneous TP retention plus restricted-FP removal before any
-  validation/test, trainer integration, smoke, probe, or full train.
+- [x] Screen and prospectively lock one equation- and
+  representation-distinct train-only A0. CAP uses pixel context, the exact 27
+  integral regions, within-image region attention, ordered LSTM encoding, and
+  residual-less NetVLAD on the frozen scratch TRKH block-2 cohort. Protocol/
+  lock SHAs are `c6d307bf...a1e32`/`4aaba9ef...c0d87`; seven roles include
+  global/self-only controls, seed repeat, spatial derangement, and label-blind
+  cross-sample context. Five source-held folds, FN-versus-restricted-FP gates,
+  20 visual anchors, replay, and resource limits are fixed before candidate
+  code or metrics.
+- [ ] Commit and push the CAP prospective protocol/lock boundary without
+  staging user payloads. Compile/pyflakes pass, focused lock tests pass `5/5`,
+  full pytest passes `1904/1904`, revision-11 Word QA passes 13 pages and
+  accessibility `0/0/0`, and retention passes 851 directories/51 manifests/
+  220 absent originals at SHA `436c06ac...bfd72e`. Only afterward implement
+  the independent PyTorch equation engine, dynamic train-only ledger, auditor,
+  launcher, replay, and fixed visual evidence. Do not expose candidate metrics
+  before the implementation stage is separately verified and pushed.
+- [ ] Run the sole locked CAP A0 only from that clean pushed implementation
+  commit. Inspect every structural, causal, performance, fold, replay,
+  resource, and XAI gate before deciding whether a separately locked
+  default-off trainer smoke is authorized.

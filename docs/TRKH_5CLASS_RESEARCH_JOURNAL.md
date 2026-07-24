@@ -21431,3 +21431,69 @@ Date: 2026-07-02
 - Research-process report revision 10 renders cleanly across all 12 pages
   after shortening only the duplicated revision-history prose; the detailed
   journal remains complete. Accessibility passes at `0/0/0`.
+
+## CAP Integral-Region Context A0 Prospective Lock - 2026-07-24
+
+- Select CAP after a primary-source and no-repeat screen. Pin the accepted
+  AAAI-2021 paper at SHA `2fd8cb83...0624cb2` and the authors' MIT repository
+  at commit/tree `cae53050...199e7dc1`/`70f47d05...e14a`. The independent
+  PyTorch adaptation follows pixel self-attention, the exact 27 integral
+  regions, within-image region-conditioned attention, an ordered LSTM, and
+  residual-less NetVLAD; it does not import the official Keras code.
+- Reject nearby candidates before implementation. PEDTrans overlaps closed
+  local-mixer/token-drop/RSC/pruning routes; ViT-CoMer overlaps the rejected
+  persistent bidirectional CNN-token coupling gate already present in TRKH;
+  ViTree's linked repository is empty at the inspected revision and provides
+  no usable licensed implementation. CAP is retained because its ordered,
+  multi-scale region-context equation is representation-distinct from the
+  closed patch selectors, covariance/global pooling, NMF, DOLG, PMG, and
+  Conformer-style routes.
+- Lock only the frozen scratch TRKH block-2 train cohort: `528` class-1 TP,
+  `13` class-1 FN, and `222` restricted FP (`158` `0->1`, `54` `2->1`,
+  `10` `4->1`). Feature/geometry/CIDT SHAs are
+  `e4a833b2...8d8de2a`/`69f581e1...f66dc72`/
+  `2e099375...d4db21c`; validation and test are forbidden.
+- Prospectively fix five outer folds, calibration fold `(outer+1)%5`, 30
+  epochs, optimizer/schedule, seven roles, seed repeat, spatial and
+  cross-sample derangements, threshold semantics, resource limits, replay,
+  and 20 visual anchors. The candidate must simultaneously retain class-1 TP
+  and remove restricted FP, improve full-train macro/class-1 F1 and class-1
+  precision, beat non-deranged controls, and lose its advantage under both
+  causal derangements.
+- Final protocol and machine-lock SHAs are
+  `c6d307bf...a1e32` and `4aaba9ef...c0d87`. Lock QA failed closed before
+  publication when tests exposed an incorrect parent commit and a transposed
+  current-best-history hash. A subsequent pre-commit code review caught a
+  misspelled `netvlad_clusters` field and, more importantly, a global
+  cross-sample mapping that could let a fit control consume held/calibration
+  features. The final lock deranges independently inside fit, calibration,
+  and held partitions and asserts zero partition escapes, source overlap,
+  self-pairs, or duplicate partners. It also locks sample-index-seeded
+  zero-fixed-point Sattolo spatial permutations, removes rectangular model
+  padding by valid-support canonicalization, and keeps own values while only
+  corrupting cross-sample keys. This prevents padding and random-label
+  replacement from becoming control shortcuts. Paper/source comparison also
+  locks the accepted Equation 2 without the training script's extra SE,
+  spectral normalization, or pre-softmax sigmoid, preventing post-result
+  mixing of two CAP variants. No candidate metric existed during any
+  correction. Byte-for-byte rebuild/check and focused tests pass `5/5`.
+- No CAP candidate implementation, training, metric, validation/test access,
+  trainer integration, smoke/probe/full train, or current-best command update
+  exists at this stage. Commit and push this prospective evidence boundary
+  before writing the candidate engine.
+- Research-process report revision 11 records the CAP lock without changing
+  keeper or current-best command. All 13 rendered pages pass full-detail
+  visual review and accessibility passes at `0/0/0`.
+- Close prospective-lock engineering verification: compile and pyflakes pass,
+  lock rebuild/check and focused tests pass `5/5`, and the complete repository
+  passes `1904/1904` with 295 existing warnings in the final post-review rerun
+  (`74.01 s`). Read-only
+  retention scans 851 run directories and all 51 valid object-schema
+  compaction manifests, verifies 220/220 compacted originals absent, deletes
+  nothing, and passes with `blockers=[]`, `88.846 GiB` free, and summary SHA
+  `436c06ac...bfd72e`.
+- Two preliminary retention invocations fail closed before creating an output
+  because PowerShell treated an array-schema cleanup manifest as a generic
+  custom object. Tightening the launcher filter to exclude `System.Array`
+  restores the same 51-manifest set used previously. This is launcher QA only;
+  no scientific input, run, raw dataset, or retention decision changes.

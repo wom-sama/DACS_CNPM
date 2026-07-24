@@ -2,10 +2,10 @@
   "document": {
     "title": "TRKH 5-class",
     "subtitle": "Quy trình nghiên cứu, trạng thái bằng chứng và kế hoạch cải tiến",
-    "revision": "10",
+    "revision": "11",
     "updated": "2026-07-24",
     "branch": "classification-only-research",
-    "status": "Đang nghiên cứu - Bal-BCE train-only A0 đã bị loại; đang sàng lọc hướng representation mới",
+    "status": "Đang nghiên cứu - CAP integral-region context A0 đã được khóa prospectively trước candidate code",
     "owner": "TRKH classification-only research"
   },
   "executive_metrics": [
@@ -37,7 +37,7 @@
         {
           "type": "callout",
           "label": "Quyết định",
-          "text": "Giữ nguyên keeper hiện tại và file lệnh full-train tốt nhất. Full train random-init 30 epoch không thắng validation gate; JPEG-DL, SaSPA synthetic, LP-A3 hard-positive, NSA Poisson, RN-LISDA và Bal-BCE A0 đều đã bị loại. Bal-BCE pass toàn bộ cấu trúc và replay exact nhưng chỉ pass 19/34 performance gate: cứu 38 TP lớp 1 đồng thời tạo 57 restricted FP và giảm precision từ 0,821494 xuống 0,759317. Trainer, validation, test và full train vẫn đóng; hướng kế tiếp phải bổ sung tín hiệu cục bộ theo mẫu thay vì dịch prior toàn cục."
+          "text": "Giữ nguyên keeper hiện tại và file lệnh full-train tốt nhất. Full train random-init 30 epoch không thắng validation gate; JPEG-DL, SaSPA synthetic, LP-A3 hard-positive, NSA Poisson, RN-LISDA và Bal-BCE A0 đều đã bị loại. Hướng CAP integral-region context đã được khóa prospectively trên frozen train-only block-2 cohort trước candidate code hoặc metric. Trainer, validation, test và full train vẫn đóng; CAP chỉ được tiến tiếp nếu đồng thời giữ TP lớp 1, loại restricted FP và chứng minh lợi thế biến mất dưới causal derangement."
         },
         {
           "type": "paragraph",
@@ -313,7 +313,7 @@
             ["Independent replay", "Artifact/hash được chạy lại bằng lệnh riêng, không tái dùng state trong RAM.", "Phát hiện batch/numeric/state leakage."],
             ["Audit toàn diện", "Metric, transitions, robustness, XAI, placebo và manual review đều bắt buộc.", "Không thăng hạng vì một con số hoặc heatmap đẹp."],
             ["Command governance", "Current-best command và history chỉ đổi cùng promotion commit.", "Người dùng luôn có lệnh VS Code chạy được và truy vết được."],
-            ["Retention có manifest", "Hash/tóm tắt trước khi xóa chính xác artifact obsolete; hậu Bal-BCE quét 850 thư mục và 51 manifest, 220/220 nguồn compact đã vắng.", "Không xóa gì trong audit; 0 blocker và 88,871 GiB còn trống."],
+            ["Retention có manifest", "Hash/tóm tắt trước khi xóa chính xác artifact obsolete; hậu CAP lock quét 851 thư mục và 51 manifest, 220/220 nguồn compact đã vắng.", "Không xóa gì trong audit; 0 blocker, 88,846 GiB còn trống và summary SHA 436c06ac...bfd72e."],
             ["Song song CPU/GPU", "Trong lúc formal/train chạy, dùng CPU cho research, docs và static checks.", "Giảm thời gian chết, không tranh VRAM."],
             ["Báo cáo tái tạo", "DOCX sinh từ JSON + script, render toàn bộ trang trước khi phát hành.", "Cập nhật thường xuyên, diff được và ít lỗi Word thủ công."],
             ["Process isolation cho diffusion", "Dựng pipeline trong worker con, giữ peak telemetry rồi gate parent sau khi worker thoát.", "Trả RAM ổn định, tránh false failure và vẫn phát hiện PID lạ."],
@@ -323,7 +323,8 @@
             ["Dynamic train-only access ledger", "Cài process-wide audit hook trước input đầu tiên, allowlist artifact và block val/test trước open; replay access digest.", "Bổ sung bằng chứng runtime cho split isolation ngoài counter tự khai báo."],
             ["Source-aware meta schedule", "Meta rows cân bằng lớp nhưng source-disjoint với outer-fit; child feature kế thừa source/fold và RNG theo sample identity.", "Cho phép augmentation/synthetic hợp lệ mà không tạo leakage hoặc đổi phân phối real head batch."],
             ["Replay read-set và scalar type", "Formal/replay dựng cùng visual evidence nhưng replay ghi file tạm; bool và numpy.bool_ so theo typed logical value.", "Ledger exact mà không ghi đè formal artifact; tránh false mismatch do object identity."],
-            ["Đối chứng hai chiều prior", "So exact Bal-BCE với CE, plain BCE, Balanced Softmax, seed repeat và reversed-prior trên cùng fold/init/order.", "Phân biệt tăng recall do mở rộng lớp toàn cục với cải thiện ranh giới chọn lọc; chặn sweep hệ số sau kết quả."]
+            ["Đối chứng hai chiều prior", "So exact Bal-BCE với CE, plain BCE, Balanced Softmax, seed repeat và reversed-prior trên cùng fold/init/order.", "Phân biệt tăng recall do mở rộng lớp toàn cục với cải thiện ranh giới chọn lọc; chặn sweep hệ số sau kết quả."],
+            ["Khóa representation trước code", "Pin paper/repository/license, phương trình CAP, 27 region, fold, role, seed, threshold, XAI và gate trước khi viết candidate.", "Tách quyết định khoa học khỏi metric; test đã bắt parent/hash sai trước khi lock được công bố."]
           ]
         }
       ]
@@ -337,7 +338,8 @@
             "Giữ nguyên các closure JPEG-DL, SaSPA F1, LP-A3, NSA, RN-LISDA và Bal-BCE A0 có giá trị tái lập; cleanup artifact tạm bằng manifest riêng.",
             "Đóng exact SaSPA, LP-A3, NSA, RN-LISDA và Bal-BCE neighborhoods đã khóa; không mở lại bằng sweep prompt/seed, radius/step/margin/lambda, query/Poisson/readout, CovNet/meta schedule hoặc prior multiplier.",
             "Giữ bất biến Bal-BCE protocol/lock SHA 27c32d2a/1e28c686 và formal/replay/final SHAs b501fe60/8766c26e/93fc089b; không integration vì candidate tạo 57 restricted FP.",
-            "Sàng lọc rồi khóa prospectively một A0 representation-distinct dùng tín hiệu cục bộ theo mẫu; gate train-only phải cùng lúc giữ TP lớp 1 và loại restricted FP, với matched causal controls.",
+            "Giữ bất biến CAP protocol/lock SHA c6d307bf/4aaba9ef; valid support loại padding, spatial Sattolo không fixed point và cross-sample control partition-preserving; commit/push trước candidate code/metric.",
+            "Sau mốc push, triển khai độc lập CAP pixel context, 27 integral regions, region attention, ordered LSTM và residual-less NetVLAD cùng các causal controls, train-only ledger, replay và XAI cố định.",
             "Giữ ưu tiên precision lớp 1 nhưng đặt recall-loss budget rõ ràng; không chấp nhận giảm false positive bằng cách phá quá nhiều true positive.",
             "Tiếp tục làm sạch worktree theo manifest và commit theo stage; không đụng BaoCao hoặc deep-research-report chưa theo dõi.",
             "Chỉ cập nhật lệnh full-train tốt nhất và history khi một candidate thắng validation, replay và XAI gate."
@@ -364,12 +366,14 @@
             ["docs/TRKH_5CLASS_BALANCED_BCE_FROZEN_EMBEDDING_A0_PROTOCOL_20260724.md", "Giao thức prospective Bal-BCE trước mọi candidate metric."],
             ["docs/TRKH_5CLASS_BALANCED_BCE_FROZEN_EMBEDDING_A0_CLOSURE_20260724.md", "Kết luận formal/replay/visual, no-repeat boundary và hash bằng chứng Bal-BCE."],
             ["scripts/build_trkh_balanced_bce_frozen_embedding_a0_lock.py", "Tái sinh fold prior, bias, init, order hashes và machine lock."],
+            ["docs/TRKH_5CLASS_CAP_INTEGRAL_REGION_CONTEXT_A0_PROTOCOL_20260724.md", "Giao thức prospective CAP, equation boundary, causal controls và downstream authorization."],
+            ["scripts/build_trkh_cap_integral_region_context_a0_lock.py", "Tái sinh cohort, fold, role, seed, epoch-order, derangement, visual-anchor và machine lock CAP."],
             ["C:/Users/ADMIN/.codex/skills/trkh-5class/SKILL.md", "Kinh nghiệm vận hành và hard rules dùng ở các phiên Codex sau."]
           ]
         },
         {
           "type": "paragraph",
-          "text": "Revision 1-3: tạo báo cáo tái lập, ghi full train 30e/JPEG-DL/chính sách synthetic chống leak, đóng JPEG-DL bằng replay-XAI và hoàn tất retention/layout QA. Revision 4-5: SaSPA F0 pass resource/replay; F1 bị loại ở fidelity 0/10, blind 7/10 và XAI 6/10, không đổi keeper. Revision 6: LP-A3 A0 bị loại sau causal-control fail; không integration. Revision 7: NSA Poisson bị loại sau formal/replay/manual review; sửa canonical hash và whole-corpus duplicate rule. Revision 8: RN-LISDA bị loại sau performance 17/37, mechanism 22/25 và replay exact; sửa visual-ledger/bool checker. Revision 9: pin nguồn LiVT và khóa Bal-BCE prospective tại protocol/lock SHA 27c32d2a/1e28c686 trước metric. Revision 10: Bal-BCE bị loại sau performance 19/34, replay exact và review 20 anchor; cứu 38 TP nhưng tạo 57 restricted FP, prior đảo mất 53 TP. Full suite 1.899/1.899, retention 850 thư mục/220 nguồn vắng và DOCX 12 trang accessibility 0/0/0; keeper/lệnh tốt nhất không đổi."
+          "text": "Revision 1-3: tạo báo cáo tái lập, ghi full train 30e/JPEG-DL/chính sách synthetic chống leak, đóng JPEG-DL bằng replay-XAI và hoàn tất retention/layout QA. Revision 4-5: SaSPA F0/F1; F1 bị loại ở fidelity và XAI. Revision 6-8: LP-A3, NSA và RN-LISDA bị loại bằng causal controls/replay. Revision 9-10: khóa rồi loại Bal-BCE; cứu 38 TP nhưng tạo 57 restricted FP. Revision 11: pin paper/repository MIT của CAP và khóa prospectively frozen train-only A0 tại protocol/lock SHA c6d307bf/4aaba9ef; 27 integral regions, bảy role, năm fold, 20 visual anchors và mọi gate cố định trước candidate code/metric. Pre-commit review loại padding shortcut, khóa Sattolo, sửa cross-sample mapping và chốt phương trình paper thay vì phụ gia script. Full pytest 1.904/1.904; retention 851 thư mục/51 manifest/220 nguồn vắng; 13 trang, accessibility 0/0/0. Keeper/lệnh tốt nhất không đổi."
         }
       ]
     },
@@ -468,6 +472,16 @@
               "title": "LiVT official repository",
               "url": "https://github.com/XuZhengzhuo/LiVT",
               "detail": "Nguồn MIT cho công thức log(pi)-log(1-pi) và one-hot BCE; phải pin revision trước A0."
+            },
+            {
+              "title": "Context-aware Attentional Pooling, AAAI 2021",
+              "url": "https://ojs.aaai.org/index.php/AAAI/article/view/16176",
+              "detail": "Nguồn phương trình pixel context, 27 integral regions, region attention, LSTM và residual-less NetVLAD cho CAP A0."
+            },
+            {
+              "title": "CAP official repository",
+              "url": "https://github.com/ArdhenduBehera/cap",
+              "detail": "Nguồn MIT được pin tại commit cae53050af583c2b3fa38081c0abc227199e7dc1; TRKH dùng implementation PyTorch độc lập."
             },
             {
               "title": "Do We Train on Test Data? Purging CIFAR of Near-Duplicates",
