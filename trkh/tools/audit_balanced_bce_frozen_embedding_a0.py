@@ -1052,7 +1052,19 @@ def _configure_torch(device: torch.device) -> None:
 
 
 def _process_snapshot() -> Dict[str, object]:
-    current = os.getpid()
+    current = psutil.Process()
+    allowed = {current.pid}
+    try:
+        allowed.update(process.pid for process in current.parents())
+    except (psutil.AccessDenied, psutil.NoSuchProcess):
+        pass
+    try:
+        allowed.update(
+            process.pid for process in current.children(recursive=True)
+        )
+    except (psutil.AccessDenied, psutil.NoSuchProcess):
+        pass
+    observed = []
     rows = []
     for process in psutil.process_iter(
         ["pid", "ppid", "name", "create_time", "cmdline"]
@@ -1062,21 +1074,25 @@ def _process_snapshot() -> Dict[str, object]:
             name = str(info.get("name") or "").casefold()
             if name not in {"python.exe", "pythonw.exe", "trtexec.exe"}:
                 continue
-            if int(info["pid"]) == current:
-                continue
-            rows.append(
-                {
-                    "pid": int(info["pid"]),
-                    "ppid": int(info.get("ppid") or 0),
-                    "name": str(info.get("name") or ""),
-                    "create_time": float(info.get("create_time") or 0.0),
-                    "cmdline": [str(value) for value in (info.get("cmdline") or [])],
-                }
-            )
+            row = {
+                "pid": int(info["pid"]),
+                "ppid": int(info.get("ppid") or 0),
+                "name": str(info.get("name") or ""),
+                "create_time": float(info.get("create_time") or 0.0),
+                "cmdline": [
+                    str(value) for value in (info.get("cmdline") or [])
+                ],
+                "owned_by_auditor_chain": int(info["pid"]) in allowed,
+            }
+            observed.append(row)
+            if not row["owned_by_auditor_chain"]:
+                rows.append(row)
         except (psutil.AccessDenied, psutil.NoSuchProcess, psutil.ZombieProcess):
             continue
     return {
-        "current_pid": current,
+        "current_pid": current.pid,
+        "allowed_pids": sorted(allowed),
+        "processes": sorted(observed, key=lambda row: row["pid"]),
         "unexpected_processes": sorted(rows, key=lambda row: row["pid"]),
     }
 
