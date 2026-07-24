@@ -380,3 +380,6 @@ def test_powershell_launcher_uses_native_exit_codes_and_fresh_process_modes() ->
     assert 'Invoke-CapMode -Mode "formal"' in launcher
     assert 'Invoke-CapMode -Mode "replay"' in launcher
     assert "--approve-visual" in launcher
+    assert "function Wait-AvailablePhysicalMemory" in launcher
+    assert "Waiting for post-test memory recovery" in launcher
+    assert "$MinimumGiB = 3.5" in launcher

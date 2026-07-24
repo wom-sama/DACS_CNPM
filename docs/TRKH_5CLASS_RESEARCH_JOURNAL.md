@@ -21568,7 +21568,15 @@ Date: 2026-07-02
   locked trace/update/state boundary; worst-role batch 32 peaks at
   `0.934431/0.890468 GiB` CUDA for FP32/BF16 and `1.668243 GiB` process RSS.
 - Compile, pyflakes, PowerShell AST parse, and focused tests pass `25/25`.
-  Complete pytest passes `1924/1924` with 295 existing warnings in `76.14 s`.
+  Complete pytest passes `1924/1924` with 295 existing warnings in `77.80 s`.
   Research-process report revision 12 passes full-detail review of all 13
   pages and accessibility `0/0/0`. Keeper, best full-train command, trainer,
   validation, test, and raw data remain unchanged; no CAP metric exists yet.
+- Push the implementation boundary at `c0684fd`. Official preflight passes
+  all ten groups with zero validation/test opens, exact repository/lock/fold/
+  ledger checks, FP32/BF16 peak CUDA `0.934431/0.890468 GiB`, and no foreign
+  compute process. The first formal launcher invocation then fails before
+  output creation because RAM reclamation after its focused tests briefly
+  falls below the unchanged 3.5-GiB guard. After process exit, free RAM
+  returns to `4.051 GiB`. Fix only the launcher to wait up to 90 seconds for
+  post-test recovery; do not lower the guard or alter any scientific setting.

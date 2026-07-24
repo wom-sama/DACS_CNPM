@@ -112,12 +112,19 @@ For each locked visual anchor:
 - Engine NumPy-oracle maximum equation error: `2.55e-15`.
 - CAP lock/engine/auditor focused tests: `25/25`.
 - Complete repository suite: `1924/1924` with 295 existing warnings in
-  `76.14 s`.
+  `77.80 s`.
 - PowerShell launcher parses without errors and uses `$LASTEXITCODE`, not a
   native stderr object pipeline.
 - The launcher runs formal and replay as separate Python invocations.
 - Research-process report revision 12 renders cleanly across all 13 pages and
   passes accessibility at `0/0/0`.
+- The first post-push formal launcher invocation failed closed before output
+  creation because focused-test memory had not yet been reclaimed at the
+  3.5-GiB guard. The launcher now waits up to 90 seconds for post-test memory
+  recovery without lowering the locked 3.5-GiB minimum. No candidate metric
+  or partial run existed during this infrastructure correction. The corrected
+  launcher passes direct success/timeout behavior, PowerShell parsing, focused
+  `25/25`, and the complete `1924/1924` suite.
 
 Formal A0 remains prohibited until this implementation stage, its tests, the
 living report, and the full repository suite are committed and pushed.

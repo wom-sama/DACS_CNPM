@@ -110,6 +110,35 @@ function Get-LockedCommit {
     return $Head
 }
 
+function Wait-AvailablePhysicalMemory {
+    param(
+        [double]$MinimumGiB = 3.5,
+        [int]$TimeoutSeconds = 90
+    )
+    $Deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    do {
+        $OperatingSystem = Get-CimInstance Win32_OperatingSystem
+        $AvailableGiB = (
+            [double]$OperatingSystem.FreePhysicalMemory * 1KB
+        ) / 1GB
+        if ($AvailableGiB -ge $MinimumGiB) {
+            Write-Host (
+                "Available physical memory: {0:N3} GiB" -f $AvailableGiB
+            )
+            return $AvailableGiB
+        }
+        Write-Host (
+            "Waiting for post-test memory recovery: {0:N3}/{1:N3} GiB" -f `
+                $AvailableGiB, $MinimumGiB
+        )
+        Start-Sleep -Seconds 2
+    } while ((Get-Date) -lt $Deadline)
+    throw (
+        "CAP A0 requires at least {0:N3} GiB available physical memory; " +
+        "only {1:N3} GiB recovered within {2} seconds."
+    ) -f $MinimumGiB, $AvailableGiB, $TimeoutSeconds
+}
+
 function Invoke-CapMode {
     param(
         [ValidateSet("formal", "replay")][string]$Mode,
@@ -198,13 +227,7 @@ if ($Phase -eq "Replay" -and -not (
     throw "Formal summary is missing in: $OutputDir"
 }
 
-$OperatingSystem = Get-CimInstance Win32_OperatingSystem
-$AvailableGiB = (
-    [double]$OperatingSystem.FreePhysicalMemory * 1KB
-) / 1GB
-if ($AvailableGiB -lt 3.5) {
-    throw "CAP A0 requires at least 3.5 GiB available physical memory."
-}
+[void](Wait-AvailablePhysicalMemory)
 
 $WallpaperPaused = $false
 try {
