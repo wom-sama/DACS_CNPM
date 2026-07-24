@@ -2,10 +2,10 @@
   "document": {
     "title": "TRKH 5-class",
     "subtitle": "Quy trình nghiên cứu, trạng thái bằng chứng và kế hoạch cải tiến",
-    "revision": "8",
+    "revision": "9",
     "updated": "2026-07-24",
     "branch": "classification-only-research",
-    "status": "Đang nghiên cứu - RN-LISDA A0 đã bị loại; đang khóa Bal-BCE train-only",
+    "status": "Đang nghiên cứu - Bal-BCE train-only A0 đã khóa prospectively; chưa có candidate metric",
     "owner": "TRKH classification-only research"
   },
   "executive_metrics": [
@@ -25,9 +25,9 @@
       "detail": "Validation macro-F1; precision class 1 còn thấp"
     },
     {
-      "label": "RN-LISDA A0",
-      "value": "Rejected",
-      "detail": "Macro/class1 F1 0,9383/0,8146; mất 25 TP so với CE"
+      "label": "Bal-BCE A0",
+      "value": "Locked",
+      "detail": "Protocol/lock 27c32d2a/1e28c686; chưa chạy candidate"
     }
   ],
   "sections": [
@@ -37,7 +37,7 @@
         {
           "type": "callout",
           "label": "Quyết định",
-          "text": "Giữ nguyên keeper hiện tại và file lệnh full-train tốt nhất. Full train random-init 30 epoch không thắng validation gate; JPEG-DL, SaSPA synthetic, LP-A3 hard-positive, NSA Poisson và RN-LISDA A0 đều đã bị loại. RN-LISDA dùng đủ 9.215 train rows với năm source-held fold, không mở validation/test; candidate trùng fixed/deranged/joint controls ở macro/class-1 F1 0,938291/0,814601, loại 22 restricted FP nhưng làm mất 25 class-1 TP so với CE. Trainer, validation và full train không được mở từ kết quả này."
+          "text": "Giữ nguyên keeper hiện tại và file lệnh full-train tốt nhất. Full train random-init 30 epoch không thắng validation gate; JPEG-DL, SaSPA synthetic, LP-A3 hard-positive, NSA Poisson và RN-LISDA A0 đều đã bị loại. Bal-BCE frozen-embedding A0 đã được khóa trước metric ở protocol/lock SHA 27c32d2a/1e28c686 với sáu vai trò, năm source-held fold, prior chỉ từ fitting-train và cổng precision-TP đồng thời. Chưa có candidate metric; trainer, validation, test và full train vẫn đóng."
         },
         {
           "type": "paragraph",
@@ -68,7 +68,8 @@
             ["SaSPA synthetic F1", "10 ảnh train-only, không train", "N/A", "Fidelity 0/10; blind 7/10; XAI 6/10", "Rejected trước A1"],
             ["LP-A3 hard-positive A0", "9.215 train; cohort 734; không train", "N/A", "TP/rival/FP reject 0,9922 / 0,9648 / 0,0315", "Rejected trước integration"],
             ["NSA class-pair Poisson A0", "9.215 train; 5 source-held folds", "N/A", "AUROC/TP/FP reject 0,8214 / 0,9754 / 0,1396", "Rejected; maps diffuse, không hơn controls"],
-            ["RN-LISDA A0", "9.215 train; 5 source-held folds", "0,938291", "0,848000 / 0,783734 / 0,814601", "Rejected; trùng fixed/deranged/joint, mất 25 TP"]
+            ["RN-LISDA A0", "9.215 train; 5 source-held folds", "0,938291", "0,848000 / 0,783734 / 0,814601", "Rejected; trùng fixed/deranged/joint, mất 25 TP"],
+            ["Bal-BCE A0", "Prospective train-only lock; chưa chạy", "N/A", "CE/plain BCE/Bal-BCE/seed/BS/sign", "Lock 1e28c686; 0 candidate metric"]
           ]
         },
         {
@@ -331,7 +332,7 @@
           "items": [
             "Giữ nguyên các closure JPEG-DL, SaSPA F1, LP-A3, NSA và RN-LISDA A0 có giá trị tái lập; cleanup artifact tạm bằng manifest riêng.",
             "Đóng exact SaSPA, LP-A3, NSA và RN-LISDA neighborhoods đã khóa; không mở lại bằng sweep prompt/seed, radius/step/margin/lambda, query/Poisson/readout hoặc CovNet/meta schedule.",
-            "Commit/push prospective Bal-BCE protocol và machine lock trước candidate metrics: official LiVT equation, source-held folds, CE/plain-BCE/Balanced-Softmax/sign/seed controls, file-access ledger, resources và conjunctive gates.",
+            "Giữ bất biến Bal-BCE protocol/lock SHA 27c32d2a/1e28c686 đã khóa và push trước candidate metrics: official LiVT equation, source-held folds, CE/plain-BCE/Balanced-Softmax/sign/seed controls, file-access ledger, resources và conjunctive gates.",
             "Chạy Bal-BCE frozen-embedding A0 chỉ trên yolo_f/train; candidate phải tăng precision, loại restricted FP, giữ class-1 TP/recall và macro/nonfocus safety trên đủ năm fold trước trainer integration.",
             "Giữ ưu tiên precision lớp 1 nhưng đặt recall-loss budget rõ ràng; không chấp nhận giảm false positive bằng cách phá quá nhiều true positive.",
             "Tiếp tục làm sạch worktree theo manifest và commit theo stage; không đụng BaoCao hoặc deep-research-report chưa theo dõi.",
@@ -356,12 +357,14 @@
             ["docs/TRKH_5CLASS_RESEARCH_PROCESS_STATUS.json", "Nguồn có cấu trúc của báo cáo này."],
             ["scripts/build_trkh_research_process_docx.py", "Trình dựng DOCX tái lập và audit layout token."],
             ["docs/TRKH_5CLASS_RESEARCH_PROCESS_STATUS.docx", "Báo cáo Word người dùng theo dõi."],
+            ["docs/TRKH_5CLASS_BALANCED_BCE_FROZEN_EMBEDDING_A0_PROTOCOL_20260724.md", "Giao thức prospective Bal-BCE trước mọi candidate metric."],
+            ["scripts/build_trkh_balanced_bce_frozen_embedding_a0_lock.py", "Tái sinh fold prior, bias, init, order hashes và machine lock."],
             ["C:/Users/ADMIN/.codex/skills/trkh-5class/SKILL.md", "Kinh nghiệm vận hành và hard rules dùng ở các phiên Codex sau."]
           ]
         },
         {
           "type": "paragraph",
-          "text": "Revision 1: tạo báo cáo Word tái lập; ghi nhận full train 30e, trạng thái JPEG-DL formal, nghiên cứu competition và chính sách synthetic train-only chống leak. Revision 2: khóa JPEG-DL A0 ở VisualFail với replay exact, ghi metric/XAI/SHAs cuối và chuyển kế hoạch sang synthetic feasibility source-disjoint. Revision 3: retention pass trên 822 thư mục/51 manifests, giữ formal 2,614 MiB; sửa odd/even header-footer và reset numbering theo từng block sau render QA. Revision 4: SaSPA F0 no-output pass formal/replay trên RTX 4060 8 GB; ghi telemetry, process isolation, hash artifact và chỉ mở quyền F1 10 ảnh train-only. Revision 5: đóng SaSPA F1 ở Rejected sau fidelity 0/10, blind 7/10, duplicate-safety pass và frozen-keeper XAI 6/10; giữ nguyên keeper/lệnh full-train tốt nhất; bỏ running header-footer để khóa lề 1 inch ổn định giữa Word và LibreOffice sau render QA. Revision 6: đóng LP-A3-inspired A0 sau audit train-only 9.215 hàng, replay exact, 19/23 automated gates và manual delta review; ghi causal-control fail 6/734, không integration hoặc command update. Revision 7: đóng NSA class-pair Poisson A0 ở reject sau formal/replay/manual review; phân biệt checker-order defect với scientific failure, sửa duplicate audit thành whole-corpus invalidation một chiều, chạy retention 847 thư mục không blocker, full suite 1.852/1.852, và chọn RN-LISDA train-only làm route kế tiếp. Revision 8: đóng RN-LISDA A0 sau performance 17/37, mechanism 22/25, replay exact và manual proxy review; sửa visual-ledger read-set cùng bool scalar checker, khóa synthetic ratio bằng train-only protocol, chọn Bal-BCE OOF gate làm route kế tiếp, full suite 1.884/1.884 và DOCX 12 trang đạt accessibility 0/0/0."
+          "text": "Revision 1: tạo báo cáo Word tái lập; ghi nhận full train 30e, trạng thái JPEG-DL formal, nghiên cứu competition và chính sách synthetic train-only chống leak. Revision 2: khóa JPEG-DL A0 ở VisualFail với replay exact, ghi metric/XAI/SHAs cuối và chuyển kế hoạch sang synthetic feasibility source-disjoint. Revision 3: retention pass trên 822 thư mục/51 manifests, giữ formal 2,614 MiB; sửa odd/even header-footer và reset numbering theo từng block sau render QA. Revision 4: SaSPA F0 no-output pass formal/replay trên RTX 4060 8 GB; ghi telemetry, process isolation, hash artifact và chỉ mở quyền F1 10 ảnh train-only. Revision 5: đóng SaSPA F1 ở Rejected sau fidelity 0/10, blind 7/10, duplicate-safety pass và frozen-keeper XAI 6/10; giữ nguyên keeper/lệnh full-train tốt nhất; bỏ running header-footer để khóa lề 1 inch ổn định giữa Word và LibreOffice sau render QA. Revision 6: đóng LP-A3-inspired A0 sau audit train-only 9.215 hàng, replay exact, 19/23 automated gates và manual delta review; ghi causal-control fail 6/734, không integration hoặc command update. Revision 7: đóng NSA class-pair Poisson A0 ở reject sau formal/replay/manual review; phân biệt checker-order defect với scientific failure, sửa duplicate audit thành whole-corpus invalidation một chiều, chạy retention 847 thư mục không blocker, full suite 1.852/1.852, và chọn RN-LISDA train-only làm route kế tiếp. Revision 8: đóng RN-LISDA A0 sau performance 17/37, mechanism 22/25, replay exact và manual proxy review; sửa visual-ledger read-set cùng bool scalar checker, khóa synthetic ratio bằng train-only protocol, chọn Bal-BCE OOF gate làm route kế tiếp, full suite 1.884/1.884 và DOCX 12 trang đạt accessibility 0/0/0. Revision 9: pin LiVT MIT commit 68546ef và paper/source hashes; khóa prospective Bal-BCE A0 với sáu vai trò, fit-fold priors, init/order hashes, ledger và cổng precision-TP tại protocol/lock SHA 27c32d2a/1e28c686 trước mọi candidate metric; full suite 1.888/1.888."
         }
       ]
     },

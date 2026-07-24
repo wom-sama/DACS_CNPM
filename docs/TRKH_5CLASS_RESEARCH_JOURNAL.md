@@ -21369,3 +21369,14 @@ Date: 2026-07-02
   and repeatability. Fit every prior and parameter only on the fitting train
   folds. Do not use validation/test, tune a prior multiplier, integrate the
   trainer, or launch a smoke before the lock and independent A0 pass.
+- Pin the official MIT repository at commit/tree
+  `68546ef...192df`/`ec1fb178...0e50c`, `util/loss.py` SHA
+  `d73c21ba...af8246`, and CVPR paper SHA `79d1afec...c505ba`.
+  Prospectively lock six roles, exact fold-local priors, independent repeat,
+  all 30 epoch orders, initial states, dynamic access ledger, fixed visual
+  anchors, and conjunctive gates. Protocol/lock SHAs are
+  `27c32d2a...a5c93b`/`1e28c686...2bc07e`; lock rebuild and tests pass `4/4`.
+  No candidate metric exists at this stage. Research-process report revision
+  9 renders cleanly over 12 pages and passes accessibility `0/0/0`; the
+  complete repository suite passes `1888/1888` in `74.45 s` with 295 existing
+  warnings.

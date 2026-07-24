@@ -4775,11 +4775,17 @@
   corpus before cross-split duplicate audit; a validation/test match can
   invalidate only the whole corpus/method and cannot tune, delete, replenish,
   or feed back individual rows.
-- [ ] Prospectively lock one train-only source-disjoint frozen-embedding
+- [x] Prospectively lock one train-only source-disjoint frozen-embedding
   Bal-BCE A0 from the official LiVT equation. Include matched CE, plain BCE,
   historical Balanced Softmax, prior-sign control, and seed repeat. Require
   class-1 precision gain, restricted-FP removal, TP/recall retention, macro
   safety, five-fold stability, exact replay, and zero validation/test access.
+  Protocol/lock SHAs are `27c32d2a...a5c93b` and
+  `1e28c686...2bc07e`; the official MIT LiVT source is pinned at commit
+  `68546ef...192df`. Lock rebuild and focused tests pass `4/4`; no candidate
+  implementation, training, metric, validation, or test was opened.
+  Research-process report revision 9 renders cleanly over 12 pages and passes
+  accessibility `0/0/0`; the complete repository suite passes `1888/1888`.
 - [ ] Implement and verify the isolated Bal-BCE engine/auditor only after the
   protocol, official source revision/license, equations, inputs, seeds,
   optimizer schedule, and thresholds are committed and pushed without
