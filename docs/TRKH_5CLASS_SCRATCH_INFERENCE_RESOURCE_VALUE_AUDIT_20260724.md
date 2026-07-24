@@ -18,7 +18,7 @@ The retained `runs` tree currently contains 149,044 files and approximately
 
 | Root | Size | Files | Current interpretation |
 |---|---:|---:|---|
-| `yolof_oof_folds_train5_20260704` | 2.488 GiB | 96,774 | High cleanup priority after retention proof |
+| `yolof_oof_folds_train5_20260704` | 2.488 GiB logical | 96,774 | Protected hardlink fold materialization; low reclaim value |
 | `audit_bbox_logpolar_stem_a0_20260720` | 0.806 GiB | 10 | Large compact payload; retain only if manifest requires it |
 | `audit_augself_color_adapter_readiness_20260716` | 0.708 GiB | 70 | Closed route; candidate for evidence compaction |
 | `yolof_cidt_fold0_trainonly_20260716` | 0.498 GiB | 19,354 | Shared train-only evidence; do not delete before dependency audit |
@@ -27,6 +27,23 @@ The retained `runs` tree currently contains 149,044 files and approximately
 
 This audit does not delete any path. Cleanup requires a separate dependency and
 retention manifest.
+
+The OOF root needs special interpretation. Its summary records 8,064 source
+images, 9,215 objects, and `96,768` materialized hardlinks with `0` copies.
+The 2.488-GiB traversal total counts the same NTFS file content through many
+directory entries; it is not 2.488 GiB of independently reclaimable data.
+Those fold paths are also live inputs for retained OOF/CIDT evidence. Do not
+prioritize or delete this root for disk reclamation. At most, a future
+dependency-complete migration may recover directory metadata after replacing
+every consumer with an immutable manifest.
+
+The post-CAP closure retention pass is read-only and covers 860 run
+directories plus all 51 valid object-schema compaction manifests. It confirms
+all 14 protected artifact checks present, all 220 compacted originals absent,
+zero blockers, zero deletion, and `93.084 GiB` free on the runs volume. Seven
+future cleanup candidates total only `31.602 MiB`, so no speculative cleanup
+is justified. The immutable summary SHA is
+`99d1835a85246d6d9ad06768e4eab2d530b7bc06e8e3f6f686b67c080604a636`.
 
 ## Scratch-Only Provenance
 
@@ -80,7 +97,7 @@ families:
 | Dynamic graph neural mixing / ViG | Class-1 precision `+0.01011`, but recall `-0.22936` and F1 `-0.14745` | Closed; similarity neighbors are not reliability evidence |
 | Dynamic-routing capsules | Macro/class-1 F1 changed by `-0.01266/-0.00791`; routing stayed near uniform | Closed |
 | Recurrent aggregation | Class-1 F1 improved `+0.01470`, but restricted FP rose `12 -> 30`; recurrent and final-only averaging were identical | Mechanism had no recurrent causal value |
-| LSTM integral-region context / CAP | Prospective train-only A0; first formal exposed no metric because XAI failed before artifact creation | Same-lock rerun allowed after audit-only fix |
+| LSTM integral-region context / CAP | Same-lock A0 AUROC `0.560111`; removes 5 FP, breaks 14 TP, net `-9`; macro/class-1 F1 `0.937491/0.805643` | Closed exact A0 after exact replay and failed manual XAI |
 | Nonnegative matrix factorization / Hamburger | FP rejection rose, but 65/528 class-1 TP broke and seed stability failed | Closed |
 | Bilinear covariance / DeepBDC | Tested with matched controls, export and runtime gates; did not authorize production integration | Closed |
 | Quaternion, topology, morphology, Gabor, log-polar and frequency operators | Multiple locked A0s failed selectivity, TP protection, robustness, or inference gates | Closed exact neighborhoods |
@@ -105,6 +122,21 @@ run:
   mixer, but the local project has already tested several token/FFN/local-mixer
   families. A new run would need a class-1 surface-selectivity mechanism, not
   merely an MLP replacement.
+- I2-HOFI combines CNN features with inter- and intra-region graph interaction,
+  but the official TensorFlow/Spektral repository recommends at least 16 GB
+  VRAM and still lists its inference script as an upcoming item. It overlaps
+  the already failed graph/region-interaction family and has no matched
+  deployment evidence for this 8-GB Windows host, so it is a no-run screen.
+- Feature Magnitude Regularization explicitly addresses bias in pretrained
+  features in a low-data transfer setting. The proposed TRKH classifier must
+  be trained from scratch, so its motivating failure is not the current
+  scratch representation bottleneck. It is retained as a reference, not an
+  experiment.
+- AD-Net combines augmented views and self-distillation with zero additional
+  inference modules. Its published setting is low-data fine-tuning, while the
+  local project has already closed nearby multi-view/self-distillation routes
+  without a new class-1 surface signal. A local run would be overlapping
+  rather than equation-distinct.
 
 Primary references:
 
@@ -120,6 +152,14 @@ Primary references:
   <https://github.com/UnicomAI/KAConvNet>
 - Hire-MLP:
   <https://openaccess.thecvf.com/content/CVPR2022/html/Guo_Hire-MLP_Vision_MLP_via_Hierarchical_Rearrangement_CVPR_2022_paper.html>
+- I2-HOFI paper/repository:
+  <https://link.springer.com/article/10.1007/s11263-024-02260-y> and
+  <https://github.com/Arindam-1991/I2-HOFI>
+- Feature Magnitude Regularization:
+  <https://arxiv.org/abs/2409.01672>
+- AD-Net paper/repository:
+  <https://arxiv.org/abs/2406.19814> and
+  <https://github.com/demidovd98/fgic_lowd>
 
 ## What Has Real Value
 
@@ -149,6 +189,13 @@ Future long auditors must run the exact XAI/backend path during preflight and
 checkpoint sufficient intermediate state to avoid repeating completed work
 when the prospective artifact contract permits it.
 
+The corrected same-lock CAP formal and fresh-process replay later completed.
+The candidate AUROC was only `0.560111`, statistically and causally no better
+than its spatial/cross-sample controls, while the existing keeper-margin
+control reached `0.836149`. CAP removed five restricted false positives but
+broke 14 class-1 true positives. Exact replay and complete manual XAI review
+make this a reusable negative result rather than authorization to sweep.
+
 ## Mandatory Gate From This Point
 
 Before a new method can consume a long GPU run, its protocol must lock:
@@ -174,11 +221,18 @@ without a validation-locked winner and convergence evidence under 30 epochs.
 
 ## CAP Decision
 
-CAP remains the only active run because its equation, folds, controls, resource
-limits, inference checks and visual rows were locked before candidate metrics.
-It tests ordered multi-scale region context with an LSTM and NetVLAD, which is
-not a cosmetic CNN/Transformer recombination. The failed formal produced zero
-metrics, so an audit-only native-RNN attribution correction does not create
-hindsight. One same-lock rerun is allowed after focused/full tests, report QA,
-clean commit and push. Any additional failure or failed scientific gate closes
-CAP; no neighboring sweep is permitted.
+CAP is closed as `negative-but-reusable`. The corrected same-lock run preserves
+the prospective equation, folds, controls, 30 orders, thresholds, resource
+limits, and visual rows. Formal performance fails: candidate/seed-repeat AUROC
+is `0.560111/0.541163`, the candidate yields net `-9` corrections, and full
+macro/class-1 F1 falls to `0.937491/0.805643`. Replay reproduces every numeric
+value with error `0.0`, but all 20 visual rows fail manual approval because
+region maps are coarse/control-like and feature attribution is often diffuse.
+
+The CAP lock covered parameter count plus mechanism-run CUDA/RSS ceilings. It
+did not measure matched batch-1 mean/p95 latency, throughput, end-to-end
+inference VRAM, ONNX parity, or TensorRT feasibility. Calling those checks
+complete would be incorrect. No inference smoke is needed after the scientific
+failure, and no integration, validation/test access, probe, full train, or
+current-best command update is authorized. Do not sweep neighboring region,
+LSTM, NetVLAD, optimizer, threshold, seed, or captured-layer settings.

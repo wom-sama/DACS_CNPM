@@ -4865,8 +4865,29 @@
 - [x] Finish full-suite verification and revision-13 report QA. Full pytest
   passes `1925/1925` in `93.86 s`; DOCX visual QA passes `14/14` rendered pages
   and accessibility passes `0/0/0`.
-- [ ] Create a clean commit/push for the audit-only correction and evidence,
-  then rerun exactly one CAP formal under the unchanged
-  protocol/lock. Inspect every structural, causal, performance, fold, replay,
-  resource, inference, and XAI gate before deciding whether a separately
-  locked default-off trainer smoke is authorized.
+- [x] Create a clean commit/push for the audit-only correction and evidence,
+  then rerun exactly one CAP formal under the unchanged protocol/lock. The
+  correction is pushed at `9191d8a`; formal/replay take
+  `6150.613/5185.448 s`. Candidate AUROC is `0.560111`, it removes 5
+  restricted FP but breaks 14 class-1 TP, and macro/class-1 F1 falls to
+  `0.937491/0.805643`. Replay is exact with all numeric errors `0.0`; all 20
+  XAI rows are reviewed and manual approval fails. Final decision SHA is
+  `00263f23...533b`; no trainer/inference smoke, validation/test, probe/full
+  train, or current-command update is authorized.
+- [x] Finish CAP closure synchronization: add the exact formal/replay/manual
+  hashes and no-repeat boundary to the implementation note, journal, resource
+  audit, skill, and revision-14 living report. Correct the OOF logical-hardlink
+  size and distinguish CAP parameter/memory evidence from a true
+  latency/throughput/ONNX/TensorRT inference contract.
+- [x] Run JSON/DOCX build, full-page visual and accessibility QA, focused/full
+  tests, and read-only retention after the CAP closure. Preserve the complete
+  final CAP artifact set and delete nothing unless a new manifest proves both
+  independence and physical reclaim value. Focused/full tests pass
+  `28/28` and `1925/1925`; revision-14 Word QA passes `14/14` pages and
+  accessibility `0/0/0`. Retention passes 860 directories/51 manifests/220
+  absent originals with zero blockers at SHA `99d1835a...04a636`.
+- [ ] Select a next method only after CAP closure is committed and pushed. It
+  must be equation-distinct from closed context/graph/local-mixer families,
+  add sample-conditional surface evidence, and prospectively lock class-1
+  TP/FP, replay, XAI, latency/p95/throughput/VRAM, ONNX, and TensorRT gates
+  before any GPU run.

@@ -2,7 +2,7 @@
 
 Date: 2026-07-24
 Protocol ID: `trkh_cap_integral_region_context_a0_20260724`
-State: implementation complete; audit-only XAI erratum verified, pending push
+State: formal/replay/manual review complete; exact A0 rejected
 
 ## Prospective Lineage
 
@@ -126,8 +126,9 @@ For each locked visual anchor:
   launcher passes direct success/timeout behavior, PowerShell parsing, focused
   `25/25`, and the complete `1924/1924` suite.
 
-Formal A0 remains prohibited until this implementation stage, its tests, the
-living report, and the full repository suite are committed and pushed.
+At this premetric boundary, formal A0 remained prohibited until the
+implementation stage, its tests, the living report, and the full repository
+suite were committed and pushed.
 
 ## Post-Training XAI Harness Erratum
 
@@ -146,3 +147,43 @@ erratum and regression test pass and this correction is committed and pushed.
 The CAP-focused suite passes `26/26`; the complete repository suite passes
 `1925/1925` in `93.86 s`. Research-process report revision 13 passes visual QA
 on all `14/14` rendered pages and accessibility at `0/0/0`.
+
+## Same-Lock Formal, Replay, And Final Decision
+
+The audit-only correction was committed and pushed at
+`9191d8a91d23e3b5722c3d52da53bb73a9a82bba`. Exactly one same-lock formal
+then completed all 30 fold-role jobs in `6150.613 s`.
+
+The CAP candidate failed the prospective performance conjunction:
+
+- TP-vs-restricted-FP AUROC `0.560111`, below the `0.82` gate;
+- five restricted false positives removed but 14 class-1 true positives
+  broken, for net `-9` corrections;
+- full macro/class-1 F1 `0.937491/0.805643`, below the unchanged keeper
+  baseline `0.939876/0.815444`;
+- class-1 precision/recall `0.699320/0.950092`, versus keeper
+  `0.700265/0.975970`;
+- candidate AUROC nearly matches spatial derangement `0.560452` and trails
+  cross-sample derangement `0.565904`, self-only `0.598809`, and keeper margin
+  `0.836149`;
+- the seed-repeat AUROC differs by `0.018948`, above the locked `0.01` limit.
+
+Fresh-process replay reproduced every scientific numeric value with maximum
+error `0.0`, every discrete value exactly, and the ordered train-only ledger
+exactly. All 20 visual rows were manually reviewed. Eight attribution maps
+had bbox mass below `0.75`; 11/20 candidate-spatial score deltas were below
+`0.01` in absolute value; region maps were coarse and often near the spatial
+control. Manual review therefore failed.
+
+The one-shot final decision is `reject_exact_cap_a0`. Trainer integration,
+validation smoke, validation, test, probe, full train, and current-best
+command update are all unauthorized. Exact metrics, hashes, resource caveats,
+and the no-repeat boundary are recorded in
+`TRKH_5CLASS_CAP_INTEGRAL_REGION_CONTEXT_A0_CLOSURE_20260724.md`.
+
+Final closure verification passes the focused suite `28/28` and the complete
+repository suite `1925/1925` with 296 existing warnings in `114.75 s`.
+Revision-14 report QA passes all 14 pages plus accessibility `0/0/0`.
+Read-only retention covers 860 run directories and all 51 valid object-schema
+manifests, confirms all 220 compacted originals absent, deletes nothing, and
+passes at summary SHA `99d1835a...04a636`.

@@ -222,7 +222,11 @@ def _add_hyperlink(paragraph: Any, text: str, url: str) -> None:
     fonts.set(qn("w:ascii"), "Calibri")
     fonts.set(qn("w:hAnsi"), "Calibri")
     fonts.set(qn("w:eastAsia"), "Calibri")
-    run_pr.extend([fonts, color, underline])
+    size = OxmlElement("w:sz")
+    size.set(qn("w:val"), "20")
+    size_cs = OxmlElement("w:szCs")
+    size_cs.set(qn("w:val"), "20")
+    run_pr.extend([fonts, color, underline, size, size_cs])
     run.append(run_pr)
     node = OxmlElement("w:t")
     node.text = text
@@ -515,14 +519,18 @@ def _add_list(
 
 
 def _add_sources(document: Document, items: Sequence[dict[str, str]], num_id: int) -> None:
-    for item in items:
+    for index, item in enumerate(items):
         p = document.add_paragraph()
         p.paragraph_format.keep_together = True
         _apply_numbering(p, num_id)
+        if index == 0:
+            p.paragraph_format.space_before = Pt(8)
+        p.paragraph_format.space_after = Pt(4)
+        p.paragraph_format.line_spacing = 1.08
         title = p.add_run(item["title"])
-        _set_run_font(title, size=10.5, color=TEXT, bold=True)
+        _set_run_font(title, size=10, color=TEXT, bold=True)
         detail = p.add_run(f" - {item['detail']} ")
-        _set_run_font(detail, size=10.5, color=TEXT)
+        _set_run_font(detail, size=10, color=TEXT)
         _add_hyperlink(p, "Mở nguồn", item["url"])
 
 

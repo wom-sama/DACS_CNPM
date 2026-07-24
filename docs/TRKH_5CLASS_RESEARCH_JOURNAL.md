@@ -21644,3 +21644,85 @@ Date: 2026-07-02
   full pytest passes `1925/1925` in `93.86 s` with `296` warnings and no
   failures. Research-process report revision 13 passes visual QA on all
   `14/14` rendered pages and accessibility at `0/0/0`.
+
+## CAP Same-Lock Formal, Exact Replay, And Closure - 2026-07-24
+
+- Push the native-RNN XAI harness correction at clean commit
+  `9191d8a91d23e3b5722c3d52da53bb73a9a82bba`, then execute exactly one
+  formal under unchanged protocol/lock SHAs
+  `c6d307bf...a1e32`/`4aaba9ef...c0d87`. All 30 fold-role jobs complete in
+  `6150.613 s`; stderr is empty. Formal stdout/stderr SHAs are
+  `de722e04...a412`/`e3b0c442...b855`, summary SHA is
+  `824549d2...f6ee`, and formal-manifest SHA is `a699fda3...e518e`.
+- Reject the candidate on the locked scientific conjunction. Its
+  TP-vs-restricted-FP AUROC is `0.560111` and FN-vs-FP AUROC is `0.412682`.
+  It removes only `5/222` restricted FP, breaks `14/528` class-1 TP, and
+  yields 5 corrections versus 14 harms, net `-9`. Full macro-F1 falls from
+  `0.939876` to `0.937491`; class-1 P/R/F1 changes from
+  `0.700265/0.975970/0.815444` to
+  `0.699320/0.950092/0.805643`.
+- Fold AUROCs are `0.552181/0.590476/0.604167/0.615575/0.551265`; folds 0
+  and 2 reject zero restricted FP. Seed repeat AUROC is `0.541163`; its
+  absolute difference `0.018948` exceeds the locked `0.01` limit and it
+  produces net `-12` corrections. The simpler keeper-margin control is much
+  stronger: AUROC `0.836149`, 40 FP removed, 18 TP broken, net `+18`, and
+  macro/class-1 F1 `0.942588/0.824576`.
+- Causal controls do not support integral-region context. Cross-sample,
+  spatial, GAP-linear, and self-only AUROCs are
+  `0.565904/0.560452/0.565145/0.598809`; CAP does not beat any relevant
+  representation control.
+- Complete fresh-process replay in `5185.448 s`. Every numeric error is
+  `0.0`, every discrete value is exact, the process is fresh, the ordered
+  88-event/32-path ledger is identical at SHA `20910d4b...e41c`, and
+  validation/test opens remain zero. Replay summary/manifest SHAs are
+  `e9f21c59...447b4`/`de0c9aa6...364c`; replay stdout/stderr SHAs are
+  `aed91e99...c59`/`e3b0c442...b855`.
+- Review all 20 locked XAI rows at original detail. Mean bbox/valid mass is
+  `0.774116/1.0`, but 8/20 bbox masses are below `0.75`, 7/20 are below
+  `0.70`, 11/20 spatial score deltas are below `0.01` absolute, and 17/20
+  are below `0.05`. The sheet contains 10 FP, 5 FN, and 5 TP; no row is
+  suppressed. Region maps are coarse and often near the spatial control;
+  feature gradients are diffuse or point-like. Reject manual XAI.
+- Finalize once as `reject_exact_cap_a0`. Manual/final-decision SHAs are
+  `197ca492...fd760`/`00263f23...533b`; every downstream authorization is
+  false. The final 21-file digest is `ffc55117...87b48`, and the artifact-set
+  manifest SHA is `77469b55...4978a`. Label the result
+  `negative-but-reusable`; do not sweep region/layer/width/LSTM/NetVLAD/
+  optimizer/epoch/seed/fold/threshold neighbors.
+- Correct the inference claim. CAP formal verifies a 1,090,979-parameter head
+  and peaks at `0.281028 GiB` CUDA allocation plus `1.868843 GiB` RSS, with
+  no unexpected process. It does not measure matched batch-1 mean/p95,
+  throughput, end-to-end inference VRAM, ONNX parity, or TensorRT
+  feasibility. Even a performance pass would have required a separate
+  prospective inference smoke; the performance failure closes that path.
+- Correct the storage interpretation. The apparent `2.488 GiB` OOF fold root
+  contains `96,768` NTFS hardlinks and zero copies for 8,064 source images /
+  9,215 object rows. Its traversal size double-counts shared file content,
+  its paths remain dependencies, and deleting it would mainly remove
+  metadata rather than reclaim 2.488 GiB. Protect it from cleanup.
+- Recheck primary sources before choosing a successor. The CAP paper uses
+  pretrained transfer learning and 150 epochs; it states that random
+  initialization took nearly twice as many iterations, so its reported
+  accuracy and 4.1-ms ResNet-50 inference are not scratch-TRKH evidence.
+  I2-HOFI is screened out because its CNN-GNN region interactions overlap
+  closed graph/context routes, the official stack recommends at least 16 GB
+  VRAM, and its inference script is still listed as upcoming. Feature
+  Magnitude Regularization targets pretrained-feature bias, not this scratch
+  setting. AD-Net's augmented self-distillation overlaps locally closed
+  multi-view/distillation routes. Spend no GPU on these no-run candidates.
+- Keep the current keeper and current-best command hashes unchanged. CAP did
+  not open trainer integration, validation/test, probe, full train, or command
+  revision.
+- Close engineering verification after synchronizing the CAP evidence.
+  CAP-focused tests pass `28/28`; the complete repository suite passes
+  `1925/1925` with 296 existing warnings in `114.75 s`. Research-process
+  report revision 14 passes visual review on all 14 pages, accessibility
+  `0/0/0`, and exact table-geometry checks.
+- Run a final read-only retention audit over 860 run directories and all 51
+  valid object-schema compaction manifests. All 14 protected checks exist,
+  all 220 compacted originals remain absent, no deletion occurs, and there
+  are zero blockers with `93.084 GiB` free. Summary SHA is
+  `99d1835a...04a636`. Seven future candidates total only `31.602 MiB`, so
+  leave them in place rather than spend risk for negligible physical reclaim.
+- Final revision-14 JSON/DOCX/builder SHAs are
+  `0b82a449...7a869c`/`ae1efaf3...f98ade`/`7a0e81e4...1002e`.
