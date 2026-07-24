@@ -371,6 +371,53 @@ def test_authorization_pins_resources_constraints_and_precedes_writes(
     assert not rejected_output.parent.exists()
 
 
+def test_repository_gate_accepts_protected_paths_with_spaces(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    head = "a" * 40
+    calls = []
+
+    def fake_run(arguments, **kwargs):
+        calls.append(list(arguments))
+        command = list(arguments[3:])
+        if command == ["rev-parse", "HEAD"]:
+            stdout = f"{head}\n"
+        elif command == [
+            "rev-parse",
+            "origin/classification-only-research",
+        ]:
+            stdout = f"{head}\n"
+        elif command[:2] == ["merge-base", "--is-ancestor"]:
+            stdout = ""
+        elif command == [
+            "status",
+            "--porcelain=v1",
+            "-z",
+            "--untracked-files=normal",
+        ]:
+            stdout = (
+                "?? BaoCao/\0"
+                "?? deep-research-report (10).md\0"
+                "?? deep-research-report (9).md\0"
+            )
+        elif command == ["branch", "--show-current"]:
+            stdout = "classification-only-research\n"
+        else:
+            raise AssertionError(f"Unexpected git command: {command}")
+        return materializer.subprocess.CompletedProcess(
+            arguments,
+            0,
+            stdout=stdout,
+            stderr="",
+        )
+
+    monkeypatch.setattr(materializer.subprocess, "run", fake_run)
+    result = materializer._repository_state(required_ancestor=head)
+    assert result["passed"]
+    assert result["unexpected_status"] == []
+    assert any("-z" in call for call in calls)
+
+
 def test_synthetic_formal_materializer_is_atomic_and_fail_closed(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

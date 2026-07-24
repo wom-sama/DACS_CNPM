@@ -99,6 +99,13 @@ REQUIRED_EXECUTION_CONSTRAINTS = {
     "test": False,
     "production_integration": False,
 }
+PROTECTED_REPOSITORY_UNTRACKED = frozenset(
+    {
+        "BaoCao/",
+        "deep-research-report (9).md",
+        "deep-research-report (10).md",
+    }
+)
 
 EXPECTED_TRANSFORM_SEMANTICS = {
     "image_size": 256,
@@ -1431,20 +1438,24 @@ def _repository_state(
         == 0
     )
     status = [
-        line
-        for line in git(
+        record
+        for record in git(
             "status",
-            "--porcelain",
+            "--porcelain=v1",
+            "-z",
             "--untracked-files=normal",
-        ).stdout.splitlines()
-        if line
+        ).stdout.split("\0")
+        if record
     ]
-    protected = {
-        "?? BaoCao/",
-        "?? deep-research-report (9).md",
-        "?? deep-research-report (10).md",
-    }
-    unexpected = [line for line in status if line not in protected]
+    unexpected = [
+        record
+        for record in status
+        if not (
+            record.startswith("?? ")
+            and record[3:].replace("\\", "/")
+            in PROTECTED_REPOSITORY_UNTRACKED
+        )
+    ]
     result = {
         "branch": git("branch", "--show-current").stdout.strip(),
         "head": head,
