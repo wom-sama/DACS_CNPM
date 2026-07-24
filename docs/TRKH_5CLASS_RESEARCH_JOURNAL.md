@@ -21856,3 +21856,43 @@ Date: 2026-07-02
   `5fdf25ac...246d`/`985ac452...2358`.
 - Final revision-16 JSON/DOCX/builder SHAs are
   `bce48a62...1dbc`/`82e5985b...bec0`/`fb39e6ef...1b46`.
+
+## CCR Pre-Implementation Same-Tensor Erratum - 2026-07-25
+
+- Commit and push the original prospective CCR boundary at
+  `2be317a20b95707b08072fba96ec6c3ee2a40384`. Post-commit
+  `--check-only` validates the frozen lock SHA, complete regenerated payload
+  and parent ancestry. Protected user payloads remain untracked.
+- Before candidate code or an image pass, trace the keeper's actual
+  evaluation tensor. Its immutable config uses object crop margin `0.05`,
+  pad-resize `256`, illumination normalization `true/0.35`, and existing
+  `background_suppression_mode=desaturate_blur` with margin/blur
+  `0.08/7.0`. Foreground crop and eval surface amplification are disabled.
+- Identify an ambiguity in the original frozen-input prose: "no background
+  suppression" conflicts with the normative requirement to invert the exact
+  keeper tensor. Preserve the original protocol/lock, and issue
+  `TRKH_5CLASS_CROSS_COLOUR_RATIO_SURFACE_A0_PREIMPLEMENTATION_ERRATUM_20260725.md`.
+  The authoritative rule is no additional or different CCR suppression; the
+  branch receives the keeper tensor after its already-selected preprocessing.
+- Pin transform sources at SHAs
+  `7ea29b5f...75d5`/`481b7c1c...7fe`/`513f4520...5e2f` and erratum SHA
+  `f9a901b1...d03b`. Three focused tests verify original lock provenance,
+  exact config semantics, source hashes, and erratum digest.
+- Forbid broad `MangoYOLOCropDataset` construction in the CCR auditor because
+  it indexes every train label. The direct loader must use locked CIDT image
+  identity plus geometry `model_boxes`, reproduce the integer crop, apply the
+  frozen transform, and match locked `crop_boxes`/`valid_masks` before any
+  descriptor or state exists.
+- No CCR implementation, image read, fit, metric, validation/test access,
+  production edit, full train, or current-best command update exists at this
+  erratum boundary.
+- Close pre-commit engineering verification with focused lock/erratum/report
+  tests `13/13` and complete pytest `1938/1938` in `75.90 s` with 296
+  existing warnings. Revision-17 DOCX QA passes all `16/16` pages and
+  accessibility `0/0/0`; a generated-OOXML regression proves source-list
+  spacing is applied after the numbering helper so the report has no orphan
+  trailing page.
+- Final revision-17 JSON/DOCX/builder SHAs are
+  `668d7a19...506e`/`e39acc27...cdd6`/`7f26c80f...7a2d`.
+  Report/erratum test SHAs are
+  `376d849a...c900`/`153f4ea4...f3a5`.

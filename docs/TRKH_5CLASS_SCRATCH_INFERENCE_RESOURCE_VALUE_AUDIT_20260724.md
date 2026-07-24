@@ -281,3 +281,18 @@ Protocol/lock SHAs are `1e408502...f347` and
 edit, checkpoint, full train, or current-best command update exists. Commit
 and push this boundary before candidate code so a later result cannot alter
 the accepted cohort, controls, gates, or resource limits.
+
+The pre-implementation same-tensor review adds one fail-closed erratum at SHA
+`f9a901b1...d03b`. The CCR branch must consume the frozen keeper evaluation
+tensor, which already includes its selected `desaturate_blur` preprocessing;
+it may not add or alter suppression. To keep the read set exact, the auditor
+must crop from locked CIDT paths and geometry rather than constructing the
+full train dataset index. Crop-box and valid-mask parity are required before
+descriptor extraction. This correction occurred before candidate code,
+image reads, fitting, metrics, or resource use.
+
+Pre-commit verification passes focused lock/erratum/report tests `13/13` and
+complete pytest `1938/1938` in `75.90 s` with 296 existing warnings. The
+revision-17 report passes visual QA on all `16/16` pages and accessibility
+`0/0/0`. This verification consumed no dataset pixels, GPU candidate run,
+checkpoint, validation/test access, or current-best command revision.

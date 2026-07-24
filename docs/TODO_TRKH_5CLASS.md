@@ -4912,12 +4912,13 @@
   rejection beyond keeper margin and causal derangements; and has a
   prospectively measurable standard-op inference path. Do not reopen the six
   screened families by changing only width, order, pooling, solver, or head.
-- [ ] Commit and push the prospective CCR protocol/lock before writing its
+- [x] Commit and push the prospective CCR protocol/lock before writing its
   candidate engine. Preserve protocol/lock SHAs
   `1e408502...f347`/`6c2a604d...c835`, the 763-row/735-image cohort manifest,
   five source-held folds, fixed XAI rows, resource ceilings, and seven
   protected user/keeper/current-command hashes. No candidate metric exists at
-  this boundary.
+  this boundary. The boundary is pushed at commit `2be317a`; post-commit
+  full-payload `--check-only` passes.
 - [ ] Only after the clean prospective commit is pushed, implement the
   independent standard-op CCR extractor and 3,004-parameter scratch evidence
   head with NumPy/identity/gradient/ONNX tests. Do not touch the production
@@ -4931,3 +4932,15 @@
   full pytest passes `1934/1934` with 296 existing warnings, visual QA passes
   all `16/16` pages, and accessibility passes `0/0/0`. No model, trainer,
   validation/test, GPU candidate run, keeper, or current-command state changed.
+- [ ] Commit and push the pre-implementation CCR erratum before engine code.
+  It preserves the original protocol/lock and supersedes only the ambiguous
+  background-suppression sentence: reproduce the frozen keeper eval tensor
+  including existing `desaturate_blur`, with no additional CCR-specific
+  preprocessing. Erratum SHA is `f9a901b1...d03b`; direct-loader preflight
+  must avoid full-label-directory indexing and prove crop/valid-mask parity.
+- [x] Verify the pre-implementation erratum and revision-17 living report
+  before commit. Focused lock/erratum/report tests pass `13/13`; full pytest
+  passes `1938/1938` in `75.90 s` with 296 existing warnings. Final render QA
+  passes all `16/16` pages without clipping, overlap, or an orphan trailing
+  page; accessibility passes `0/0/0`. A DOCX regression test now proves the
+  compact source spacing is applied after numbering.

@@ -2,10 +2,10 @@
   "document": {
     "title": "TRKH 5-class",
     "subtitle": "Quy trình nghiên cứu, trạng thái bằng chứng và kế hoạch cải tiến",
-    "revision": "16",
+    "revision": "17",
     "updated": "2026-07-25",
     "branch": "classification-only-research",
-    "status": "Đang nghiên cứu - đã khóa prospective CCR train-only",
+    "status": "Đang nghiên cứu - đã khóa CCR same-tensor erratum",
     "owner": "TRKH classification-only research"
   },
   "executive_metrics": [
@@ -25,9 +25,9 @@
       "detail": "Validation macro-F1; precision class 1 còn thấp"
     },
     {
-      "label": "CCR prospective lock",
-      "value": "763 train-only rows",
-      "detail": "Chưa có candidate metric; model, validation/test và lệnh tốt nhất không đổi"
+      "label": "CCR same-tensor erratum",
+      "value": "Pre-code, no metric",
+      "detail": "Giữ frozen desaturate_blur; cấm thêm CCR-specific preprocessing"
     }
   ],
   "sections": [
@@ -54,6 +54,10 @@
         {
           "type": "paragraph",
           "text": "Revision 16 đã khóa Cross Colour Ratio (CCR) như một information gate train-only có thể bác bỏ, không phải model promotion. Cohort gồm 763 hàng/735 ảnh unique trong năm source-held folds; candidate phải thắng keeper margin, plain colour-ratio cùng kích thước, trained spatial dephase, same-weight dephase và seed repeat trên gate đồng thời về TP/FP/pairwise/replay. Giả định vật lý của CCR có thể bị phá bởi tone curve JPEG, auto-WB, clipping, bề mặt ướt hoặc phản xạ gương, vì vậy chưa có metric hay quyền integration/full train."
+        },
+        {
+          "type": "paragraph",
+          "text": "Revision 17 khóa erratum trước implementation: cùng tensor nghĩa là giữ nguyên frozen keeper eval transform, bao gồm desaturate_blur margin/blur 0,08/7,0 đã có sẵn; CCR không được thêm hoặc đổi suppression. Auditor phải dùng trực tiếp CIDT path và geometry đã khóa thay vì index toàn bộ nhãn train, rồi chứng minh crop-box/valid-mask parity trước descriptor. Erratum SHA f9a901b1...d03b; focused/full test 13/13 và 1938/1938, Word QA 16/16, accessibility 0/0/0; chưa có image pass, fit hay metric."
         }
       ]
     },
@@ -674,6 +678,11 @@
               "CCR prospective information gate",
               "Khóa 763 train-only rows/735 ảnh, năm source-held folds, plain colour-ratio và hai spatial-dephase controls trước candidate code.",
               "Giới hạn A0 20 phút, dưới 2 GiB VRAM, không validation/test; chỉ mở XAI/inference khi toàn bộ clean conjunction pass."
+            ],
+            [
+              "CCR same-tensor pre-code erratum",
+              "Giữ frozen eval desaturate_blur 0,08/7,0; direct loader dùng CIDT path + locked geometry, không index toàn bộ label train.",
+              "Loại ambiguity trước candidate code và buộc crop-box/valid-mask parity fail-closed."
             ]
           ]
         }
@@ -698,7 +707,8 @@
             "Chọn successor chỉ khi equation-distinct, có sample-conditional surface evidence và khóa trước TP/FP, latency/p95/throughput/VRAM, ONNX/TensorRT.",
             "Không mở lại sáu họ post-CAP bằng cách chỉ đổi width, order, pooling, solver hoặc head; tài liệu no-run ngày 25-07 là cổng resource-value bắt buộc.",
             "Commit/push CCR protocol và machine lock trước candidate code; giữ bất biến SHA 1e408502...f347/6c2a604d...c835 và trạng thái chưa có metric.",
-            "Chỉ triển khai một independent CCR A0 sau prospective commit; dừng fail-closed trước robustness/XAI/inference nếu không thắng mọi clean information, causal và TP/FP gate."
+            "Chỉ triển khai một independent CCR A0 sau prospective commit; dừng fail-closed trước robustness/XAI/inference nếu không thắng mọi clean information, causal và TP/FP gate.",
+            "Commit/push same-tensor erratum SHA f9a901b1...d03b trước engine code; không rewrite protocol/lock gốc và không dùng full dataset constructor trong CCR auditor."
           ]
         }
       ]
@@ -813,12 +823,16 @@
             [
               "scripts/build_trkh_cross_colour_ratio_surface_a0_lock.py",
               "Tái sinh và check-only CCR prospective lock trước mọi candidate implementation hoặc metric."
+            ],
+            [
+              "docs/TRKH_5CLASS_CROSS_COLOUR_RATIO_SURFACE_A0_PREIMPLEMENTATION_ERRATUM_20260725.md",
+              "Sửa ambiguity same-tensor trước code; pin frozen eval preprocessing và direct-loader crop/valid-mask parity."
             ]
           ]
         },
         {
           "type": "paragraph",
-          "text": "Revision 1-3 dựng báo cáo tái lập, full-train/JPEG-DL và synthetic policy. Revision 4-10 đóng SaSPA, LP-A3, NSA, RN-LISDA và Bal-BCE bằng fidelity, causal control, replay và TP/FP gates. Revision 11-14 khóa CAP trước metric, sửa audit-only eval-LSTM, rồi hoàn tất same-lock formal/replay/manual review; CAP đóng negative-but-reusable và retention pass tại SHA 99d1835a...04a636. Revision 15 screen no-run sáu họ successor và cô lập regression OOXML hyperlink; full suite đạt 1927/1927, visual/accessibility QA đạt 15/15 và 0/0/0. Revision 16 khóa CCR train-only trước candidate code tại protocol/lock SHA 1e408502...f347/6c2a604d...c835; pre-commit review sửa mô tả RNG, thêm write guard và full-payload check-only, focused/full test đạt 9/9 và 1934/1934, visual/accessibility QA đạt 16/16 và 0/0/0; chưa có metric, GPU run, validation/test, production edit hoặc command update."
+          "text": "Revision 1-3 dựng báo cáo tái lập, full-train/JPEG-DL và synthetic policy. Revision 4-10 đóng SaSPA, LP-A3, NSA, RN-LISDA và Bal-BCE bằng fidelity, causal control, replay và TP/FP gates. Revision 11-14 khóa CAP trước metric, sửa audit-only eval-LSTM, rồi hoàn tất same-lock formal/replay/manual review; CAP đóng negative-but-reusable và retention pass tại SHA 99d1835a...04a636. Revision 15 screen no-run sáu họ successor và cô lập regression OOXML hyperlink. Revision 16 khóa CCR train-only tại protocol/lock SHA 1e408502...f347/6c2a604d...c835, thêm write guard/full-payload check-only; focused/full test 9/9 và 1934/1934, visual/accessibility 16/16 và 0/0/0. Revision 17 khóa same-tensor/direct-loader erratum SHA f9a901b1...d03b trước implementation; focused/full test 13/13 và 1938/1938, visual/accessibility 16/16 và 0/0/0; chưa có image pass, fit, metric, validation/test, production edit hoặc command update."
         }
       ]
     },

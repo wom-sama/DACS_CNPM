@@ -55,3 +55,22 @@ def test_generated_hyperlinks_follow_ooxml_schema_order() -> None:
             "color",
             "u",
         ]
+
+
+def test_generated_source_list_keeps_compact_spacing_after_numbering() -> None:
+    with zipfile.ZipFile(REPORT) as archive:
+        root = ElementTree.fromstring(archive.read("word/document.xml"))
+    source_paragraphs = [
+        paragraph
+        for paragraph in root.findall(f".//{{{WORD_NS}}}p")
+        if paragraph.find(f"{{{WORD_NS}}}hyperlink") is not None
+    ]
+    assert len(source_paragraphs) == 33
+    for paragraph in source_paragraphs:
+        spacing = paragraph.find(
+            f"{{{WORD_NS}}}pPr/{{{WORD_NS}}}spacing"
+        )
+        assert spacing is not None
+        assert spacing.get(f"{{{WORD_NS}}}after") == "20"
+        assert spacing.get(f"{{{WORD_NS}}}line") == "252"
+        assert spacing.get(f"{{{WORD_NS}}}lineRule") == "auto"

@@ -521,6 +521,8 @@ def _add_sources(document: Document, items: Sequence[dict[str, str]], num_id: in
         p = document.add_paragraph()
         p.paragraph_format.keep_together = True
         _apply_numbering(p, num_id)
+        p.paragraph_format.line_spacing = 1.05
+        p.paragraph_format.space_after = Pt(1)
         title = p.add_run(item["title"])
         _set_run_font(title, size=10.5, color=TEXT, bold=True)
         detail = p.add_run(f" - {item['detail']} ")
