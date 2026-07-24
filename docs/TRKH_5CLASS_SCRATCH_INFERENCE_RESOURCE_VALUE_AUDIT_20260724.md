@@ -296,3 +296,37 @@ complete pytest `1938/1938` in `75.90 s` with 296 existing warnings. The
 revision-17 report passes visual QA on all `16/16` pages and accessibility
 `0/0/0`. This verification consumed no dataset pixels, GPU candidate run,
 checkpoint, validation/test access, or current-best command revision.
+
+## CCR Equation-Engine Resource Result
+
+The pre-fit CCR engine is a bounded engineering result, not a model result.
+It adds a fixed descriptor path and a 3,004-parameter scratch head without
+touching the production trainer. Equation, physical-invariance, fold/order,
+state/gradient, and dynamic-batch ONNX Runtime tests pass `8/8`. The ONNX graph
+uses only standard-domain operators and stays below the locked `1e-5` replay
+error limit.
+
+No cohort image, CUDA fitting job, validation/test row, checkpoint, or run
+directory was consumed to obtain this result. The only cohort dependency read
+was immutable geometry metadata used to reproduce hashes that were already
+fixed prospectively. Engine/test/implementation SHAs are
+`ac610d7c...d26fe9`, `5a83a138...94c840`, and `18c2dbeb...8c804`.
+
+The value label remains `mechanism-only-preflight`. Parameter count and ONNX
+compatibility do not establish keeper-relative batch-1 mean/p95 latency,
+throughput, end-to-end VRAM, TensorRT parity, or scientific utility. Those
+measurements remain closed until all clean train-only information, causal,
+TP-retention, restricted-FP, pairwise, seed, and replay gates pass.
+
+The next resource spend is authorized only after a direct cohort tensor
+materializer proves exact row identity and crop/model-box/bbox-mask/valid-mask
+parity without indexing the broad train-label tree. Any parity, provenance,
+process, disk, or memory failure stops before descriptor retention and before
+head fitting. This preserves the prospective 20-minute/2-GiB/0.40-GiB/0.10-GiB
+wall/fit-VRAM/temp/retained ceilings.
+
+Focused CCR/report verification passes `21/21`; the complete repository suite
+passes `1946/1946` in `72.24 s` with 298 warnings. Revision-18 Word QA passes
+all `16/16` pages and accessibility `0/0/0`. These checks used no cohort
+pixels, candidate GPU fit, validation/test access, checkpoint, or command
+revision.

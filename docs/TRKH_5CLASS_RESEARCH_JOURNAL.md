@@ -21896,3 +21896,47 @@ Date: 2026-07-02
   `668d7a19...506e`/`e39acc27...cdd6`/`7f26c80f...7a2d`.
   Report/erratum test SHAs are
   `376d849a...c900`/`153f4ea4...f3a5`.
+
+## CCR Equation Engine Preflight - 2026-07-25
+
+- Implement the independent standard-op CCR equation engine only after the
+  original prospective lock and same-tensor erratum are pushed at commits
+  `2be317a` and `171a8fb`. The implementation remains isolated from the
+  production model, trainer, augmentation, keeper, and current-best commands.
+- Reconstruct sRGB from the exact normalized keeper tensor, apply a fixed
+  adaptive-area-equivalent `256 -> 96` operator and inverse sRGB transfer,
+  then compute signed Gaussian derivatives of `log(R/G)`, `log(R/B)`, and
+  `log(G/B)`. The matched control uses derivatives of `log(R/G/B)`.
+  Reliability requires complete valid and nonsaturated `7 x 7` support.
+- Lock the head at exactly 3,004 scratch parameters. Candidate, plain
+  colour-ratio, and trained-dephase roles share byte-identical initialization;
+  the seed repeat differs by the prospective `+100000` offset. No pretrained
+  or external parameter, keeper probability, bbox, source ID, or metadata is
+  an input.
+- Independent regression evidence passes `8/8`: direct multiplicative and
+  log-difference CCR agree within `1e-12`; the FP64 NumPy derivative oracle
+  agrees within `2e-15`; common spatial shading and fixed per-channel gain
+  cancel only in the CCR candidate; all five fold-order and dephase hashes
+  reproduce the lock; finite gradients update the scratch state.
+- Export the complete descriptor-plus-head path at ONNX opset 17. It contains
+  only standard-domain nodes, accepts dynamic batches, and replays
+  probabilities/pair maps through ONNX Runtime below the locked `1e-5` error
+  ceiling. This is deployment feasibility, not measured latency, throughput,
+  end-to-end VRAM, or TensorRT authorization.
+- Preserve prospective state: no cohort pixel has been loaded by the CCR
+  implementation, no head has been fitted, and no candidate score, threshold,
+  action, metric, validation/test read, checkpoint, run directory, production
+  edit, full train, or command-history revision exists.
+- Record engine/test SHAs
+  `ac610d7c...d26fe9`/`5a83a138...94c840` and implementation-note SHA
+  `18c2dbeb...8c804`. The next authorized step is a direct locked-CIDT tensor
+  materializer that proves row identity and crop/model-box/bbox-mask/valid-mask
+  parity before descriptor retention or fitting.
+- Close repository verification with focused tests `21/21` and complete
+  pytest `1946/1946` in `72.24 s` with 298 warnings. Revision-18 DOCX QA
+  passes all `16/16` pages after compacting only the source-list spacing;
+  accessibility passes `0/0/0`. The current-best checkpoint, command, and
+  history hashes remain unchanged.
+- Final revision-18 JSON/DOCX/builder SHAs are
+  `857e6bfc...f91d7`/`281f59b3...8005c`/`55e006b0...a2243`;
+  the builder regression test SHA is `903e2e6b...b8615`.

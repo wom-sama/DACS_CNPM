@@ -4919,10 +4919,21 @@
   protected user/keeper/current-command hashes. No candidate metric exists at
   this boundary. The boundary is pushed at commit `2be317a`; post-commit
   full-payload `--check-only` passes.
-- [ ] Only after the clean prospective commit is pushed, implement the
+- [x] Only after the clean prospective commit is pushed, implement the
   independent standard-op CCR extractor and 3,004-parameter scratch evidence
   head with NumPy/identity/gradient/ONNX tests. Do not touch the production
   model, trainer, augmentation, validation/test, or current-best commands.
+  The equation engine and independent tests pass `8/8`; FP64 oracle error is
+  at most `2e-15`, dephase/fold hashes reproduce the lock, the head has exactly
+  3,004 scratch parameters, and dynamic-batch ONNX Runtime replay stays below
+  `1e-5`. Focused/full tests pass `21/21` and `1946/1946`; revision-18 Word
+  QA passes `16/16` pages and accessibility `0/0/0`. No image pass, fit,
+  metric, or command update occurred.
+- [ ] Implement and commit the fail-closed direct cohort tensor materializer
+  before the CCR A0 image pass. It must use locked CIDT identities and geometry
+  without constructing the broad train dataset, reproduce the exact keeper
+  crop/eval tensor, and prove identity/crop/model-box/bbox-mask/valid-mask
+  parity before retaining any descriptor or fitting a head.
 - [ ] Run exactly one locked CCR A0 only if implementation preflight passes.
   Stop at the clean train-only information conjunction unless candidate CCR
   beats keeper margin, equal-size colour-ratio, trained spatial-dephase and
@@ -4932,12 +4943,13 @@
   full pytest passes `1934/1934` with 296 existing warnings, visual QA passes
   all `16/16` pages, and accessibility passes `0/0/0`. No model, trainer,
   validation/test, GPU candidate run, keeper, or current-command state changed.
-- [ ] Commit and push the pre-implementation CCR erratum before engine code.
+- [x] Commit and push the pre-implementation CCR erratum before engine code.
   It preserves the original protocol/lock and supersedes only the ambiguous
   background-suppression sentence: reproduce the frozen keeper eval tensor
   including existing `desaturate_blur`, with no additional CCR-specific
   preprocessing. Erratum SHA is `f9a901b1...d03b`; direct-loader preflight
   must avoid full-label-directory indexing and prove crop/valid-mask parity.
+  The boundary is pushed at commit `171a8fb`.
 - [x] Verify the pre-implementation erratum and revision-17 living report
   before commit. Focused lock/erratum/report tests pass `13/13`; full pytest
   passes `1938/1938` in `75.90 s` with 296 existing warnings. Final render QA

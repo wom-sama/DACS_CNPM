@@ -71,6 +71,6 @@ def test_generated_source_list_keeps_compact_spacing_after_numbering() -> None:
             f"{{{WORD_NS}}}pPr/{{{WORD_NS}}}spacing"
         )
         assert spacing is not None
-        assert spacing.get(f"{{{WORD_NS}}}after") == "20"
-        assert spacing.get(f"{{{WORD_NS}}}line") == "252"
+        assert spacing.get(f"{{{WORD_NS}}}after") == "0"
+        assert spacing.get(f"{{{WORD_NS}}}line") == "240"
         assert spacing.get(f"{{{WORD_NS}}}lineRule") == "auto"
