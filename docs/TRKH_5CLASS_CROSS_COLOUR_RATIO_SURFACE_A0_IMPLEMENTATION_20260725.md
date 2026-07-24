@@ -307,19 +307,52 @@ dedicated regression case uses image size 2938x1150 and bbox
 `(0.617804, 0.027735, 0.303894, 0.8)`. Failure evidence is locked at SHA
 `11714304...a554e9`. The consumed authorization must not be reused.
 
+## Recovery Materialization and Fresh Replay
+
+Recovery authorization SHA `7081cece...16e42` was committed and pushed at
+`3ac7302c554dc5f2023868ec63775516f1263be2`. It pins the correction commit,
+failure evidence, exact module/test/lock/erratum/engine hashes, output path,
+resource limits, and CPU-only/no-descriptor/no-fit/no-validation/no-test
+constraints.
+
+The replacement materialization completed in `22.013373 s` under PID 28104.
+All 763 rows and every manifest, model box, crop box, valid mask, bbox mask,
+packed-mask replay, and model-tensor round trip passed with maximum numeric
+error `0.0`. Peak process RSS was `744,726,528` bytes; the
+`156,728,872`-byte temporary cache stayed below the `429,496,730`-byte limit,
+and no CUDA context was used.
+
+The fresh-process replay completed in `21.784652 s` under PID 17800 and passed
+all 13 checks. It reproduced the authorization, lock, module, transform,
+image/label manifests, access ledger, cohort arrays, sRGB cache, packed valid
+masks, and parity record exactly.
+
+The dynamic ledger contains 2,958 raw events collapsed to 1,479 unique
+logical reads: 735 train images, 735 train labels, and nine immutable inputs.
+Every logical path was opened once; blocked, write-like, validation, and test
+counts are all zero. The retained local cache contains only uint8 sRGB,
+packed uint8 valid masks, and immutable cohort geometry/identity/keeper
+probabilities. It contains no candidate descriptor or candidate state.
+
+Compact recovery evidence is locked at SHA
+`e992c297c2416976152694dec95df6d99692dd63af6395f00df99b9efa98c3ed`.
+It pins the formal/artifact-set manifests, all cache hashes and sizes, array
+schemas, ledger digest, resources, replay checks, and the no-fit scientific
+boundary. The 150 MB cache remains a local temporary dependency and is not
+added to Git.
+
+Revision-22 Word QA passes all `18/18` rendered pages at original detail with
+no clipping, overlap, broken table flow, or malformed source links.
+Accessibility findings are `0/0/0`.
+
 ## Next Authorized Stage
 
-Commit and push the float-order correction plus failure evidence first. A new
-recovery authorization must then pin the corrected materializer/test hashes,
-the correction commit, failure SHA, engine/lock/erratum hashes, exact output
-directory, resource limits, and `materializer_authorized_no_fit` state.
+Commit and push the compact materialization/replay evidence first. Then define
+and commit a separate prospective descriptor/four-role head-fit runner
+boundary that consumes only the exact local cache and immutable lock. It must
+pin output, resource, file-set, replay, no-validation/test, and fail-closed
+cleanup rules before descriptor extraction or fitting.
 
-Only that recovery authorization may permit one replacement 735-image
-materialization and one fresh-process exact replay. The replay must match the
-sRGB cache, packed-mask cache, cohort arrays, manifests, parity record, and
-ordered access-ledger hash. A failure deletes its temporary directory and
-leaves no formal output.
 Head fitting, descriptors, candidate metrics, validation/test, production
 integration, full train, and current-best command changes remain unauthorized
-until the formal materializer and replay are committed as evidence and a new
-fit-runner boundary is prospectively locked.
+until that new boundary is committed and pushed.

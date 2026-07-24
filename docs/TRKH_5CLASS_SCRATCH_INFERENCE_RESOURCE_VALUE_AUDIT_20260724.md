@@ -376,3 +376,24 @@ iterated object boxes through float32 after deriving integer crop bounds from
 the original primary bbox. The corrected path and regression test pass without
 another cohort read. Failure evidence SHA is `11714304...a554e9`; a separate
 recovery authorization is mandatory before a replacement image pass.
+
+## CCR Recovery-Materializer Resource Result
+
+Recovery authorization SHA `7081cece...16e42` is pushed at commit
+`3ac7302c...63be2`. The one replacement materialization and one fresh-process
+replay complete in `22.013373/21.784652 s` with independent PIDs. All
+same-tensor parity errors are `0.0`; all 13 replay checks pass.
+
+Peak process RSS is `744,726,528` bytes. The temporary cache is
+`156,728,872` bytes, below the locked `429,496,730`-byte temporary ceiling;
+CUDA, validation, and test use are zero. The ledger records 1,479 unique
+logical reads exactly once, comprising 735 train images, 735 train labels, and
+nine immutable inputs, with zero block or write-like event.
+
+This is still `mechanism-only-materialization`, not a model gain or inference
+pass. The local 150 MB cache is a temporary dependency for the prospectively
+locked A0 fit and is not a final retained model artifact. Compact evidence SHA
+is `e992c297...98c3ed`. Descriptor extraction and head fitting remain closed
+until that evidence is committed and a separate fit-runner boundary is pushed.
+Revision-22 Word QA passes all `18/18` rendered pages and accessibility
+`0/0/0`.

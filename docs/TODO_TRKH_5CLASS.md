@@ -4966,13 +4966,23 @@
   `29/29`; full pytest passes `1957/1957` in `74.10 s` with 373 warnings.
   Failure evidence SHA is `11714304...a554e9`. Revision-21 Word QA passes
   `18/18` rendered pages and accessibility `0/0/0`.
-- [ ] Commit and push the float-order correction plus failure evidence, then
-  create and push a separate one-attempt recovery authorization. Never reuse
-  consumed authorization SHA `e76bd56c...07068`.
-- [ ] Run one recovery 735-image materialization plus one exact fresh-process
-  replay only under the recovery authorization. Keep descriptors and head fit
-  closed until cache/manifests/parity/access-ledger hashes replay exactly and
-  the evidence is committed.
+- [x] Commit and push the float-order correction plus failure evidence at
+  `fb1931e991451c356c2f3971577823bffe93442c`, then create and push the
+  separate recovery authorization at
+  `3ac7302c554dc5f2023868ec63775516f1263be2`, SHA
+  `7081cece...16e42`. The consumed authorization `e76bd56c...07068` remains
+  invalid.
+- [x] Run the one recovery 735-image materialization plus one exact
+  fresh-process replay. Materialization/replay complete in
+  `22.013373/21.784652 s`; all parity errors are `0.0`, all 13 replay checks
+  pass, peak RSS/cache are `744,726,528/156,728,872` bytes, and CUDA,
+  validation, test, descriptor, state, and metric use are zero. Compact
+  evidence SHA is `e992c297...98c3ed`. Revision-22 Word QA passes all
+  `18/18` rendered pages and accessibility `0/0/0`.
+- [ ] Commit and push the compact materialization/replay evidence, then create
+  and push a separate prospective descriptor/four-role head-fit runner
+  boundary. Do not extract descriptors or fit under either materializer
+  authorization.
 - [ ] Run exactly one locked CCR A0 only if implementation preflight passes.
   Stop at the clean train-only information conjunction unless candidate CCR
   beats keeper margin, equal-size colour-ratio, trained spatial-dephase and

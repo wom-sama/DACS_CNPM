@@ -22031,3 +22031,31 @@ Date: 2026-07-02
 - Revision-21 DOCX QA passes all `18/18` rendered pages at original detail
   without clipping, overlap, or broken table flow; accessibility findings are
   `0/0/0`.
+
+## CCR Materializer Recovery Success - 2026-07-25
+
+- Commit and push the float-order correction at
+  `fb1931e991451c356c2f3971577823bffe93442c`, then commit and push the
+  separate recovery authorization at
+  `3ac7302c554dc5f2023868ec63775516f1263be2`. Authorization SHA is
+  `7081cece...16e42`; the consumed original authorization remains invalid.
+- The one replacement materialization completes in `22.013373 s` under PID
+  28104. All 763 rows, manifests, boxes, masks, packed-mask replay, and tensor
+  round trips are exact with maximum errors `0.0`. Peak RSS is 744,726,528
+  bytes, cache size 156,728,872 bytes, CUDA unused.
+- Fresh-process replay completes in `21.784652 s` under PID 17800 and passes
+  all 13 checks, including exact authorization, lock, module, transform,
+  manifests, ledger, arrays, sRGB, masks, and parity.
+- Independent artifact audit verifies formal manifest 5/5 and artifact set
+  7/7 by names, sizes, file hashes, totals, and canonical row hashes. The
+  ledger has 2,958 raw events, 1,479 unique logical reads exactly once,
+  735/735 train image/label paths, nine immutable inputs, and zero blocked,
+  write-like, validation, or test access.
+- Preserve the local cache and compact evidence SHA
+  `e992c297...98c3ed`. No descriptor, candidate state, fit, metric,
+  validation/test, production edit, full train, or current-command change is
+  authorized. Commit this evidence before prospectively locking the
+  descriptor/four-role fit runner.
+- Revision-22 DOCX QA passes all `18/18` rendered pages at original detail
+  without clipping, overlap, broken table flow, or malformed source links;
+  accessibility findings are `0/0/0`.

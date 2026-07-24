@@ -2,10 +2,10 @@
   "document": {
     "title": "TRKH 5-class",
     "subtitle": "Quy trình nghiên cứu, trạng thái bằng chứng và kế hoạch cải tiến",
-    "revision": "21",
+    "revision": "22",
     "updated": "2026-07-25",
     "branch": "classification-only-research",
-    "status": "Đang nghiên cứu - CCR formal attempt 1 fail-closed, recovery fix pending",
+    "status": "Đang nghiên cứu - CCR materializer replay exact, descriptor/fit chưa mở",
     "owner": "TRKH classification-only research"
   },
   "executive_metrics": [
@@ -26,8 +26,8 @@
     },
     {
       "label": "CCR materializer",
-      "value": "11/11, recovery pending",
-      "detail": "Attempt 1 chỉ fail crop-box 1 ULP; output sạch; chưa descriptor/fit"
+      "value": "13/13 replay exact",
+      "detail": "763 hàng; parity error 0,0; CPU-only; chưa descriptor/fit"
     }
   ],
   "sections": [
@@ -74,6 +74,10 @@
         {
           "type": "paragraph",
           "text": "Revision 21 ghi nhận formal attempt đầu tiên đã tiêu thụ authorization e76bd56c...07068 và dừng fail-closed sau khoảng 25,4 giây. Cả 763 hàng, image/label manifest, model box, valid mask, bbox mask và tensor round-trip đều exact; chỉ crop_boxes_exact=false. Output và thư mục tạm đều vắng, không có descriptor/state/metric/CUDA/validation/test. Đối chiếu source xác định production lấy crop bounds từ bbox gốc nhưng chuyển object boxes qua float32 trước crop-relative box; direct loader thiếu đúng boundary này, tạo sai khác một ULP 2,98e-8 đến 5,96e-8 dù mask giống. Bản sửa và regression test đạt materializer/CCR/full 11/11, 29/29, 1957/1957 trong 74,10 giây với 373 cảnh báo; module/test SHA mới cc30d973...f24af22/f8b2962f...edf5945. Failure evidence SHA 11714304...a554e9; Word QA đạt 18/18 trang và accessibility 0/0/0. Phải commit/push rồi tạo recovery authorization riêng trước lần đọc ảnh thay thế."
+        },
+        {
+          "type": "paragraph",
+          "text": "Revision 22 dùng recovery authorization SHA 7081cece...16e42 đã push tại 3ac7302c...63be2. Replacement materialization và fresh-process replay hoàn tất trong 22,013373/21,784652 giây với PID độc lập 28104/17800. Cả 763 hàng và mọi manifest/box/mask/tensor parity đều exact, sai số tối đa 0,0; 13/13 replay checks pass. Ledger có 2.958 raw event, 1.479 logical read duy nhất gồm 735 ảnh train, 735 label train và chín input bất biến; zero block/write/validation/test. Peak RSS/cache là 744.726.528/156.728.872 byte, CUDA không dùng. Evidence SHA e992c297...98c3ed; Word QA đạt 18/18 trang và accessibility 0/0/0. Cache cục bộ được giữ như dependency tạm, chưa có descriptor, state, fit, metric, production edit hay command update."
         }
       ]
     },
@@ -738,7 +742,8 @@
         "Giữ engine/test/implementation SHA ac610d7c...d26fe9/5a83a138...94c840/18c2dbeb...8c804; trước A0 phải commit direct locked-CIDT materializer và chứng minh identity/crop/model-box/bbox-mask/valid-mask parity fail-closed.",
         "Giữ materializer SHA 3c7e33e9...e6321f7, test SHA 2675a37a...7a3808 và repository-gate commit 5b4df3d...02f4b1; authorization SHA e76bd56c...07068 khóa ancestor/output/resource cùng trạng thái materializer_authorized_no_fit.",
         "Giữ authorization e76bd56c...07068 ở trạng thái consumed sau attempt 1 fail crop-box exact; bảo toàn failure SHA 11714304...a554e9 và không tái sử dụng authorization cũ.",
-        "Commit/push materializer/test correction cc30d973...f24af22/f8b2962f...edf5945, sau đó khóa recovery authorization riêng trước một replacement materialization và fresh-process replay; descriptor/head fit vẫn đóng."
+        "Giữ correction commit fb1931e9...3442c và recovery authorization commit/SHA 3ac7302c...63be2/7081cece...16e42; authorization cũ vẫn consumed.",
+        "Bảo toàn materialization/replay evidence SHA e992c297...98c3ed và cache cục bộ exact; chỉ mở descriptor/four-role head fit sau một boundary riêng được commit/push."
       ]
         }
       ]
@@ -877,12 +882,20 @@
             [
               "docs/TRKH_5CLASS_CROSS_COLOUR_RATIO_SURFACE_A0_MATERIALIZER_FAILURE_20260725.json",
               "Failure evidence của formal attempt 1, atomic cleanup, root cause một ULP và recovery boundary."
+            ],
+            [
+              "docs/TRKH_5CLASS_CROSS_COLOUR_RATIO_SURFACE_A0_MATERIALIZER_RECOVERY_AUTHORIZATION_20260725.json",
+              "Authorization một lần đã push cho replacement materialization và fresh-process replay, vẫn no-fit."
+            ],
+            [
+              "docs/TRKH_5CLASS_CROSS_COLOUR_RATIO_SURFACE_A0_MATERIALIZER_RECOVERY_EVIDENCE_20260725.json",
+              "Hash, schema, parity, resource, ledger và replay evidence; pin cache cục bộ nhưng không đưa binary lớn vào Git."
             ]
           ]
         },
         {
           "type": "paragraph",
-          "text": "Revision 1-3 dựng báo cáo tái lập, full-train/JPEG-DL và synthetic policy. Revision 4-10 đóng SaSPA, LP-A3, NSA, RN-LISDA và Bal-BCE bằng fidelity, causal control, replay và TP/FP gates. Revision 11-14 khóa CAP trước metric, sửa audit-only eval-LSTM, rồi hoàn tất same-lock formal/replay/manual review; CAP đóng negative-but-reusable và retention pass tại SHA 99d1835a...04a636. Revision 15 screen no-run sáu họ successor và cô lập regression OOXML hyperlink. Revision 16 khóa CCR train-only tại protocol/lock SHA 1e408502...f347/6c2a604d...c835. Revision 17 khóa same-tensor/direct-loader erratum SHA f9a901b1...d03b trước implementation. Revision 18 thêm equation engine/head scratch 3.004 tham số tại SHA ac610d7c...d26fe9. Revision 19 thêm direct materializer và cache bound 160.456.704 byte. Revision 20 sửa Windows path gate và khóa authorization e76bd56c...07068. Revision 21 ghi attempt 1 fail-closed crop-box một ULP, failure SHA 11714304...a554e9 và correction cc30d973...f24af22/f8b2962f...edf5945; full pytest 1957/1957. Chưa có descriptor, fit, metric, validation/test, production edit hoặc command update."
+          "text": "Revision 1-3 dựng báo cáo tái lập, full-train/JPEG-DL và synthetic policy. Revision 4-10 đóng SaSPA, LP-A3, NSA, RN-LISDA và Bal-BCE bằng fidelity, causal control, replay và TP/FP gates. Revision 11-14 khóa CAP trước metric, sửa audit-only eval-LSTM, rồi hoàn tất same-lock formal/replay/manual review; CAP đóng negative-but-reusable và retention pass tại SHA 99d1835a...04a636. Revision 15 screen no-run sáu họ successor và cô lập regression OOXML hyperlink. Revision 16 khóa CCR train-only tại protocol/lock SHA 1e408502...f347/6c2a604d...c835. Revision 17 khóa same-tensor/direct-loader erratum SHA f9a901b1...d03b trước implementation. Revision 18 thêm equation engine/head scratch 3.004 tham số tại SHA ac610d7c...d26fe9. Revision 19 thêm direct materializer và cache bound 160.456.704 byte. Revision 20 sửa Windows path gate và khóa authorization e76bd56c...07068. Revision 21 ghi attempt 1 fail-closed crop-box một ULP và correction cc30d973...f24af22/f8b2962f...edf5945. Revision 22 hoàn tất recovery materialization/replay exact tại authorization 7081cece...16e42, evidence e992c297...98c3ed, Word QA 18/18 và accessibility 0/0/0. Chưa có descriptor, fit, metric, validation/test, production edit hoặc command update."
         }
       ]
     },
