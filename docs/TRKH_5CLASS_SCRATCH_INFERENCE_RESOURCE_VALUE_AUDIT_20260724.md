@@ -347,16 +347,18 @@ ceiling. This avoids retaining two float32 descriptor families and preserves
 the ability to prove all geometry rows before descriptor extraction. The
 formal process is CPU-only; any initialized CUDA context is a failure.
 
-Nine tests cover production-parity crops, multi-object labels, exact tensor
+Ten tests cover production-parity crops, multi-object labels, exact tensor
 round-trip, packed-mask replay, allowlist blocking, no-pixel real preflight,
 synthetic formal manifests, Windows logical-open accounting, atomic publish,
 forced-failure cleanup, exact resource/CPU-only/no-fit authorization, and
-no-write-before-authorization. Resource limits are checked before and during
-the image loop; failed replay finalization removes partial files. Combined CCR
-focused verification passes `27/27`. Materializer/test SHAs are
-`ff1050bc...7afbfd5` and `b6f76b19...5058013`.
-Focused CCR/report verification passes `30/30`; the full repository suite
-passes `1955/1955` in `75.30 s` with 373 existing warnings. Revision-19 Word
+no-write-before-authorization. The repository gate uses NUL-delimited Git
+porcelain so protected paths containing spaces cannot be rejected because of
+display quoting. Resource limits are checked before and during the image loop;
+failed replay finalization removes partial files. Combined CCR focused
+verification passes `28/28`. Materializer/test SHAs are
+`3c7e33e9...e6321f7` and `2675a37a...7a3808`.
+Focused CCR/report verification passes `31/31`; the full repository suite
+passes `1956/1956` in `74.35 s` with 373 existing warnings. Revision-20 Word
 QA passes `17/17` pages and accessibility `0/0/0`.
 
 Value remains `mechanism-only-preflight`. The result avoids a broad 9,215-row

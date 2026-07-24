@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "protocol_id": "trkh_cross_colour_ratio_surface_a0_20260725",
+  "state": "materializer_authorized_no_fit",
+  "authorized_date": "2026-07-25",
+  "output_dir": "D:\\DataAI\\AIEx\\TRKH\\runs\\audit_cross_colour_ratio_surface_a0_materialized_20260725",
+  "required_ancestor_commit": "5b4df3d5266c9844f7c6843e516daafea502f4b1",
+  "expected": {
+    "lock_sha256": "6c2a604deb4f976a3556ffb0ad8ddb60c7f376e81e374ae16272c6e6d49fc835",
+    "erratum_sha256": "f9a901b14098b042272a2c3c777f7686e3e6ac61e6cfff8ed1c2d93b0777d03b",
+    "module_sha256": "3c7e33e9a8164769e0ee44fcbc04727eef63f4fd2b576c53c97441ca0e6321f7",
+    "engine_sha256": "ac610d7c37eda1b96a54257f6814a3e8c7ef5bfc243ec3bb3c7ae13a86d26fe9",
+    "test_sha256": "2675a37a0c334096ec178e0d40299f9e1d4820fc81e81ffdaab3b7998e7a3808"
+  },
+  "resource_limits": {
+    "batch1_mean_ratio": 1.15,
+    "batch1_p95_ratio": 1.15,
+    "batch_throughput_ratio": 0.85,
+    "clean_wall_seconds": 1200,
+    "end_to_end_peak_cuda_bytes": 6442450944,
+    "end_to_end_peak_cuda_ratio": 1.15,
+    "head_peak_cuda_bytes": 2147483648,
+    "onnx_max_probability_error": 1e-05,
+    "process_rss_bytes": 10737418240,
+    "retained_bytes": 107374183,
+    "temporary_cache_bytes": 429496730,
+    "tensorrt_fp32_max_probability_error": 0.0001
+  },
+  "execution_constraints": {
+    "cpu_only": true,
+    "formal_materializations": 1,
+    "fresh_process_replays": 1,
+    "descriptor_creation": false,
+    "head_fit": false,
+    "validation": false,
+    "test": false,
+    "production_integration": false
+  }
+}

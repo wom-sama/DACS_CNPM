@@ -256,7 +256,7 @@ The ledger preserves both raw events for exact replay and separately collapses
 the adjacent `mode='r'`/`mode=None` pair into one logical open. The formal
 gate requires one logical open per unique image and label.
 
-Nine materializer tests pass. They cover bit-exact parity against the
+Ten materializer tests pass. They cover bit-exact parity against the
 production dataset on multi-object synthetic images, source-code exclusion of
 the broad dataset constructor, label filtering, valid-mask packing, forbidden
 path blocking, real lock preflight without cohort pixel/label reads, an
@@ -264,18 +264,20 @@ end-to-end synthetic formal artifact set, atomic rename, and forced-failure
 cleanup. Authorization now pins the full resource-limit block and exact
 CPU-only/no-fit execution constraints; invalid authorization creates no output
 parent. Resource limits are checked before and during the image loop, and a
-failed replay removes partial finalization files. The combined
-lock/erratum/engine/materializer suite passes `27/27`. Focused CCR/report
-verification passes `30/30`; the complete repository suite passes `1955/1955`
-in `75.30 s` with 373 existing warnings. Revision-19 Word
-QA passes all `17/17` rendered pages and accessibility `0/0/0`.
+failed replay removes partial finalization files. A Windows regression test
+also requires NUL-delimited Git porcelain so protected untracked paths with
+spaces are compared by literal path rather than display quoting. The combined
+lock/erratum/engine/materializer suite passes `28/28`. Focused CCR/report
+verification passes `31/31`; the complete repository suite passes
+`1956/1956` in `74.35 s` with 373 existing warnings. Revision-20 Word QA
+passes all `17/17` rendered pages and accessibility `0/0/0`.
 
 Current implementation hashes are:
 
 - materializer:
-  `ff1050bc96fbb1f92baddf49368c3a3ffba24627a62a05c98760fe0967afbfd5`;
+  `3c7e33e9a8164769e0ee44fcbc04727eef63f4fd2b576c53c97441ca0e6321f7`;
 - materializer tests:
-  `b6f76b1998cae9bb6fd97c434edc361dd20376aafddebb6444e7b608f5058013`.
+  `2675a37a0c334096ec178e0d40299f9e1d4820fc81e81ffdaab3b7998e7a3808`.
 
 The real structural preflight reports 763 rows, 735 unique images, 735 unique
 labels, nine logical locked-input opens, zero blocked attempts, no cohort

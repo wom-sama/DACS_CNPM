@@ -4929,8 +4929,8 @@
   `1e-5`. Focused/full tests pass `21/21` and `1946/1946`; revision-18 Word
   QA passes `16/16` pages and accessibility `0/0/0`. No image pass, fit,
   metric, or command update occurred.
-- [ ] Commit and push the implemented fail-closed direct cohort tensor
-  materializer before the CCR A0 image pass. Structural preflight and nine
+- [x] Commit and push the implemented fail-closed direct cohort tensor
+  materializer before the CCR A0 image pass. Structural preflight and ten
   tests pass: it uses locked CIDT identities and geometry without constructing
   the broad train dataset, reproduces the exact keeper crop/eval tensor,
   bounds the lossless cache at `160,456,704` bytes, and proves
@@ -4938,15 +4938,21 @@
   synthetic cases. Authorization pins exact resource and CPU-only/no-fit
   constraints, invalid authorization cannot create an output parent, resource
   ceilings are checked during the image loop, and replay failure removes
-  partial finalization files. Combined CCR focused tests pass `27/27`; no real cohort
-  image/label, descriptor, fit, metric, CUDA, validation, or test was used.
-  Focused CCR/report verification passes `30/30`; full pytest passes
-  `1955/1955` in `75.30 s` with 373 existing warnings. Revision-19 Word QA
-  passes `17/17` pages and accessibility `0/0/0`.
-- [ ] After the materializer implementation commit is pushed, create and push
+  partial finalization files. NUL-delimited Git porcelain prevents protected
+  paths with spaces from being rejected by display quoting. Combined CCR
+  focused tests pass `28/28`; no real cohort image/label, descriptor, fit,
+  metric, CUDA, validation, or test was used. Focused CCR/report verification
+  passes `31/31`; full pytest passes `1956/1956` in `74.35 s` with 373
+  existing warnings. Revision-20 Word QA passes `17/17` pages and
+  accessibility `0/0/0`. The implementation boundary is
+  pushed at commit `a22a2ba7025bfcdef1c980f1891255fae77306d2`; the repository
+  path-gate correction is pushed at `5b4df3d5266c9844f7c6843e516daafea502f4b1`.
+- [x] After the materializer implementation commit is pushed, create and push
   a separate machine execution authorization that pins its module/test hashes,
   ancestor commit, lock/erratum/engine hashes, exact output path, CPU-only
-  rule, temporary limit, and `materializer_authorized_no_fit` state.
+  rule, temporary limit, and `materializer_authorized_no_fit` state. The
+  prospective authorization SHA is `e76bd56c...07068`; this checkbox becomes
+  effective only when its containing commit is pushed.
 - [ ] Run one formal 735-image same-tensor materialization plus one exact
   fresh-process replay only under that authorization. Keep descriptors and
   head fitting closed until cache/manifests/parity/access-ledger hashes replay

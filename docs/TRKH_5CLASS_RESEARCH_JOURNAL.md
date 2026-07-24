@@ -21964,20 +21964,41 @@ Date: 2026-07-02
   rows/images/labels, nine logical immutable-input opens, zero blocks, and no
   cohort pixel/label read, descriptor, state, metric, CUDA, validation, or
   test use.
-- Nine materializer tests include production-path parity, broad-constructor
+- Ten materializer tests include production-path parity, broad-constructor
   exclusion, exact cache replay, path blocking, synthetic formal artifact
   generation, atomic rename, forced-failure cleanup, exact resource/CPU-only/
   no-fit authorization, and no-write-before-authorization. Resource limits are
   checked before and during the image loop; failed replay finalization removes
-  partial files. Combined CCR focused tests pass `27/27`.
+  partial files. NUL-delimited Git porcelain protects literal untracked paths
+  with spaces from display-quoting mismatches. Combined CCR focused tests pass
+  `28/28`.
 - Materializer/test SHAs are
-  `ff1050bc96fbb1f92baddf49368c3a3ffba24627a62a05c98760fe0967afbfd5`
+  `3c7e33e9a8164769e0ee44fcbc04727eef63f4fd2b576c53c97441ca0e6321f7`
   and
-  `b6f76b1998cae9bb6fd97c434edc361dd20376aafddebb6444e7b608f5058013`.
-- Focused CCR/report verification passes `30/30`; complete pytest passes
-  `1955/1955` in `75.30 s` with 373 existing warnings. Revision-19 DOCX visual
+  `2675a37a0c334096ec178e0d40299f9e1d4820fc81e81ffdaab3b7998e7a3808`.
+- Focused CCR/report verification passes `31/31`; complete pytest passes
+  `1956/1956` in `74.35 s` with 373 existing warnings. Revision-20 DOCX visual
   QA passes all `17/17` rendered pages and accessibility `0/0/0`.
 - This remains `mechanism-only-preflight`. Commit/push must precede a separate
   machine execution authorization. Formal materialization, fresh replay,
   descriptors, fit, metrics, validation/test, production integration, full
   train, and current-best command updates have not occurred.
+
+## CCR Materializer Execution Authorization - 2026-07-25
+
+- The implementation boundary is committed and pushed at
+  `a22a2ba7025bfcdef1c980f1891255fae77306d2`. A reproduced Windows
+  display-quoting failure in the repository gate is corrected and pushed at
+  `5b4df3d5266c9844f7c6843e516daafea502f4b1`; this is the authorization
+  ancestor.
+- Create a separate prospective machine authorization at SHA
+  `e76bd56c5b592714f90272d51df113ab17ede9edb87e31c126747dcc93907068`.
+  It pins the implementation commit, module/test/engine/lock/erratum hashes,
+  exact formal output directory, complete resource limits, and CPU-only,
+  one-materialization, one-fresh-replay, no-descriptor, no-fit,
+  no-validation/test, no-production constraints.
+- The authorization permits no image access until its own commit is pushed
+  and the repository gate is clean except for the three protected user-owned
+  untracked paths. It authorizes only lossless same-tensor materialization and
+  exact replay; candidate descriptors, fitting, scores, validation/test,
+  integration, full train, and current-best command updates remain closed.
