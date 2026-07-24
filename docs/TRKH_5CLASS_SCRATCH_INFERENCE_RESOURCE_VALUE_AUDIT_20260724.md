@@ -236,3 +236,22 @@ complete would be incorrect. No inference smoke is needed after the scientific
 failure, and no integration, validation/test access, probe, full train, or
 current-best command update is authorized. Do not sweep neighboring region,
 LSTM, NetVLAD, optimizer, threshold, seed, or captured-layer settings.
+
+## Post-CAP Successor Resource Screen
+
+The 2026-07-25 primary-source screen covers Self-ONN, learnable morphological
+neurons, PointNet/Deep Sets, DeepEMD/optimal transport, normalizing flows, and
+hierarchical local-material recognition. None satisfies all four immediate
+requirements: equation distinctness from local closures, new
+sample-conditional class1-vs-0/2/4 surface evidence, scratch convergence within
+the project budget, and a plausible matched standard-op inference contract.
+The detailed decisions and sources are in
+`TRKH_5CLASS_POST_CAP_SUCCESSOR_NO_RUN_SCREEN_20260725.md`.
+
+No implementation or experiment is authorized from this screen. Its resource
+value is the avoided cost of six overlapping or assumption-mismatched probes:
+zero new GPU time, zero validation/test reads, zero checkpoint/ONNX/engine
+artifacts, and no command change. A future proposal must first pass a
+source-disjoint train-only information and causal-control gate on explicit
+pair-specific bbox-valid surface evidence; a generic replacement neuron,
+pooling layer, density head, or set aggregator is insufficient.

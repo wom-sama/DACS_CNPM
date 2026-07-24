@@ -4890,4 +4890,24 @@
   must be equation-distinct from closed context/graph/local-mixer families,
   add sample-conditional surface evidence, and prospectively lock class-1
   TP/FP, replay, XAI, latency/p95/throughput/VRAM, ONNX, and TensorRT gates
-  before any GPU run.
+  before any GPU run. The 2026-07-25 post-CAP screen found no candidate that
+  currently satisfies this conjunction.
+- [x] Complete a primary-source, local-overlap, and deployment screen for
+  Self-ONN, learnable morphological neurons, PointNet/Deep Sets, DeepEMD/
+  optimal transport, normalizing flows, and hierarchical local-material
+  recognition. Record the no-run decisions in
+  `docs/TRKH_5CLASS_POST_CAP_SUCCESSOR_NO_RUN_SCREEN_20260725.md`; spend no GPU,
+  open no validation/test split, and keep keeper/current-command/history SHAs
+  unchanged.
+- [x] Rebuild revision-15 JSON/DOCX and close the report-rendering regression.
+  A/B known-good artifacts isolated explicit hyperlink `w:sz`/`w:szCs` as the
+  Word/LibreOffice repagination trigger; two tests now enforce minimal
+  `rFonts/color/u` run properties. Full pytest passes `1927/1927`; final visual
+  QA passes `15/15` pages and accessibility passes `0/0/0`. No model,
+  validation/test, keeper, or current-command state changed.
+- [ ] Admit a successor only if it introduces explicit pair-specific,
+  sample-conditional bbox-valid surface evidence for `1-vs-0`, `1-vs-2`, and
+  `1-vs-4`; demonstrates source-held train-only TP retention and restricted-FP
+  rejection beyond keeper margin and causal derangements; and has a
+  prospectively measurable standard-op inference path. Do not reopen the six
+  screened families by changing only width, order, pooling, solver, or head.

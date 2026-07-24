@@ -2,10 +2,10 @@
   "document": {
     "title": "TRKH 5-class",
     "subtitle": "Quy trình nghiên cứu, trạng thái bằng chứng và kế hoạch cải tiến",
-    "revision": "14",
-    "updated": "2026-07-24",
+    "revision": "15",
+    "updated": "2026-07-25",
     "branch": "classification-only-research",
-    "status": "Đang nghiên cứu - CAP A0 đã reject sau formal/replay/XAI",
+    "status": "Đang nghiên cứu - post-CAP no-run screen đã hoàn tất",
     "owner": "TRKH classification-only research"
   },
   "executive_metrics": [
@@ -25,9 +25,9 @@
       "detail": "Validation macro-F1; precision class 1 còn thấp"
     },
     {
-      "label": "CAP A0 formal",
-      "value": "Rejected",
-      "detail": "AUROC 0,560111; 5 FP sửa, 14 TP hỏng; replay exact"
+      "label": "Post-CAP screen",
+      "value": "6 no-run",
+      "detail": "Không ứng viên nào qua đủ mechanism, surface và deployment gate"
     }
   ],
   "sections": [
@@ -37,7 +37,7 @@
         {
           "type": "callout",
           "label": "Quyết định",
-          "text": "Giữ nguyên keeper và file lệnh full-train tốt nhất. CAP rerun cùng lock đã hoàn tất formal, fresh-process replay và review đủ 20 hàng XAI nhưng bị loại: AUROC 0,560111, chỉ sửa 5 restricted FP và phá 14 TP lớp 1; macro/class-1 F1 giảm còn 0,937491/0,805643. Replay exact nhưng causal controls và manual XAI đều không hỗ trợ cơ chế. Không integration, validation/test, probe/full train hoặc command update. Mọi classifier đề xuất vẫn scratch-only; pretrained baseline chỉ được dùng đối chiếu."
+          "text": "Giữ nguyên keeper và file lệnh full-train tốt nhất. CAP rerun cùng lock đã hoàn tất formal, fresh-process replay và review đủ 20 hàng XAI nhưng bị loại: AUROC 0,560111, chỉ sửa 5 restricted FP và phá 14 TP lớp 1; macro/class-1 F1 giảm còn 0,937491/0,805643. Sau CAP, sáu họ Self-ONN, learnable morphology, PointNet/Deep Sets, DeepEMD/optimal transport, normalizing flow và hierarchical material recognition đều bị screen no-run vì trùng cơ chế, thiếu tín hiệu bề mặt lớp-điều-kiện hoặc không phù hợp deployment. Không integration, validation/test, probe/full train hoặc command update. Mọi classifier đề xuất vẫn scratch-only; pretrained baseline chỉ được dùng đối chiếu."
         },
         {
           "type": "paragraph",
@@ -46,6 +46,10 @@
         {
           "type": "paragraph",
           "text": "Mô hình hiện tại đã vượt AIDT trên phép đối chiếu final-test đã ánh xạ ở macro-F1, nhưng chưa vượt các teacher pretrained mạnh và chưa giải quyết ranh giới lớp 1. Các giao thức pretrained, scratch, validation và test không được trộn thành một bảng xếp hạng duy nhất nếu chưa chuẩn hóa điều kiện."
+        },
+        {
+          "type": "paragraph",
+          "text": "No-run screen ngày 25-07 là một cổng tiết kiệm tài nguyên, không phải metric mới. Successor kế tiếp phải tạo evidence map hoặc score cục bộ riêng cho 1-vs-0, 1-vs-2 và 1-vs-4 trên phần bề mặt hợp lệ trong bbox; phải thắng keeper margin và causal derangement ở cả giữ TP lớp 1 lẫn loại restricted FP trên source-held train folds; đồng thời có đường standard-op để đo latency mean/p95, throughput, VRAM, ONNX và TensorRT."
         }
       ]
     },
@@ -682,7 +686,8 @@
             "Bảo vệ OOF fold root: 2,488 GiB là logical size của 96.768 hardlink/0 copy và các path còn dependency; chỉ xét migration sau dependency proof.",
             "Tiếp tục làm sạch worktree theo manifest và commit theo stage; không đụng BaoCao hoặc deep-research-report chưa theo dõi.",
             "Chỉ cập nhật lệnh full-train tốt nhất và history khi một candidate thắng validation, replay, XAI và deployment gate.",
-            "Chọn successor chỉ khi equation-distinct, có sample-conditional surface evidence và khóa trước TP/FP, latency/p95/throughput/VRAM, ONNX/TensorRT."
+            "Chọn successor chỉ khi equation-distinct, có sample-conditional surface evidence và khóa trước TP/FP, latency/p95/throughput/VRAM, ONNX/TensorRT.",
+            "Không mở lại sáu họ post-CAP bằng cách chỉ đổi width, order, pooling, solver hoặc head; tài liệu no-run ngày 25-07 là cổng resource-value bắt buộc."
           ]
         }
       ]
@@ -781,12 +786,16 @@
             [
               "docs/TRKH_5CLASS_SCRATCH_INFERENCE_RESOURCE_VALUE_AUDIT_20260724.md",
               "Scratch provenance, non-CNN/Transformer review, storage inventory và mandatory resource/inference gate."
+            ],
+            [
+              "docs/TRKH_5CLASS_POST_CAP_SUCCESSOR_NO_RUN_SCREEN_20260725.md",
+              "Primary-source screen cho sáu họ successor, local-overlap map, deployment caveat và điều kiện mở lại."
             ]
           ]
         },
         {
           "type": "paragraph",
-          "text": "Revision 1-3: tạo báo cáo tái lập, full train 30e/JPEG-DL và synthetic policy. Revision 4-5: SaSPA F0/F1 bị loại ở fidelity/XAI. Revision 6-8: LP-A3, NSA và RN-LISDA bị loại bằng causal controls/replay. Revision 9-10: Bal-BCE bị loại vì tạo 57 restricted FP. Revision 11-12: khóa CAP prospectively rồi cố định engine/auditor/replay/XAI trước metric. Revision 13: sửa audit-only lỗi eval-LSTM XAI sau zero-artifact formal. Revision 14: same-lock CAP formal/replay/manual review hoàn tất; candidate AUROC 0,560111, net -9, macro/class-1 F1 0,937491/0,805643, replay numeric error 0,0 nhưng manual XAI fail. CAP đóng negative-but-reusable; sửa OOF hardlink và memory-vs-inference claims. Closure QA pass focused/full 28/28 và 1925/1925, Word 14/14, accessibility 0/0/0, retention 860 directory/51 manifest/220 original vắng tại SHA 99d1835a...04a636. Keeper/lệnh tốt nhất vẫn không đổi."
+          "text": "Revision 1-3 dựng báo cáo tái lập, full-train/JPEG-DL và synthetic policy. Revision 4-10 đóng SaSPA, LP-A3, NSA, RN-LISDA và Bal-BCE bằng fidelity, causal control, replay và TP/FP gates. Revision 11-14 khóa CAP trước metric, sửa audit-only eval-LSTM, rồi hoàn tất same-lock formal/replay/manual review; CAP đóng negative-but-reusable và retention pass tại SHA 99d1835a...04a636. Revision 15 screen no-run sáu họ successor; không code/GPU/validation/test, keeper và lệnh tốt nhất không đổi. A/B known-good cô lập regression OOXML hyperlink gây Word/LibreOffice repagination vô hạn; hai test cấu trúc và full suite đạt 1927/1927, toàn bộ trang render được, accessibility 0/0/0."
         }
       ]
     },
@@ -910,6 +919,36 @@
               "title": "AD-Net: Extract More from Less, BMVC 2024",
               "url": "https://arxiv.org/abs/2406.19814",
               "detail": "Augmentation và self-distillation cho low-data; screened no-run vì overlap."
+            },
+            {
+              "title": "Self-Organized Operational Neural Networks for Severe Image Restoration",
+              "url": "https://arxiv.org/abs/2008.12894",
+              "detail": "Taylor-polynomial operational neurons; screen no-run vì evidence chính là restoration và overlap higher-order stem."
+            },
+            {
+              "title": "Morphological Network: How Far Can We Go with Morphological Neurons?, BMVC 2022",
+              "url": "https://bmvc2022.mpi-inf.mpg.de/0779.pdf",
+              "detail": "Learnable dilation/erosion; theory và experiment chính bị giới hạn ở whole-input 1D, chưa chứng minh surface selectivity cho TRKH."
+            },
+            {
+              "title": "PointNet, CVPR 2017",
+              "url": "https://openaccess.thecvf.com/content_cvpr_2017/html/Qi_PointNet_Deep_Learning_CVPR_2017_paper.html",
+              "detail": "Permutation-invariant 3D point-set model; không khớp regular 2D fruit surface và overlap patch-set aggregation."
+            },
+            {
+              "title": "DeepEMD, CVPR 2020",
+              "url": "https://openaccess.thecvf.com/content_CVPR_2020/html/Zhang_DeepEMD_Few-Shot_Image_Classification_With_Differentiable_Earth_Movers_Distance_and_CVPR_2020_paper.html",
+              "detail": "Few-shot optimal patch matching; local DeepEMD/DN4/Sinkhorn neighborhood đã screen với patch-prototype closure."
+            },
+            {
+              "title": "Why Normalizing Flows Fail to Detect Out-of-Distribution Data, NeurIPS 2020",
+              "url": "https://proceedings.neurips.cc/paper/2020/hash/ecb9fe2fbb99c31f567e9823e884dbec-Abstract.html",
+              "detail": "Flow likelihood có thể học local pixel correlation thay vì semantics; không mở lại density route đã fail."
+            },
+            {
+              "title": "Hierarchical Material Recognition from Local Appearance, ICCV 2025",
+              "url": "https://openaccess.thecvf.com/content/ICCV2025/html/Beveridge_Hierarchical_Material_Recognition_from_Local_Appearance_ICCV_2025_paper.html",
+              "detail": "Dựa trên taxonomy graph, depth và context không tồn tại tương đương trong TRKH; graph/context neighborhood đã đóng."
             },
             {
               "title": "Do We Train on Test Data? Purging CIFAR of Near-Duplicates",

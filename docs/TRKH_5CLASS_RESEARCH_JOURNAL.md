@@ -21726,3 +21726,62 @@ Date: 2026-07-02
   leave them in place rather than spend risk for negligible physical reclaim.
 - Final revision-14 JSON/DOCX/builder SHAs are
   `0b82a449...7a869c`/`ae1efaf3...f98ade`/`7a0e81e4...1002e`.
+
+## Post-CAP Successor No-Run Screen - 2026-07-25
+
+- Recheck primary sources and the local no-repeat map before authorizing a new
+  architecture. Screen Self-ONN, learnable morphological neurons, PointNet/
+  Deep Sets, DeepEMD/optimal transport, normalizing flows, and hierarchical
+  local-material recognition in
+  `docs/TRKH_5CLASS_POST_CAP_SUCCESSOR_NO_RUN_SCREEN_20260725.md`.
+- Self-ONN is a Taylor-polynomial operational layer with principal 2D evidence
+  in image restoration; locally it is adjacent to failed MogaNet/StarNet and
+  screened HorNet higher-order interactions. The accepted morphological-neuron
+  analysis restricts its own theory/experiments to whole-input 1D operators
+  and warns that large exact morphology networks train slowly; its 2D sibling
+  evaluates de-raining. Neither supplies prospective class-conditional
+  surface evidence beyond the failed fixed-morphology route.
+- PointNet's unordered 3D point-set assumption does not match the regular 2D
+  fruit surface and would reduce to another closed patch-set/MIL/prototype
+  aggregator on existing tokens. DeepEMD is an episodic few-shot optimal-
+  transport matcher already screened with DN4/Sinkhorn against the failed
+  patch-prototype family. Normalizing-flow evidence warns that likelihood can
+  follow generic local pixel correlations rather than semantics, reinforcing
+  the failed local multimodal-density result.
+- ICCV-2025 hierarchical material recognition depends on a physical taxonomy,
+  graph attention, local appearance, depth, and context. TRKH has no matching
+  depth/taxonomy supervision, while its graph/context/class-axis neighborhoods
+  are closed. Removing those assumptions leaves no distinct candidate.
+- Conclude that none of the six families passes mechanism distinctness,
+  sample-conditional class1-vs-0/2/4 evidence, scratch convergence, and matched
+  deployment plausibility together. Authorize no code, GPU/long CPU training,
+  validation/test access, trainer or command update. This is an explicit
+  resource-preserving no-run result, not a model metric.
+- Preserve keeper/current-command/history SHAs
+  `1f49d577...482677`/`36b9aa1a...40faf`/`39bd2879...98f53`.
+  A successor must first expose pair-specific bbox-valid surface evidence on
+  source-disjoint train folds and beat keeper margin plus causal derangements
+  on both TP retention and restricted-FP removal, with a standard-op matched
+  inference contract.
+
+## Revision-15 DOCX Compatibility And Release QA - 2026-07-25
+
+- Rebuild the living report from JSON after the post-CAP screen. An A/B test
+  with the previous known-good builder and document isolated an OOXML
+  regression: adding explicit `w:sz`/`w:szCs` to hyperlink run properties made
+  both Word and LibreOffice repaginate indefinitely. Restore the minimal
+  schema-compatible order `rFonts`, `color`, `u` and add two regression tests
+  over both builder AST and generated `word/document.xml`.
+- On this Windows host, the managed renderer also emitted a malformed
+  `file://C:\...` LibreOffice profile argument and `pdf2image` could not launch
+  `.cmd` Poppler wrappers directly. Use a session-local shim to normalize the
+  profile to `file:///C:/...`, put the real Poppler `Library/bin` executables
+  on `PATH`, and terminate only the stale render process trees created by this
+  session. Do not encode the machine-specific shim in repository code.
+- Release revision 15 at JSON/DOCX/builder SHAs
+  `c366db89...98454f2`/`70d32dd5...02497`/`fb39e6ef...91b46`.
+  Visual QA passes all `15/15` pages with no clipping, overlap, blank page, or
+  unbalanced trailing page; accessibility passes `0/0/0`.
+- The complete repository suite passes `1927/1927` in `74.48 s` with 296
+  existing warnings. No model code, GPU run, validation/test access, keeper,
+  full-train command, or command-history revision changed.
