@@ -21301,3 +21301,71 @@ Date: 2026-07-02
   pages at original detail, and pass accessibility at `0/0/0`. Compile checks
   pass, focused NSA/retention tests pass `29/29`, and the complete repository
   suite passes `1852/1852` with 295 existing warnings in `122.17 s`.
+
+## RN-LISDA Formal Replay And Final Reject - 2026-07-24
+
+- Run the sole locked train-only RN-LISDA A0 from clean pushed commit
+  `79d0b7185909a32f23560c23f991caca733c239a`. Formal summary and pre-replay
+  manifest SHAs are `1bd069ae...edc7d` and `68db8305...48ff4`.
+  All structural checks pass; validation/test opens are zero, raw metadata is
+  unchanged, runtime is `898.04 s`, peak RSS/CUDA is
+  `1.3284/0.1111 GiB`, and no unrelated compute process appears.
+- Reject on both performance and mechanism. Candidate macro/class1 F1 is
+  `0.938291/0.814601`, class1 P/R is `0.848000/0.783734`, with 424 TP and 74
+  restricted FP. It is exactly equal to fixed class-wise ISDA,
+  deranged-input, joint/no-meta, and its independent CovNet-seed repeat.
+  Versus CE (`0.940600/0.823853`, 449 TP, 96 FP), it makes 24 corrections and
+  30 harms, removes 22 FP, breaks 25 TP, and rescues zero FN.
+- Mechanism passes only `22/25`: sample-wise scale standard deviation is about
+  `5.50e-8`, same-label input-swap relative change is about `1.68e-8`, and
+  candidate/joint covariance ratio is only `1.000066`. The CovNet updates but
+  learns an effectively constant scale rather than sample-specific semantics.
+- Review all 20 fixed rows at original detail. Five class-1 rows correctly
+  disable augmentation. Every enabled candidate proxy-0 equals its
+  deranged-input proxy, while proxy-1 has no stable lesion, ripeness, or
+  surface meaning. Manual and automatic rejection agree.
+- Preserve every replay attempt rather than hiding infrastructure failures.
+  The first invocation used an invalid one-second command timeout; replay B
+  exposed a formal/replay visual read-set mismatch; replay C failed
+  immediately because the external wrapper lacked the repository import path;
+  replay D exposed `bool` versus `numpy.bool_` object-identity comparison.
+  Replay E at SHA `58c6fe12...d4712` passes every check with exact scientific,
+  ledger, and visual artifacts and only `5.0e-11` CSV text round-trip error.
+- Final review/decision/manifest SHAs are
+  `8a91ca8f...1210aa`, `af0f42a4...5e61f`, and
+  `349a0455...a14d`. No integration, validation smoke, test, probe, full train,
+  or current-best update is authorized. Full closure is
+  `docs/TRKH_5CLASS_RESTRICTED_NEGATIVE_LEARNABLE_ISDA_A0_CLOSURE_20260724.md`.
+- Repair replay infrastructure after finalization. Replay now renders the
+  same fixed contact evidence to a temporary path, preserves formal metadata,
+  and compares typed Python/NumPy booleans by logical value while rejecting
+  type/value mismatches. Compile, pyflakes, and focused tests pass `32/32`.
+- Reaffirm the synthetic-data authorization and its leak boundary. Raw
+  `class_f`/`yolo_f` files remain immutable. Any transformed or generated
+  child is legal only when built from the fitting train partition and carries
+  the union of parent source/fold IDs. Freeze a complete derived corpus before
+  cross-split duplicate auditing; validation/test can invalidate the complete
+  corpus or method but cannot select, delete, replace, filter, or tune rows.
+- Close engineering verification with focused tests `32/32` and complete
+  repository tests `1884/1884` in `71.06 s` with 295 existing warnings.
+  Research-process report revision 8 renders cleanly over all 12 pages and
+  passes accessibility at `0/0/0`.
+
+## Bal-BCE Primary-Source Screen - 2026-07-24
+
+- Select Balanced BCE for the next prospective train-only readout gate, not
+  for direct trainer integration. The accepted CVPR-2023 LiVT paper targets
+  long-tailed ViTs trained from scratch and reports quick convergence. Its
+  official MIT source computes `pi=n/sum(n)`, adds
+  `log(pi)-log(1-pi)` to each binary logit, then applies one-hot
+  BCE-with-logits scaled by class count.
+- Keep this equation distinct from the rejected Balanced Softmax `tau=0.25`.
+  Bal-BCE can still over-expand rare class 1, while natural sampling alone
+  previously improved precision by `+0.171753` but reduced recall by
+  `-0.516557`. Therefore a five-fold source-held A0 must compare CE, plain
+  BCE, exact Bal-BCE, Balanced Softmax, prior-sign control, and a seed repeat.
+- Prospectively require a real precision gain and restricted-FP removal while
+  protecting class-1 TP/recall, macro F1, nonfocus classes, all five folds,
+  and repeatability. Fit every prior and parameter only on the fitting train
+  folds. Do not use validation/test, tune a prior multiplier, integrate the
+  trainer, or launch a smoke before the lock and independent A0 pass.

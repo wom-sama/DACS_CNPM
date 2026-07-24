@@ -4734,17 +4734,57 @@
   retention passes 847 directories/36 absent compacted sources/zero blockers;
   focused tests pass `29/29` and the complete suite passes `1852/1852`.
   Commit/push this coherent closure stage without staging user payloads.
-- [ ] Prospectively lock the restricted-negative LearnableISDA train-only
+- [x] Prospectively lock the restricted-negative LearnableISDA train-only
   frozen-embedding A0 before candidate execution. Pin ISDA/MetaSAug/
   LearnableISDA sources, runtime, eight matched roles, 65 source-partition
   hashes, balanced meta schedules, resource limits, fixed visuals, and
   conjunctive gates.
-- [ ] Implement and verify the independent RN-LISDA equation engine, dynamic
+- [x] Implement and verify the independent RN-LISDA equation engine, dynamic
   train-only file-access ledger, auditor, launcher, synthetic GPU benchmark,
   exact replay, and manual contact-sheet finalizer. Do not copy unlicensed
   reference code or open validation/test.
-- [ ] Only if every RN-LISDA A0 structural, mechanism, causal, repeat,
+- [x] Run and reject RN-LISDA A0. Structural checks pass, but performance is
+  only `17/37` and mechanism is `22/25`: candidate macro/class1 F1 is
+  `0.938291/0.814601`, exactly equal to fixed class-wise, deranged-input, and
+  joint/no-meta controls. Versus CE it removes 22 restricted FP but breaks 25
+  class-1 TP and rescues none.
+- [x] Inspect all 20 fixed visual rows and finalize reject. Five class-1 rows
+  correctly disable augmentation; every enabled candidate proxy-0 collapses
+  to deranged input and proxy-1 has no stable lesion/ripeness/surface meaning.
+  Final decision/manifest SHAs are `af0f42a4...5e61f` and
+  `349a0455...a14d`; every downstream authorization remains false.
+- [x] Complete fresh-process replay at SHA `58c6fe12...d4712` with zero
+  state/trace/analysis/mechanism/ledger/visual error and `5.0e-11` text-CSV
+  probability error. Repair two checker defects permanently: formal/replay
+  visual read-set mismatch and Python `bool` versus `numpy.bool_` identity.
+  Compile, pyflakes, and focused tests pass `32/32`.
+- [x] Close the exact RN-LISDA equation/roles/meta schedule/seed/epoch/LR
+  neighborhood in
+  `docs/TRKH_5CLASS_RESTRICTED_NEGATIVE_LEARNABLE_ISDA_A0_CLOSURE_20260724.md`.
+  Do not integrate or sweep it. The complete repository suite passes
+  `1884/1884`; research-process report revision 8 renders cleanly over 12
+  pages and passes accessibility `0/0/0`.
+- [x] Only if every RN-LISDA A0 structural, mechanism, causal, repeat,
   performance, replay, resource, and visual gate passes, commit a default-off
   production trainer path and separately lock one matched CE-versus-candidate
-  validation smoke. Test/probe/full train/current-command promotion remain
-  closed.
+  validation smoke. The conjunction failed, so no trainer path or smoke was
+  opened; test/probe/full train/current-command promotion remain closed.
+- [x] Reaffirm synthetic-data policy: immutable raw files; derived children
+  may use preprocessing, augmentation, or generation only from their fitting
+  train partition and inherit every parent source/fold ID. Freeze the complete
+  corpus before cross-split duplicate audit; a validation/test match can
+  invalidate only the whole corpus/method and cannot tune, delete, replenish,
+  or feed back individual rows.
+- [ ] Prospectively lock one train-only source-disjoint frozen-embedding
+  Bal-BCE A0 from the official LiVT equation. Include matched CE, plain BCE,
+  historical Balanced Softmax, prior-sign control, and seed repeat. Require
+  class-1 precision gain, restricted-FP removal, TP/recall retention, macro
+  safety, five-fold stability, exact replay, and zero validation/test access.
+- [ ] Implement and verify the isolated Bal-BCE engine/auditor only after the
+  protocol, official source revision/license, equations, inputs, seeds,
+  optimizer schedule, and thresholds are committed and pushed without
+  candidate metrics.
+- [ ] Only if every Bal-BCE A0 structural, replay, precision, TP, FP, fold,
+  control, and no-leak gate passes, add a default-off production loss and lock
+  one matched validation smoke. Test/probe/full train/current-best promotion
+  remain closed before that independent gate.

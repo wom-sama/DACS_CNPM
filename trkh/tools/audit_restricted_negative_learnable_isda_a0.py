@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
@@ -3020,6 +3021,38 @@ def build_visual_evidence(
     return arrays, metadata
 
 
+def _build_replay_visual_evidence(
+    *,
+    cache: Mapping[str, np.ndarray],
+    folds: np.ndarray,
+    sources: np.ndarray,
+    outputs: Mapping[str, np.ndarray],
+    views: Mapping[int, Mapping[str, np.ndarray]],
+    lock: Mapping[str, object],
+    output: Path,
+) -> Tuple[Dict[str, np.ndarray], Dict[str, object]]:
+    formal_contact_sheet = output / "fixed_visual_contact_sheet.png"
+    with tempfile.TemporaryDirectory(
+        prefix="trkh_rn_lisda_replay_visual_"
+    ) as temp_dir:
+        replay_contact_sheet = (
+            Path(temp_dir) / "fixed_visual_contact_sheet.png"
+        )
+        arrays, metadata = build_visual_evidence(
+            cache=cache,
+            folds=folds,
+            sources=sources,
+            outputs=outputs,
+            views=views,
+            lock=lock,
+            contact_sheet_path=replay_contact_sheet,
+            render_contact=True,
+        )
+    corrected_metadata = dict(metadata)
+    corrected_metadata["contact_sheet"] = str(formal_contact_sheet)
+    return arrays, corrected_metadata
+
+
 def _write_jsonl(path: Path, rows: Iterable[Mapping[str, object]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8", newline="\n") as handle:
@@ -3333,8 +3366,14 @@ def _recursive_numeric_difference(
             ),
             default=0.0,
         )
-    if isinstance(left, bool) or isinstance(right, bool):
-        if left is not right:
+    left_is_boolean = isinstance(left, (bool, np.bool_))
+    right_is_boolean = isinstance(right, (bool, np.bool_))
+    if left_is_boolean or right_is_boolean:
+        if (
+            not left_is_boolean
+            or not right_is_boolean
+            or bool(left) != bool(right)
+        ):
             raise ValueError(f"Replay boolean differs at {path}")
         return 0.0
     if isinstance(left, (int, float)) and isinstance(right, (int, float)):
@@ -4055,15 +4094,14 @@ def _replay_formal_with_ledger(
         lock=lock,
         device=device,
     )
-    visual_arrays, visual_metadata = build_visual_evidence(
+    visual_arrays, visual_metadata = _build_replay_visual_evidence(
         cache=cache,
         folds=folds,
         sources=sources,
         outputs=outputs,
         views=views,
         lock=lock,
-        contact_sheet_path=output / "fixed_visual_contact_sheet.png",
-        render_contact=False,
+        output=output,
     )
     elapsed_seconds = float(time.perf_counter() - started)
     post_run_hashes = _post_run_locked_hashes(lock)

@@ -167,6 +167,56 @@ def test_recursive_and_array_replay_comparisons() -> None:
         audit._maximum_array_error(
             arrays, {"x": np.asarray([1.0, 2.0], dtype=np.float64)}
         )
+    assert (
+        audit._recursive_numeric_difference(True, np.bool_(True)) == 0.0
+    )
+    with pytest.raises(ValueError, match="Replay boolean differs"):
+        audit._recursive_numeric_difference(True, np.bool_(False))
+    with pytest.raises(ValueError, match="Replay boolean differs"):
+        audit._recursive_numeric_difference(True, 1)
+
+
+def test_replay_visual_builder_matches_formal_read_set_without_overwrite(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    output = tmp_path / "formal"
+    output.mkdir()
+    formal_contact = output / "fixed_visual_contact_sheet.png"
+    formal_contact.write_bytes(b"formal")
+    observed: dict[str, object] = {}
+
+    def fake_build_visual_evidence(**kwargs: object):
+        replay_contact = Path(kwargs["contact_sheet_path"])
+        observed["contact_sheet_path"] = replay_contact
+        observed["render_contact"] = kwargs["render_contact"]
+        replay_contact.write_bytes(b"replay")
+        return (
+            {"values": np.asarray([1.0], dtype=np.float32)},
+            {"contact_sheet": str(replay_contact), "rows": []},
+        )
+
+    monkeypatch.setattr(
+        audit, "build_visual_evidence", fake_build_visual_evidence
+    )
+    arrays, metadata = audit._build_replay_visual_evidence(
+        cache={},
+        folds=np.asarray([], dtype=np.int64),
+        sources=np.asarray([], dtype=str),
+        outputs={},
+        views={},
+        lock={},
+        output=output,
+    )
+
+    replay_contact = Path(observed["contact_sheet_path"])
+    assert observed["render_contact"] is True
+    assert replay_contact != formal_contact
+    assert not replay_contact.exists()
+    assert formal_contact.read_bytes() == b"formal"
+    assert metadata["contact_sheet"] == str(formal_contact)
+    assert np.array_equal(
+        arrays["values"], np.asarray([1.0], dtype=np.float32)
+    )
 
 
 def test_manifest_round_trip_detects_mutation(tmp_path: Path) -> None:
