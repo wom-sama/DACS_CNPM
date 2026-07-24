@@ -21497,3 +21497,40 @@ Date: 2026-07-02
   custom object. Tightening the launcher filter to exclude `System.Array`
   restores the same 51-manifest set used previously. This is launcher QA only;
   no scientific input, run, raw dataset, or retention decision changes.
+
+## CAP Independent Engine Boundary - 2026-07-24
+
+- Push the prospective paper/protocol/machine-lock boundary first at commit
+  `05a9ced`. The candidate engine is written only after that push, and no
+  candidate score, threshold, validation/test access, trainer integration, or
+  current-best command change exists at this stage.
+- Implement
+  `trkh/tools/cap_integral_region_context_a0_engine.py` as independent PyTorch
+  code. It crops each exact rectangular valid support and restores it to
+  `16x16`, applies paper-equation pixel context, enumerates the locked 27
+  `42x42` integral regions, pools each to `7x7`, applies additive
+  region-conditioned attention without the script-only sigmoid, encodes the
+  fixed order with a one-layer LSTM-128, and uses residual-less NetVLAD-32
+  before one binary logit.
+- Use the exact linear identity
+  `GAP(alpha @ flattened_regions) == alpha @ GAP(regions)` in the runtime to
+  avoid materializing a second `[B,27,256,7,7]` context tensor. An independent
+  full-construction oracle verifies this optimization before use.
+- Construct self-only, candidate, seed-repeat, spatial-Sattolo, and
+  cross-sample-key controls through one module. All primary-seed CAP roles have
+  byte-identical initial state and equal parameter count; the repeat has the
+  locked `+100000` seed. Cross-sample context retains own queries and values
+  while substituting only mapped different-source keys inside the active
+  fit/calibration/held partition.
+- Independent NumPy oracles cover pixel-attention orientation, align-corners
+  false support/ROI bilinear resizing, region attention, cross-sample Q/K/V,
+  compact-versus-full context GAP, LSTM order, residual-less NetVLAD,
+  threshold ties, and suppression semantics. Maximum observed equation error
+  is `2.55e-15`.
+- Engine tests reproduce all five lock order and partition-mapping hashes,
+  verify zero-fixed-point Sattolo permutations, reject nonrectangular support,
+  check matched parameter/state contracts, and run finite forward/backward for
+  every CAP role. Compile and pyflakes pass; focused tests pass `11/11`; the
+  complete suite passes `1915/1915` with 295 existing warnings in `72.72 s`.
+  Formal metrics remain prohibited until the auditor/ledger/replay/XAI stage
+  is separately committed and pushed.

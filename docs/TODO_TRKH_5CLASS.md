@@ -4824,14 +4824,23 @@
   cross-sample context. Five source-held folds, FN-versus-restricted-FP gates,
   20 visual anchors, replay, and resource limits are fixed before candidate
   code or metrics.
-- [ ] Commit and push the CAP prospective protocol/lock boundary without
+- [x] Commit and push the CAP prospective protocol/lock boundary without
   staging user payloads. Compile/pyflakes pass, focused lock tests pass `5/5`,
   full pytest passes `1904/1904`, revision-11 Word QA passes 13 pages and
   accessibility `0/0/0`, and retention passes 851 directories/51 manifests/
-  220 absent originals at SHA `436c06ac...bfd72e`. Only afterward implement
-  the independent PyTorch equation engine, dynamic train-only ledger, auditor,
-  launcher, replay, and fixed visual evidence. Do not expose candidate metrics
-  before the implementation stage is separately verified and pushed.
+  220 absent originals at SHA `436c06ac...bfd72e`. The exact boundary is
+  pushed at commit `05a9ced`.
+- [x] Implement and push the independent PyTorch CAP equation engine before
+  candidate metrics. It canonicalizes rectangular valid support, reproduces
+  the exact 27-region order, implements paper-equation pixel/region attention,
+  ordered LSTM and residual-less NetVLAD, and shares exact initialization and
+  parameter budget across matched CAP roles. Independent NumPy equation
+  errors are at most `2.6e-15`; engine/hash/gradient tests pass `11/11` and the
+  complete suite passes `1915/1915` with 295 existing warnings.
+- [ ] Implement the dynamic train-only ledger, formal auditor, resource
+  preflight, launcher, exact replay, fixed 20-row XAI sheet, and all locked
+  metric/causal gates. Commit and push this implementation boundary without
+  candidate metrics before running the sole formal A0.
 - [ ] Run the sole locked CAP A0 only from that clean pushed implementation
   commit. Inspect every structural, causal, performance, fold, replay,
   resource, and XAI gate before deciding whether a separately locked
