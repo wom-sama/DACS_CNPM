@@ -256,7 +256,7 @@ The ledger preserves both raw events for exact replay and separately collapses
 the adjacent `mode='r'`/`mode=None` pair into one logical open. The formal
 gate requires one logical open per unique image and label.
 
-Ten materializer tests pass. They cover bit-exact parity against the
+Eleven materializer tests pass. They cover bit-exact parity against the
 production dataset on multi-object synthetic images, source-code exclusion of
 the broad dataset constructor, label filtering, valid-mask packing, forbidden
 path blocking, real lock preflight without cohort pixel/label reads, an
@@ -267,34 +267,58 @@ parent. Resource limits are checked before and during the image loop, and a
 failed replay removes partial finalization files. A Windows regression test
 also requires NUL-delimited Git porcelain so protected untracked paths with
 spaces are compared by literal path rather than display quoting. The combined
-lock/erratum/engine/materializer suite passes `28/28`. Focused CCR/report
-verification passes `31/31`; the complete repository suite passes
-`1956/1956` in `74.35 s` with 373 existing warnings. Revision-20 Word QA
-passes all `17/17` rendered pages and accessibility `0/0/0`.
+lock/erratum/engine/materializer suite passes `29/29`. Focused CCR/report
+verification passes `32/32`; the complete repository suite passes
+`1957/1957` in `74.10 s` with 373 existing warnings. Revision-21 Word QA
+passes all `18/18` rendered pages and accessibility `0/0/0`.
 
 Current implementation hashes are:
 
 - materializer:
-  `3c7e33e9a8164769e0ee44fcbc04727eef63f4fd2b576c53c97441ca0e6321f7`;
+  `cc30d9734a2d75c621f56fed5b90b86a6169e071a33ce51aa0c8edb46f24af22`;
 - materializer tests:
-  `2675a37a0c334096ec178e0d40299f9e1d4820fc81e81ffdaab3b7998e7a3808`.
+  `f8b2962f47d0515d27b11806752a3faf98ea0ebd40b8908bbd8470b4cedf5945`.
 
 The real structural preflight reports 763 rows, 735 unique images, 735 unique
 labels, nine logical locked-input opens, zero blocked attempts, no cohort
 image/label read, and no descriptor, model state, candidate metric, CUDA,
 validation, or test use.
 
+## Formal Attempt 1 Failure and Correction
+
+The one attempt authorized by SHA `e76bd56c...07068` was consumed from pushed
+commit `c594549...8f2af`. It stopped fail-closed after approximately 25.4
+seconds. All 763 rows completed and image/label manifests, model boxes,
+16x16 valid masks, bbox masks, and model-tensor round trips were exact. Only
+`crop_boxes_exact` failed. No formal output or temporary directory remained,
+and no descriptor, state, metric, CUDA, validation, or test artifact existed.
+
+Source comparison and an independent synthetic reproduction isolated the
+failure to production float ordering. Production computes integer crop bounds
+from the original parsed primary bbox, then converts every iterated object box
+through one `torch.float32` tensor before calculating crop-relative boxes.
+The direct loader previously used original decimal object boxes in the second
+step. The resulting crop-relative coordinates can differ by one ULP
+(`2.98e-8` to `5.96e-8`) while all masks remain identical.
+
+The direct loader now mirrors the production float32 conversion at the same
+boundary and keeps the original primary bbox for integer crop bounds. A
+dedicated regression case uses image size 2938x1150 and bbox
+`(0.617804, 0.027735, 0.303894, 0.8)`. Failure evidence is locked at SHA
+`11714304...a554e9`. The consumed authorization must not be reused.
+
 ## Next Authorized Stage
 
-Commit and push this implementation-preflight boundary first. A separate
-machine authorization must then pin the committed materializer/test/engine/
-lock/erratum hashes, ancestor commit, exact output directory, resource limits,
-and `materializer_authorized_no_fit` state.
+Commit and push the float-order correction plus failure evidence first. A new
+recovery authorization must then pin the corrected materializer/test hashes,
+the correction commit, failure SHA, engine/lock/erratum hashes, exact output
+directory, resource limits, and `materializer_authorized_no_fit` state.
 
-Only that authorization may permit one formal 735-image materialization and
-one fresh-process exact replay. The replay must match the sRGB cache, packed
-mask cache, cohort arrays, manifests, parity record, and ordered access-ledger
-hash. A failure deletes its temporary directory and leaves no formal output.
+Only that recovery authorization may permit one replacement 735-image
+materialization and one fresh-process exact replay. The replay must match the
+sRGB cache, packed-mask cache, cohort arrays, manifests, parity record, and
+ordered access-ledger hash. A failure deletes its temporary directory and
+leaves no formal output.
 Head fitting, descriptors, candidate metrics, validation/test, production
 integration, full train, and current-best command changes remain unauthorized
 until the formal materializer and replay are committed as evidence and a new

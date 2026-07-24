@@ -347,7 +347,7 @@ ceiling. This avoids retaining two float32 descriptor families and preserves
 the ability to prove all geometry rows before descriptor extraction. The
 formal process is CPU-only; any initialized CUDA context is a failure.
 
-Ten tests cover production-parity crops, multi-object labels, exact tensor
+Eleven tests cover production-parity crops, multi-object labels, exact tensor
 round-trip, packed-mask replay, allowlist blocking, no-pixel real preflight,
 synthetic formal manifests, Windows logical-open accounting, atomic publish,
 forced-failure cleanup, exact resource/CPU-only/no-fit authorization, and
@@ -355,11 +355,11 @@ no-write-before-authorization. The repository gate uses NUL-delimited Git
 porcelain so protected paths containing spaces cannot be rejected because of
 display quoting. Resource limits are checked before and during the image loop;
 failed replay finalization removes partial files. Combined CCR focused
-verification passes `28/28`. Materializer/test SHAs are
-`3c7e33e9...e6321f7` and `2675a37a...7a3808`.
-Focused CCR/report verification passes `31/31`; the full repository suite
-passes `1956/1956` in `74.35 s` with 373 existing warnings. Revision-20 Word
-QA passes `17/17` pages and accessibility `0/0/0`.
+verification passes `29/29`. Materializer/test SHAs are
+`cc30d973...f24af22` and `f8b2962f...edf5945`.
+Focused CCR/report verification passes `32/32`; the full repository suite
+passes `1957/1957` in `74.10 s` with 373 existing warnings. Revision-21 Word
+QA passes `18/18` pages and accessibility `0/0/0`.
 
 Value remains `mechanism-only-preflight`. The result avoids a broad 9,215-row
 dataset index and bounds the only necessary image pass, but it provides no
@@ -367,3 +367,12 @@ class-1 information gain, latency, throughput, VRAM, TensorRT, or model metric.
 Commit/push and a separate hash-locked execution authorization are required
 before one formal materialization plus one fresh-process replay. Descriptor
 creation and head fitting remain forbidden at this stage.
+
+The first authorized formal attempt used about 25.4 seconds and failed only
+exact crop-box parity; every other reported parity and manifest check passed.
+No output or temporary directory remains. The mismatch is a one-ULP
+production float-order issue, not a resource failure: production converts
+iterated object boxes through float32 after deriving integer crop bounds from
+the original primary bbox. The corrected path and regression test pass without
+another cohort read. Failure evidence SHA is `11714304...a554e9`; a separate
+recovery authorization is mandatory before a replacement image pass.

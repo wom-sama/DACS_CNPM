@@ -810,9 +810,14 @@ def crop_primary_object_view(
     crop_height = max(1, bottom - top)
     kept_labels: List[int] = []
     kept_boxes: List[Tuple[float, float, float, float]] = []
-    for obj in objects:
+    # Production creates one float32 box tensor before iterating via tolist().
+    rounded_boxes = torch.tensor(
+        [obj.bbox for obj in objects],
+        dtype=torch.float32,
+    ).tolist()
+    for obj, rounded_box in zip(objects, rounded_boxes):
         x1, y1, x2, y2 = bbox_xywh_to_xyxy(
-            obj.bbox,
+            rounded_box,
             width=width,
             height=height,
         )

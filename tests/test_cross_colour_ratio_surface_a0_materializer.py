@@ -16,10 +16,12 @@ from trkh.tools.cross_colour_ratio_surface_a0_materializer import (
     CohortRecord,
     EXPECTED_TRANSFORM_SEMANTICS,
     FEATURE_SIZE,
+    LabelObject,
     LOCK_PATH,
     MODEL_IMAGE_SIZE,
     DataAccessLedger,
     build_frozen_eval_transform,
+    crop_primary_object_view,
     direct_tensor_sample,
     feature_geometry,
     load_lock,
@@ -131,6 +133,44 @@ def test_direct_loader_matches_production_object_crop_and_eval_tensor(
             direct.image_valid_mask,
             production_metadata["image_mask"],
         )
+
+
+def test_crop_boxes_replay_production_float32_object_rounding() -> None:
+    image = Image.new("RGB", (2938, 1150), (0, 0, 0))
+    bbox = (0.617804, 0.027735, 0.303894, 0.8)
+    primary = LabelObject(label=1, bbox=bbox, object_index=0)
+    _, labels, boxes, crop_box = crop_primary_object_view(
+        image,
+        [primary],
+        primary,
+    )
+    left, top, right, bottom = crop_box
+    crop_width = right - left
+    crop_height = bottom - top
+    rounded_box = torch.tensor(
+        [bbox],
+        dtype=torch.float32,
+    ).tolist()[0]
+    x1, y1, x2, y2 = materializer.bbox_xywh_to_xyxy(
+        rounded_box,
+        width=image.width,
+        height=image.height,
+    )
+    expected = torch.tensor(
+        [
+            (
+                ((max(float(left), x1) + min(float(right), x2)) / 2.0 - left)
+                / crop_width,
+                ((max(float(top), y1) + min(float(bottom), y2)) / 2.0 - top)
+                / crop_height,
+                (min(float(right), x2) - max(float(left), x1)) / crop_width,
+                (min(float(bottom), y2) - max(float(top), y1)) / crop_height,
+            )
+        ],
+        dtype=torch.float32,
+    )
+    assert labels.tolist() == [1]
+    assert torch.equal(boxes, expected)
 
 
 def test_srgb_and_valid_mask_cache_round_trip_is_exact(

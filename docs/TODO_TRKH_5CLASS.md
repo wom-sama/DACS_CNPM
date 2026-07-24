@@ -4953,10 +4953,26 @@
   rule, temporary limit, and `materializer_authorized_no_fit` state. The
   prospective authorization SHA is `e76bd56c...07068`; this checkbox becomes
   effective only when its containing commit is pushed.
-- [ ] Run one formal 735-image same-tensor materialization plus one exact
-  fresh-process replay only under that authorization. Keep descriptors and
-  head fitting closed until cache/manifests/parity/access-ledger hashes replay
-  exactly and the evidence is committed.
+- [x] Consume the one original authorized formal materialization. It stopped
+  fail-closed after about `25.4 s`: all rows, manifests, model boxes, valid
+  masks, bbox masks, and tensor round trips were exact, but
+  `crop_boxes_exact=false`. Output and temporary directories are absent; no
+  descriptor, state, metric, CUDA, validation, or test artifact exists.
+- [x] Diagnose and correct the crop-box mismatch without another cohort read.
+  Production rounds iterated boxes through `torch.float32` after calculating
+  integer crop bounds from the original primary bbox; the direct loader did
+  not. A synthetic case reproduces the one-ULP delta (`2.98e-8` to
+  `5.96e-8`). Materializer/failure tests pass `11/11`; combined CCR passes
+  `29/29`; full pytest passes `1957/1957` in `74.10 s` with 373 warnings.
+  Failure evidence SHA is `11714304...a554e9`. Revision-21 Word QA passes
+  `18/18` rendered pages and accessibility `0/0/0`.
+- [ ] Commit and push the float-order correction plus failure evidence, then
+  create and push a separate one-attempt recovery authorization. Never reuse
+  consumed authorization SHA `e76bd56c...07068`.
+- [ ] Run one recovery 735-image materialization plus one exact fresh-process
+  replay only under the recovery authorization. Keep descriptors and head fit
+  closed until cache/manifests/parity/access-ledger hashes replay exactly and
+  the evidence is committed.
 - [ ] Run exactly one locked CCR A0 only if implementation preflight passes.
   Stop at the clean train-only information conjunction unless candidate CCR
   beats keeper margin, equal-size colour-ratio, trained spatial-dephase and

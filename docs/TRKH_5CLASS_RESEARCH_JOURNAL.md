@@ -22002,3 +22002,32 @@ Date: 2026-07-02
   untracked paths. It authorizes only lossless same-tensor materialization and
   exact replay; candidate descriptors, fitting, scores, validation/test,
   integration, full train, and current-best command updates remain closed.
+
+## CCR Materializer Formal Attempt 1 Failure - 2026-07-25
+
+- Consume the one materialization authorized by SHA `e76bd56c...07068` from
+  pushed commit `c594549...8f2af`. The process stops fail-closed after about
+  `25.4 s`: 763 rows complete; image/label manifests, model boxes, valid
+  masks, bbox masks, and model-tensor round trips are exact; only
+  `crop_boxes_exact` fails.
+- Atomic cleanup passes: the formal output is absent, no temporary directory
+  remains, and no descriptor, model state, candidate metric, CUDA,
+  validation, or test artifact exists. Authorization `e76bd56c...07068` is
+  consumed and must not be reused.
+- Source-only diagnosis finds a production float-order mismatch. Integer crop
+  bounds use the original primary bbox, but production iterates object boxes
+  only after conversion through one float32 tensor. A synthetic 2938x1150
+  case with bbox `(0.617804, 0.027735, 0.303894, 0.8)` reproduces one-ULP
+  coordinate deltas from `2.98e-8` to `5.96e-8` while masks remain equal.
+- Mirror that exact float32 boundary in the direct loader and add a dedicated
+  regression test. Corrected module/test SHAs are
+  `cc30d973...f24af22`/`f8b2962f...edf5945`; materializer/combined/full tests
+  pass `11/11`, `29/29`, and `1957/1957` in `74.10 s` with 373 existing
+  warnings.
+- Preserve failure JSON SHA `11714304...a554e9`. Commit/push the correction
+  and failure evidence before creating a separate hash-locked one-attempt
+  recovery authorization. Descriptor extraction and head fitting remain
+  forbidden.
+- Revision-21 DOCX QA passes all `18/18` rendered pages at original detail
+  without clipping, overlap, or broken table flow; accessibility findings are
+  `0/0/0`.
