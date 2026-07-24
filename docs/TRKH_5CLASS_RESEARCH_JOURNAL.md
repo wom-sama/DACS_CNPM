@@ -21380,3 +21380,54 @@ Date: 2026-07-02
   9 renders cleanly over 12 pages and passes accessibility `0/0/0`; the
   complete repository suite passes `1888/1888` in `74.45 s` with 295 existing
   warnings.
+
+## Bal-BCE Formal Replay And Final Reject - 2026-07-24
+
+- Run the sole prospectively locked train-only Bal-BCE A0 from clean pushed
+  commit `f2fcb80fcde4a905ca8a382516041f4cf35110a4`. Formal summary and
+  pre-replay artifact-set SHAs are `b501fe60...51b6` and
+  `084fde3c...b51`. All structural checks pass, validation/test opens are
+  zero, and no production trainer, model, config, or raw-data file is changed.
+- Reject the exact LiVT equation at performance `19/34`. Bal-BCE
+  macro/class1 F1 is `0.940560/0.825316` and class-1 P/R is
+  `0.759317/0.903882`, versus CE `0.941361/0.827523` and
+  `0.821494/0.833641`. It rescues 38 class-1 FN and breaks no class-1 TP, but
+  creates 57 restricted FP, removes none, and makes 59 harms versus 48
+  corrections.
+- Matched controls locate the failure. Plain BCE is
+  `0.940091/0.823529`; historical Balanced Softmax is stronger at
+  `0.941954/0.830961`. Reversed-prior BCE raises precision to `0.865217` and
+  removes 33 restricted FP, but breaks 53 TP and drops class-1 F1 to
+  `0.795205`. Global prior pressure changes the operating point without
+  learning a selective local boundary.
+- Review all 20 fixed train-only anchors at original detail. Bal-BCE raises
+  class-1 probability on visually rival class-0/2/4 fruit, including
+  already-confident false positives, which agrees with the 57 created
+  restricted FP. Manual review rejects independently at SHA
+  `5523edc8...e4ec`.
+- Fresh-process replay passes at SHA `8766c26e...5ef07` with exact
+  logits/probabilities, states, traces, equations, folds, analysis,
+  performance gates, access ledger, and visual evidence. Formal/replay
+  runtimes are `205.86/205.12 s`; peak formal RSS/CUDA is
+  `1.1537/0.0742 GiB`.
+- Final decision/artifact-set SHAs are `93fc089b...25e5` and
+  `f972d1f4...07b7b`. Every downstream authorization remains false.
+  Current-best command/history and keeper checkpoint remain byte-identical at
+  `36b9aa1a...940faf`, `39bd2879...98f53`, and
+  `1f49d577...482677`.
+- Close the exact prior/sign/seed/fold/epoch/optimizer neighborhood. Do not
+  interpolate a prior multiplier after seeing these metrics. The next A0 must
+  add sample-conditional local evidence and prospectively prove both
+  restricted-FP removal and class-1 TP retention. Derived augmentation and
+  synthetic data remain legal only from fitting-train parents with inherited
+  source/fold provenance and no raw-data modification.
+- Close engineering and retention verification. The focused lock/engine/
+  auditor/retention suite passes `17/17`; the full repository passes
+  `1899/1899` with 295 existing warnings in `72.11 s`. Read-only retention
+  scans 850 run directories and all 51 current object-schema compaction
+  manifests, verifies 220/220 named originals absent, deletes nothing, and
+  passes with `blockers=[]`, `88.871 GiB` free, and summary SHA
+  `b48ebd82...5510`.
+- Research-process report revision 10 renders cleanly across all 12 pages
+  after shortening only the duplicated revision-history prose; the detailed
+  journal remains complete. Accessibility passes at `0/0/0`.

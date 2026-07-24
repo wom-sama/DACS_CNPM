@@ -2,10 +2,10 @@
   "document": {
     "title": "TRKH 5-class",
     "subtitle": "Quy trình nghiên cứu, trạng thái bằng chứng và kế hoạch cải tiến",
-    "revision": "9",
+    "revision": "10",
     "updated": "2026-07-24",
     "branch": "classification-only-research",
-    "status": "Đang nghiên cứu - Bal-BCE train-only A0 đã khóa prospectively; chưa có candidate metric",
+    "status": "Đang nghiên cứu - Bal-BCE train-only A0 đã bị loại; đang sàng lọc hướng representation mới",
     "owner": "TRKH classification-only research"
   },
   "executive_metrics": [
@@ -26,8 +26,8 @@
     },
     {
       "label": "Bal-BCE A0",
-      "value": "Locked",
-      "detail": "Protocol/lock 27c32d2a/1e28c686; chưa chạy candidate"
+      "value": "Rejected",
+      "detail": "P/R/F1 lớp 1 = 0,7593/0,9039/0,8253; tạo 57 restricted FP"
     }
   ],
   "sections": [
@@ -37,7 +37,7 @@
         {
           "type": "callout",
           "label": "Quyết định",
-          "text": "Giữ nguyên keeper hiện tại và file lệnh full-train tốt nhất. Full train random-init 30 epoch không thắng validation gate; JPEG-DL, SaSPA synthetic, LP-A3 hard-positive, NSA Poisson và RN-LISDA A0 đều đã bị loại. Bal-BCE frozen-embedding A0 đã được khóa trước metric ở protocol/lock SHA 27c32d2a/1e28c686 với sáu vai trò, năm source-held fold, prior chỉ từ fitting-train và cổng precision-TP đồng thời. Chưa có candidate metric; trainer, validation, test và full train vẫn đóng."
+          "text": "Giữ nguyên keeper hiện tại và file lệnh full-train tốt nhất. Full train random-init 30 epoch không thắng validation gate; JPEG-DL, SaSPA synthetic, LP-A3 hard-positive, NSA Poisson, RN-LISDA và Bal-BCE A0 đều đã bị loại. Bal-BCE pass toàn bộ cấu trúc và replay exact nhưng chỉ pass 19/34 performance gate: cứu 38 TP lớp 1 đồng thời tạo 57 restricted FP và giảm precision từ 0,821494 xuống 0,759317. Trainer, validation, test và full train vẫn đóng; hướng kế tiếp phải bổ sung tín hiệu cục bộ theo mẫu thay vì dịch prior toàn cục."
         },
         {
           "type": "paragraph",
@@ -69,7 +69,7 @@
             ["LP-A3 hard-positive A0", "9.215 train; cohort 734; không train", "N/A", "TP/rival/FP reject 0,9922 / 0,9648 / 0,0315", "Rejected trước integration"],
             ["NSA class-pair Poisson A0", "9.215 train; 5 source-held folds", "N/A", "AUROC/TP/FP reject 0,8214 / 0,9754 / 0,1396", "Rejected; maps diffuse, không hơn controls"],
             ["RN-LISDA A0", "9.215 train; 5 source-held folds", "0,938291", "0,848000 / 0,783734 / 0,814601", "Rejected; trùng fixed/deranged/joint, mất 25 TP"],
-            ["Bal-BCE A0", "Prospective train-only lock; chưa chạy", "N/A", "CE/plain BCE/Bal-BCE/seed/BS/sign", "Lock 1e28c686; 0 candidate metric"]
+            ["Bal-BCE A0", "9.215 train; 5 source-held folds", "0,940560", "0,759317 / 0,903882 / 0,825316", "Rejected; cứu 38 TP nhưng tạo 57 restricted FP"]
           ]
         },
         {
@@ -179,6 +179,7 @@
             ["Nhiễu hard-positive", "LP-A3 candidate chỉ khác feature-only 6/734 hàng; delta khuếch đại là speckle cao tần phủ bbox.", "Ràng buộc nhãn số học không bảo đảm tín hiệu bề mặt có cấu trúc hay cải thiện precision."],
             ["Synthetic tự nhiên nhưng phi nhân quả", "NSA tạo composite Poisson tự nhiên nhưng AUROC 0,821398, TP retention 0,975379 và cross-map mass trong target chỉ 0,092528.", "Hình học hợp lệ không đủ; cơ chế phải hơn clean/no-query/permuted controls và định vị đúng tín hiệu."],
             ["Learnable covariance bị collapse", "RN-LISDA candidate trùng fixed, deranged và joint/no-meta; scale std 5,50e-8, input-swap change 1,68e-8.", "Parameter có update không chứng minh signal theo mẫu; cần causal controls và TP budget."],
+            ["Dịch prior toàn cục", "Bal-BCE cứu 38 TP nhưng tạo 57 restricted FP; prior đảo loại 33 FP nhưng phá 53 TP.", "Cân bằng lớp đổi operating point nhưng không tạo tín hiệu cục bộ để tách lớp 1 khỏi 0/2/4."],
             ["Worktree bẩn", "Có payload người dùng chưa theo dõi và nhiều artifact lịch sử.", "Stage theo path rõ ràng; không xóa/revert nội dung không xác định."]
           ]
         }
@@ -197,7 +198,9 @@
             "Patch verifier, directional gate, stacked verifier và recall restore threshold: có cải thiện validation cục bộ nhưng không generalize đủ; không tiếp tục sweep lân cận.",
             "OOF soft-label/label-repair trực tiếp: đã thử nhiều biến thể và bị loại; kết quả competition không đủ lý do để lặp lại nếu không có tín hiệu mới.",
             "LP-A3-inspired hard positive: giữ TP cao nhưng FP rejection thấp, rival retention dưới gate và label hinge không hơn feature-only; không sweep radius/step/margin/lambda/noise/layer/erosion.",
-            "NSA class-pair Poisson: đóng exact geometry/query/adapter/readout neighborhood; không sweep support, Poisson mode, query width, epoch, readout hoặc metric gate sau khi candidate không hơn controls."
+            "NSA class-pair Poisson: đóng exact geometry/query/adapter/readout neighborhood; không sweep support, Poisson mode, query width, epoch, readout hoặc metric gate sau khi candidate không hơn controls.",
+            "RN-LISDA: đóng exact covariance/CovNet/meta schedule vì candidate trùng fixed, deranged, joint/no-meta và mất 25 TP lớp 1.",
+            "Bal-BCE: đóng exact prior/sign/seed/fold/epoch/optimizer neighborhood; không nội suy prior multiplier hoặc nhiệt độ Balanced Softmax sau khi thấy tradeoff FP-TP."
           ]
         },
         {
@@ -252,7 +255,7 @@
             ["ISDA, NeurIPS 2019", "Ước lượng covariance theo lớp trong feature space và tối ưu robust CE tương đương semantic augmentation vô hạn.", "Fixed class-wise ISDA tăng áp lực precision lớp 1 nhưng giảm recall; dùng làm control, không tự coi là winner."],
             ["MetaSAug, CVPR 2021", "Meta-learn hệ số semantic augmentation từ balanced meta objective cho dữ liệu long-tail.", "Dùng source-held balanced meta rows chỉ từ train; real head batches vẫn giữ phân phối tự nhiên."],
             ["LearnableISDA, IEEE TIP 2024", "Học covariance/scale theo mẫu thay vì chỉ covariance cố định theo lớp.", "RN-LISDA A0 đã bị loại: scale collapse, không hơn fixed/deranged/joint controls và mất 25 class-1 TP."],
-            ["LiVT / Balanced BCE, CVPR 2023", "ViT train-from-scratch trên long-tail; cộng log(pi)-log(1-pi) vào binary logits trước one-hot BCE.", "Route kế tiếp chỉ là train-only OOF gate; phải hơn CE/plain BCE/Balanced Softmax/sign control mà vẫn giữ TP và precision."]
+            ["LiVT / Balanced BCE, CVPR 2023", "ViT train-from-scratch trên long-tail; cộng log(pi)-log(1-pi) vào binary logits trước one-hot BCE.", "A0 đã bị loại: recall tăng nhưng precision giảm, tạo 57 restricted FP; global prior không thay thế representation cục bộ."]
           ]
         },
         {
@@ -310,7 +313,7 @@
             ["Independent replay", "Artifact/hash được chạy lại bằng lệnh riêng, không tái dùng state trong RAM.", "Phát hiện batch/numeric/state leakage."],
             ["Audit toàn diện", "Metric, transitions, robustness, XAI, placebo và manual review đều bắt buộc.", "Không thăng hạng vì một con số hoặc heatmap đẹp."],
             ["Command governance", "Current-best command và history chỉ đổi cùng promotion commit.", "Người dùng luôn có lệnh VS Code chạy được và truy vết được."],
-            ["Retention có manifest", "Hash/tóm tắt trước khi xóa chính xác artifact obsolete; hậu NSA pass 847 thư mục, 36/36 nguồn compact đã vắng.", "Giải phóng dung lượng mà không mất bằng chứng; 0 blocker và 88,918 GiB còn trống."],
+            ["Retention có manifest", "Hash/tóm tắt trước khi xóa chính xác artifact obsolete; hậu Bal-BCE quét 850 thư mục và 51 manifest, 220/220 nguồn compact đã vắng.", "Không xóa gì trong audit; 0 blocker và 88,871 GiB còn trống."],
             ["Song song CPU/GPU", "Trong lúc formal/train chạy, dùng CPU cho research, docs và static checks.", "Giảm thời gian chết, không tranh VRAM."],
             ["Báo cáo tái tạo", "DOCX sinh từ JSON + script, render toàn bộ trang trước khi phát hành.", "Cập nhật thường xuyên, diff được và ít lỗi Word thủ công."],
             ["Process isolation cho diffusion", "Dựng pipeline trong worker con, giữ peak telemetry rồi gate parent sau khi worker thoát.", "Trả RAM ổn định, tránh false failure và vẫn phát hiện PID lạ."],
@@ -319,7 +322,8 @@
             ["Canonical replay order", "Định nghĩa thứ tự record bằng sample identity/role trước khi băm, thay vì phụ thuộc cách gom batch.", "Tránh báo nhầm nondeterminism như lỗi ordered-hash của NSA."],
             ["Dynamic train-only access ledger", "Cài process-wide audit hook trước input đầu tiên, allowlist artifact và block val/test trước open; replay access digest.", "Bổ sung bằng chứng runtime cho split isolation ngoài counter tự khai báo."],
             ["Source-aware meta schedule", "Meta rows cân bằng lớp nhưng source-disjoint với outer-fit; child feature kế thừa source/fold và RNG theo sample identity.", "Cho phép augmentation/synthetic hợp lệ mà không tạo leakage hoặc đổi phân phối real head batch."],
-            ["Replay read-set và scalar type", "Formal/replay dựng cùng visual evidence nhưng replay ghi file tạm; bool và numpy.bool_ so theo typed logical value.", "Ledger exact mà không ghi đè formal artifact; tránh false mismatch do object identity."]
+            ["Replay read-set và scalar type", "Formal/replay dựng cùng visual evidence nhưng replay ghi file tạm; bool và numpy.bool_ so theo typed logical value.", "Ledger exact mà không ghi đè formal artifact; tránh false mismatch do object identity."],
+            ["Đối chứng hai chiều prior", "So exact Bal-BCE với CE, plain BCE, Balanced Softmax, seed repeat và reversed-prior trên cùng fold/init/order.", "Phân biệt tăng recall do mở rộng lớp toàn cục với cải thiện ranh giới chọn lọc; chặn sweep hệ số sau kết quả."]
           ]
         }
       ]
@@ -330,10 +334,10 @@
         {
           "type": "numbered",
           "items": [
-            "Giữ nguyên các closure JPEG-DL, SaSPA F1, LP-A3, NSA và RN-LISDA A0 có giá trị tái lập; cleanup artifact tạm bằng manifest riêng.",
-            "Đóng exact SaSPA, LP-A3, NSA và RN-LISDA neighborhoods đã khóa; không mở lại bằng sweep prompt/seed, radius/step/margin/lambda, query/Poisson/readout hoặc CovNet/meta schedule.",
-            "Giữ bất biến Bal-BCE protocol/lock SHA 27c32d2a/1e28c686 đã khóa và push trước candidate metrics: official LiVT equation, source-held folds, CE/plain-BCE/Balanced-Softmax/sign/seed controls, file-access ledger, resources và conjunctive gates.",
-            "Chạy Bal-BCE frozen-embedding A0 chỉ trên yolo_f/train; candidate phải tăng precision, loại restricted FP, giữ class-1 TP/recall và macro/nonfocus safety trên đủ năm fold trước trainer integration.",
+            "Giữ nguyên các closure JPEG-DL, SaSPA F1, LP-A3, NSA, RN-LISDA và Bal-BCE A0 có giá trị tái lập; cleanup artifact tạm bằng manifest riêng.",
+            "Đóng exact SaSPA, LP-A3, NSA, RN-LISDA và Bal-BCE neighborhoods đã khóa; không mở lại bằng sweep prompt/seed, radius/step/margin/lambda, query/Poisson/readout, CovNet/meta schedule hoặc prior multiplier.",
+            "Giữ bất biến Bal-BCE protocol/lock SHA 27c32d2a/1e28c686 và formal/replay/final SHAs b501fe60/8766c26e/93fc089b; không integration vì candidate tạo 57 restricted FP.",
+            "Sàng lọc rồi khóa prospectively một A0 representation-distinct dùng tín hiệu cục bộ theo mẫu; gate train-only phải cùng lúc giữ TP lớp 1 và loại restricted FP, với matched causal controls.",
             "Giữ ưu tiên precision lớp 1 nhưng đặt recall-loss budget rõ ràng; không chấp nhận giảm false positive bằng cách phá quá nhiều true positive.",
             "Tiếp tục làm sạch worktree theo manifest và commit theo stage; không đụng BaoCao hoặc deep-research-report chưa theo dõi.",
             "Chỉ cập nhật lệnh full-train tốt nhất và history khi một candidate thắng validation, replay và XAI gate."
@@ -358,13 +362,14 @@
             ["scripts/build_trkh_research_process_docx.py", "Trình dựng DOCX tái lập và audit layout token."],
             ["docs/TRKH_5CLASS_RESEARCH_PROCESS_STATUS.docx", "Báo cáo Word người dùng theo dõi."],
             ["docs/TRKH_5CLASS_BALANCED_BCE_FROZEN_EMBEDDING_A0_PROTOCOL_20260724.md", "Giao thức prospective Bal-BCE trước mọi candidate metric."],
+            ["docs/TRKH_5CLASS_BALANCED_BCE_FROZEN_EMBEDDING_A0_CLOSURE_20260724.md", "Kết luận formal/replay/visual, no-repeat boundary và hash bằng chứng Bal-BCE."],
             ["scripts/build_trkh_balanced_bce_frozen_embedding_a0_lock.py", "Tái sinh fold prior, bias, init, order hashes và machine lock."],
             ["C:/Users/ADMIN/.codex/skills/trkh-5class/SKILL.md", "Kinh nghiệm vận hành và hard rules dùng ở các phiên Codex sau."]
           ]
         },
         {
           "type": "paragraph",
-          "text": "Revision 1: tạo báo cáo Word tái lập; ghi nhận full train 30e, trạng thái JPEG-DL formal, nghiên cứu competition và chính sách synthetic train-only chống leak. Revision 2: khóa JPEG-DL A0 ở VisualFail với replay exact, ghi metric/XAI/SHAs cuối và chuyển kế hoạch sang synthetic feasibility source-disjoint. Revision 3: retention pass trên 822 thư mục/51 manifests, giữ formal 2,614 MiB; sửa odd/even header-footer và reset numbering theo từng block sau render QA. Revision 4: SaSPA F0 no-output pass formal/replay trên RTX 4060 8 GB; ghi telemetry, process isolation, hash artifact và chỉ mở quyền F1 10 ảnh train-only. Revision 5: đóng SaSPA F1 ở Rejected sau fidelity 0/10, blind 7/10, duplicate-safety pass và frozen-keeper XAI 6/10; giữ nguyên keeper/lệnh full-train tốt nhất; bỏ running header-footer để khóa lề 1 inch ổn định giữa Word và LibreOffice sau render QA. Revision 6: đóng LP-A3-inspired A0 sau audit train-only 9.215 hàng, replay exact, 19/23 automated gates và manual delta review; ghi causal-control fail 6/734, không integration hoặc command update. Revision 7: đóng NSA class-pair Poisson A0 ở reject sau formal/replay/manual review; phân biệt checker-order defect với scientific failure, sửa duplicate audit thành whole-corpus invalidation một chiều, chạy retention 847 thư mục không blocker, full suite 1.852/1.852, và chọn RN-LISDA train-only làm route kế tiếp. Revision 8: đóng RN-LISDA A0 sau performance 17/37, mechanism 22/25, replay exact và manual proxy review; sửa visual-ledger read-set cùng bool scalar checker, khóa synthetic ratio bằng train-only protocol, chọn Bal-BCE OOF gate làm route kế tiếp, full suite 1.884/1.884 và DOCX 12 trang đạt accessibility 0/0/0. Revision 9: pin LiVT MIT commit 68546ef và paper/source hashes; khóa prospective Bal-BCE A0 với sáu vai trò, fit-fold priors, init/order hashes, ledger và cổng precision-TP tại protocol/lock SHA 27c32d2a/1e28c686 trước mọi candidate metric; full suite 1.888/1.888."
+          "text": "Revision 1-3: tạo báo cáo tái lập, ghi full train 30e/JPEG-DL/chính sách synthetic chống leak, đóng JPEG-DL bằng replay-XAI và hoàn tất retention/layout QA. Revision 4-5: SaSPA F0 pass resource/replay; F1 bị loại ở fidelity 0/10, blind 7/10 và XAI 6/10, không đổi keeper. Revision 6: LP-A3 A0 bị loại sau causal-control fail; không integration. Revision 7: NSA Poisson bị loại sau formal/replay/manual review; sửa canonical hash và whole-corpus duplicate rule. Revision 8: RN-LISDA bị loại sau performance 17/37, mechanism 22/25 và replay exact; sửa visual-ledger/bool checker. Revision 9: pin nguồn LiVT và khóa Bal-BCE prospective tại protocol/lock SHA 27c32d2a/1e28c686 trước metric. Revision 10: Bal-BCE bị loại sau performance 19/34, replay exact và review 20 anchor; cứu 38 TP nhưng tạo 57 restricted FP, prior đảo mất 53 TP. Full suite 1.899/1.899, retention 850 thư mục/220 nguồn vắng và DOCX 12 trang accessibility 0/0/0; keeper/lệnh tốt nhất không đổi."
         }
       ]
     },

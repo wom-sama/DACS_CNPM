@@ -4786,11 +4786,37 @@
   implementation, training, metric, validation, or test was opened.
   Research-process report revision 9 renders cleanly over 12 pages and passes
   accessibility `0/0/0`; the complete repository suite passes `1888/1888`.
-- [ ] Implement and verify the isolated Bal-BCE engine/auditor only after the
+- [x] Implement and verify the isolated Bal-BCE engine/auditor only after the
   protocol, official source revision/license, equations, inputs, seeds,
   optimizer schedule, and thresholds are committed and pushed without
-  candidate metrics.
-- [ ] Only if every Bal-BCE A0 structural, replay, precision, TP, FP, fold,
+  candidate metrics. The implementation remains outside the production
+  trainer; focused checks pass `15/15` and the complete suite passes
+  `1897/1897`.
+- [x] Run the sole locked Bal-BCE A0 and reject it after complete structural,
+  performance, replay, and manual-visual review. Candidate class-1 P/R/F1 is
+  `0.759317/0.903882/0.825316` versus CE
+  `0.821494/0.833641/0.827523`; it rescues 38 TP but creates 57 restricted FP,
+  removes none, and passes only `19/34` performance checks. Fresh-process
+  replay is exact at SHA `8766c26e...5ef07`.
+- [x] Only if every Bal-BCE A0 structural, replay, precision, TP, FP, fold,
   control, and no-leak gate passes, add a default-off production loss and lock
   one matched validation smoke. Test/probe/full train/current-best promotion
-  remain closed before that independent gate.
+  remain closed because the conjunction failed. Final decision/artifact-set
+  SHAs are `93fc089b...25e5` and `f972d1f4...07b7b`.
+- [x] Close the exact Bal-BCE prior/sign/seed/fold/epoch/optimizer neighborhood
+  in
+  `docs/TRKH_5CLASS_BALANCED_BCE_FROZEN_EMBEDDING_A0_CLOSURE_20260724.md`.
+  Do not post-hoc sweep a prior multiplier or nearby Balanced Softmax
+  temperature: positive prior pressure creates restricted FP, while reversed
+  pressure removes 33 FP by breaking 53 class-1 TP.
+- [x] Finish Bal-BCE closure verification. Lock/engine/auditor/retention tests
+  pass `17/17`; the complete suite passes `1899/1899` with 295 existing
+  warnings. Read-only retention scans 850 directories/all 51 current
+  object-schema manifests, verifies 220/220 compacted originals absent,
+  deletes nothing, and passes at SHA `b48ebd82...5510`. Research-process DOCX
+  revision 10 renders cleanly over 12 pages and passes accessibility `0/0/0`.
+- [ ] Screen and prospectively lock one equation- and
+  representation-distinct train-only A0. It must use sample-conditional local
+  evidence, include FN-versus-restricted-FP causal controls, and prove
+  simultaneous TP retention plus restricted-FP removal before any
+  validation/test, trainer integration, smoke, probe, or full train.
