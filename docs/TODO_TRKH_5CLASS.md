@@ -4714,8 +4714,37 @@
   same and first cross retain matched geometry. Select four workers from
   symmetric trials: `14.4234` versus `13.1546` stem images/s (`+9.65%`) at
   equal `1099.66 MiB` peak CUDA. Benchmark SHA is `e437d84c...25492`.
-- [ ] Commit/push the formal engine from a clean worktree, run the sole A0,
+- [x] Commit/push the formal engine from a clean worktree, run the sole A0,
   inspect every metric/audit plus the fixed 19-row sheet, run fresh-process
   replay, finalize pass/reject conjunctively, and only then consider a
   default-off trainer smoke. Validation/test and command promotion remain
-  forbidden before a complete A0 pass.
+  forbidden before a complete A0 pass. Reject NSA v2 at candidate
+  AUROC/TP-retention/FP-rejection `0.821398/0.975379/0.139640`; final
+  review/manifest SHAs are `93a4da57...46f89`/`9b978d3a...abc6`.
+- [x] Diagnose the replay geometry-hash failure without rerunning NSA.
+  Reordering each saved formal batch from role-major to sample-major exactly
+  reproduces all five replay hashes; scientific arrays/actions/metrics remain
+  exact, while replay stays failed under the original ordered-hash and
+  virtual-memory gates.
+- [x] Compact only the failed NSA v1 formal attempt with a verified cleanup
+  manifest, excluding `159,348,276` heavy bytes and preserving failure/
+  preflight/diagnostic evidence. Keep complete v2 and keeper roots protected.
+- [x] Finish NSA closure and research-report revision 7. The 11-page DOCX
+  passes full-detail render review and accessibility `0/0/0`; post-NSA
+  retention passes 847 directories/36 absent compacted sources/zero blockers;
+  focused tests pass `29/29` and the complete suite passes `1852/1852`.
+  Commit/push this coherent closure stage without staging user payloads.
+- [ ] Prospectively lock the restricted-negative LearnableISDA train-only
+  frozen-embedding A0 before candidate execution. Pin ISDA/MetaSAug/
+  LearnableISDA sources, runtime, eight matched roles, 65 source-partition
+  hashes, balanced meta schedules, resource limits, fixed visuals, and
+  conjunctive gates.
+- [ ] Implement and verify the independent RN-LISDA equation engine, dynamic
+  train-only file-access ledger, auditor, launcher, synthetic GPU benchmark,
+  exact replay, and manual contact-sheet finalizer. Do not copy unlicensed
+  reference code or open validation/test.
+- [ ] Only if every RN-LISDA A0 structural, mechanism, causal, repeat,
+  performance, replay, resource, and visual gate passes, commit a default-off
+  production trainer path and separately lock one matched CE-versus-candidate
+  validation smoke. Test/probe/full train/current-command promotion remain
+  closed.

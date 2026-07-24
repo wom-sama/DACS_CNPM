@@ -21242,3 +21242,62 @@ Date: 2026-07-02
   passed geometry v2 evidence and best keeper. Current-best command/history
   remain byte-identical at `36b9aa1a...940faf` and
   `39bd2879...98f53`.
+
+## NSA Formal V2 Replay, Final Reject, And Retention - 2026-07-24
+
+- Run the sole formal v2 A0 and preserve summary/contact/pre-replay-manifest
+  SHAs `576c061f...e13`, `2564d055...9b2`, and
+  `7b443c0d...f36b1`. Candidate AUROC/TP retention/FP rejection is
+  `0.821398/0.975379/0.139640`; it removes 31/222 restricted FP but breaks
+  13/528 class-1 TP, passes only 11/21 mechanism gates, and does not beat the
+  no-query control.
+- Inspect all 19 fixed rows at original detail. Poisson geometry is natural
+  and has no systematic seam, padding, hand, basket, bbox-edge, or background
+  shortcut, but candidate maps are diffuse over the fruit, close to matched
+  controls, and place only `0.092528` mean mass inside the changed support
+  versus the locked `0.75` floor. Final reject/review SHA is
+  `93a4da57...46f89`; all integration, validation/test, smoke/probe/full-train,
+  and current-command permissions are false.
+- Fresh-process replay at SHA `ea6ed963...0fdf4` exactly reproduces adapter
+  states, actions, metrics, query/aggregate diagnostics, fold maps, and all
+  266 visual arrays; maximum readout score error is `2.22e-16`. It remains
+  `failed` because peak virtual-memory fraction is `0.899 > 0.82` and the
+  prospectively ordered geometry hashes differ.
+- Diagnose the geometry-hash failure without regenerating pixels or running
+  the model. Formal appends each batch as
+  `[all same][all cross0][all cross1]`; replay appends
+  `[same,cross0,cross1]` per sample. Reordering only the saved formal records
+  reproduces every replay hash for all `5/5` folds. Preserve the gate failure
+  and document the checker-order defect at
+  `docs/TRKH_5CLASS_NSA_REPLAY_GEOMETRY_ORDER_DIAGNOSIS_20260724.md`; do not
+  rerun or relax NSA after metrics.
+- Final artifact-manifest SHA is `9b978d3a...abc6`. Compact only the failed v1
+  attempt through
+  `runs/cleanup_manifest_20260724_nsa_failed_v1_compacted.json`: exclude 30
+  heavy files (`159,348,276` bytes), retain 27 evidence files plus inventories,
+  and verify source deletion. Keep the manifest-locked evidence at
+  `runs/runs/evidence_nsa_class_pair_poisson_a0_failed_v1_20260724`; do not
+  move it after verification.
+- Correct the synthetic anti-leak rule prospectively. Freeze every complete
+  derived corpus before a separate cross-split duplicate audit. A
+  validation/test match may invalidate only the whole corpus or whole method;
+  it may not remove one child, replenish rows, choose a generator, tune a
+  threshold, or feed information back into training. This explicitly
+  supersedes the old per-row exclusion wording in the
+  `Synthetic Data Allowance And External-Evidence Screen` section.
+- Select restricted-negative LearnableISDA as the next equation-distinct
+  route using ISDA (NeurIPS 2019), MetaSAug (CVPR 2021), and LearnableISDA
+  (IEEE TIP 2024). The next stage is a separately locked train-only
+  source-held frozen-embedding mechanism gate; no NSA result may tune its
+  equation, roles, seed, thresholds, or visual rows.
+- Current-best command/history remain byte-identical at
+  `36b9aa1a...940faf` and `39bd2879...98f53`; NSA creates no checkpoint or
+  training-command revision.
+- Run the post-NSA read-only retention audit over 847 directories and all
+  seven compaction manifests. It passes with 36/36 compacted originals absent,
+  zero blockers, no deletion, and `88.918 GiB` free; summary SHA is
+  `82800b94...cc958`.
+- Build research-process report revision 7, inspect all 11 final rendered
+  pages at original detail, and pass accessibility at `0/0/0`. Compile checks
+  pass, focused NSA/retention tests pass `29/29`, and the complete repository
+  suite passes `1852/1852` with 295 existing warnings in `122.17 s`.

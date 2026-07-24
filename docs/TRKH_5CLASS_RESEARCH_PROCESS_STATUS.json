@@ -2,10 +2,10 @@
   "document": {
     "title": "TRKH 5-class",
     "subtitle": "Quy trình nghiên cứu, trạng thái bằng chứng và kế hoạch cải tiến",
-    "revision": "6",
+    "revision": "7",
     "updated": "2026-07-24",
     "branch": "classification-only-research",
-    "status": "Đang nghiên cứu - LP-A3 A0 đã bị loại; chưa có checkpoint mới",
+    "status": "Đang nghiên cứu - NSA A0 đã bị loại; đang khóa RN-LISDA train-only",
     "owner": "TRKH classification-only research"
   },
   "executive_metrics": [
@@ -25,9 +25,9 @@
       "detail": "Validation macro-F1; precision class 1 còn thấp"
     },
     {
-      "label": "LP-A3 hard-positive A0",
+      "label": "NSA Poisson A0",
       "value": "Rejected",
-      "detail": "TP 0,9922; rival 0,9648; FP reject 0,0315"
+      "detail": "AUROC 0,8214; TP 0,9754; FP reject 0,1396"
     }
   ],
   "sections": [
@@ -37,7 +37,7 @@
         {
           "type": "callout",
           "label": "Quyết định",
-          "text": "Giữ nguyên keeper hiện tại và file lệnh full-train tốt nhất. Full train random-init 30 epoch không thắng validation gate; JPEG-DL, SaSPA synthetic và LP-A3-inspired hard-positive A0 đều đã bị loại. LP-A3 dùng đủ 9.215 train rows, không mở validation/test và replay exact, nhưng chỉ loại 7/222 restricted FP, tạo 9 FP mới, phá 2 TP và không chứng minh tác dụng nhân quả của label hinge; trainer và full train không được mở."
+          "text": "Giữ nguyên keeper hiện tại và file lệnh full-train tốt nhất. Full train random-init 30 epoch không thắng validation gate; JPEG-DL, SaSPA synthetic, LP-A3 hard-positive và NSA class-pair Poisson A0 đều đã bị loại. NSA dùng đủ 9.215 train rows với năm source-held fold, không mở validation/test; candidate không hơn clean/no-query/permuted controls, chỉ đạt AUROC 0,821398, giữ 0,975379 TP và loại 0,139640 restricted FP. Trainer, validation và full train không được mở từ kết quả này."
         },
         {
           "type": "paragraph",
@@ -66,7 +66,8 @@
             ["AIDT pretrained", "mapped final test", "0.8575", "- / - / 0.5806", "Thấp hơn TRKH ở phép đối chiếu này"],
             ["Top-5 pretrained TTA", "final test, giao thức khác", "0.9248", "- / - / 0.7786", "Upper bound representation, không phải scratch"],
             ["SaSPA synthetic F1", "10 ảnh train-only, không train", "N/A", "Fidelity 0/10; blind 7/10; XAI 6/10", "Rejected trước A1"],
-            ["LP-A3 hard-positive A0", "9.215 train; cohort 734; không train", "N/A", "TP/rival/FP reject 0,9922 / 0,9648 / 0,0315", "Rejected trước integration"]
+            ["LP-A3 hard-positive A0", "9.215 train; cohort 734; không train", "N/A", "TP/rival/FP reject 0,9922 / 0,9648 / 0,0315", "Rejected trước integration"],
+            ["NSA class-pair Poisson A0", "9.215 train; 5 source-held folds", "N/A", "AUROC/TP/FP reject 0,8214 / 0,9754 / 0,1396", "Rejected; maps diffuse, không hơn controls"]
           ]
         },
         {
@@ -89,13 +90,15 @@
             "Source-group không đồng nhất: nhiều ảnh có nhiều object và có thể mang nhãn khác nhau. Mọi split/gate phải dựa trên source identity, không chỉ đường dẫn crop.",
             "Validation có 2.606 object-row và final test có 1.267 object-row trong các audit hiện tại.",
             "Audit nền cho thấy blur/desaturate nền thường làm dự đoán thay đổi rất ít; màu, bề mặt và ranh giới quả xoài ảnh hưởng mạnh hơn. Context rộng vẫn có ích để loại nền, nhưng chưa phải tín hiệu phân lớp quyết định.",
-            "Augmentation, preprocessing và synthetic data sinh từ dữ liệu hiện có được phép, với điều kiện chỉ dùng phía train và có provenance đầy đủ."
+            "Augmentation, preprocessing và synthetic data sinh từ dữ liệu hiện có được phép, với điều kiện chỉ dùng fitting-train của từng fold và có provenance đầy đủ.",
+            "Mọi child kế thừa source-group, split và fold của toàn bộ parent; child nhiều parent kế thừa hợp các ràng buộc nên không thể vượt qua bất kỳ biên nguồn nào.",
+            "Corpus dẫn xuất phải được đóng băng trước cross-split duplicate audit. Match với validation/test chỉ được vô hiệu hóa toàn bộ corpus hoặc phương pháp; không được loại riêng row, sinh bù, đổi generator hay phản hồi threshold vào training."
           ]
         },
         {
           "type": "callout",
           "label": "Luật cách ly",
-          "text": "Validation/test không được tham gia fit generator, tạo prompt, chọn ảnh synthetic, huấn luyện bộ lọc, chọn tỷ lệ synthetic, chọn threshold hoặc quyết định kiến trúc. Mọi ngoại lệ làm mất hiệu lực gate."
+          "text": "Validation/test không được tham gia fit generator, tạo prompt, chọn child, huấn luyện bộ lọc, chọn tỷ lệ synthetic, chọn threshold hoặc quyết định kiến trúc. Candidate train-only phải cài file-open ledger trước lần đọc đầu tiên, chặn mọi path component val/valid/validation/test và replay exact access digest. Validation chỉ được mở bởi auditor riêng sau khi candidate, corpus và quyết định promotion đã đóng băng."
         }
       ]
     },
@@ -172,6 +175,7 @@
             ["Giới hạn máy", "RTX 4060 8 GB, RAM 15,6 GB; SaSPA F0/F1 chạy ổn bằng worker cô lập và model CPU offload.", "Dùng process/resource gate trước diffusion hoặc full train."],
             ["Synthetic fidelity", "SaSPA F1 không bị trùng/leak nhưng 0/10 ảnh vượt fidelity; blind review có 4 severe artifacts.", "Không đồng nhất duplicate-safety với bảo toàn nhãn fine-grained."],
             ["Nhiễu hard-positive", "LP-A3 candidate chỉ khác feature-only 6/734 hàng; delta khuếch đại là speckle cao tần phủ bbox.", "Ràng buộc nhãn số học không bảo đảm tín hiệu bề mặt có cấu trúc hay cải thiện precision."],
+            ["Synthetic tự nhiên nhưng phi nhân quả", "NSA tạo composite Poisson tự nhiên nhưng AUROC 0,821398, TP retention 0,975379 và cross-map mass trong target chỉ 0,092528.", "Hình học hợp lệ không đủ; cơ chế phải hơn clean/no-query/permuted controls và định vị đúng tín hiệu."],
             ["Worktree bẩn", "Có payload người dùng chưa theo dõi và nhiều artifact lịch sử.", "Stage theo path rõ ràng; không xóa/revert nội dung không xác định."]
           ]
         }
@@ -189,7 +193,8 @@
             "AIDT/top-5 KD, focus KD, DKD, rescue-margin, in-sample disagreement weighting và TRKH-logit router: không chuyển được representation advantage theo cách fold-safe.",
             "Patch verifier, directional gate, stacked verifier và recall restore threshold: có cải thiện validation cục bộ nhưng không generalize đủ; không tiếp tục sweep lân cận.",
             "OOF soft-label/label-repair trực tiếp: đã thử nhiều biến thể và bị loại; kết quả competition không đủ lý do để lặp lại nếu không có tín hiệu mới.",
-            "LP-A3-inspired hard positive: giữ TP cao nhưng FP rejection thấp, rival retention dưới gate và label hinge không hơn feature-only; không sweep radius/step/margin/lambda/noise/layer/erosion."
+            "LP-A3-inspired hard positive: giữ TP cao nhưng FP rejection thấp, rival retention dưới gate và label hinge không hơn feature-only; không sweep radius/step/margin/lambda/noise/layer/erosion.",
+            "NSA class-pair Poisson: đóng exact geometry/query/adapter/readout neighborhood; không sweep support, Poisson mode, query width, epoch, readout hoặc metric gate sau khi candidate không hơn controls."
           ]
         },
         {
@@ -239,7 +244,11 @@
             ["SaSPA, NeurIPS 2024", "Sinh ảnh giữ structure và subject bằng edge/subject conditioning; tỷ lệ synthetic tối ưu phụ thuộc lượng real data.", "Exact F1 đã bị loại: resource/duplicate pass nhưng fidelity, blind và XAI không đạt."],
             ["DiffuseMix, CVPR 2024", "Ghép phần ảnh thật với bản diffusion rồi blend fractal để giữ nhãn.", "Có thể giảm label ambiguity, nhưng cần audit bề mặt xoài và overhead; chưa ưu tiên hơn SaSPA A0."],
             ["BOB, CVPR 2026", "Condition background/pose class-agnostic khi fine-tune generator, marginalize khi sinh để giảm class-context association.", "Hữu ích cho context bias; độ phức tạp cao, dùng làm nguyên tắc thiết kế hơn là triển khai full ngay."],
-            ["LP-A3, NeurIPS 2022", "Tối đa khoảng cách feature của hard positive dưới ràng buộc log-prob nhãn thật; chọn mẫu theo time consistency.", "A0 độc lập đã bị loại: hinge gần như không khác feature-only và delta không có cấu trúc bề mặt."]
+            ["LP-A3, NeurIPS 2022", "Tối đa khoảng cách feature của hard positive dưới ràng buộc log-prob nhãn thật; chọn mẫu theo time consistency.", "A0 độc lập đã bị loại: hinge gần như không khác feature-only và delta không có cấu trúc bề mặt."],
+            ["NSA, ECCV 2022", "Poisson patch từ ảnh nguồn khác tạo anomaly tự nhiên và giữ cấu trúc cục bộ.", "A0 class-pair độc lập tạo ảnh tự nhiên nhưng mismatch map diffuse và không hơn ba matched controls; đóng neighborhood exact."],
+            ["ISDA, NeurIPS 2019", "Ước lượng covariance theo lớp trong feature space và tối ưu robust CE tương đương semantic augmentation vô hạn.", "Fixed class-wise ISDA tăng áp lực precision lớp 1 nhưng giảm recall; dùng làm control, không tự coi là winner."],
+            ["MetaSAug, CVPR 2021", "Meta-learn hệ số semantic augmentation từ balanced meta objective cho dữ liệu long-tail.", "Dùng source-held balanced meta rows chỉ từ train; real head batches vẫn giữ phân phối tự nhiên."],
+            ["LearnableISDA, IEEE TIP 2024", "Học covariance/scale theo mẫu thay vì chỉ covariance cố định theo lớp.", "Ứng viên kế tiếp là restricted-negative RN-LISDA frozen-embedding A0, tám role và replay khóa trước; tự cài phương trình, không copy code thiếu license."]
           ]
         },
         {
@@ -267,10 +276,10 @@
         {
           "type": "numbered",
           "items": [
-            "Khóa split và source_group_id trước khi sinh. A0 dùng source-disjoint train folds; generator chỉ thấy fitting fold.",
+            "Khóa split và source_group_id trước khi sinh. A0 dùng source-disjoint train folds; generator chỉ thấy fitting fold; mỗi child kế thừa hợp source/fold của mọi parent.",
             "Không dùng pixel, label, prompt, embedding, checkpoint hoặc thống kê từ validation/test trong fit, generation, filtering hay selection.",
             "Ghi manifest cho từng ảnh: source IDs, split/fold, label, prompt hash, seed, generator/model revision, preprocessing hash, output SHA-256 và giấy phép.",
-            "Chạy exact-hash, perceptual-hash và embedding near-duplicate so với toàn bộ train/validation/test; loại mọi synthetic quá gần validation/test và báo threshold.",
+            "Đóng băng toàn bộ corpus rồi chạy exact-hash, perceptual-hash và embedding near-duplicate một chiều so với mọi split. Match validation/test chỉ được làm fail toàn bộ corpus/phương pháp; cấm loại riêng child, sinh bù, đổi generator hoặc tune threshold từ kết quả.",
             "Bộ lọc quality/class fidelity phải được huấn luyện chỉ từ fitting fold hoặc cross-fit trên train; không dùng keeper đã thấy validation để chọn synthetic.",
             "Audit thủ công và XAI mù nhãn cho class 1, đặc biệt màu, đốm, độ chín, vùng dập và ranh giới; loại ảnh thay đổi semantics.",
             "A0 bắt đầu với tỷ lệ synthetic bảo thủ 5-10%; tỷ lệ là hyperparameter validation-side chỉ sau khi train-only feasibility/fidelity pass, không sweep trên test.",
@@ -297,12 +306,15 @@
             ["Independent replay", "Artifact/hash được chạy lại bằng lệnh riêng, không tái dùng state trong RAM.", "Phát hiện batch/numeric/state leakage."],
             ["Audit toàn diện", "Metric, transitions, robustness, XAI, placebo và manual review đều bắt buộc.", "Không thăng hạng vì một con số hoặc heatmap đẹp."],
             ["Command governance", "Current-best command và history chỉ đổi cùng promotion commit.", "Người dùng luôn có lệnh VS Code chạy được và truy vết được."],
-            ["Retention có manifest", "Hash/tóm tắt trước khi xóa chính xác artifact obsolete.", "Giải phóng dung lượng mà không mất bằng chứng."],
+            ["Retention có manifest", "Hash/tóm tắt trước khi xóa chính xác artifact obsolete; hậu NSA pass 847 thư mục, 36/36 nguồn compact đã vắng.", "Giải phóng dung lượng mà không mất bằng chứng; 0 blocker và 88,918 GiB còn trống."],
             ["Song song CPU/GPU", "Trong lúc formal/train chạy, dùng CPU cho research, docs và static checks.", "Giảm thời gian chết, không tranh VRAM."],
             ["Báo cáo tái tạo", "DOCX sinh từ JSON + script, render toàn bộ trang trước khi phát hành.", "Cập nhật thường xuyên, diff được và ít lỗi Word thủ công."],
             ["Process isolation cho diffusion", "Dựng pipeline trong worker con, giữ peak telemetry rồi gate parent sau khi worker thoát.", "Trả RAM ổn định, tránh false failure và vẫn phát hiện PID lạ."],
             ["Gate synthetic nhiều tầng", "Khóa fidelity, blind review, duplicate-safety và XAI theo thứ tự; XAI không được cứu gate đã fail.", "Phân biệt rõ không trùng dữ liệu với bảo toàn semantics và giá trị huấn luyện."],
-            ["Causal control cho augmentation", "Khớp radius/mask với baseline, seed theo sample index, so random-feasible và objective ablation trước trainer.", "Phát hiện LP-A3 hinge không tạo khác biệt dù metric feature-distance cao hơn random."]
+            ["Causal control cho augmentation", "Khớp radius/mask với baseline, seed theo sample index, so random-feasible và objective ablation trước trainer.", "Phát hiện LP-A3 hinge không tạo khác biệt dù metric feature-distance cao hơn random."],
+            ["Canonical replay order", "Định nghĩa thứ tự record bằng sample identity/role trước khi băm, thay vì phụ thuộc cách gom batch.", "Tránh báo nhầm nondeterminism như lỗi ordered-hash của NSA."],
+            ["Dynamic train-only access ledger", "Cài process-wide audit hook trước input đầu tiên, allowlist artifact và block val/test trước open; replay access digest.", "Bổ sung bằng chứng runtime cho split isolation ngoài counter tự khai báo."],
+            ["Source-aware meta schedule", "Meta rows cân bằng lớp nhưng source-disjoint với outer-fit; child feature kế thừa source/fold và RNG theo sample identity.", "Cho phép augmentation/synthetic hợp lệ mà không tạo leakage hoặc đổi phân phối real head batch."]
           ]
         }
       ]
@@ -313,10 +325,10 @@
         {
           "type": "numbered",
           "items": [
-            "Giữ nguyên các closure JPEG-DL, SaSPA F1 và LP-A3 A0 có giá trị tái lập; cleanup artifact tạm bằng manifest riêng.",
-            "Đóng exact SaSPA và LP-A3 neighborhoods đã khóa; không mở lại bằng sweep prompt/seed hoặc radius/step/margin/lambda.",
-            "Tra cứu và prospectively khóa một cơ chế train-only mới có biến đổi bề mặt/tổn thương có cấu trúc, licensed và equation-distinct; không lặp KeepAugment/AugMax/PRIME nếu thiếu class-pair causal target mới.",
-            "Trước trainer integration, candidate mới phải bảo vệ class-1 TP, loại restricted FP tốt hơn matched simple control và không dùng validation/test để fit/chọn tham số.",
+            "Giữ nguyên các closure JPEG-DL, SaSPA F1, LP-A3 và NSA A0 có giá trị tái lập; cleanup artifact tạm bằng manifest riêng.",
+            "Đóng exact SaSPA, LP-A3 và NSA neighborhoods đã khóa; không mở lại bằng sweep prompt/seed, radius/step/margin/lambda hoặc query/Poisson/readout.",
+            "Commit/push prospective RN-LISDA protocol và machine lock trước candidate metrics: tám matched roles, 65 source partitions, balanced meta schedules, file-access ledger, resource limit, visuals và conjunctive gates.",
+            "Chạy RN-LISDA frozen-embedding A0 chỉ trên yolo_f/train; candidate phải giữ class-1 TP, loại restricted FP tốt hơn fixed-ISDA/CovNet/deranged/joint controls và replay exact trước trainer integration.",
             "Giữ ưu tiên precision lớp 1 nhưng đặt recall-loss budget rõ ràng; không chấp nhận giảm false positive bằng cách phá quá nhiều true positive.",
             "Tiếp tục làm sạch worktree theo manifest và commit theo stage; không đụng BaoCao hoặc deep-research-report chưa theo dõi.",
             "Chỉ cập nhật lệnh full-train tốt nhất và history khi một candidate thắng validation, replay và XAI gate."
@@ -345,7 +357,7 @@
         },
         {
           "type": "paragraph",
-          "text": "Revision 1: tạo báo cáo Word tái lập; ghi nhận full train 30e, trạng thái JPEG-DL formal, nghiên cứu competition và chính sách synthetic train-only chống leak. Revision 2: khóa JPEG-DL A0 ở VisualFail với replay exact, ghi metric/XAI/SHAs cuối và chuyển kế hoạch sang synthetic feasibility source-disjoint. Revision 3: retention pass trên 822 thư mục/51 manifests, giữ formal 2,614 MiB; sửa odd/even header-footer và reset numbering theo từng block sau render QA. Revision 4: SaSPA F0 no-output pass formal/replay trên RTX 4060 8 GB; ghi telemetry, process isolation, hash artifact và chỉ mở quyền F1 10 ảnh train-only. Revision 5: đóng SaSPA F1 ở Rejected sau fidelity 0/10, blind 7/10, duplicate-safety pass và frozen-keeper XAI 6/10; giữ nguyên keeper/lệnh full-train tốt nhất; bỏ running header-footer để khóa lề 1 inch ổn định giữa Word và LibreOffice sau render QA. Revision 6: đóng LP-A3-inspired A0 sau audit train-only 9.215 hàng, replay exact, 19/23 automated gates và manual delta review; ghi causal-control fail 6/734, không integration hoặc command update."
+          "text": "Revision 1: tạo báo cáo Word tái lập; ghi nhận full train 30e, trạng thái JPEG-DL formal, nghiên cứu competition và chính sách synthetic train-only chống leak. Revision 2: khóa JPEG-DL A0 ở VisualFail với replay exact, ghi metric/XAI/SHAs cuối và chuyển kế hoạch sang synthetic feasibility source-disjoint. Revision 3: retention pass trên 822 thư mục/51 manifests, giữ formal 2,614 MiB; sửa odd/even header-footer và reset numbering theo từng block sau render QA. Revision 4: SaSPA F0 no-output pass formal/replay trên RTX 4060 8 GB; ghi telemetry, process isolation, hash artifact và chỉ mở quyền F1 10 ảnh train-only. Revision 5: đóng SaSPA F1 ở Rejected sau fidelity 0/10, blind 7/10, duplicate-safety pass và frozen-keeper XAI 6/10; giữ nguyên keeper/lệnh full-train tốt nhất; bỏ running header-footer để khóa lề 1 inch ổn định giữa Word và LibreOffice sau render QA. Revision 6: đóng LP-A3-inspired A0 sau audit train-only 9.215 hàng, replay exact, 19/23 automated gates và manual delta review; ghi causal-control fail 6/734, không integration hoặc command update. Revision 7: đóng NSA class-pair Poisson A0 ở reject sau formal/replay/manual review; phân biệt checker-order defect với scientific failure, sửa duplicate audit thành whole-corpus invalidation một chiều, chạy retention 847 thư mục không blocker, full suite 1.852/1.852, và chọn RN-LISDA train-only làm route kế tiếp."
         }
       ]
     },
@@ -414,6 +426,31 @@
               "title": "LP-A3 official reference repository",
               "url": "https://github.com/kai-wen-yang/LPA3",
               "detail": "Pin commit 7059ca393b5cdfa04cf3304bb86c4c79712adfa3; không thấy license nên không copy/import code."
+            },
+            {
+              "title": "Natural Synthetic Anomalies for Self-Supervised Anomaly Detection and Localization, ECCV 2022",
+              "url": "https://www.ecva.net/papers/eccv_2022/papers_ECCV/html/7519_ECCV_2022_paper.php",
+              "detail": "Nguồn Poisson synthetic geometry; TRKH adaptation độc lập đã bị loại ở A0."
+            },
+            {
+              "title": "Implicit Semantic Data Augmentation, NeurIPS 2019",
+              "url": "https://papers.nips.cc/paper_files/paper/2019/hash/15f99f2165aa8c86c9dface16fefd281-Abstract.html",
+              "detail": "Nguồn phương trình covariance feature-space và robust CE của ISDA."
+            },
+            {
+              "title": "MetaSAug: Meta Semantic Augmentation for Long-Tailed Visual Recognition, CVPR 2021",
+              "url": "https://openaccess.thecvf.com/content/CVPR2021/html/Li_MetaSAug_Meta_Semantic_Augmentation_for_Long-Tailed_Visual_Recognition_CVPR_2021_paper.html",
+              "detail": "Nguồn balanced meta objective cho semantic augmentation."
+            },
+            {
+              "title": "LearnableISDA, IEEE Transactions on Image Processing 2024",
+              "url": "https://arxiv.org/abs/2309.00399",
+              "detail": "Nguồn sample-wise learnable covariance/scale; repository chỉ dùng để pin provenance."
+            },
+            {
+              "title": "Do We Train on Test Data? Purging CIFAR of Near-Duplicates",
+              "url": "https://arxiv.org/abs/1902.00423",
+              "detail": "Đối chiếu nguy cơ near-duplicate cross-split; TRKH dùng quy tắc whole-corpus invalidation nghiêm ngặt hơn."
             }
           ]
         }
