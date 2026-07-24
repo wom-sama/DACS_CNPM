@@ -11,6 +11,7 @@ from trkh.tools.audit_balanced_bce_frozen_embedding_a0 import (
     LOCK_PATH,
     VISUAL_ANCHORS,
     _load_audit_inputs,
+    _jsonable,
     _recursive_numeric_difference,
     _verify_engine_contract,
     analyze_predictions,
@@ -82,6 +83,19 @@ def test_recursive_comparison_normalizes_only_boolean_scalars() -> None:
     assert _recursive_numeric_difference(False, np.bool_(True)) == np.inf
     assert _recursive_numeric_difference(True, 1) == np.inf
     assert _recursive_numeric_difference({"a": [1.0]}, {"a": [1.0]}) == 0.0
+
+
+def test_jsonable_normalizes_numpy_without_weakening_boolean_comparison() -> None:
+    payload = _jsonable(
+        {
+            "flag": np.bool_(True),
+            "count": np.int64(3),
+            "values": np.asarray([1.0, 2.0], dtype=np.float32),
+        }
+    )
+    assert payload == {"flag": True, "count": 3, "values": [1.0, 2.0]}
+    assert isinstance(payload["flag"], bool)
+    assert isinstance(payload["count"], int)
 
 
 def test_gate_logic_rejects_identical_candidate_and_controls() -> None:

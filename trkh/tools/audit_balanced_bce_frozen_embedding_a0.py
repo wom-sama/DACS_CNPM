@@ -113,9 +113,28 @@ def _string_sequence_sha256(values: Sequence[object]) -> str:
     return digest.hexdigest()
 
 
+def _jsonable(value: object) -> object:
+    if isinstance(value, Mapping):
+        return {str(name): _jsonable(item) for name, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_jsonable(item) for item in value]
+    if isinstance(value, np.ndarray):
+        return _jsonable(value.tolist())
+    if isinstance(value, np.generic):
+        return value.item()
+    if isinstance(value, Path):
+        return str(value)
+    return value
+
+
 def _write_json(path: Path, payload: object) -> None:
     path.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True)
+        json.dumps(
+            _jsonable(payload),
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
+        )
         + "\n",
         encoding="utf-8",
     )
@@ -125,7 +144,10 @@ def _write_jsonl(path: Path, rows: Iterable[Mapping[str, object]]) -> None:
     with path.open("w", encoding="utf-8", newline="\n") as handle:
         for row in rows:
             handle.write(
-                json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n"
+                json.dumps(
+                    _jsonable(row), ensure_ascii=False, sort_keys=True
+                )
+                + "\n"
             )
 
 
@@ -2905,7 +2927,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             file=sys.stderr,
         )
         return 1
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    print(json.dumps(_jsonable(result), ensure_ascii=False, indent=2))
     return 0
 
 
