@@ -2244,6 +2244,34 @@ def _visual_arrays_sha256(arrays: Mapping[str, np.ndarray]) -> str:
     return digest.hexdigest()
 
 
+def _eval_cap_feature_gradient(
+    model: nn.Module,
+    features: torch.Tensor,
+    support_boxes: np.ndarray,
+) -> Tuple[torch.Tensor, Mapping[str, torch.Tensor], torch.Tensor]:
+    if model.training:
+        raise ValueError("CAP feature attribution requires evaluation mode")
+    if not features.requires_grad:
+        raise ValueError("CAP attribution features must require gradients")
+
+    # cuDNN does not retain the LSTM reserve buffer for eval-mode backward.
+    # Keep evaluation semantics and use PyTorch's native RNN only for XAI.
+    with torch.backends.cudnn.flags(enabled=False):
+        output = model(
+            features,
+            support_boxes,
+            return_auxiliary=True,
+        )
+        logit, auxiliary = output
+        gradient = torch.autograd.grad(
+            logit.sum(),
+            features,
+            retain_graph=False,
+            create_graph=False,
+        )[0]
+    return logit, auxiliary, gradient
+
+
 def build_visual_evidence(
     *,
     inputs: Mapping[str, np.ndarray],
@@ -2345,18 +2373,13 @@ def build_visual_evidence(
             .clone()
             .requires_grad_(True)
         )
-        candidate_output = candidate_model(
-            leaf,
-            support_boxes[position : position + 1],
-            return_auxiliary=True,
+        candidate_logit, candidate_aux, gradient = (
+            _eval_cap_feature_gradient(
+                candidate_model,
+                leaf,
+                support_boxes[position : position + 1],
+            )
         )
-        candidate_logit, candidate_aux = candidate_output
-        gradient = torch.autograd.grad(
-            candidate_logit.sum(),
-            leaf,
-            retain_graph=False,
-            create_graph=False,
-        )[0]
         attribution = (
             (gradient * leaf).abs().sum(dim=1)[0].detach().cpu().numpy()
         )

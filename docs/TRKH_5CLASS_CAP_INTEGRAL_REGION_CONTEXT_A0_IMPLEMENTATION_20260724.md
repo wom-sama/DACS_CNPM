@@ -2,7 +2,7 @@
 
 Date: 2026-07-24
 Protocol ID: `trkh_cap_integral_region_context_a0_20260724`
-State: implementation complete before candidate metric
+State: implementation complete; audit-only XAI erratum verified, pending push
 
 ## Prospective Lineage
 
@@ -128,3 +128,21 @@ For each locked visual anchor:
 
 Formal A0 remains prohibited until this implementation stage, its tests, the
 living report, and the full repository suite are committed and pushed.
+
+## Post-Training XAI Harness Erratum
+
+The first formal invocation completed all locked fold/role training and then
+failed before writing any output because cuDNN cannot backpropagate through an
+LSTM evaluation forward. The zero-artifact failure and its immutable log hashes
+are recorded in
+`TRKH_5CLASS_CAP_INTEGRAL_REGION_CONTEXT_A0_XAI_ERRATUM_20260724.md`.
+
+The correction keeps the candidate in evaluation mode and disables cuDNN only
+around the feature-attribution forward/backward, selecting the native PyTorch
+RNN implementation. Training, scoring, model state, protocol, lock, gates, and
+visual rows are unchanged. A same-lock rerun is permitted only after the
+erratum and regression test pass and this correction is committed and pushed.
+
+The CAP-focused suite passes `26/26`; the complete repository suite passes
+`1925/1925` in `93.86 s`. Research-process report revision 13 passes visual QA
+on all `14/14` rendered pages and accessibility at `0/0/0`.

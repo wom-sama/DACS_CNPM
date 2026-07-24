@@ -21580,3 +21580,67 @@ Date: 2026-07-02
   falls below the unchanged 3.5-GiB guard. After process exit, free RAM
   returns to `4.051 GiB`. Fix only the launcher to wait up to 90 seconds for
   post-test recovery; do not lower the guard or alter any scientific setting.
+
+## CAP XAI Harness Erratum And Resource-Value Audit - 2026-07-24
+
+- Push the bounded RAM-recovery launcher fix at `abc9963`, then run the first
+  actual formal from that clean commit. All six trainable roles complete for
+  every one of the five folds (`30/30` fold-role jobs). The process then fails
+  inside fixed XAI before writing any formal output:
+  `RuntimeError: cudnn RNN backward can only be called in training mode`.
+- Verify the failed formal directory contains zero files. No summary,
+  prediction, threshold, metric, contact sheet, or candidate decision exists,
+  so the failure cannot inform a model, equation, seed, gate, or threshold
+  change. Preserve stdout/stderr at
+  `runs/evidence_cap_a0_xai_harness_failure_20260724` with SHAs
+  `630b5cec...ab887`/`48930829...2a7bb`.
+- Diagnose the exact backend boundary: an eval-mode cuDNN LSTM forward does not
+  retain the reserve buffer required by autograd. Keep model and LSTM in
+  `eval()` and disable cuDNN only around the XAI forward/backward. Native
+  PyTorch RNN then yields finite nonzero feature attribution while the
+  attribution logit matches the ordinary eval forward within `1e-5`; the
+  global cuDNN state is restored. Training/scoring/state/protocol/lock remain
+  unchanged. Compile, pyflakes, and all CAP-focused tests pass `26/26`.
+- Re-audit the research process before authorizing the repeated cost. Current
+  command history has three revisions/two updates but zero selected
+  single-model checkpoint replacements. The repository has 68 closure, 90
+  protocol, and 48 audit documents; retained runs contain 149,044 files and
+  `11.742 GiB`. The largest root is the old OOF corpus at `2.488 GiB` and
+  96,774 files. No cleanup occurs here; a dependency-aware retention manifest
+  is mandatory first.
+- Verify the current keeper directly: SHA
+  `1f49d577...482677`, `model_config.pretrained=false`, no resume lineage, no
+  model teacher checkpoint, and own EMA as the weight source. Its enabled
+  focus-binary signal uses offline outputs from the documented no-pretrain
+  TRKH ensemble, not loaded external parameters. The teacher CSV/summary SHAs
+  are `a5ca8a45...0318d`/`445e72c1...ac2e`. Legacy cleanup removed parent
+  probe checkpoints, so future teacher caches must preserve a cryptographic
+  source-checkpoint/config/scratch chain before compaction.
+- Strengthen the persistent rule: external architectures/equations may be
+  adapted, but no proposed classifier, teacher, router, or inference package
+  may load pretrained/external parameters. Comparison baselines remain
+  isolated. External pretrained generation is only a separately disclosed
+  train-only synthetic prior and never part of classifier inference.
+- Record non-CNN/Transformer evidence and the new mandatory value gate in
+  `TRKH_5CLASS_SCRATCH_INFERENCE_RESOURCE_VALUE_AUDIT_20260724.md`. Scratch
+  selective state-space Mamba, ViG graph mixing, dynamic-routing capsules,
+  recurrent averaging, NMF, covariance, quaternion, topology, morphology and
+  frequency operators have already been tested or closed. Fresh screening
+  retains SNN, DEQ and KAN only as references: their long schedules,
+  iterative inference, conventional-GPU mismatch, immaturity, or overlap do
+  not justify a run.
+- From this point, every long GPU request must prospectively state distinct
+  mechanism, missing evidence, reused artifacts, wall-time/VRAM/disk ceiling,
+  early stop, cleanup, class-1 TP/FP budgets, and matched keeper inference
+  contract. Final value must be labeled `promotable`, `mechanism-only`,
+  `negative-but-reusable`, or `waste/invalid`. Accuracy cannot override failed
+  latency, throughput, VRAM, ONNX, or TensorRT gates.
+- Permit one same-lock CAP rerun only after the audit-only correction, full
+  suite, report revision 13, clean commit, and push. CAP remains
+  representation-distinct, its resource/inference limits were locked before
+  metrics, and the first attempt exposed none. Any further harness failure or
+  failed scientific conjunction closes CAP without neighboring sweeps.
+- Verify the corrected boundary before push: CAP-focused tests pass `26/26`;
+  full pytest passes `1925/1925` in `93.86 s` with `296` warnings and no
+  failures. Research-process report revision 13 passes visual QA on all
+  `14/14` rendered pages and accessibility at `0/0/0`.

@@ -4845,7 +4845,28 @@
   formal/replay manifests reject extras and traversal; finalization is
   one-shot. Focused tests pass `25/25`, full pytest passes `1924/1924`, and
   report revision 12 passes 13-page visual QA plus accessibility `0/0/0`.
-- [ ] Run the sole locked CAP A0 only from that clean pushed implementation
-  commit. Inspect every structural, causal, performance, fold, replay,
-  resource, and XAI gate before deciding whether a separately locked
-  default-off trainer smoke is authorized.
+- [x] Run the first sole locked CAP A0 attempt from clean pushed commit
+  `abc9963`. All 30 fold-role training jobs completed, but the process failed
+  before writing any artifact because cuDNN cannot backpropagate through an
+  eval-mode LSTM during XAI. The output directory had zero files, so no
+  candidate metric, threshold, prediction, or decision was observed. Preserve
+  stdout/stderr SHAs `630b5cec...ab887`/`48930829...2a7bb`.
+- [x] Apply only the CAP audit-harness erratum: keep the model/LSTM in
+  evaluation mode and disable cuDNN around the feature-attribution
+  forward/backward so native PyTorch RNN supplies the gradient. Training,
+  scoring, state, folds, seeds, equations, gates, and visual rows remain
+  unchanged. Compile/pyflakes and the CAP-focused suite pass `26/26`.
+- [x] Re-audit research value before spending another long GPU run. Current
+  command history has zero keeper replacements; retained runs occupy
+  `11.742 GiB`/149,044 files. Record scratch provenance limits, inference
+  requirements, non-CNN/Transformer results, resource ceilings, stop rules,
+  and value labels in
+  `docs/TRKH_5CLASS_SCRATCH_INFERENCE_RESOURCE_VALUE_AUDIT_20260724.md`.
+- [x] Finish full-suite verification and revision-13 report QA. Full pytest
+  passes `1925/1925` in `93.86 s`; DOCX visual QA passes `14/14` rendered pages
+  and accessibility passes `0/0/0`.
+- [ ] Create a clean commit/push for the audit-only correction and evidence,
+  then rerun exactly one CAP formal under the unchanged
+  protocol/lock. Inspect every structural, causal, performance, fold, replay,
+  resource, inference, and XAI gate before deciding whether a separately
+  locked default-off trainer smoke is authorized.

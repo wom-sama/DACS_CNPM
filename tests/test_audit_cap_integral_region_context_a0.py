@@ -6,6 +6,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import torch
 
 from trkh.tools.audit_cap_integral_region_context_a0 import (
     DataAccessLedger,
@@ -14,6 +15,7 @@ from trkh.tools.audit_cap_integral_region_context_a0 import (
     VISUAL_ANCHORS,
     _manifest_payload,
     _maximum_array_error,
+    _eval_cap_feature_gradient,
     _project_canonical_map,
     _recursive_numeric_difference,
     _region_attention_map,
@@ -26,6 +28,9 @@ from trkh.tools.audit_cap_integral_region_context_a0 import (
     parse_args,
     verify_engine_contract,
     verify_locked_files,
+)
+from trkh.tools.cap_integral_region_context_a0_engine import (
+    CAPIntegralRegionBinaryHead,
 )
 
 
@@ -209,6 +214,52 @@ def test_visual_region_rasterization_and_support_projection_are_normalized() -> 
     outside = np.ones((16, 16), dtype=np.bool_)
     outside[2:14, 3:13] = False
     assert not bool(projected[outside].any())
+
+
+@pytest.mark.skipif(
+    not torch.cuda.is_available(),
+    reason="cuDNN LSTM eval-backward regression requires CUDA",
+)
+def test_eval_lstm_feature_attribution_uses_native_rnn_without_mode_drift() -> None:
+    device = torch.device("cuda")
+    torch.manual_seed(20260724)
+    model = CAPIntegralRegionBinaryHead(context_mode="context").to(device)
+    model.eval()
+    for parameter in model.parameters():
+        parameter.requires_grad_(False)
+    features = torch.randn(
+        1,
+        256,
+        16,
+        16,
+        dtype=torch.float32,
+        device=device,
+    )
+    support_boxes = np.asarray([[0, 0, 16, 16]], dtype=np.int64)
+    with torch.no_grad():
+        reference = model(features, support_boxes)
+    leaf = features.detach().clone().requires_grad_(True)
+    cudnn_enabled = torch.backends.cudnn.enabled
+
+    try:
+        logit, auxiliary, gradient = _eval_cap_feature_gradient(
+            model,
+            leaf,
+            support_boxes,
+        )
+        assert not model.training
+        assert not model.lstm.training
+        assert torch.backends.cudnn.enabled == cudnn_enabled
+        assert tuple(logit.shape) == (1,)
+        assert tuple(gradient.shape) == tuple(leaf.shape)
+        assert torch.isfinite(gradient).all()
+        assert float(gradient.abs().sum()) > 0.0
+        assert "region_attention" in auxiliary
+        assert torch.allclose(logit.detach(), reference, atol=1e-5, rtol=0.0)
+    finally:
+        model.to(torch.device("cpu"))
+        del model, features, leaf
+        torch.cuda.empty_cache()
 
 
 def test_replay_comparators_preserve_discrete_types_and_numeric_tolerance() -> None:
