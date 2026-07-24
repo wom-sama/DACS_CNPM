@@ -10,6 +10,7 @@ from trkh.tools.audit_balanced_bce_frozen_embedding_a0 import (
     DataAccessLedger,
     LOCK_PATH,
     VISUAL_ANCHORS,
+    _configure_torch,
     _load_audit_inputs,
     _jsonable,
     _recursive_numeric_difference,
@@ -19,6 +20,7 @@ from trkh.tools.audit_balanced_bce_frozen_embedding_a0 import (
     load_locked_train_cache,
 )
 from trkh.tools.balanced_bce_frozen_embedding_a0_engine import ROLE_NAMES
+import torch
 
 
 def _lock() -> dict:
@@ -96,6 +98,16 @@ def test_jsonable_normalizes_numpy_without_weakening_boolean_comparison() -> Non
     assert payload == {"flag": True, "count": 3, "values": [1.0, 2.0]}
     assert isinstance(payload["flag"], bool)
     assert isinstance(payload["count"], int)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is required")
+def test_cuda_alias_resolves_to_an_indexed_locked_device() -> None:
+    resolved = _configure_torch(torch.device("cuda"))
+    assert resolved.type == "cuda"
+    assert resolved.index == torch.cuda.current_device()
+    assert torch.are_deterministic_algorithms_enabled()
+    assert not torch.backends.cuda.matmul.allow_tf32
+    assert not torch.backends.cudnn.allow_tf32
 
 
 def test_gate_logic_rejects_identical_candidate_and_controls() -> None:

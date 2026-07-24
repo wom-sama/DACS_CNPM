@@ -1038,17 +1038,22 @@ def _load_audit_inputs(
     return cache, folds, sources, fold_evidence, protocol
 
 
-def _configure_torch(device: torch.device) -> None:
+def _configure_torch(device: torch.device) -> torch.device:
     if device.type != "cuda" or not torch.cuda.is_available():
         raise RuntimeError("Bal-BCE formal A0 requires locked CUDA runtime")
+    resolved = torch.device(
+        "cuda",
+        torch.cuda.current_device() if device.index is None else device.index,
+    )
     torch.use_deterministic_algorithms(True)
     torch.backends.cuda.matmul.allow_tf32 = False
     torch.backends.cudnn.allow_tf32 = False
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.deterministic = True
-    torch.cuda.set_device(device)
+    torch.cuda.set_device(resolved)
     torch.cuda.empty_cache()
-    torch.cuda.reset_peak_memory_stats(device)
+    torch.cuda.reset_peak_memory_stats(resolved)
+    return resolved
 
 
 def _process_snapshot() -> Dict[str, object]:
@@ -2171,8 +2176,7 @@ def _run_formal_with_ledger(
         )
     start_available_gib = float(psutil.virtual_memory().available / (1024**3))
     output = _prepare_output_dir(output_dir)
-    device = torch.device(device_name)
-    _configure_torch(device)
+    device = _configure_torch(torch.device(device_name))
     started = time.perf_counter()
     with PeakResourceMonitor() as resource:
         logits, probabilities, results = train_all_roles(
@@ -2551,8 +2555,7 @@ def _replay_formal_with_ledger(
         )
     cache, folds, sources, fold_evidence, fold_protocol = _load_audit_inputs(lock)
     oracles = equation_oracles()
-    device = torch.device(device_name)
-    _configure_torch(device)
+    device = _configure_torch(torch.device(device_name))
     started = time.perf_counter()
     with PeakResourceMonitor() as resource:
         logits, probabilities, results = train_all_roles(
