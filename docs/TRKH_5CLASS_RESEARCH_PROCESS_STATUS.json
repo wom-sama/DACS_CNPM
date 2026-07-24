@@ -2,10 +2,10 @@
   "document": {
     "title": "TRKH 5-class",
     "subtitle": "Quy trình nghiên cứu, trạng thái bằng chứng và kế hoạch cải tiến",
-    "revision": "11",
+    "revision": "12",
     "updated": "2026-07-24",
     "branch": "classification-only-research",
-    "status": "Đang nghiên cứu - CAP integral-region context A0 đã được khóa prospectively trước candidate code",
+    "status": "Đang nghiên cứu - CAP A0 engine/auditor đã được khóa trước formal metric",
     "owner": "TRKH classification-only research"
   },
   "executive_metrics": [
@@ -324,7 +324,8 @@
             ["Source-aware meta schedule", "Meta rows cân bằng lớp nhưng source-disjoint với outer-fit; child feature kế thừa source/fold và RNG theo sample identity.", "Cho phép augmentation/synthetic hợp lệ mà không tạo leakage hoặc đổi phân phối real head batch."],
             ["Replay read-set và scalar type", "Formal/replay dựng cùng visual evidence nhưng replay ghi file tạm; bool và numpy.bool_ so theo typed logical value.", "Ledger exact mà không ghi đè formal artifact; tránh false mismatch do object identity."],
             ["Đối chứng hai chiều prior", "So exact Bal-BCE với CE, plain BCE, Balanced Softmax, seed repeat và reversed-prior trên cùng fold/init/order.", "Phân biệt tăng recall do mở rộng lớp toàn cục với cải thiện ranh giới chọn lọc; chặn sweep hệ số sau kết quả."],
-            ["Khóa representation trước code", "Pin paper/repository/license, phương trình CAP, 27 region, fold, role, seed, threshold, XAI và gate trước khi viết candidate.", "Tách quyết định khoa học khỏi metric; test đã bắt parent/hash sai trước khi lock được công bố."]
+            ["Khóa representation trước code", "Pin paper/repository/license, phương trình CAP, 27 region, fold, role, seed, threshold, XAI và gate trước khi viết candidate.", "Tách quyết định khoa học khỏi metric; test đã bắt parent/hash sai trước khi lock được công bố."],
+            ["Implementation boundary trước metric", "Tách commit protocol, engine và auditor; NumPy oracle, synthetic 30e, FP32/BF16 resource, ledger, fresh-process replay và XAI đều được kiểm tra trước formal.", "Ngăn sửa phương trình hoặc audit sau khi thấy candidate metric; worst-role batch 32 chỉ dùng 0,934 GiB CUDA."]
           ]
         }
       ]
@@ -338,8 +339,8 @@
             "Giữ nguyên các closure JPEG-DL, SaSPA F1, LP-A3, NSA, RN-LISDA và Bal-BCE A0 có giá trị tái lập; cleanup artifact tạm bằng manifest riêng.",
             "Đóng exact SaSPA, LP-A3, NSA, RN-LISDA và Bal-BCE neighborhoods đã khóa; không mở lại bằng sweep prompt/seed, radius/step/margin/lambda, query/Poisson/readout, CovNet/meta schedule hoặc prior multiplier.",
             "Giữ bất biến Bal-BCE protocol/lock SHA 27c32d2a/1e28c686 và formal/replay/final SHAs b501fe60/8766c26e/93fc089b; không integration vì candidate tạo 57 restricted FP.",
-            "Giữ bất biến CAP protocol/lock SHA c6d307bf/4aaba9ef; valid support loại padding, spatial Sattolo không fixed point và cross-sample control partition-preserving; commit/push trước candidate code/metric.",
-            "Sau mốc push, triển khai độc lập CAP pixel context, 27 integral regions, region attention, ordered LSTM và residual-less NetVLAD cùng các causal controls, train-only ledger, replay và XAI cố định.",
+            "Giữ bất biến CAP protocol/lock SHA c6d307bf/4aaba9ef tại commit 05a9ced và engine độc lập tại ea90703; valid support loại padding, spatial Sattolo không fixed point và cross-sample control partition-preserving.",
+            "Commit/push auditor, ledger, resource preflight, fresh-process replay và XAI cố định trước metric; sau đó chạy duy nhất CAP formal A0 từ commit sạch đã push.",
             "Giữ ưu tiên precision lớp 1 nhưng đặt recall-loss budget rõ ràng; không chấp nhận giảm false positive bằng cách phá quá nhiều true positive.",
             "Tiếp tục làm sạch worktree theo manifest và commit theo stage; không đụng BaoCao hoặc deep-research-report chưa theo dõi.",
             "Chỉ cập nhật lệnh full-train tốt nhất và history khi một candidate thắng validation, replay và XAI gate."
@@ -367,13 +368,17 @@
             ["docs/TRKH_5CLASS_BALANCED_BCE_FROZEN_EMBEDDING_A0_CLOSURE_20260724.md", "Kết luận formal/replay/visual, no-repeat boundary và hash bằng chứng Bal-BCE."],
             ["scripts/build_trkh_balanced_bce_frozen_embedding_a0_lock.py", "Tái sinh fold prior, bias, init, order hashes và machine lock."],
             ["docs/TRKH_5CLASS_CAP_INTEGRAL_REGION_CONTEXT_A0_PROTOCOL_20260724.md", "Giao thức prospective CAP, equation boundary, causal controls và downstream authorization."],
+            ["docs/TRKH_5CLASS_CAP_INTEGRAL_REGION_CONTEXT_A0_IMPLEMENTATION_20260724.md", "Định nghĩa engine, threshold, full-row action, XAI, resource và fresh-process replay trước formal metric."],
             ["scripts/build_trkh_cap_integral_region_context_a0_lock.py", "Tái sinh cohort, fold, role, seed, epoch-order, derangement, visual-anchor và machine lock CAP."],
+            ["trkh/tools/cap_integral_region_context_a0_engine.py", "Engine PyTorch độc lập cho paper-equation CAP và sáu role trainable."],
+            ["trkh/tools/audit_cap_integral_region_context_a0.py", "Formal auditor, dynamic ledger, metric gates, resource, XAI, manifest và replay."],
+            ["scripts/run_trkh_cap_integral_region_context_a0.ps1", "Launcher VS Code PowerShell cho preflight, formal, fresh-process replay và manual finalize."],
             ["C:/Users/ADMIN/.codex/skills/trkh-5class/SKILL.md", "Kinh nghiệm vận hành và hard rules dùng ở các phiên Codex sau."]
           ]
         },
         {
           "type": "paragraph",
-          "text": "Revision 1-3: tạo báo cáo tái lập, ghi full train 30e/JPEG-DL/chính sách synthetic chống leak, đóng JPEG-DL bằng replay-XAI và hoàn tất retention/layout QA. Revision 4-5: SaSPA F0/F1; F1 bị loại ở fidelity và XAI. Revision 6-8: LP-A3, NSA và RN-LISDA bị loại bằng causal controls/replay. Revision 9-10: khóa rồi loại Bal-BCE; cứu 38 TP nhưng tạo 57 restricted FP. Revision 11: pin paper/repository MIT của CAP và khóa prospectively frozen train-only A0 tại protocol/lock SHA c6d307bf/4aaba9ef; 27 integral regions, bảy role, năm fold, 20 visual anchors và mọi gate cố định trước candidate code/metric. Pre-commit review loại padding shortcut, khóa Sattolo, sửa cross-sample mapping và chốt phương trình paper thay vì phụ gia script. Full pytest 1.904/1.904; retention 851 thư mục/51 manifest/220 nguồn vắng; 13 trang, accessibility 0/0/0. Keeper/lệnh tốt nhất không đổi."
+          "text": "Revision 1-3: tạo báo cáo tái lập, ghi full train 30e/JPEG-DL/chính sách synthetic chống leak, đóng JPEG-DL bằng replay-XAI và hoàn tất retention/layout QA. Revision 4-5: SaSPA F0/F1; F1 bị loại ở fidelity và XAI. Revision 6-8: LP-A3, NSA và RN-LISDA bị loại bằng causal controls/replay. Revision 9-10: khóa rồi loại Bal-BCE; cứu 38 TP nhưng tạo 57 restricted FP. Revision 11: pin paper/repository MIT của CAP và khóa prospectively frozen train-only A0 tại protocol/lock SHA c6d307bf/4aaba9ef. Revision 12: engine paper-equation, sáu role trainable, dynamic ledger, exact-file-set formal/replay manifest, full-row action, fresh-process replay và XAI được cố định trước formal; NumPy error tối đa 2,55e-15, focused 25/25, full pytest 1924/1924, synthetic FP32/BF16 peak CUDA 0,934/0,890 GiB. Keeper/lệnh tốt nhất không đổi."
         }
       ]
     },

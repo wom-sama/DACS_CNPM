@@ -982,10 +982,25 @@ def train_role_fold(
 ) -> TrainedRoleFold:
     if role not in TRAINABLE_ROLES:
         raise ValueError(f"Unknown trainable CAP role: {role}")
-    if features.device != device or gap_features.device != device:
+    resolved_device = features.device
+    requested_index = (
+        torch.cuda.current_device()
+        if device.type == "cuda" and device.index is None
+        else device.index
+    )
+    if (
+        gap_features.device != resolved_device
+        or resolved_device.type != device.type
+        or (
+            device.type == "cuda"
+            and resolved_device.index != requested_index
+        )
+    ):
         raise ValueError("Feature tensors are not on the requested device")
     seed = role_seed(role, fold)
-    model = initialize_role_model(role, fold=fold, device=device)
+    model = initialize_role_model(
+        role, fold=fold, device=resolved_device
+    )
     initial_state = model_state_arrays(model)
     optimizer = torch.optim.AdamW(
         model.parameters(),
@@ -1008,7 +1023,9 @@ def train_role_fold(
         for start in range(0, int(order.size), BATCH_SIZE):
             batch_indices = order[start : start + BATCH_SIZE]
             batch = torch.as_tensor(
-                batch_indices, dtype=torch.long, device=device
+                batch_indices,
+                dtype=torch.long,
+                device=resolved_device,
             )
             logits = _role_logits(
                 model,

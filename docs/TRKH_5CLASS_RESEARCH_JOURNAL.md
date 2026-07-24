@@ -21534,3 +21534,41 @@ Date: 2026-07-02
   complete suite passes `1915/1915` with 295 existing warnings in `72.72 s`.
   Formal metrics remain prohibited until the auditor/ledger/replay/XAI stage
   is separately committed and pushed.
+
+## CAP Auditor And Replay Boundary - 2026-07-24
+
+- Implement the complete train-only CAP auditor without opening a candidate
+  metric. The dynamic process-wide ledger allowlists only the machine-locked
+  feature, geometry, CIDT, protocol, official-source files, and exactly 20
+  `yolo_f/images/train` visual rows. It blocks data-domain writes and complete
+  `val/valid/validation/test` path components before open.
+- Recompute all five fit/calibration/held partitions, primary/repeat epoch
+  orders, partition-preserving cross-sample maps, cohort Sattolo permutations,
+  and ordered visual anchors from immutable inputs. The complete Sattolo and
+  anchor hashes now fail closed directly against the machine lock.
+- Fix metric authority before formal: geometry-cache probabilities control
+  cohort margin/top-1/replacement; locked CIDT clean rows control the
+  9,215-row baseline. The caches differ by at most `0.0015103519`, preserve
+  all 763 top-1 labels, and differ on one near-tied non-class-1 rival. This is
+  recorded rather than incorrectly asserting byte-identical probabilities.
+- Implement all seven roles, fold-local TP-retention thresholds, full-row
+  action accounting, AUROC/fold/precision/recall/F1/nonfocus gates, seed
+  repeat, resource monitoring, and fixed XAI. XAI uses absolute
+  gradient-times-frozen-feature attribution plus area-normalized CAP region
+  attention, exact valid-support projection, spatial-control contrast, bbox
+  mass, score deltas, and a 20-row raw-image contact sheet.
+- Formal and replay execute in separate Python processes; replay rejects the
+  formal PID and compares every numeric array within `1e-7`, every discrete
+  value exactly, and the ordered ledger exactly. Exact-file-set formal and
+  replay manifests reject missing or extra files, duplicate/absolute/traversal
+  paths, and size/hash drift. Manual visual finalization is one-shot and
+  requires both manifests intact.
+- Synthetic premetric checks remain metric-free: every role has finite
+  forward/backward gradients; a full candidate 30-epoch cycle reaches the
+  locked trace/update/state boundary; worst-role batch 32 peaks at
+  `0.934431/0.890468 GiB` CUDA for FP32/BF16 and `1.668243 GiB` process RSS.
+- Compile, pyflakes, PowerShell AST parse, and focused tests pass `25/25`.
+  Complete pytest passes `1924/1924` with 295 existing warnings in `76.14 s`.
+  Research-process report revision 12 passes full-detail review of all 13
+  pages and accessibility `0/0/0`. Keeper, best full-train command, trainer,
+  validation, test, and raw data remain unchanged; no CAP metric exists yet.

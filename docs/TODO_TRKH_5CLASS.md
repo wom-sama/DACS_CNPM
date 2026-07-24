@@ -4837,10 +4837,14 @@
   parameter budget across matched CAP roles. Independent NumPy equation
   errors are at most `2.6e-15`; engine/hash/gradient tests pass `11/11` and the
   complete suite passes `1915/1915` with 295 existing warnings.
-- [ ] Implement the dynamic train-only ledger, formal auditor, resource
+- [x] Implement the dynamic train-only ledger, formal auditor, resource
   preflight, launcher, exact replay, fixed 20-row XAI sheet, and all locked
   metric/causal gates. Commit and push this implementation boundary without
-  candidate metrics before running the sole formal A0.
+  candidate metrics before running the sole formal A0. Direct machine-lock
+  checks cover the complete Sattolo and visual-anchor hashes; exact-file-set
+  formal/replay manifests reject extras and traversal; finalization is
+  one-shot. Focused tests pass `25/25`, full pytest passes `1924/1924`, and
+  report revision 12 passes 13-page visual QA plus accessibility `0/0/0`.
 - [ ] Run the sole locked CAP A0 only from that clean pushed implementation
   commit. Inspect every structural, causal, performance, fold, replay,
   resource, and XAI gate before deciding whether a separately locked
