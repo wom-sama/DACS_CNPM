@@ -4886,12 +4886,13 @@
   `28/28` and `1925/1925`; revision-14 Word QA passes `14/14` pages and
   accessibility `0/0/0`. Retention passes 860 directories/51 manifests/220
   absent originals with zero blockers at SHA `99d1835a...04a636`.
-- [ ] Select a next method only after CAP closure is committed and pushed. It
-  must be equation-distinct from closed context/graph/local-mixer families,
-  add sample-conditional surface evidence, and prospectively lock class-1
-  TP/FP, replay, XAI, latency/p95/throughput/VRAM, ONNX, and TensorRT gates
-  before any GPU run. The 2026-07-25 post-CAP screen found no candidate that
-  currently satisfies this conjunction.
+- [x] Select a next method only after CAP closure is committed and pushed.
+  A primary-source re-screen selected Cross Colour Ratio (CCR) only for a
+  bounded train-only information gate, not for model integration. CCR is
+  equation-distinct enough to test because neighboring log cross-channel
+  ratios cancel common shading and per-channel gain under the paper
+  assumptions; the lock also treats it as failed if it cannot beat an
+  equal-size plain colour-ratio control and spatial dephasing.
 - [x] Complete a primary-source, local-overlap, and deployment screen for
   Self-ONN, learnable morphological neurons, PointNet/Deep Sets, DeepEMD/
   optimal transport, normalizing flows, and hierarchical local-material
@@ -4911,3 +4912,22 @@
   rejection beyond keeper margin and causal derangements; and has a
   prospectively measurable standard-op inference path. Do not reopen the six
   screened families by changing only width, order, pooling, solver, or head.
+- [ ] Commit and push the prospective CCR protocol/lock before writing its
+  candidate engine. Preserve protocol/lock SHAs
+  `1e408502...f347`/`6c2a604d...c835`, the 763-row/735-image cohort manifest,
+  five source-held folds, fixed XAI rows, resource ceilings, and seven
+  protected user/keeper/current-command hashes. No candidate metric exists at
+  this boundary.
+- [ ] Only after the clean prospective commit is pushed, implement the
+  independent standard-op CCR extractor and 3,004-parameter scratch evidence
+  head with NumPy/identity/gradient/ONNX tests. Do not touch the production
+  model, trainer, augmentation, validation/test, or current-best commands.
+- [ ] Run exactly one locked CCR A0 only if implementation preflight passes.
+  Stop at the clean train-only information conjunction unless candidate CCR
+  beats keeper margin, equal-size colour-ratio, trained spatial-dephase and
+  seed controls while preserving class-1 TP and rejecting restricted FP.
+- [x] Rebuild research-process report revision 16 from its JSON source and
+  verify the prospective CCR boundary. Focused lock/report tests pass `9/9`,
+  full pytest passes `1934/1934` with 296 existing warnings, visual QA passes
+  all `16/16` pages, and accessibility passes `0/0/0`. No model, trainer,
+  validation/test, GPU candidate run, keeper, or current-command state changed.

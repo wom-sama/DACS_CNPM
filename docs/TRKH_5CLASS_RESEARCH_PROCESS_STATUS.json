@@ -2,10 +2,10 @@
   "document": {
     "title": "TRKH 5-class",
     "subtitle": "Quy trình nghiên cứu, trạng thái bằng chứng và kế hoạch cải tiến",
-    "revision": "15",
+    "revision": "16",
     "updated": "2026-07-25",
     "branch": "classification-only-research",
-    "status": "Đang nghiên cứu - post-CAP no-run screen đã hoàn tất",
+    "status": "Đang nghiên cứu - đã khóa prospective CCR train-only",
     "owner": "TRKH classification-only research"
   },
   "executive_metrics": [
@@ -25,9 +25,9 @@
       "detail": "Validation macro-F1; precision class 1 còn thấp"
     },
     {
-      "label": "Post-CAP screen",
-      "value": "6 no-run",
-      "detail": "Không ứng viên nào qua đủ mechanism, surface và deployment gate"
+      "label": "CCR prospective lock",
+      "value": "763 train-only rows",
+      "detail": "Chưa có candidate metric; model, validation/test và lệnh tốt nhất không đổi"
     }
   ],
   "sections": [
@@ -50,6 +50,10 @@
         {
           "type": "paragraph",
           "text": "No-run screen ngày 25-07 là một cổng tiết kiệm tài nguyên, không phải metric mới. Successor kế tiếp phải tạo evidence map hoặc score cục bộ riêng cho 1-vs-0, 1-vs-2 và 1-vs-4 trên phần bề mặt hợp lệ trong bbox; phải thắng keeper margin và causal derangement ở cả giữ TP lớp 1 lẫn loại restricted FP trên source-held train folds; đồng thời có đường standard-op để đo latency mean/p95, throughput, VRAM, ONNX và TensorRT."
+        },
+        {
+          "type": "paragraph",
+          "text": "Revision 16 đã khóa Cross Colour Ratio (CCR) như một information gate train-only có thể bác bỏ, không phải model promotion. Cohort gồm 763 hàng/735 ảnh unique trong năm source-held folds; candidate phải thắng keeper margin, plain colour-ratio cùng kích thước, trained spatial dephase, same-weight dephase và seed repeat trên gate đồng thời về TP/FP/pairwise/replay. Giả định vật lý của CCR có thể bị phá bởi tone curve JPEG, auto-WB, clipping, bề mặt ướt hoặc phản xạ gương, vì vậy chưa có metric hay quyền integration/full train."
         }
       ]
     },
@@ -665,6 +669,11 @@
               "CAP closure verification",
               "Focused/full test 28/28 và 1925/1925; Word QA 14/14, accessibility 0/0/0; retention 860 directory/51 manifest/220 original vắng.",
               "Bảo toàn toàn bộ CAP evidence, không xóa artifact và khóa kết luận bằng retention SHA 99d1835a...04a636."
+            ],
+            [
+              "CCR prospective information gate",
+              "Khóa 763 train-only rows/735 ảnh, năm source-held folds, plain colour-ratio và hai spatial-dephase controls trước candidate code.",
+              "Giới hạn A0 20 phút, dưới 2 GiB VRAM, không validation/test; chỉ mở XAI/inference khi toàn bộ clean conjunction pass."
             ]
           ]
         }
@@ -687,7 +696,9 @@
             "Tiếp tục làm sạch worktree theo manifest và commit theo stage; không đụng BaoCao hoặc deep-research-report chưa theo dõi.",
             "Chỉ cập nhật lệnh full-train tốt nhất và history khi một candidate thắng validation, replay, XAI và deployment gate.",
             "Chọn successor chỉ khi equation-distinct, có sample-conditional surface evidence và khóa trước TP/FP, latency/p95/throughput/VRAM, ONNX/TensorRT.",
-            "Không mở lại sáu họ post-CAP bằng cách chỉ đổi width, order, pooling, solver hoặc head; tài liệu no-run ngày 25-07 là cổng resource-value bắt buộc."
+            "Không mở lại sáu họ post-CAP bằng cách chỉ đổi width, order, pooling, solver hoặc head; tài liệu no-run ngày 25-07 là cổng resource-value bắt buộc.",
+            "Commit/push CCR protocol và machine lock trước candidate code; giữ bất biến SHA 1e408502...f347/6c2a604d...c835 và trạng thái chưa có metric.",
+            "Chỉ triển khai một independent CCR A0 sau prospective commit; dừng fail-closed trước robustness/XAI/inference nếu không thắng mọi clean information, causal và TP/FP gate."
           ]
         }
       ]
@@ -790,12 +801,24 @@
             [
               "docs/TRKH_5CLASS_POST_CAP_SUCCESSOR_NO_RUN_SCREEN_20260725.md",
               "Primary-source screen cho sáu họ successor, local-overlap map, deployment caveat và điều kiện mở lại."
+            ],
+            [
+              "docs/TRKH_5CLASS_CROSS_COLOUR_RATIO_SURFACE_A0_PROTOCOL_20260725.md",
+              "Prospective CCR equations, camera-assumption caveats, cohort/folds, controls, gates, XAI và resource/inference authorization."
+            ],
+            [
+              "docs/TRKH_5CLASS_CROSS_COLOUR_RATIO_SURFACE_A0_LOCK_20260725.json",
+              "Machine lock cho 763-row train-only cohort, source-held folds, dephase offsets, hashes và protected artifacts."
+            ],
+            [
+              "scripts/build_trkh_cross_colour_ratio_surface_a0_lock.py",
+              "Tái sinh và check-only CCR prospective lock trước mọi candidate implementation hoặc metric."
             ]
           ]
         },
         {
           "type": "paragraph",
-          "text": "Revision 1-3 dựng báo cáo tái lập, full-train/JPEG-DL và synthetic policy. Revision 4-10 đóng SaSPA, LP-A3, NSA, RN-LISDA và Bal-BCE bằng fidelity, causal control, replay và TP/FP gates. Revision 11-14 khóa CAP trước metric, sửa audit-only eval-LSTM, rồi hoàn tất same-lock formal/replay/manual review; CAP đóng negative-but-reusable và retention pass tại SHA 99d1835a...04a636. Revision 15 screen no-run sáu họ successor; không code/GPU/validation/test, keeper và lệnh tốt nhất không đổi. A/B known-good cô lập regression OOXML hyperlink gây Word/LibreOffice repagination vô hạn; hai test cấu trúc và full suite đạt 1927/1927, toàn bộ trang render được, accessibility 0/0/0."
+          "text": "Revision 1-3 dựng báo cáo tái lập, full-train/JPEG-DL và synthetic policy. Revision 4-10 đóng SaSPA, LP-A3, NSA, RN-LISDA và Bal-BCE bằng fidelity, causal control, replay và TP/FP gates. Revision 11-14 khóa CAP trước metric, sửa audit-only eval-LSTM, rồi hoàn tất same-lock formal/replay/manual review; CAP đóng negative-but-reusable và retention pass tại SHA 99d1835a...04a636. Revision 15 screen no-run sáu họ successor và cô lập regression OOXML hyperlink; full suite đạt 1927/1927, visual/accessibility QA đạt 15/15 và 0/0/0. Revision 16 khóa CCR train-only trước candidate code tại protocol/lock SHA 1e408502...f347/6c2a604d...c835; pre-commit review sửa mô tả RNG, thêm write guard và full-payload check-only, focused/full test đạt 9/9 và 1934/1934, visual/accessibility QA đạt 16/16 và 0/0/0; chưa có metric, GPU run, validation/test, production edit hoặc command update."
         }
       ]
     },
@@ -949,6 +972,21 @@
               "title": "Hierarchical Material Recognition from Local Appearance, ICCV 2025",
               "url": "https://openaccess.thecvf.com/content/ICCV2025/html/Beveridge_Hierarchical_Material_Recognition_from_Local_Appearance_ICCV_2025_paper.html",
               "detail": "Dựa trên taxonomy graph, depth và context không tồn tại tương đương trong TRKH; graph/context neighborhood đã đóng."
+            },
+            {
+              "title": "Color-Based Object Recognition, Pattern Recognition 1999",
+              "url": "https://staff.fnwi.uva.nl/th.gevers/pub/GeversPR99.pdf",
+              "detail": "Nguồn phương trình cross colour ratio, Gaussian derivative sigma=1 và các giả định invariance dùng cho CCR A0."
+            },
+            {
+              "title": "Invariant Descriptors for Intrinsic Image Decomposition, JOSA A 2021",
+              "url": "https://arxiv.org/abs/2204.04076",
+              "detail": "Đối chiếu log cross-colour ratios, reflectance edge evidence và giới hạn từ image-formation assumptions."
+            },
+            {
+              "title": "IDTransformer, ICCV Workshop 2023",
+              "url": "https://openaccess.thecvf.com/content/ICCV2023W/NIVT/html/Das_IDTransformer_Transformer_for_Intrinsic_Image_Decomposition_ICCVW_2023_paper.html",
+              "detail": "Bối cảnh học intrinsic decomposition; project page chưa cung cấp code nên TRKH không copy/import implementation."
             },
             {
               "title": "Do We Train on Test Data? Purging CIFAR of Near-Duplicates",

@@ -255,3 +255,29 @@ artifacts, and no command change. A future proposal must first pass a
 source-disjoint train-only information and causal-control gate on explicit
 pair-specific bbox-valid surface evidence; a generic replacement neuron,
 pooling layer, density head, or set aggregator is insufficient.
+
+## CCR Prospective Resource Gate
+
+Cross Colour Ratio is admitted only as a bounded information gate after the
+post-CAP screen, not as an architecture promotion. Its log cross-channel
+derivatives have an analytic common-shading/per-channel-gain cancellation
+under the original diffuse, approximately linear narrow-band assumptions.
+That mechanism is cheap and standard-op compatible, but camera tone curves,
+auto white balance, clipping, wet fruit, and specular reflection can invalidate
+it. The gate therefore compares CCR with an equal-size plain colour-ratio
+derivative control and both trained and same-weight spatial dephasing.
+
+The prospective lock fixes 763 train-only rows, 735 unique images, five
+source-held folds, a 3,004-parameter scratch evidence head, 20 epochs, batch
+64, workers 4, no augmentation/weighting/oversampling, and no validation/test
+access. It caps A0 at 20 minutes, fitting VRAM below 2 GiB, temporary disk at
+0.40 GiB, and retained output at 0.10 GiB. Clean information, pairwise,
+TP-retention, restricted-FP rejection, seed, causal-control, and replay gates
+must all pass before robustness, XAI, or matched inference work can run.
+
+Protocol/lock SHAs are `1e408502...f347` and
+`6c2a604d...c835`. The lock state is
+`prospective_no_candidate_observation`: no metric, GPU run, production model
+edit, checkpoint, full train, or current-best command update exists. Commit
+and push this boundary before candidate code so a later result cannot alter
+the accepted cohort, controls, gates, or resource limits.

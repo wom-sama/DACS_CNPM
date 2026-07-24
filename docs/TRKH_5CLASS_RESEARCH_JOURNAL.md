@@ -21785,3 +21785,74 @@ Date: 2026-07-02
 - The complete repository suite passes `1927/1927` in `74.48 s` with 296
   existing warnings. No model code, GPU run, validation/test access, keeper,
   full-train command, or command-history revision changed.
+
+## Cross Colour Ratio Surface A0 Prospective Lock - 2026-07-25
+
+- Re-audit the eight unanimous class-1 binary residuals and their adjacent
+  frames. Every residual still has a cross-label acquisition neighbor, and
+  several near-identical fruit instances carry different labels. This keeps
+  the empirical target explicitly two-sided: retain class-1 TP while removing
+  restricted `0/2/4 -> 1` FP. It also keeps the documented ceiling warning:
+  RGB cannot be assumed to reveal firmness, sweetness, acidity, or every
+  internal maturity trait.
+- Recheck primary sources before code. The original colour-constancy work
+  defines neighboring cross-channel ratios
+  `R1*G2/(R2*G1)`, `R1*B2/(R2*B1)`, and `G1*B2/(G2*B1)`.
+  In log form these are spatial derivatives of `log(R/G)`, `log(R/B)`, and
+  `log(G/B)`, which cancel a common local shading factor and constant
+  per-channel gain under approximately linear, narrow-band, diffuse/matte
+  assumptions. JPEG tone curves, auto white balance, clipping, wet surfaces,
+  and specular highlights can violate those assumptions, so CCR is only a
+  falsifiable information probe.
+- Lock a 763-row train-only cohort before any candidate implementation:
+  541 class-1 rows (`528` keeper TP, `13` FN) and 222 restricted FP
+  (`158/54/10` from targets `0/2/4`). It contains 735 unique images and uses
+  five source-disjoint outer folds; each fold holds one source group for
+  scoring, the next for calibration, and the remaining three for fitting.
+  Image/label/dephase manifest SHAs are
+  `e7aec744...e0ecf1`/`2a5cd357...b578`/`814bd0da...951d`.
+- Pin exact keeper-view semantics: bbox margin `0.05`, padded `256` input,
+  denormalization of that tensor, `96`-pixel analysis support, inverse sRGB,
+  Gaussian derivative `sigma=1`, log epsilon `1/255`, saturation reliability,
+  and no validation/test reads. Candidate input has six signed derivatives
+  from the three CCR maps. Matched controls are six derivatives of
+  `log(R/G/B)`, trained spatially dephased CCR, same-weight dephasing, keeper
+  margin, and a seed repeat.
+- Lock the scratch evidence head at exactly 3,004 parameters with direct
+  pair maps for `1-vs-0`, `1-vs-2`, and `1-vs-4`. Training is natural-frequency
+  unweighted CE for 20 epochs, batch 64, workers 4, AdamW `1e-3`, with no
+  augmentation, weighting, or oversampling. Clean authorization is
+  conjunctive: candidate AUROC/AUPRC at least `0.86/0.92`, gains of at least
+  `0.02` over keeper margin and equal-size colour ratio, at least `0.04` over
+  trained dephase, same-weight dephase drop at least `0.03`, pairwise gates,
+  TP/FP/FN and macro/class-1 precision/F1 safety, seed stability, and replay.
+- Reserve shifted robustness, 30-row XAI, batch-1 mean/p95, throughput, VRAM,
+  ONNX parity, and TensorRT feasibility only after the clean conjunction
+  passes. A0 wall time is capped at 20 minutes, fitting VRAM below 2 GiB,
+  temporary cache at 0.40 GiB, and retained artifacts at 0.10 GiB.
+- Generate the machine lock with state
+  `prospective_no_candidate_observation`. Protocol/lock SHAs are
+  `1e408502...f347`/`6c2a604d...c835`; focused tests pass `7/7`,
+  `--check-only`, compile, pyflakes, and diff checks pass. No candidate
+  metric, production edit, validation/test access, run directory, checkpoint,
+  full train, or current-best command/history update exists at lock time.
+- Pre-commit line review catches one protocol-only mismatch before any
+  candidate observation: prose claimed dephase offsets used SHA-256 while the
+  locked implementation used
+  `NumPy SeedSequence([seed, sample_index, channel])`. Correct the prose to
+  the actual deterministic generator; cohort, offsets and their SHA remain
+  unchanged. Add a write guard that refuses to regenerate the prospective
+  lock after HEAD or upstream leaves parent commit `12f08e7`; post-commit
+  verification remains available through `--check-only`. Strengthen that
+  path to validate the frozen lock byte SHA and complete regenerated payload,
+  normalize only historical lock-time HEAD/upstream fields, and require the
+  parent to remain an ancestor of current HEAD/upstream.
+- Rebuild the living research report at revision 16. Combined CCR-lock/report
+  tests pass `9/9`; the complete repository suite passes `1934/1934` in
+  `75.23 s` with 296 existing warnings. Rendered DOCX review passes all
+  `16/16` pages without clipping, overlap, blank pages, or an unbalanced
+  trailing page; accessibility is `0/0/0`.
+- CCR lock-builder/test SHAs after the write guard are
+  `5fdf25ac...246d`/`985ac452...2358`.
+- Final revision-16 JSON/DOCX/builder SHAs are
+  `bce48a62...1dbc`/`82e5985b...bec0`/`fb39e6ef...1b46`.
