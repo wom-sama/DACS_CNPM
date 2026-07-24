@@ -488,6 +488,53 @@ def test_mechanism_gate_is_strictly_conjunctive() -> None:
     assert not failed_update["mechanism_pass"]
 
 
+def test_query_metrics_accepts_numpy_score_artifacts() -> None:
+    cohort = []
+    compatibility = np.full((10, 5), 0.1, dtype=np.float32)
+    candidate_maps = np.zeros((10, 1, 2, 2), dtype=np.float32)
+    for index in range(10):
+        target = index % 5
+        probabilities = np.full(5, 0.025, dtype=np.float64)
+        probabilities[target] = 0.9
+        cohort.append(
+            CleanTrainRow(
+                sample_index=index,
+                image_path=Path(f"C:/train/query_metric_{index}.jpg"),
+                source_stem=f"query_metric_{index}",
+                fold=0,
+                target=target,
+                keeper_prediction=1,
+                keeper_probabilities=probabilities,
+            )
+        )
+        compatibility[index, target] = 0.9
+        candidate_maps[index, 0, index % 2, (index // 2) % 2] = 1.0
+
+    observed = nsa_engine.query_metrics(
+        cohort=cohort,
+        fold_scores={
+            0: {
+                "query_compatibility": compatibility,
+                "candidate_maps": candidate_maps,
+            }
+        },
+    )
+
+    centered = candidate_maps.reshape(10, -1).astype(np.float64)
+    centered -= centered.mean(axis=0, keepdims=True)
+    singular = np.linalg.svd(
+        centered, full_matrices=False, compute_uv=False
+    )
+    energy = np.square(singular)
+    expected_rank = float(
+        np.square(energy.sum())
+        / np.clip(np.square(energy).sum(), 1e-12, None)
+    )
+    assert observed["true_query_better_fraction"] == pytest.approx(1.0)
+    assert observed["five_query_accuracy"] == pytest.approx(1.0)
+    assert observed["effective_spatial_rank"] == pytest.approx(expected_rank)
+
+
 def test_saved_readouts_apply_without_refitting() -> None:
     cohort = []
     for fold in range(5):

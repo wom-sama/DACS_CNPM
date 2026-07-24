@@ -1685,9 +1685,10 @@ def query_metrics(
     maps = np.stack(map_rows, axis=0)
     centered = maps - maps.mean(axis=0, keepdims=True)
     singular = np.linalg.svd(centered, full_matrices=False, compute_uv=False)
-    weights = singular.square()
+    weights = np.square(singular)
     effective_rank = float(
-        weights.sum() ** 2 / np.clip(weights.square().sum(), 1e-12, None)
+        weights.sum() ** 2
+        / np.clip(np.square(weights).sum(), 1e-12, None)
     )
     return {
         "true_query_better_fraction": float(np.mean(true_better)),
