@@ -330,3 +330,38 @@ passes `1946/1946` in `72.24 s` with 298 warnings. Revision-18 Word QA passes
 all `16/16` pages and accessibility `0/0/0`. These checks used no cohort
 pixels, candidate GPU fit, validation/test access, checkpoint, or command
 revision.
+
+## CCR Direct-Materializer Preflight Result
+
+The direct same-tensor materializer is implemented without constructing the
+broad train dataset index. The real structural preflight resolves the locked
+763 rows to 735 unique image/label pairs, verifies the exact keeper transform
+and source hashes, and records nine logical locked-input opens with zero
+blocked attempts. It opens no cohort image or label and creates no descriptor,
+model state, candidate score, checkpoint, or run artifact.
+
+The temporary representation is exact post-transform sRGB uint8 plus
+little-endian packed 256x256 valid masks. Its conservative upper bound is
+`160,456,704` bytes versus the prospective `429,496,730`-byte temporary
+ceiling. This avoids retaining two float32 descriptor families and preserves
+the ability to prove all geometry rows before descriptor extraction. The
+formal process is CPU-only; any initialized CUDA context is a failure.
+
+Nine tests cover production-parity crops, multi-object labels, exact tensor
+round-trip, packed-mask replay, allowlist blocking, no-pixel real preflight,
+synthetic formal manifests, Windows logical-open accounting, atomic publish,
+forced-failure cleanup, exact resource/CPU-only/no-fit authorization, and
+no-write-before-authorization. Resource limits are checked before and during
+the image loop; failed replay finalization removes partial files. Combined CCR
+focused verification passes `27/27`. Materializer/test SHAs are
+`ff1050bc...7afbfd5` and `b6f76b19...5058013`.
+Focused CCR/report verification passes `30/30`; the full repository suite
+passes `1955/1955` in `75.30 s` with 373 existing warnings. Revision-19 Word
+QA passes `17/17` pages and accessibility `0/0/0`.
+
+Value remains `mechanism-only-preflight`. The result avoids a broad 9,215-row
+dataset index and bounds the only necessary image pass, but it provides no
+class-1 information gain, latency, throughput, VRAM, TensorRT, or model metric.
+Commit/push and a separate hash-locked execution authorization are required
+before one formal materialization plus one fresh-process replay. Descriptor
+creation and head fitting remain forbidden at this stage.

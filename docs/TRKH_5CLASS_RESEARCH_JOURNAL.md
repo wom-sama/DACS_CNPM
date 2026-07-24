@@ -21940,3 +21940,44 @@ Date: 2026-07-02
 - Final revision-18 JSON/DOCX/builder SHAs are
   `857e6bfc...f91d7`/`281f59b3...8005c`/`55e006b0...a2243`;
   the builder regression test SHA is `903e2e6b...b8615`.
+
+## CCR Direct Same-Tensor Materializer Preflight - 2026-07-25
+
+- Implement a direct formal path that never constructs
+  `MangoYOLOCropDataset`. It derives exactly 763 locked object rows and 735
+  unique train image/label pairs from CIDT identity plus immutable geometry.
+- Match each target and float32 `model_boxes` bbox in only its same-stem label
+  file, reproduce the margin-0.05 integer crop with every intersecting object,
+  and apply the frozen keeper transform including illumination normalization
+  and existing `desaturate_blur`.
+- Require exact row-by-row model-box, transformed crop-box, 16x16 valid-mask,
+  bbox-mask, identity, target, source, image, label, and manifest parity before
+  any descriptor or model state may exist.
+- Store only exact post-transform sRGB uint8 and packed 256x256 valid masks.
+  The conservative upper bound is `160,456,704` bytes versus the locked
+  temporary limit `429,496,730`. Bit-exact mean/std normalization replay is
+  mandatory for every row.
+- Preserve raw Windows audit events for replay while grouping the adjacent
+  `mode='r'` and `mode=None` events into one logical file open. Formal gates
+  require one logical open for each of the 735 images and labels.
+- Structural preflight on the real lock passes with 763/735/735
+  rows/images/labels, nine logical immutable-input opens, zero blocks, and no
+  cohort pixel/label read, descriptor, state, metric, CUDA, validation, or
+  test use.
+- Nine materializer tests include production-path parity, broad-constructor
+  exclusion, exact cache replay, path blocking, synthetic formal artifact
+  generation, atomic rename, forced-failure cleanup, exact resource/CPU-only/
+  no-fit authorization, and no-write-before-authorization. Resource limits are
+  checked before and during the image loop; failed replay finalization removes
+  partial files. Combined CCR focused tests pass `27/27`.
+- Materializer/test SHAs are
+  `ff1050bc96fbb1f92baddf49368c3a3ffba24627a62a05c98760fe0967afbfd5`
+  and
+  `b6f76b1998cae9bb6fd97c434edc361dd20376aafddebb6444e7b608f5058013`.
+- Focused CCR/report verification passes `30/30`; complete pytest passes
+  `1955/1955` in `75.30 s` with 373 existing warnings. Revision-19 DOCX visual
+  QA passes all `17/17` rendered pages and accessibility `0/0/0`.
+- This remains `mechanism-only-preflight`. Commit/push must precede a separate
+  machine execution authorization. Formal materialization, fresh replay,
+  descriptors, fit, metrics, validation/test, production integration, full
+  train, and current-best command updates have not occurred.

@@ -222,20 +222,78 @@ Result:
 8 passed, 2 upstream export warnings
 ```
 
+## Direct Same-Tensor Materializer Preflight
+
+The direct materializer is implemented in
+`trkh/tools/cross_colour_ratio_surface_a0_materializer.py`. It does not
+construct `MangoYOLOCropDataset` in the formal path. It reads the locked CIDT
+CSV and geometry first, derives the exact 735 image/label pairs, then
+authorizes only those paths in a process-wide dynamic file-open ledger.
+Validation/test components, undeclared data-domain inputs, and all writes to
+data domains are blocked.
+
+For every selected object, the materializer:
+
+1. matches the target and float32 bbox from the one same-stem label file;
+2. reproduces the margin-0.05 integer crop and all intersecting objects;
+3. applies the exact keeper evaluation transform, including the existing
+   illumination normalization and `desaturate_blur`;
+4. requires exact model-box, transformed crop-box, 16x16 valid-mask, and
+   bbox-mask parity with the immutable geometry cache;
+5. inverts mean/std to the exact post-transform 8-bit sRGB tensor and proves
+   bit-exact normalization replay;
+6. packs the 256x256 valid mask with a fixed little-endian bit order.
+
+The cache contains no descriptor or model state. Its prospective upper bound
+is `160,456,704` bytes: `150,011,904` sRGB bytes, `6,250,496` packed-mask
+bytes, and a conservative `4 MiB` for headers/identity metadata. This is
+below the locked temporary limit `429,496,730` bytes. Keeping the lossless
+same-tensor cache, rather than descriptors, lets all 763 geometry rows pass
+before any descriptor exists and avoids a second image decoder.
+
+Windows emits two low-level audit events for one `Path.read_bytes()` call.
+The ledger preserves both raw events for exact replay and separately collapses
+the adjacent `mode='r'`/`mode=None` pair into one logical open. The formal
+gate requires one logical open per unique image and label.
+
+Nine materializer tests pass. They cover bit-exact parity against the
+production dataset on multi-object synthetic images, source-code exclusion of
+the broad dataset constructor, label filtering, valid-mask packing, forbidden
+path blocking, real lock preflight without cohort pixel/label reads, an
+end-to-end synthetic formal artifact set, atomic rename, and forced-failure
+cleanup. Authorization now pins the full resource-limit block and exact
+CPU-only/no-fit execution constraints; invalid authorization creates no output
+parent. Resource limits are checked before and during the image loop, and a
+failed replay removes partial finalization files. The combined
+lock/erratum/engine/materializer suite passes `27/27`. Focused CCR/report
+verification passes `30/30`; the complete repository suite passes `1955/1955`
+in `75.30 s` with 373 existing warnings. Revision-19 Word
+QA passes all `17/17` rendered pages and accessibility `0/0/0`.
+
+Current implementation hashes are:
+
+- materializer:
+  `ff1050bc96fbb1f92baddf49368c3a3ffba24627a62a05c98760fe0967afbfd5`;
+- materializer tests:
+  `b6f76b1998cae9bb6fd97c434edc361dd20376aafddebb6444e7b608f5058013`.
+
+The real structural preflight reports 763 rows, 735 unique images, 735 unique
+labels, nine logical locked-input opens, zero blocked attempts, no cohort
+image/label read, and no descriptor, model state, candidate metric, CUDA,
+validation, or test use.
+
 ## Next Authorized Stage
 
-The next stage is a direct, fail-closed cohort tensor materializer. It must:
+Commit and push this implementation-preflight boundary first. A separate
+machine authorization must then pin the committed materializer/test/engine/
+lock/erratum hashes, ancestor commit, exact output directory, resource limits,
+and `materializer_authorized_no_fit` state.
 
-1. use only locked CIDT image identity, target, source, sample identity, and
-   geometry;
-2. avoid constructing the dataset class that scans all train labels;
-3. reproduce the exact keeper crop and frozen evaluation transform;
-4. prove row-by-row parity of crop boxes, model boxes, bbox masks, valid
-   masks, identities, targets, sources, and manifests;
-5. cache only the minimum descriptor tensors within the prospective storage
-   budget;
-6. stop before fit if any parity, process, disk, CUDA, or provenance gate
-   fails.
-
-Only after that materializer is independently tested and committed may the
-minimum locked A0 image pass and four-role fold fit begin.
+Only that authorization may permit one formal 735-image materialization and
+one fresh-process exact replay. The replay must match the sRGB cache, packed
+mask cache, cohort arrays, manifests, parity record, and ordered access-ledger
+hash. A failure deletes its temporary directory and leaves no formal output.
+Head fitting, descriptors, candidate metrics, validation/test, production
+integration, full train, and current-best command changes remain unauthorized
+until the formal materializer and replay are committed as evidence and a new
+fit-runner boundary is prospectively locked.

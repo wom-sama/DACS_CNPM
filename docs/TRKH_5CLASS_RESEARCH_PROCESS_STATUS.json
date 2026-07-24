@@ -2,10 +2,10 @@
   "document": {
     "title": "TRKH 5-class",
     "subtitle": "Quy trình nghiên cứu, trạng thái bằng chứng và kế hoạch cải tiến",
-    "revision": "18",
+    "revision": "19",
     "updated": "2026-07-25",
     "branch": "classification-only-research",
-    "status": "Đang nghiên cứu - CCR equation engine đã qua preflight",
+    "status": "Đang nghiên cứu - CCR direct materializer đã qua structural preflight",
     "owner": "TRKH classification-only research"
   },
   "executive_metrics": [
@@ -25,9 +25,9 @@
       "detail": "Validation macro-F1; precision class 1 còn thấp"
     },
     {
-      "label": "CCR equation engine",
-      "value": "8/8, chưa có metric",
-      "detail": "3.004 scratch params; NumPy/gradient/ONNX pass; chưa đọc ảnh"
+      "label": "CCR materializer",
+      "value": "9/9, chưa đọc ảnh thật",
+      "detail": "763 rows/735 ảnh; cache <=160.456.704 B; chưa descriptor/fit"
     }
   ],
   "sections": [
@@ -62,6 +62,10 @@
         {
           "type": "paragraph",
           "text": "Revision 18 hoàn tất equation-engine preflight trước dữ liệu: extractor CCR signed, matched plain-colour control và head 3.004 tham số scratch tái lập đúng hash fold/dephase. Tám regression test độc lập xác minh phương trình FP64, bất biến common-shading/per-channel-gain, gradient update và ONNX Runtime batch động dưới sai số 1e-5. Đây chỉ là mechanism-only-preflight: chưa đọc pixel cohort, chưa fit, chưa có score/metric và chưa đổi keeper hay lệnh full-train. Direct loader phải chứng minh identity/crop/model-box/bbox-mask/valid-mask parity trước A0. Focused/full test đạt 21/21 và 1946/1946; Word QA 16/16, accessibility 0/0/0."
+        },
+        {
+          "type": "paragraph",
+          "text": "Revision 19 triển khai direct same-tensor materializer không dựng broad dataset index. Structural preflight ánh xạ đúng 763 hàng thành 735 ảnh/label unique, khóa exact keeper transform, dự toán cache lossless sRGB uint8 + packed valid-mask tối đa 160.456.704 byte và không mở pixel/label cohort. Chín test bao phủ production-parity crop, packed-mask replay, dynamic allowlist, synthetic formal artifact, atomic publish, forced-failure cleanup, khóa exact resource/CPU-only/no-fit và no-write-before-authorization. Resource được kiểm tra trước/trong image loop; replay lỗi xóa partial finalization. Focused CCR đạt 27/27, focused CCR/report đạt 30/30 và full pytest đạt 1955/1955 trong 75,30 giây với 373 cảnh báo hiện hữu. Word QA đạt 17/17 trang, accessibility 0/0/0. Materializer vẫn chưa được phép chạy formal trước commit/push và machine authorization riêng; chưa có descriptor, fit, metric, CUDA, validation/test, integration, full train hay command update."
         }
       ]
     },
@@ -692,6 +696,11 @@
           "CCR equation engine trước dữ liệu",
           "Khóa signed CCR/control, reliability 7x7 và head scratch 3.004 tham số; kiểm tra NumPy, invariance, fold/dephase, gradient và ONNX batch động.",
           "Xác minh cơ chế và deployment feasibility không cần đọc pixel hay chạy GPU; không nhầm preflight với model gain."
+        ],
+        [
+          "CCR direct materializer preflight",
+          "Dùng CIDT + geometry để khóa 735 image/label path; exact crop/transform/bbox/mask parity; cache sRGB uint8 + packed valid mask dưới 160.456.704 byte.",
+          "Không index 9.215 label rows, không đọc pixel ở preflight; synthetic formal/atomic cleanup và Windows logical-open accounting đều pass."
         ]
           ]
         }
@@ -718,7 +727,9 @@
             "Commit/push CCR protocol và machine lock trước candidate code; giữ bất biến SHA 1e408502...f347/6c2a604d...c835 và trạng thái chưa có metric.",
             "Chỉ triển khai một independent CCR A0 sau prospective commit; dừng fail-closed trước robustness/XAI/inference nếu không thắng mọi clean information, causal và TP/FP gate.",
         "Commit/push same-tensor erratum SHA f9a901b1...d03b trước engine code; không rewrite protocol/lock gốc và không dùng full dataset constructor trong CCR auditor.",
-        "Giữ engine/test/implementation SHA ac610d7c...d26fe9/5a83a138...94c840/18c2dbeb...8c804; trước A0 phải commit direct locked-CIDT materializer và chứng minh identity/crop/model-box/bbox-mask/valid-mask parity fail-closed."
+        "Giữ engine/test/implementation SHA ac610d7c...d26fe9/5a83a138...94c840/18c2dbeb...8c804; trước A0 phải commit direct locked-CIDT materializer và chứng minh identity/crop/model-box/bbox-mask/valid-mask parity fail-closed.",
+        "Commit/push materializer SHA ff1050bc...7afbfd5 và test SHA b6f76b19...5058013; sau đó mới tạo machine authorization khóa ancestor/output/resource và trạng thái materializer_authorized_no_fit.",
+        "Chỉ chạy một formal 735-image materialization và một fresh-process replay; descriptor/head fit vẫn đóng cho đến khi cache, manifest, parity và access-ledger replay exact."
       ]
         }
       ]
@@ -807,7 +818,7 @@
               "Launcher VS Code PowerShell cho preflight, formal, fresh-process replay và manual finalize."
             ],
             [
-              "C:/Users/ADMIN/.codex/skills/trkh-5class/SKILL.md",
+              "~/.codex/skills/trkh-5class/SKILL.md",
               "Kinh nghiệm vận hành và hard rules dùng ở các phiên Codex sau."
             ],
             [
@@ -845,12 +856,20 @@
             [
               "trkh/tools/cross_colour_ratio_surface_a0_engine.py",
               "Extractor CCR/control signed, reliability support, dephase, head scratch 3.004 tham số và action helpers."
+            ],
+            [
+              "trkh/tools/cross_colour_ratio_surface_a0_materializer.py",
+              "Direct locked-CIDT loader, dynamic ledger, exact keeper-tensor parity, lossless cache, atomic publish và fresh-process replay."
+            ],
+            [
+              "tests/test_cross_colour_ratio_surface_a0_materializer.py",
+              "Production-parity, packed-mask, path-blocking, no-pixel preflight, synthetic formal và forced-failure cleanup."
             ]
           ]
         },
         {
           "type": "paragraph",
-          "text": "Revision 1-3 dựng báo cáo tái lập, full-train/JPEG-DL và synthetic policy. Revision 4-10 đóng SaSPA, LP-A3, NSA, RN-LISDA và Bal-BCE bằng fidelity, causal control, replay và TP/FP gates. Revision 11-14 khóa CAP trước metric, sửa audit-only eval-LSTM, rồi hoàn tất same-lock formal/replay/manual review; CAP đóng negative-but-reusable và retention pass tại SHA 99d1835a...04a636. Revision 15 screen no-run sáu họ successor và cô lập regression OOXML hyperlink. Revision 16 khóa CCR train-only tại protocol/lock SHA 1e408502...f347/6c2a604d...c835. Revision 17 khóa same-tensor/direct-loader erratum SHA f9a901b1...d03b trước implementation. Revision 18 thêm equation engine/head scratch 3.004 tham số tại SHA ac610d7c...d26fe9, focused/full test 21/21 và 1946/1946, Word/accessibility QA 16/16 và 0/0/0; vẫn chưa có image pass, fit, metric, validation/test, production edit hoặc command update."
+          "text": "Revision 1-3 dựng báo cáo tái lập, full-train/JPEG-DL và synthetic policy. Revision 4-10 đóng SaSPA, LP-A3, NSA, RN-LISDA và Bal-BCE bằng fidelity, causal control, replay và TP/FP gates. Revision 11-14 khóa CAP trước metric, sửa audit-only eval-LSTM, rồi hoàn tất same-lock formal/replay/manual review; CAP đóng negative-but-reusable và retention pass tại SHA 99d1835a...04a636. Revision 15 screen no-run sáu họ successor và cô lập regression OOXML hyperlink. Revision 16 khóa CCR train-only tại protocol/lock SHA 1e408502...f347/6c2a604d...c835. Revision 17 khóa same-tensor/direct-loader erratum SHA f9a901b1...d03b trước implementation. Revision 18 thêm equation engine/head scratch 3.004 tham số tại SHA ac610d7c...d26fe9. Revision 19 thêm direct materializer SHA ff1050bc...7afbfd5, test SHA b6f76b19...5058013, focused CCR/report 30/30, full pytest 1955/1955, Word QA 17/17 và cache bound 160.456.704 byte; vẫn chưa có image pass thật, descriptor, fit, metric, validation/test, production edit hoặc command update."
         }
       ]
     },

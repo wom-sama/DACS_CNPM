@@ -4929,11 +4929,28 @@
   `1e-5`. Focused/full tests pass `21/21` and `1946/1946`; revision-18 Word
   QA passes `16/16` pages and accessibility `0/0/0`. No image pass, fit,
   metric, or command update occurred.
-- [ ] Implement and commit the fail-closed direct cohort tensor materializer
-  before the CCR A0 image pass. It must use locked CIDT identities and geometry
-  without constructing the broad train dataset, reproduce the exact keeper
-  crop/eval tensor, and prove identity/crop/model-box/bbox-mask/valid-mask
-  parity before retaining any descriptor or fitting a head.
+- [ ] Commit and push the implemented fail-closed direct cohort tensor
+  materializer before the CCR A0 image pass. Structural preflight and nine
+  tests pass: it uses locked CIDT identities and geometry without constructing
+  the broad train dataset, reproduces the exact keeper crop/eval tensor,
+  bounds the lossless cache at `160,456,704` bytes, and proves
+  identity/crop/model-box/bbox-mask/valid-mask parity on production-path
+  synthetic cases. Authorization pins exact resource and CPU-only/no-fit
+  constraints, invalid authorization cannot create an output parent, resource
+  ceilings are checked during the image loop, and replay failure removes
+  partial finalization files. Combined CCR focused tests pass `27/27`; no real cohort
+  image/label, descriptor, fit, metric, CUDA, validation, or test was used.
+  Focused CCR/report verification passes `30/30`; full pytest passes
+  `1955/1955` in `75.30 s` with 373 existing warnings. Revision-19 Word QA
+  passes `17/17` pages and accessibility `0/0/0`.
+- [ ] After the materializer implementation commit is pushed, create and push
+  a separate machine execution authorization that pins its module/test hashes,
+  ancestor commit, lock/erratum/engine hashes, exact output path, CPU-only
+  rule, temporary limit, and `materializer_authorized_no_fit` state.
+- [ ] Run one formal 735-image same-tensor materialization plus one exact
+  fresh-process replay only under that authorization. Keep descriptors and
+  head fitting closed until cache/manifests/parity/access-ledger hashes replay
+  exactly and the evidence is committed.
 - [ ] Run exactly one locked CCR A0 only if implementation preflight passes.
   Stop at the clean train-only information conjunction unless candidate CCR
   beats keeper margin, equal-size colour-ratio, trained spatial-dephase and
