@@ -504,12 +504,22 @@ def _verify_runtime(lock: Mapping[str, object]) -> Dict[str, object]:
 def _repository_state(lock: Mapping[str, object]) -> Dict[str, object]:
     head = _run_git(REPO_ROOT, "rev-parse", "HEAD")
     upstream = _run_git(REPO_ROOT, "rev-parse", "@{upstream}")
+    status_result = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(REPO_ROOT),
+            "status",
+            "--porcelain=v1",
+            "--untracked-files=all",
+            "-z",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
     status_lines = [
-        row
-        for row in _run_git(
-            REPO_ROOT, "status", "--porcelain=v1", "--untracked-files=all"
-        ).splitlines()
-        if row
+        row for row in status_result.stdout.split("\0") if row
     ]
     protected = [
         str(value).replace("\\", "/").rstrip("/")
