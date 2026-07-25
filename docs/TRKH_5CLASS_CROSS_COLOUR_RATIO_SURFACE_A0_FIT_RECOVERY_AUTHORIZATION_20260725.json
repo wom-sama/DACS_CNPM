@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "protocol_id": "trkh_cross_colour_ratio_surface_a0_20260725",
+  "state": "fit_recovery_authorized_train_only_no_validation_test",
+  "authorized_date": "2026-07-25",
+  "recovery_of_failure_sha256": "51a58928b949a5f48417cca735ed84f483ab98fc692121bba0332537c1983ccf",
+  "supersedes_consumed_authorization_sha256": "3ecb6a82d14980e25cd947007561294fa39cfe5419032cb3961389a30d1697b5",
+  "materialized_cache_dir": "D:\\DataAI\\AIEx\\TRKH\\runs\\audit_cross_colour_ratio_surface_a0_materialized_20260725",
+  "output_dir": "D:\\DataAI\\AIEx\\TRKH\\runs\\audit_cross_colour_ratio_surface_a0_20260725",
+  "expected": {
+    "lock_sha256": "6c2a604deb4f976a3556ffb0ad8ddb60c7f376e81e374ae16272c6e6d49fc835",
+    "evidence_sha256": "e992c297c2416976152694dec95df6d99692dd63af6395f00df99b9efa98c3ed",
+    "engine_sha256": "ac610d7c37eda1b96a54257f6814a3e8c7ef5bfc243ec3bb3c7ae13a86d26fe9",
+    "runner_sha256": "5c0a049ac7c137ab02c2efac6f0f1a71c73a49f9f0e755a111996645d63a0a06",
+    "runner_test_sha256": "9b032bb601e89a9929b719dc96ea256468ac597bd2150708afbc0c44ca8b2e0c",
+    "launcher_sha256": "e0fd77f858a0f46566ca4413ea05ed69e959bed737b5a39104fe027c4b31e541",
+    "implementation_note_sha256": "3957572ea754c5eb2a7d28cb2e662d544caa66790a3176e9db089cf2cb6168fd",
+    "cache_artifact_set_manifest_sha256": "84811728ab7f795f4be15226962dbb3f33e694aff871cda4fa568cecae1df6aa",
+    "implementation_commit": "0218379db7fa43135e7e22529121965c49ef0b71",
+    "upstream_commit": "0218379db7fa43135e7e22529121965c49ef0b71"
+  },
+  "resource_limits": {
+    "batch1_mean_ratio": 1.15,
+    "batch1_p95_ratio": 1.15,
+    "batch_throughput_ratio": 0.85,
+    "clean_wall_seconds": 1200,
+    "end_to_end_peak_cuda_bytes": 6442450944,
+    "end_to_end_peak_cuda_ratio": 1.15,
+    "head_peak_cuda_bytes": 2147483648,
+    "onnx_max_probability_error": 1e-05,
+    "process_rss_bytes": 10737418240,
+    "retained_bytes": 107374183,
+    "temporary_cache_bytes": 429496730,
+    "tensorrt_fp32_max_probability_error": 0.0001
+  },
+  "execution_constraints": {
+    "formal_runs": 1,
+    "fresh_process_replays": 1,
+    "descriptor_creation": true,
+    "head_fit": true,
+    "scratch_only": true,
+    "conditions": [
+      "clean"
+    ],
+    "epochs": 20,
+    "folds": 5,
+    "roles": [
+      "colour_ratio_control",
+      "cross_colour_ratio_candidate",
+      "cross_colour_ratio_seed_repeat",
+      "cross_colour_ratio_spatial_dephased_control"
+    ],
+    "requested_workers": 4,
+    "raw_dataset_read": false,
+    "raw_dataset_write": false,
+    "keeper_forward": false,
+    "shifted_conditions": false,
+    "xai": false,
+    "deployment": false,
+    "validation": false,
+    "test": false,
+    "production_integration": false,
+    "full_train": false,
+    "current_best_command_update": false
+  }
+}
