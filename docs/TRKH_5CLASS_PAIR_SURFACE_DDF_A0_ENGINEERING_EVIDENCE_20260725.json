@@ -1,0 +1,80 @@
+{
+  "candidate_data": {
+    "cache_read": false,
+    "candidate_metric_created": false,
+    "labels_read": false,
+    "raw_dataset_read": false,
+    "test_read": false,
+    "validation_read": false
+  },
+  "final_attempt": {
+    "backend": "torch_cuda_graph_fp16_static_binding",
+    "batch1": {
+      "maximum_eager_graph_error": 0.0,
+      "mean_ms": 0.18268832032879193,
+      "p95_ms": 0.22149120047688492,
+      "peak_cuda_bytes": 997888
+    },
+    "batch32": {
+      "maximum_eager_graph_error": 0.0,
+      "mean_ms": 0.5153379200398922,
+      "p95_ms": 0.8254976242780685,
+      "peak_cuda_bytes": 31695872
+    },
+    "equation_maximum_absolute_error": 8.881784197001252e-16,
+    "onnx": {
+      "dynamic_batch": true,
+      "nodes": 357,
+      "opset": 17,
+      "runtime_maximum_absolute_error": 2.2351741790771484e-08,
+      "standard_domains_only": true
+    },
+    "passed": true,
+    "summary_path": "runs/audit_pair_surface_ddf_a0_engineering_preflight_cuda_graph_20260725/summary.json",
+    "summary_sha256": "62e1c4dd4fe5720326501ac397c97e0a4392a633cecfba5c77f56911e6f73bdf",
+    "tensorrt": {
+      "build_passed": true,
+      "engine_bytes_ephemeral": 1355748,
+      "parse_passed": true,
+      "retained": false,
+      "version": "10.7.0"
+    }
+  },
+  "first_attempt": {
+    "failure": [
+      "role_contract_compared_batchnorm_after_train_forward",
+      "eager_batch1_p95_over_locked_limit"
+    ],
+    "passed": false,
+    "summary_path": "runs/audit_pair_surface_ddf_a0_engineering_preflight_20260725/summary.json",
+    "summary_sha256": "fefee523c3833511328941c0027fec9e4ed9130649cb4d8fdeb286a480cd468b"
+  },
+  "limits": {
+    "batch1_mean_ms": 2.0,
+    "batch1_p95_ms": 2.5,
+    "batch32_mean_ms": 2.5,
+    "batch32_p95_ms": 3.0,
+    "equation_maximum_absolute_error": 1e-10,
+    "onnxruntime_maximum_absolute_error": 1e-05,
+    "peak_cuda_bytes": 134217728
+  },
+  "lock_sha256": "d0d93579e10ad9f8bbd678d252a707b5032894290923b07d86c589a8bd92a16f",
+  "protocol_id": "trkh_pair_surface_ddf_a0_20260725",
+  "recovery_attempt": {
+    "failure": [
+      "eager_batch1_mean_and_p95_over_locked_limits",
+      "eager_batch32_p95_over_locked_limit"
+    ],
+    "passed": false,
+    "role_contract_passed": true,
+    "summary_path": "runs/audit_pair_surface_ddf_a0_engineering_preflight_recovery_20260725/summary.json",
+    "summary_sha256": "0193dd98a3d9404d6f77fdbdab49ec54b1589ed5709c0ad43e157a76707676b1"
+  },
+  "source_sha256": {
+    "engine": "2a9288fbd1c20a2e141185aa9aea70e8e3c257282de22c749205c986cb6e19fe",
+    "engine_test": "d08da8168ec4effcb72c2450b339aeb51c284cf2b69f9dc317d4278150675622",
+    "preflight": "ce573a51c47ad767d1b9f53eb67e579ca0d6f2a26997ea9cde48cccb47b528dc",
+    "preflight_test": "8268f37faffad2c41eab67928a6bb96fda8c670061478e70221b2b9819f5184d"
+  },
+  "state": "synthetic_engineering_passed_mechanism_unproven"
+}
