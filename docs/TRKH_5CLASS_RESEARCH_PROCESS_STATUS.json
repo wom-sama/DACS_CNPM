@@ -2,10 +2,10 @@
   "document": {
     "title": "TRKH 5-class",
     "subtitle": "Quy trình nghiên cứu, trạng thái bằng chứng và kế hoạch cải tiến",
-    "revision": "22",
+    "revision": "23",
     "updated": "2026-07-25",
     "branch": "classification-only-research",
-    "status": "Đang nghiên cứu - CCR materializer replay exact, descriptor/fit chưa mở",
+    "status": "Đang nghiên cứu - CCR fit runner đã triển khai, chưa được ủy quyền chạy",
     "owner": "TRKH classification-only research"
   },
   "executive_metrics": [
@@ -25,9 +25,9 @@
       "detail": "Validation macro-F1; precision class 1 còn thấp"
     },
     {
-      "label": "CCR materializer",
-      "value": "13/13 replay exact",
-      "detail": "763 hàng; parity error 0,0; CPU-only; chưa descriptor/fit"
+      "label": "CCR fit runner",
+      "value": "44/44 focused pass",
+      "detail": "Preflight không descriptor pass; formal fit chưa được ủy quyền"
     }
   ],
   "sections": [
@@ -78,6 +78,10 @@
         {
           "type": "paragraph",
           "text": "Revision 22 dùng recovery authorization SHA 7081cece...16e42 đã push tại 3ac7302c...63be2. Replacement materialization và fresh-process replay hoàn tất trong 22,013373/21,784652 giây với PID độc lập 28104/17800. Cả 763 hàng và mọi manifest/box/mask/tensor parity đều exact, sai số tối đa 0,0; 13/13 replay checks pass. Ledger có 2.958 raw event, 1.479 logical read duy nhất gồm 735 ảnh train, 735 label train và chín input bất biến; zero block/write/validation/test. Peak RSS/cache là 744.726.528/156.728.872 byte, CUDA không dùng. Evidence SHA e992c297...98c3ed; Word QA đạt 18/18 trang và accessibility 0/0/0. Cache cục bộ được giữ như dependency tạm, chưa có descriptor, state, fit, metric, production edit hay command update."
+        },
+        {
+          "type": "paragraph",
+          "text": "Revision 23 triển khai prospective CCR fit runner riêng sau khi evidence được push tại afa38ce...5481. Runner dùng duy nhất cache exact và CIDT clean train CSV, huấn luyện bốn vai trò scratch 3.004 tham số trên năm source-held folds, giữ một descriptor family tại một thời điểm, khóa threshold reuse cho same-weight dephase, ledger fail-closed và replay fresh-process 1e-7. Focused runner/CCR/full đạt 15/15, 44/44 và 1972/1972; post-fit snapshot chặn worker Python/TensorRT còn sống. Preflight không tạo descriptor dự báo 333.700.752/429.496.730 byte, CUDA BF16 sẵn sàng, GPU 19%, VRAM nền 771/8188 MiB và không có Python/TensorRT GPU lạ. Word QA đạt 18/18 trang và accessibility 0/0/0. Đây vẫn là engineering boundary chưa được ủy quyền: chưa có descriptor, fit, state, metric, validation/test, integration, full train hay command update."
         }
       ]
     },
@@ -878,6 +882,10 @@
             [
               "tests/test_cross_colour_ratio_surface_a0_materializer.py",
               "Production-parity, float32 crop-order regression, packed-mask, path-blocking, no-pixel preflight, synthetic formal và forced-failure cleanup."
+            ],
+            [
+              "CCR fit runner / test / implementation note",
+              "Four-role/five-fold clean gate, ledger/resource/atomic replay, threshold reuse và prospective downstream closure."
             ],
             [
               "docs/TRKH_5CLASS_CROSS_COLOUR_RATIO_SURFACE_A0_MATERIALIZER_FAILURE_20260725.json",

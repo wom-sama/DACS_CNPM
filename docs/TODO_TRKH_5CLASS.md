@@ -4979,10 +4979,16 @@
   validation, test, descriptor, state, and metric use are zero. Compact
   evidence SHA is `e992c297...98c3ed`. Revision-22 Word QA passes all
   `18/18` rendered pages and accessibility `0/0/0`.
-- [ ] Commit and push the compact materialization/replay evidence, then create
-  and push a separate prospective descriptor/four-role head-fit runner
-  boundary. Do not extract descriptors or fit under either materializer
-  authorization.
+- [x] Commit and push the compact materialization/replay evidence at
+  `afa38ce8905713fdce2f4e526eed836ae0f65481`, evidence SHA
+  `e992c297...98c3ed`. Preserve the exact local cache; neither materializer
+  authorization can permit descriptor extraction or fitting.
+- [ ] Commit and push the separate prospective descriptor/four-role head-fit
+  runner boundary. It must pass compile/pyflakes, focused/full tests, clean
+  repository preflight, report QA, and exact hash review before a separate
+  one-formal/one-replay authorization is created. Current engineering checks
+  pass runner/CCR/full tests `15/15`, `44/44`, and `1972/1972`; the
+  post-fit worker-process gate is covered by a live-child regression.
 - [ ] Run exactly one locked CCR A0 only if implementation preflight passes.
   Stop at the clean train-only information conjunction unless candidate CCR
   beats keeper margin, equal-size colour-ratio, trained spatial-dephase and

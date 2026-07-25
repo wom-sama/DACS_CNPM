@@ -22059,3 +22059,40 @@ Date: 2026-07-02
 - Revision-22 DOCX QA passes all `18/18` rendered pages at original detail
   without clipping, overlap, broken table flow, or malformed source links;
   accessibility findings are `0/0/0`.
+
+## CCR Four-Role Fit Runner Pre-Authorization - 2026-07-25
+
+- Preserve materializer evidence commit
+  `afa38ce8905713fdce2f4e526eed836ae0f65481` and the exact local cache.
+  Implement a new runner without constructing the broad dataset, decoding raw
+  data, running the keeper, or reading validation/test.
+- The clean runner trains the four locked 3,004-parameter scratch roles over
+  five source-held folds for exactly 20 epochs. Candidate and controls share
+  the locked primary initialization/orders where required; the repeat uses
+  its independent seed. The same-weight dephase check reuses each clean
+  threshold without refit or recalibration.
+- Keep one descriptor family at a time and delete descriptor/reliability
+  scratch in `finally`. Atomic output retains only states, held pair maps,
+  scores, thresholds, actions, metrics, training records, access ledger, and
+  exact-file-set manifests. Fresh-process replay compares every numeric array
+  within `1e-7` and requires exact scientific metrics/training/ledger hashes.
+- Windows WDDM lists desktop graphics contexts in the compute-app query with
+  unknown memory. Process isolation therefore blocks foreign Python/TensorRT
+  GPU processes and separately requires pre-run GPU utilization at most 30%,
+  while recording all contexts instead of misclassifying Explorer/Codex as a
+  training process.
+- Runner tests pass `15/15`; combined CCR tests pass `44/44` with 77 existing
+  warnings. A no-descriptor structural preflight passes: predicted
+  source-plus-descriptor/reliability disk is
+  `333,700,752/429,496,730` bytes, CUDA BF16 is available, GPU is 19% with
+  `771/8188 MiB`, and no foreign Python/TensorRT compute process exists.
+- Add a post-fit process snapshot and fail-closed
+  `orphan_compute_children_zero` check. A regression test observes a real
+  Python child, while the complete suite passes `1972/1972` in `82.82 s`
+  with 373 existing warnings. Revision-23 report QA passes all `18/18`
+  rendered pages and accessibility `0/0/0`.
+- This remains pre-authorization engineering evidence. No descriptor, head
+  state, candidate score/threshold/action/metric, validation/test access,
+  trainer integration, full train, or current-best command update has
+  occurred. Commit/push this boundary before creating a separate exact
+  authorization.
