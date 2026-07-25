@@ -5029,12 +5029,32 @@
   retained run. Do not run XAI or downstream stages because the prospective
   clean gate failed. Do not sweep nearby descriptor/head/training/threshold
   settings after observing the result.
-- [ ] Research and prospectively screen an equation-distinct successor that
+- [x] Research and prospectively screen an equation-distinct successor that
   provides sample-conditional material/surface evidence for all three
   `1-vs-0/2/4` boundaries. Require a no-run overlap check, scratch-only
   provenance, source-held train-only gate, explicit precision/TP budget,
   causal controls, replay, and standard-op matched inference contract before
   implementation or a costly run.
+- [x] Select Pair-Surface DDF as the equation-distinct successor after a
+  primary-source/no-repeat screen and synthetic-only standard-op pilot. Pin
+  official commit `4e21b4a`, preserve scratch-only provenance, and record that
+  the pilot establishes ONNX/TensorRT feasibility but no classification
+  value.
+- [x] Build and test the prospective Pair-Surface DDF A0
+  machine lock. It must pin the retained 763-row cache, clean 9,215-row CIDT
+  table, source-held partitions, initialization/order seeds, Sattolo partners,
+  spatial offsets, calibrators, five trained roles, causal controls,
+  precision/TP/scientific gates, exact replay, and engineering/resource
+  ceilings before candidate implementation. Protocol/lock SHAs are
+  `724f63ef...0fc42` / `d0d93579...2a16f`; focused/full tests pass
+  `7/7` and `1983/1983`. This checkbox becomes an effective implementation
+  boundary only after its containing commit is pushed.
+- [ ] Only after the prospective lock is pushed, implement and independently
+  test the standard-op DDF equation, 9,380-parameter sidecar,
+  9,435-parameter static control, train-only auditor, access ledger, ONNX/ORT/
+  TensorRT checks, and fail-closed retention. Do not access validation/test,
+  integrate the keeper, launch a full train, or update current-best commands
+  unless the complete A0 conjunction later passes.
 - [x] Rebuild research-process report revision 16 from its JSON source and
   verify the prospective CCR boundary. Focused lock/report tests pass `9/9`,
   full pytest passes `1934/1934` with 296 existing warnings, visual QA passes

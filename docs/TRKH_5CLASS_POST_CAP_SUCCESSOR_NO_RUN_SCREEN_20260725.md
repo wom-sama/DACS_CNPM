@@ -82,3 +82,26 @@ pair-specific local evidence maps or scores for `1-vs-0`, `1-vs-2`, and
 beat keeper margin and causal derangements on both restricted-FP rejection and
 class-1 TP retention; and use a standard-op path that can be measured against
 the keeper's complete inference contract.
+
+## Selected Successor Boundary
+
+A subsequent primary-source review selects multiplicative Decoupled Dynamic
+Filters (DDF, CVPR 2021) for one narrow train-only A0. Unlike ODConv or
+CondConv, its spatial filter varies by sample and pixel while its channel
+filter varies by sample and channel. Unlike the rejected 256-channel
+Involution replacement, the proposed mechanism is a dedicated
+`3 -> 16 -> 32` pair-surface sidecar at `64x64`.
+
+A synthetic-only standard-operator pilot established engineering feasibility,
+not classification value: 8,687 parameters, batch-1 FP16 mean/p95
+`1.806/2.208 ms`, batch-32 `1.616/1.903 ms`, ONNX Runtime maximum error
+`1.1920929e-7`, and a successful TensorRT 10.7 engine build. Pilot files were
+deleted and no cohort pixel, label, candidate score, validation/test split, or
+pretrained parameter was read.
+
+The complete prospective question, controls, source-held folds, precision/TP
+gates, causal derangements, replay contract, and deployment ceilings are in
+`docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_PROTOCOL_20260725.md`. DDF remains
+unproven until that machine-locked A0 passes every conjunctive gate; this
+selection does not authorize integration, validation/test, full training, or
+current-command promotion.

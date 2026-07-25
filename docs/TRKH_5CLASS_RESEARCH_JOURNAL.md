@@ -22222,3 +22222,48 @@ Date: 2026-07-02
   `7c925240...cd764`, `5e7cfb49...fd153`, and
   `55e006b0...a2243`. The evidence and closure sidecars reproduce their
   pinned SHAs exactly.
+
+## Pair-Surface DDF A0 Prospective Selection - 2026-07-25
+
+- Recheck the local no-repeat map before spending another fit. Generic
+  ODConv/CondConv-style sample-conditioned kernels remain closed, and the
+  official Involution replacement remains rejected at the keeper's
+  256-channel third-stem geometry because of its measured runtime/memory
+  multiplier. Exact DDF/PAC-style position-conditional local filtering had
+  not been tested.
+- Pin the official MIT DDF repository at
+  `4e21b4ad55ffe039b075be4722eaa8968894408c` and the CVPR 2021 paper. The
+  selected equation multiplies a sample/pixel-specific spatial filter by a
+  sample/channel-specific channel filter. No official or external parameter
+  is admissible.
+- A synthetic-only `3 -> 16 -> 32` standard-op pilot passes ONNX Runtime and
+  TensorRT 10.7 construction. It measures batch-1 FP16 mean/p95
+  `1.806/2.208 ms`, batch-32 `1.616/1.903 ms`, and peak CUDA
+  `1,699,328/52,781,056` bytes. The temporary ONNX/engine files were removed;
+  no cached or raw image/label and no candidate metric was read.
+- Prospectively define a 9,380-parameter four-map DDF sidecar, a
+  9,435-parameter static control, spatial-only/channel-only controls, an
+  independent repeat, same-weight cross-sample/dephase/neutral-factor
+  ablations, five source-held fit/calibration/held folds, exact replay, and
+  precision/TP/inference gates in
+  `docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_PROTOCOL_20260725.md`.
+- This is protocol engineering only. Keep the keeper checkpoint and
+  current-best command/history SHAs unchanged. Create, verify, commit, and
+  push the deterministic machine lock before writing candidate code or
+  reading the retained 763-row image cache.
+- Prospective self-review catches and fixes a zero-support flaw before lock:
+  cyclic calibration would have assigned class-4-free fold 1 to outer fold
+  0. The frozen mapping `[2,3,4,2,3]` now gives every calibration exactly
+  three class-4 negatives and every fit at least four, while every row remains
+  held exactly once.
+- Freeze protocol/lock SHAs
+  `724f63ef...0fc42` / `d0d93579...2a16f`. The lock pins the official source,
+  cache/CIDT/keeper/current-command hashes, 9,380/9,435 parameter oracles,
+  fold partitions, initialization/order seeds, source-different Sattolo
+  partners, nonzero two-scale dephase offsets, calibrators, conjunctive
+  precision/TP/scientific gates, exact replay, and resource/inference limits.
+  It authorizes zero formal/replay runs and contains no candidate
+  implementation, state, score, action, or metric.
+- Builder compile/pyflakes and focused lock tests pass `7/7`; complete pytest
+  passes `1983/1983` in `124.69 s` with 373 existing warnings. Commit and push
+  this prospective boundary before candidate implementation.
