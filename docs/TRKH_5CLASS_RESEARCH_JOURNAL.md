@@ -22096,3 +22096,56 @@ Date: 2026-07-02
   trainer integration, full train, or current-best command update has
   occurred. Commit/push this boundary before creating a separate exact
   authorization.
+
+## CCR Fit Formal Attempt 1 Harness Failure - 2026-07-25
+
+- Commit and push the prospective runner at
+  `0289a944bb7bed67e3633e5dfa6b62418423fb0f`, then commit and push the
+  separate authorization at `b24c16c74ea8a1e8cff3ad186f5fb0464525b8ae`.
+  Authorization SHA `3ecb6a82...d1697b5` pins the exact runner, test,
+  launcher, implementation note, cache manifest, and one-formal/one-replay
+  clean-only constraints.
+- Preflight from the clean pushed authorization commit passes every check at
+  GPU `21%`, VRAM `785/8188 MiB`, predicted source-plus-scratch disk
+  `333,700,752/429,496,730` bytes, zero foreign GPU compute processes, zero
+  compute children, and no descriptor/state/metric creation.
+- Formal attempt 1 stops after `52.8 s` in the second descriptor phase. The
+  plain colour-ratio descriptor and five control folds completed only in
+  temporary memory. Their call to deterministic setup made the following CCR
+  resize matmul enforce cuBLAS determinism, but
+  `CUBLAS_WORKSPACE_CONFIG` had not been set before CUDA initialization.
+- The exception path also reveals a Windows cleanup defect: live NumPy
+  memmaps retained by the traceback prevent immediate unlink with WinError
+  32. The final output is absent. After the process exits, remove exactly
+  `descriptor_float32.npy` (`168,763,520` bytes) and
+  `reliability_uint8.npy` (`7,031,936` bytes), then remove the empty hidden
+  temporary directory. No Python/TensorRT process, retained state, score,
+  threshold, action, metric, validation/test access, or raw-data edit remains.
+- Treat authorization `3ecb6a82...d1697b5` as consumed. The recovery changes
+  only the harness: set `CUBLAS_WORKSPACE_CONFIG=:4096:8` before Torch import
+  and in PowerShell, and explicitly close all source/output memmaps in a
+  `finally` block. NVIDIA cuBLAS documents `:4096:8` as a deterministic
+  workspace option; it adds about 24 MiB of library workspace, still far
+  below the locked 2-GiB fitting ceiling:
+  https://docs.nvidia.com/cuda/cublas/index.html#results-reproducibility
+- Fresh-process CUDA deterministic matmul now passes after deleting the
+  inherited environment variable. Forced descriptor failure can delete both
+  live scratch files while its exception is active. Recovery verification
+  requires exact state
+  `fit_recovery_authorized_train_only_no_validation_test`, sidecar-verified
+  failure SHA, and the superseded consumed-authorization SHA; the launcher no
+  longer defaults to the initial authorization. Compile/pyflakes, PowerShell
+  parse, runner/combined CCR/full tests pass `19/19`, `48/48`, and
+  `1976/1976` in `5.55/10.94/78.92 s`; the full suite retains 373 existing
+  warnings.
+- Structural preflight without the repository-clean requirement passes every
+  non-destructive check: combined cache prediction
+  `333,700,752/429,496,730` bytes, CUDA BF16 available, GPU utilization
+  `20%`, and zero foreign Python/TensorRT GPU processes. It creates no
+  descriptor, state, metric, validation, or test artifact. Research-process
+  report revision 24 passes visual inspection on all `19/19` rendered pages,
+  accessibility `0/0/0`, and report tests `3/3`.
+- Preserve equations, materialized cache, folds, role seeds, epoch orders,
+  model parameters, optimizer, thresholds, and promotion checks. Commit/push
+  the correction and failure evidence before creating a separate recovery
+  authorization; no candidate metric exists yet.

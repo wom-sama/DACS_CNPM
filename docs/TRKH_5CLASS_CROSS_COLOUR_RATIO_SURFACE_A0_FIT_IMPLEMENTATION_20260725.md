@@ -94,3 +94,33 @@ production promotion.
 
 The launcher invokes Python directly and checks `$LASTEXITCODE`; it does not
 pipe native stderr through the PowerShell object pipeline.
+
+## Formal Attempt 1 Harness Failure
+
+The first authorized formal attempt stopped before CCR head fitting or any
+metric. Plain colour-ratio descriptor extraction and its five control fits had
+completed only in temporary memory. Enabling deterministic algorithms during
+those fits caused the subsequent CCR resize matmul to fail because cuBLAS
+workspace determinism had not been configured before CUDA initialization.
+
+The same exception retained NumPy memmap frames long enough for immediate
+Windows cleanup to report a sharing violation. The final output remained
+absent; after the process exited, the two partial scratch files were removed
+and no state, score, threshold, action, or metric was retained.
+
+The audit-only recovery sets `CUBLAS_WORKSPACE_CONFIG=:4096:8` before importing
+Torch and in the launcher, and explicitly closes every descriptor/source
+memmap in a `finally` block. It does not change equations, cached input,
+partitions, role seeds, epoch orders, model parameters, optimizer, threshold,
+or promotion gates. The original fit authorization is consumed and cannot be
+reused.
+
+The recovery runner accepts only state
+`fit_recovery_authorized_train_only_no_validation_test`. Its authorization
+must pin the SHA-256 sidecar-verified failure evidence and explicitly
+supersede consumed authorization SHA
+`3ecb6a82d14980e25cd947007561294fa39cfe5419032cb3961389a30d1697b5`.
+The runner also verifies that the failure record names that same authorization
+as consumed and forbids reuse. The launcher now defaults to the separate
+recovery-authorization filename, so the initial authorization fails both the
+state and implementation-hash checks.

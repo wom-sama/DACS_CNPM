@@ -4,7 +4,7 @@ param(
     [string]$Python = "D:\DataAI\.venv\Scripts\python.exe",
     [string]$Authorization = (
         "docs\TRKH_5CLASS_CROSS_COLOUR_RATIO_SURFACE_A0_" +
-        "FIT_AUTHORIZATION_20260725.json"
+        "FIT_RECOVERY_AUTHORIZATION_20260725.json"
     ),
     [string]$CacheDir = (
         "runs\audit_cross_colour_ratio_surface_a0_" +
@@ -16,6 +16,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$env:CUBLAS_WORKSPACE_CONFIG = ":4096:8"
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location -LiteralPath $RepoRoot
 

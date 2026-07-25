@@ -16,6 +16,8 @@ import threading
 import time
 from typing import Dict, Iterable, Iterator, List, Mapping, Optional, Sequence
 
+os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+
 import numpy as np
 from PIL import Image, ImageEnhance
 import psutil
@@ -81,7 +83,15 @@ DEFAULT_AUTHORIZATION = (
     / "docs"
     / (
         "TRKH_5CLASS_CROSS_COLOUR_RATIO_SURFACE_A0_"
-        "FIT_AUTHORIZATION_20260725.json"
+        "FIT_RECOVERY_AUTHORIZATION_20260725.json"
+    )
+)
+FAILURE_EVIDENCE_PATH = (
+    REPO_ROOT
+    / "docs"
+    / (
+        "TRKH_5CLASS_CROSS_COLOUR_RATIO_SURFACE_A0_"
+        "FIT_FAILURE_20260725.json"
     )
 )
 DEFAULT_CACHE = (
@@ -137,6 +147,10 @@ REQUESTED_WORKERS = 4
 MINIMUM_CLASS1_RETENTION = 0.97
 REPLAY_NUMERIC_TOLERANCE = 1e-7
 RESTRICTED_RIVALS = (0, 2, 4)
+CONSUMED_AUTHORIZATION_SHA256 = (
+    "3ecb6a82d14980e25cd947007561294fa"
+    "39cfe5419032cb3961389a30d1697b5"
+)
 
 CONDITIONS = (
     ("clean", 1.00, 1.00),
@@ -713,6 +727,8 @@ def _verify_authorization(
     authorization_sha256: str,
     lock_sha256: str,
     evidence_sha256: str,
+    failure_evidence: Mapping[str, object],
+    failure_evidence_sha256: str,
     cache_dir: Path,
     output: Path,
 ) -> Dict[str, object]:
@@ -727,6 +743,7 @@ def _verify_authorization(
         "authorization_sha256": authorization_sha256,
         "lock_sha256": lock_sha256,
         "evidence_sha256": evidence_sha256,
+        "failure_evidence_sha256": failure_evidence_sha256,
         "engine_sha256": sha256_file(ENGINE_PATH),
         "runner_sha256": sha256_file(RUNNER_PATH),
         "runner_test_sha256": sha256_file(RUNNER_TEST_PATH),
@@ -745,7 +762,29 @@ def _verify_authorization(
         "protocol_id": authorization.get("protocol_id")
         == "trkh_cross_colour_ratio_surface_a0_20260725",
         "state": authorization.get("state")
-        == "fit_authorized_train_only_no_validation_test",
+        == "fit_recovery_authorized_train_only_no_validation_test",
+        "recovery_failure_evidence": authorization.get(
+            "recovery_of_failure_sha256"
+        )
+        == failure_evidence_sha256,
+        "supersedes_consumed_authorization": authorization.get(
+            "supersedes_consumed_authorization_sha256"
+        )
+        == CONSUMED_AUTHORIZATION_SHA256,
+        "failure_state": failure_evidence.get("state")
+        == "formal_attempt_1_harness_failure_no_candidate_metric",
+        "failure_authorization_consumed": failure_evidence.get(
+            "authorization_consumed"
+        )
+        is True,
+        "failure_authorization_reuse_forbidden": failure_evidence.get(
+            "authorization_reuse_allowed"
+        )
+        is False,
+        "failure_authorization_sha256": failure_evidence.get(
+            "authorization_sha256"
+        )
+        == CONSUMED_AUTHORIZATION_SHA256,
         "lock_sha256": expected.get("lock_sha256") == lock_sha256,
         "evidence_sha256": expected.get("evidence_sha256")
         == evidence_sha256,
@@ -1072,6 +1111,16 @@ def _condition_srgb(
     return output
 
 
+def _close_numpy_memmap(value: object, *, flush: bool = False) -> None:
+    if not isinstance(value, np.memmap):
+        return
+    if flush:
+        value.flush()
+    handle = getattr(value, "_mmap", None)
+    if handle is not None and not handle.closed:
+        handle.close()
+
+
 def _extract_descriptor_cache(
     *,
     srgb_path: Path,
@@ -1114,102 +1163,113 @@ def _extract_descriptor_cache(
             dtype=np.uint8,
             shape=(ROWS, 1, VIEW_SIZE, VIEW_SIZE),
         )
-    extractor = ColourDerivativeDescriptorExtractor(mode=mode).to(
-        device=device,
-        dtype=torch.float32,
-    )
-    extractor.eval()
-    clip_fractions: List[np.ndarray] = []
-    reliable_counts: List[np.ndarray] = []
-    with torch.inference_mode():
-        for start in range(0, ROWS, int(batch_size)):
-            stop = min(ROWS, start + int(batch_size))
-            srgb_batch = np.asarray(srgb[start:stop]).copy()
-            if name != "clean":
-                srgb_batch = _condition_srgb(
-                    srgb_batch,
-                    brightness=brightness,
-                    contrast=contrast,
-                )
-            mask_batch = unpack_valid_masks(
-                np.asarray(packed[start:stop])
-            )
-            srgb_tensor = torch.from_numpy(srgb_batch).to(
-                device=device,
-                dtype=torch.float32,
-            )
-            srgb_tensor = srgb_tensor / 255.0
-            mean = extractor.input_mean
-            std = extractor.input_std
-            model_input = (srgb_tensor - mean) / std
-            mask_tensor = torch.from_numpy(mask_batch[:, None]).to(
-                device=device,
-                dtype=torch.bool,
-            )
-            descriptors, reliability, clip_fraction = extractor(
-                model_input,
-                mask_tensor,
-            )
-            descriptors_np = (
-                descriptors.detach().cpu().numpy().astype(
-                    np.float32,
-                    copy=False,
-                )
-            )
-            reliability_np = (
-                reliability.detach().cpu().numpy() > 0.5
-            ).astype(np.uint8)
-            if not np.isfinite(descriptors_np).all():
-                raise RuntimeError("CCR descriptor contains non-finite values")
-            support = reliability_np.sum(axis=(1, 2, 3))
-            if bool((support == 0).any()):
-                raise RuntimeError("CCR descriptor has empty reliable support")
-            output[start:stop] = descriptors_np
-            if reliability_exists:
-                if not np.array_equal(
-                    np.asarray(reliability_output[start:stop]),
-                    reliability_np,
-                ):
-                    raise RuntimeError(
-                        "CCR/Colour Ratio reliability masks differ"
+    extractor: Optional[ColourDerivativeDescriptorExtractor] = None
+    try:
+        extractor = ColourDerivativeDescriptorExtractor(mode=mode).to(
+            device=device,
+            dtype=torch.float32,
+        )
+        extractor.eval()
+        clip_fractions: List[np.ndarray] = []
+        reliable_counts: List[np.ndarray] = []
+        with torch.inference_mode():
+            for start in range(0, ROWS, int(batch_size)):
+                stop = min(ROWS, start + int(batch_size))
+                srgb_batch = np.asarray(srgb[start:stop]).copy()
+                if name != "clean":
+                    srgb_batch = _condition_srgb(
+                        srgb_batch,
+                        brightness=brightness,
+                        contrast=contrast,
                     )
-            else:
-                reliability_output[start:stop] = reliability_np
-            clip_fractions.append(
-                clip_fraction.detach().cpu().numpy().astype(np.float64)
-            )
-            reliable_counts.append(support.astype(np.int64))
-    output.flush()
-    if hasattr(reliability_output, "flush"):
-        reliability_output.flush()
-    descriptor_hash = array_sha256(np.asarray(output))
-    reliability_hash = array_sha256(
-        np.asarray(reliability_output)
-    )
-    del extractor
-    del output
-    del reliability_output
-    del srgb
-    del packed
-    gc.collect()
-    if device.type == "cuda":
-        torch.cuda.empty_cache()
-    clips = np.concatenate(clip_fractions)
-    supports = np.concatenate(reliable_counts)
-    return {
-        "mode": mode,
-        "condition": name,
-        "shape": [ROWS, 6, VIEW_SIZE, VIEW_SIZE],
-        "dtype": "float32",
-        "descriptor_sha256": descriptor_hash,
-        "reliability_sha256": reliability_hash,
-        "clip_fraction_max": float(clips.max()),
-        "clip_fraction_mean": float(clips.mean()),
-        "reliable_pixels_min": int(supports.min()),
-        "reliable_pixels_mean": float(supports.mean()),
-        "descriptor_bytes": output_path.stat().st_size,
-        "reliability_bytes": reliability_path.stat().st_size,
-    }
+                mask_batch = unpack_valid_masks(
+                    np.asarray(packed[start:stop])
+                )
+                srgb_tensor = torch.from_numpy(srgb_batch).to(
+                    device=device,
+                    dtype=torch.float32,
+                )
+                srgb_tensor = srgb_tensor / 255.0
+                mean = extractor.input_mean
+                std = extractor.input_std
+                model_input = (srgb_tensor - mean) / std
+                mask_tensor = torch.from_numpy(mask_batch[:, None]).to(
+                    device=device,
+                    dtype=torch.bool,
+                )
+                descriptors, reliability, clip_fraction = extractor(
+                    model_input,
+                    mask_tensor,
+                )
+                descriptors_np = (
+                    descriptors.detach().cpu().numpy().astype(
+                        np.float32,
+                        copy=False,
+                    )
+                )
+                reliability_np = (
+                    reliability.detach().cpu().numpy() > 0.5
+                ).astype(np.uint8)
+                if not np.isfinite(descriptors_np).all():
+                    raise RuntimeError(
+                        "CCR descriptor contains non-finite values"
+                    )
+                support = reliability_np.sum(axis=(1, 2, 3))
+                if bool((support == 0).any()):
+                    raise RuntimeError(
+                        "CCR descriptor has empty reliable support"
+                    )
+                output[start:stop] = descriptors_np
+                if reliability_exists:
+                    if not np.array_equal(
+                        np.asarray(reliability_output[start:stop]),
+                        reliability_np,
+                    ):
+                        raise RuntimeError(
+                            "CCR/Colour Ratio reliability masks differ"
+                        )
+                else:
+                    reliability_output[start:stop] = reliability_np
+                clip_fractions.append(
+                    clip_fraction.detach().cpu().numpy().astype(np.float64)
+                )
+                reliable_counts.append(support.astype(np.int64))
+        output.flush()
+        if hasattr(reliability_output, "flush"):
+            reliability_output.flush()
+        descriptor_hash = array_sha256(np.asarray(output))
+        reliability_hash = array_sha256(
+            np.asarray(reliability_output)
+        )
+        clips = np.concatenate(clip_fractions)
+        supports = np.concatenate(reliable_counts)
+        result = {
+            "mode": mode,
+            "condition": name,
+            "shape": [ROWS, 6, VIEW_SIZE, VIEW_SIZE],
+            "dtype": "float32",
+            "descriptor_sha256": descriptor_hash,
+            "reliability_sha256": reliability_hash,
+            "clip_fraction_max": float(clips.max()),
+            "clip_fraction_mean": float(clips.mean()),
+            "reliable_pixels_min": int(supports.min()),
+            "reliable_pixels_mean": float(supports.mean()),
+            "descriptor_bytes": output_path.stat().st_size,
+            "reliability_bytes": reliability_path.stat().st_size,
+        }
+    finally:
+        _close_numpy_memmap(output, flush=True)
+        _close_numpy_memmap(
+            reliability_output,
+            flush=not reliability_exists,
+        )
+        _close_numpy_memmap(srgb)
+        _close_numpy_memmap(packed)
+        del extractor
+        gc.collect()
+        if device.type == "cuda":
+            torch.cuda.empty_cache()
+    return result
 
 
 def _load_shared_descriptor_tensors(
@@ -2897,6 +2957,9 @@ def run_formal(
         raise FileExistsError(f"CCR fit temporary output exists: {temporary}")
     lock, lock_sha = _load_sidecar_json(lock_path)
     evidence, evidence_sha = _load_sidecar_json(EVIDENCE_PATH)
+    failure_evidence, failure_evidence_sha = _load_sidecar_json(
+        FAILURE_EVIDENCE_PATH
+    )
     authorization, authorization_sha = _load_sidecar_json(
         authorization_path
     )
@@ -2905,6 +2968,8 @@ def run_formal(
         authorization_sha256=authorization_sha,
         lock_sha256=lock_sha,
         evidence_sha256=evidence_sha,
+        failure_evidence=failure_evidence,
+        failure_evidence_sha256=failure_evidence_sha,
         cache_dir=cache_dir,
         output=authorized_output,
     )

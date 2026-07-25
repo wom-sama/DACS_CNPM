@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import copy
 import json
 import os
 from pathlib import Path
@@ -330,6 +331,162 @@ def test_process_snapshot_reports_live_python_child() -> None:
         child.wait(timeout=10)
 
 
+def test_cublas_workspace_config_is_set_before_torch_import() -> None:
+    source = audit.RUNNER_PATH.read_text(encoding="utf-8")
+    assignment = (
+        'os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"'
+    )
+    assert source.index(assignment) < source.index("import torch")
+    assert os.environ["CUBLAS_WORKSPACE_CONFIG"] == ":4096:8"
+
+
+def test_authorization_requires_exact_recovery_chain() -> None:
+    authorization = json.loads(
+        (
+            REPOSITORY
+            / "docs"
+            / (
+                "TRKH_5CLASS_CROSS_COLOUR_RATIO_SURFACE_A0_"
+                "FIT_AUTHORIZATION_20260725.json"
+            )
+        ).read_text(encoding="utf-8")
+    )
+    _, failure_sha = audit._load_sidecar_json(
+        audit.FAILURE_EVIDENCE_PATH
+    )
+    failure = json.loads(
+        audit.FAILURE_EVIDENCE_PATH.read_text(encoding="utf-8")
+    )
+    authorization["state"] = (
+        "fit_recovery_authorized_train_only_no_validation_test"
+    )
+    authorization["recovery_of_failure_sha256"] = failure_sha
+    authorization["supersedes_consumed_authorization_sha256"] = (
+        audit.CONSUMED_AUTHORIZATION_SHA256
+    )
+    authorization["expected"].update(
+        {
+            "engine_sha256": audit.sha256_file(audit.ENGINE_PATH),
+            "runner_sha256": audit.sha256_file(audit.RUNNER_PATH),
+            "runner_test_sha256": audit.sha256_file(
+                audit.RUNNER_TEST_PATH
+            ),
+            "launcher_sha256": audit.sha256_file(
+                audit.LAUNCHER_PATH
+            ),
+            "implementation_note_sha256": audit.sha256_file(
+                audit.IMPLEMENTATION_NOTE_PATH
+            ),
+            "cache_artifact_set_manifest_sha256": audit.sha256_file(
+                CACHE / audit.ARTIFACT_SET_MANIFEST_NAME
+            ),
+        }
+    )
+    result = audit._verify_authorization(
+        authorization,
+        authorization_sha256="a" * 64,
+        lock_sha256=authorization["expected"]["lock_sha256"],
+        evidence_sha256=authorization["expected"]["evidence_sha256"],
+        failure_evidence=failure,
+        failure_evidence_sha256=failure_sha,
+        cache_dir=CACHE,
+        output=Path(authorization["output_dir"]),
+    )
+    assert result["passed"]
+    for key, value in (
+        ("state", "fit_authorized_train_only_no_validation_test"),
+        ("recovery_of_failure_sha256", "b" * 64),
+        ("supersedes_consumed_authorization_sha256", "c" * 64),
+    ):
+        invalid = copy.deepcopy(authorization)
+        invalid[key] = value
+        with pytest.raises(ValueError, match="authorization differs"):
+            audit._verify_authorization(
+                invalid,
+                authorization_sha256="a" * 64,
+                lock_sha256=invalid["expected"]["lock_sha256"],
+                evidence_sha256=invalid["expected"]["evidence_sha256"],
+                failure_evidence=failure,
+                failure_evidence_sha256=failure_sha,
+                cache_dir=CACHE,
+                output=Path(invalid["output_dir"]),
+            )
+
+
+def test_explicit_memmap_close_releases_live_file_handle(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "scratch.npy"
+    values = np.lib.format.open_memmap(
+        path,
+        mode="w+",
+        dtype=np.float32,
+        shape=(4, 4),
+    )
+    values[:] = 1.0
+    audit._close_numpy_memmap(values, flush=True)
+    path.unlink()
+    assert not path.exists()
+
+
+def test_descriptor_failure_closes_all_temporary_memmaps(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rows = 2
+    srgb_path = tmp_path / "srgb.npy"
+    packed_path = tmp_path / "packed.npy"
+    descriptor_path = tmp_path / "descriptor.npy"
+    reliability_path = tmp_path / "reliability.npy"
+    np.save(
+        srgb_path,
+        np.zeros((rows, 3, 256, 256), dtype=np.uint8),
+        allow_pickle=False,
+    )
+    np.save(
+        packed_path,
+        np.zeros((rows, 8192), dtype=np.uint8),
+        allow_pickle=False,
+    )
+
+    class ExplodingExtractor:
+        input_mean = torch.zeros(1, 3, 1, 1)
+        input_std = torch.ones(1, 3, 1, 1)
+
+        def __init__(self, *, mode: str) -> None:
+            self.mode = mode
+
+        def to(self, **_: object) -> "ExplodingExtractor":
+            return self
+
+        def eval(self) -> "ExplodingExtractor":
+            return self
+
+        def __call__(self, *_: object) -> None:
+            raise RuntimeError("forced descriptor failure")
+
+    monkeypatch.setattr(audit, "ROWS", rows)
+    monkeypatch.setattr(
+        audit,
+        "ColourDerivativeDescriptorExtractor",
+        ExplodingExtractor,
+    )
+    with pytest.raises(RuntimeError, match="forced descriptor failure"):
+        audit._extract_descriptor_cache(
+            srgb_path=srgb_path,
+            packed_mask_path=packed_path,
+            output_path=descriptor_path,
+            reliability_path=reliability_path,
+            mode="cross_colour_ratio",
+            device=torch.device("cpu"),
+            batch_size=1,
+        )
+    descriptor_path.unlink()
+    reliability_path.unlink()
+    assert not descriptor_path.exists()
+    assert not reliability_path.exists()
+
+
 def test_cli_requires_exactly_one_mode() -> None:
     with pytest.raises(SystemExit):
         audit.parse_args([])
@@ -352,6 +509,8 @@ def test_launcher_parses_and_avoids_native_stderr_pipeline() -> None:
     script = audit.LAUNCHER_PATH.read_text(encoding="utf-8")
     assert "& $Python @RunnerArgs" in script
     assert "$LASTEXITCODE" in script
+    assert '$env:CUBLAS_WORKSPACE_CONFIG = ":4096:8"' in script
+    assert "FIT_RECOVERY_AUTHORIZATION_20260725.json" in script
     assert "2>&1" not in script
     command = (
         "$tokens=$null; $errors=$null; "

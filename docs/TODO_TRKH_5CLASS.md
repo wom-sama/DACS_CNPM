@@ -4983,12 +4983,36 @@
   `afa38ce8905713fdce2f4e526eed836ae0f65481`, evidence SHA
   `e992c297...98c3ed`. Preserve the exact local cache; neither materializer
   authorization can permit descriptor extraction or fitting.
-- [ ] Commit and push the separate prospective descriptor/four-role head-fit
+- [x] Commit and push the separate prospective descriptor/four-role head-fit
   runner boundary. It must pass compile/pyflakes, focused/full tests, clean
   repository preflight, report QA, and exact hash review before a separate
   one-formal/one-replay authorization is created. Current engineering checks
   pass runner/CCR/full tests `15/15`, `44/44`, and `1972/1972`; the
-  post-fit worker-process gate is covered by a live-child regression.
+  post-fit worker-process gate is covered by a live-child regression. The
+  boundary is pushed at `0289a944bb7bed67e3633e5dfa6b62418423fb0f`.
+- [x] Create and push the separate fit authorization at commit `b24c16c`,
+  SHA `3ecb6a82...d1697b5`. It pins the implementation commit and exact
+  runner/test/launcher/note/cache hashes, permits one clean formal plus one
+  fresh replay, and forbids raw data, keeper forward, validation/test,
+  shifted conditions, XAI, deployment, integration, full train, and command
+  update.
+- [x] Consume formal attempt 1 and stop fail-closed before CCR fitting or any
+  candidate metric. The plain colour-ratio descriptor/five control folds
+  completed only in temporary memory; the next deterministic cuBLAS matmul
+  required `CUBLAS_WORKSPACE_CONFIG`. Immediate cleanup also exposed a
+  Windows memmap sharing violation. Post-process cleanup removed the exact
+  two partial files; formal output remains absent and authorization
+  `3ecb6a82...d1697b5` is consumed.
+- [ ] Commit and push only the audit-harness recovery: set
+  `CUBLAS_WORKSPACE_CONFIG=:4096:8` before Torch import and in the launcher,
+  close all NumPy memmaps in `finally`, preserve sidecar-verified failure
+  evidence, and require an exact recovery chain that rejects the consumed
+  authorization. Runner, CCR, and full tests pass `19/19`, `48/48`, and
+  `1976/1976`; fresh CUDA deterministic matmul and live-handle deletion
+  regressions pass.
+- [ ] Create and push a new hash-locked recovery authorization. Do not reuse
+  the consumed attempt-1 authorization or change equations, cache, folds,
+  seeds, epoch orders, model, optimizer, threshold, or scientific gates.
 - [ ] Run exactly one locked CCR A0 only if implementation preflight passes.
   Stop at the clean train-only information conjunction unless candidate CCR
   beats keeper margin, equal-size colour-ratio, trained spatial-dephase and
