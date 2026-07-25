@@ -5003,20 +5003,38 @@
   Windows memmap sharing violation. Post-process cleanup removed the exact
   two partial files; formal output remains absent and authorization
   `3ecb6a82...d1697b5` is consumed.
-- [ ] Commit and push only the audit-harness recovery: set
+- [x] Commit and push only the audit-harness recovery: set
   `CUBLAS_WORKSPACE_CONFIG=:4096:8` before Torch import and in the launcher,
   close all NumPy memmaps in `finally`, preserve sidecar-verified failure
   evidence, and require an exact recovery chain that rejects the consumed
   authorization. Runner, CCR, and full tests pass `19/19`, `48/48`, and
   `1976/1976`; fresh CUDA deterministic matmul and live-handle deletion
-  regressions pass.
-- [ ] Create and push a new hash-locked recovery authorization. Do not reuse
+  regressions pass. The correction and failure evidence are pushed at
+  `0218379db7fa43135e7e22529121965c49ef0b71`.
+- [x] Create and push a new hash-locked recovery authorization. Do not reuse
   the consumed attempt-1 authorization or change equations, cache, folds,
   seeds, epoch orders, model, optimizer, threshold, or scientific gates.
-- [ ] Run exactly one locked CCR A0 only if implementation preflight passes.
+  Recovery authorization SHA `b7cda19b...a36770` is pushed at
+  `54c3e5c309aec0f9b60a5c39e452f12f938748df`.
+- [x] Run exactly one locked CCR A0 only if implementation preflight passes.
   Stop at the clean train-only information conjunction unless candidate CCR
   beats keeper margin, equal-size colour-ratio, trained spatial-dephase and
-  seed controls while preserving class-1 TP and rejecting restricted FP.
+  seed controls while preserving class-1 TP and rejecting restricted FP. The
+  formal/replay complete in `190.493/188.756 s`, reproduce 180 state and 46
+  output arrays exactly, but the clean gate fails: candidate AUROC is
+  `0.535520`, it corrects only two restricted FP while harming 30 TP, and
+  macro/class-1 F1 falls by `0.006738/0.026845`.
+- [x] Close exact CCR Surface A0 as `negative-but-reusable`; preserve evidence
+  and closure SHAs `868f8e40...dcfa9`/`a3cc3e36...bb634` plus the complete
+  retained run. Do not run XAI or downstream stages because the prospective
+  clean gate failed. Do not sweep nearby descriptor/head/training/threshold
+  settings after observing the result.
+- [ ] Research and prospectively screen an equation-distinct successor that
+  provides sample-conditional material/surface evidence for all three
+  `1-vs-0/2/4` boundaries. Require a no-run overlap check, scratch-only
+  provenance, source-held train-only gate, explicit precision/TP budget,
+  causal controls, replay, and standard-op matched inference contract before
+  implementation or a costly run.
 - [x] Rebuild research-process report revision 16 from its JSON source and
   verify the prospective CCR boundary. Focused lock/report tests pass `9/9`,
   full pytest passes `1934/1934` with 296 existing warnings, visual QA passes

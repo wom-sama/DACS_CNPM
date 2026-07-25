@@ -22149,3 +22149,76 @@ Date: 2026-07-02
   model parameters, optimizer, thresholds, and promotion checks. Commit/push
   the correction and failure evidence before creating a separate recovery
   authorization; no candidate metric exists yet.
+
+## CCR Fit Recovery, Formal Closure, And No-Repeat Boundary - 2026-07-25
+
+- Commit and push the harness-only correction at
+  `0218379db7fa43135e7e22529121965c49ef0b71`, then create and push the
+  one-use recovery authorization at
+  `54c3e5c309aec0f9b60a5c39e452f12f938748df`. Authorization SHA
+  `b7cda19b...a36770` pins failure SHA `51a58928...983ccf`, the consumed
+  authorization SHA `3ecb6a82...d1697b5`, exact implementation hashes,
+  output path, resource limits, and clean-only/no-validation/test boundary.
+- The sole replacement formal completes in `190.4927751 s`. Every
+  authorization, repository, cache, ledger, resource, worker, finite-gradient,
+  parameter-update, and optimizer-state check passes. Four 3,004-parameter
+  scratch roles each train across five source-held folds for 20 epochs and
+  160 updates per fold-role, totaling 3,200 updates. Candidate mean loss falls
+  from `1.32792147` to `0.79999480`.
+- Reject the clean scientific conjunction. CCR candidate AUROC/AUPRC is
+  `0.53551981/0.75713975`, versus keeper margin
+  `0.81669747/0.92107012`, equal-size plain colour ratio
+  `0.52815107/0.75535137`, and trained spatial dephase
+  `0.50379677/0.71677195`. Candidate gains only `0.00736874` over the plain
+  control and `0.03172304` over trained dephase, loses `0.28117767` to the
+  keeper, and beats both learned controls in only `2/5` folds.
+- Pairwise candidate AUROC is only `0.59983855`, `0.46272335`, and
+  `0.39685767` for `1-vs-0`, `1-vs-2`, and `1-vs-4`. It changes 32 rows,
+  corrects two restricted false positives, harms 30 class-1 true positives,
+  rejects only `1/158`, `1/54`, and `0/10` target-0/2/4 false positives, and
+  retains `498/528 = 0.94318182` keeper true positives.
+- Full-train diagnostic macro-F1 falls from `0.93987615` to `0.93313789`.
+  Class-1 precision/recall/F1 falls from
+  `0.70026525/0.97597043/0.81544402` to
+  `0.68975069/0.92051756/0.78859857`. The candidate therefore moves opposite
+  to the requested precision improvement.
+- The independent seed repeat is stable but negative: AUROC `0.53766798`,
+  absolute difference `0.00214817`, action agreement `0.98034076`, three
+  corrections and 20 harms. Same-weight dephase drops AUROC by `0.03613595`,
+  proving the head uses spatial layout, but it retains only `0.40530303` of
+  keeper class-1 true positives and reduces class-1 F1 by `0.31250630`.
+  Spatial use is therefore not evidence of class-discriminative or action-safe
+  surface reasoning.
+- Fresh-process replay completes in `188.7562594 s` under PID 3184 versus
+  formal PID 26120. All 180 state arrays and 46 output arrays are exact with
+  maximum error `0.0`; metrics, training science, ledger, authorization, and
+  descriptor records reproduce exactly. Validation/test/raw-dataset access is
+  zero.
+- Resource evidence passes: peak CUDA `366,425,600` bytes, peak RSS
+  `2,416,246,784` bytes, maximum combined temporary storage `333,692,816`
+  bytes, 55 ledger events/34 logical opens/nine unique paths, zero
+  blocked/write-like access, and zero orphan compute children.
+- Do not run XAI, shifted conditions, deployment, validation/test, production
+  integration, probe, or full train. The prospective protocol opens those
+  stages only after the complete clean information gate, which failed. Keep
+  the keeper, full-train command, and command history unchanged.
+- Preserve formal summary/metrics/replay/artifact-set SHAs
+  `86c05016...841be`, `b2617256...d2d7d`, `6a71ed2a...3e22`, and
+  `9f504ab9...a3ba1`. Compact evidence and closure SHAs are
+  `868f8e40...dcfa9` and `a3cc3e36...bb634`; retained output is
+  `runs/audit_cross_colour_ratio_surface_a0_20260725`.
+- Close the exact CCR descriptor/head family and its neighboring sigma,
+  epsilon, channel order, reliability support, head shape, epoch/LR/seed,
+  fold, loss, threshold, and dephase sweeps. Reopen only for an
+  equation-distinct sample-conditional material/surface mechanism that is
+  prospectively stronger than keeper and causal controls across all three
+  difficult class pairs, satisfies TP/precision/F1 budgets, replays exactly,
+  and has a standard-op inference path.
+- Close verification with focused CCR/report tests `51/51` and complete
+  pytest `1976/1976` in `78.25 s` with 373 existing warnings. Research-process
+  report revision 25 renders cleanly across all `20/20` pages at original
+  detail and passes accessibility `0/0/0`.
+- Final revision-25 JSON/DOCX/builder SHAs are
+  `7c925240...cd764`, `5e7cfb49...fd153`, and
+  `55e006b0...a2243`. The evidence and closure sidecars reproduce their
+  pinned SHAs exactly.

@@ -2,10 +2,10 @@
   "document": {
     "title": "TRKH 5-class",
     "subtitle": "Quy trình nghiên cứu, trạng thái bằng chứng và kế hoạch cải tiến",
-    "revision": "24",
+    "revision": "25",
     "updated": "2026-07-25",
     "branch": "classification-only-research",
-    "status": "Đang nghiên cứu - CCR fit attempt 1 dừng ở harness, recovery chưa được ủy quyền",
+    "status": "Đang nghiên cứu - CCR A0 đã đóng negative-but-reusable; successor khác biệt đang được sàng lọc",
     "owner": "TRKH classification-only research"
   },
   "executive_metrics": [
@@ -25,9 +25,9 @@
       "detail": "Validation macro-F1; precision class 1 còn thấp"
     },
     {
-      "label": "CCR fit attempt 1",
-      "value": "Chưa có candidate metric",
-      "detail": "cuBLAS deterministic fail; recovery-chain đạt 19/19, 48/48, 1976/1976"
+      "label": "CCR Surface A0",
+      "value": "Rejected: AUROC 0.535520",
+      "detail": "Chỉ sửa 2 FP nhưng phá 30 TP; macro/class-1 F1 giảm 0.006738/0.026845"
     }
   ],
   "sections": [
@@ -37,7 +37,7 @@
         {
           "type": "callout",
           "label": "Quyết định",
-          "text": "Giữ nguyên keeper và file lệnh full-train tốt nhất. CAP rerun cùng lock đã hoàn tất formal, fresh-process replay và review đủ 20 hàng XAI nhưng bị loại: AUROC 0,560111, chỉ sửa 5 restricted FP và phá 14 TP lớp 1; macro/class-1 F1 giảm còn 0,937491/0,805643. Sau CAP, sáu họ Self-ONN, learnable morphology, PointNet/Deep Sets, DeepEMD/optimal transport, normalizing flow và hierarchical material recognition đều bị screen no-run vì trùng cơ chế, thiếu tín hiệu bề mặt lớp-điều-kiện hoặc không phù hợp deployment. Không integration, validation/test, probe/full train hoặc command update. Mọi classifier đề xuất vẫn scratch-only; pretrained baseline chỉ được dùng đối chiếu."
+          "text": "Giữ nguyên keeper và file lệnh full-train tốt nhất. CCR Surface A0 đã hoàn tất formal và fresh-process replay exact nhưng bị loại: AUROC 0,535520 thấp hơn keeper margin 0,816697, chỉ sửa 2 restricted FP và phá 30 TP lớp 1; macro/class-1 F1 giảm 0,006738/0,026845. Same-weight dephase chứng minh head dùng bố cục không gian nhưng tín hiệu không đủ phân biệt hoặc an toàn. Không chạy XAI/downstream vì clean gate đã fail; không integration, validation/test, probe/full train hoặc command update. Mọi classifier đề xuất vẫn scratch-only; pretrained baseline chỉ được dùng đối chiếu."
         },
         {
           "type": "paragraph",
@@ -86,6 +86,10 @@
         {
           "type": "paragraph",
           "text": "Revision 24 ghi formal attempt 1 dưới authorization SHA 3ecb6a82...d1697b5 đã push tại b24c16c...5b8ae. Preflight sạch pass, nhưng attempt dừng sau 52,8 giây ở descriptor CCR: năm plain colour-ratio control fold chỉ hoàn tất trong RAM rồi deterministic cuBLAS matmul yêu cầu CUBLAS_WORKSPACE_CONFIG trước CUDA init. Traceback giữ memmap làm cleanup tức thời gặp WinError 32; sau khi process thoát, đúng hai scratch file 168.763.520/7.031.936 byte và thư mục tạm đã được xóa, formal output vắng. Không có candidate state/score/threshold/action/metric hay validation/test. Correction chỉ đặt :4096:8 trước Torch import, đóng memmap trong finally và yêu cầu recovery authorization pin failure SHA cùng consumed authorization SHA; fresh CUDA matmul, live-handle deletion, runner/CCR/full test đạt 19/19, 48/48 và 1976/1976. Authorization cũ đã consumed; recovery phải commit/push và có authorization mới."
+        },
+        {
+          "type": "paragraph",
+          "text": "Revision 25 ghi correction/failure evidence đã push tại 0218379...ef0b71 và recovery authorization SHA b7cda19b...a36770 tại 54c3e5c...748df. Sole replacement formal/replay hoàn tất trong 190,493/188,756 giây; 180 state arrays và 46 output arrays exact với sai số 0,0, không đọc raw/validation/test và mọi resource/ledger/worker gate đều pass. Clean science gate fail: CCR AUROC/AUPRC 0,535520/0,757140 so với keeper 0,816697/0,921070; chỉ sửa 2/222 restricted FP nhưng phá 30 TP, giảm macro/class-1 F1 0,006738/0,026845. Seed repeat ổn định nhưng cũng âm; same-weight dephase chứng minh spatial use chứ không chứng minh phân biệt lớp. XAI và downstream không được mở. Evidence/closure SHA là 868f8e40...dcfa9/a3cc3e36...bb634; exact CCR neighborhood được đóng và keeper/lệnh full-train/history giữ nguyên."
         }
       ]
     },
@@ -200,6 +204,13 @@
               "0,937491",
               "0,699320 / 0,950092 / 0,805643",
               "Rejected; AUROC 0,5601, net -9, XAI fail"
+            ],
+            [
+              "CCR Surface A0",
+              "Cohort 763; 5 source-held folds; train-only",
+              "0,933138",
+              "0,689751 / 0,920518 / 0,788599",
+              "Rejected; AUROC 0,5355, 2 corrections / 30 harms"
             ]
           ]
         },
@@ -721,6 +732,16 @@
           "CCR direct materializer preflight",
           "Dùng CIDT + geometry để khóa 735 image/label path; exact crop/transform/bbox/mask parity; cache sRGB uint8 + packed valid mask dưới 160.456.704 byte.",
           "Không index 9.215 label rows, không đọc pixel ở preflight; synthetic formal/atomic cleanup và Windows logical-open accounting đều pass."
+        ],
+        [
+          "CCR recovery chain",
+          "Authorization đầu bị consumed bởi lỗi deterministic-cuBLAS; correction chỉ đặt :4096:8 trước Torch import, đóng memmap và pin exact failure/authorization chain.",
+          "Ngăn reuse quyền chạy một lần và chứng minh lỗi harness không làm thay đổi equation, cohort, fold, seed, optimizer, threshold hay science gate."
+        ],
+        [
+          "CCR formal/replay closure",
+          "Formal/replay 190,493/188,756 giây; 180 state và 46 output arrays exact; AUROC 0,535520, 2 corrections/30 harms, macro/class-1 F1 giảm.",
+          "Reproducibility và convergence pass không cứu utility fail; đóng exact neighborhood, không chạy XAI/downstream hoặc update lệnh full-train."
         ]
           ]
         }
@@ -751,7 +772,10 @@
         "Giữ materializer SHA 3c7e33e9...e6321f7, test SHA 2675a37a...7a3808 và repository-gate commit 5b4df3d...02f4b1; authorization SHA e76bd56c...07068 khóa ancestor/output/resource cùng trạng thái materializer_authorized_no_fit.",
         "Giữ authorization e76bd56c...07068 ở trạng thái consumed sau attempt 1 fail crop-box exact; bảo toàn failure SHA 11714304...a554e9 và không tái sử dụng authorization cũ.",
         "Giữ correction commit fb1931e9...3442c và recovery authorization commit/SHA 3ac7302c...63be2/7081cece...16e42; authorization cũ vẫn consumed.",
-        "Bảo toàn materialization/replay evidence SHA e992c297...98c3ed và cache cục bộ exact; chỉ mở descriptor/four-role head fit sau một boundary riêng được commit/push."
+        "Bảo toàn materialization/replay evidence SHA e992c297...98c3ed và cache cục bộ exact; chỉ mở descriptor/four-role head fit sau một boundary riêng được commit/push.",
+        "Giữ correction/recovery commits 0218379...ef0b71/54c3e5c...748df và recovery authorization SHA b7cda19b...a36770; authorization fit ban đầu 3ecb6a82...d1697b5 đã consumed và không được reuse.",
+        "Bảo toàn CCR formal/replay tại runs/audit_cross_colour_ratio_surface_a0_20260725 cùng evidence/closure SHA 868f8e40...dcfa9/a3cc3e36...bb634. Clean gate fail nên cấm XAI, shifted conditions, deployment, integration, validation/test, full train và command update.",
+        "Đóng exact CCR và mọi sweep gần kề về sigma/epsilon/channel order/reliability/head/epoch/LR/seed/fold/loss/threshold/dephase. Successor phải equation-distinct, sample-conditional, pair-specific, scratch-only và có standard-op inference gate prospective."
       ]
         }
       ]
@@ -896,6 +920,18 @@
               "Attempt-1 harness failure, exact temporary artifacts, post-process cleanup, consumed authorization và narrow recovery scope."
             ],
             [
+              "docs/TRKH_5CLASS_CROSS_COLOUR_RATIO_SURFACE_A0_FIT_RECOVERY_AUTHORIZATION_20260725.json",
+              "One-use authorization pin correction commit, failure chain, exact fit implementation, resource limit và clean-only boundary."
+            ],
+            [
+              "docs/TRKH_5CLASS_CROSS_COLOUR_RATIO_SURFACE_A0_FIT_EVIDENCE_20260725.json",
+              "Machine-readable formal/replay metrics, training, controls, resource, ledger, immutable hashes và downstream denial."
+            ],
+            [
+              "docs/TRKH_5CLASS_CROSS_COLOUR_RATIO_SURFACE_A0_FIT_CLOSURE_20260725.md",
+              "Human closure, scientific interpretation, no-XAI reason, no-repeat boundary và successor admission rule."
+            ],
+            [
               "docs/TRKH_5CLASS_CROSS_COLOUR_RATIO_SURFACE_A0_MATERIALIZER_FAILURE_20260725.json",
               "Failure evidence của formal attempt 1, atomic cleanup, root cause một ULP và recovery boundary."
             ],
@@ -911,7 +947,7 @@
         },
         {
           "type": "paragraph",
-          "text": "Revision 1-3 dựng báo cáo tái lập, full-train/JPEG-DL và synthetic policy. Revision 4-10 đóng SaSPA, LP-A3, NSA, RN-LISDA và Bal-BCE bằng fidelity, causal control, replay và TP/FP gates. Revision 11-14 khóa CAP trước metric, sửa audit-only eval-LSTM, rồi hoàn tất same-lock formal/replay/manual review; CAP đóng negative-but-reusable và retention pass tại SHA 99d1835a...04a636. Revision 15 screen no-run sáu họ successor và cô lập regression OOXML hyperlink. Revision 16-18 khóa CCR train-only, same-tensor erratum và equation engine/head scratch 3.004 tham số. Revision 19-22 hoàn tất direct materializer, Windows path gate, one-ULP recovery và exact cache evidence e992c297...98c3ed. Revision 23 push four-role fit runner tại 0289a94. Revision 24 ghi authorization 3ecb6a82...d1697b5 đã consumed bởi deterministic-cuBLAS harness failure trước candidate metric; correction :4096:8, explicit memmap close và exact recovery-chain verifier phải được commit/push rồi cấp recovery authorization riêng. Chưa có candidate state, score, threshold, action, metric, validation/test, production edit hoặc command update."
+          "text": "Revision 1-3 dựng báo cáo tái lập, full-train/JPEG-DL và synthetic policy. Revision 4-10 đóng SaSPA, LP-A3, NSA, RN-LISDA và Bal-BCE bằng fidelity, causal control, replay và TP/FP gates. Revision 11-14 khóa CAP trước metric, sửa audit-only eval-LSTM, rồi hoàn tất same-lock formal/replay/manual review; CAP đóng negative-but-reusable và retention pass tại SHA 99d1835a...04a636. Revision 15 screen no-run sáu họ successor và cô lập regression OOXML hyperlink. Revision 16-18 khóa CCR train-only, same-tensor erratum và equation engine/head scratch 3.004 tham số. Revision 19-22 hoàn tất direct materializer, Windows path gate, one-ULP recovery và exact cache evidence e992c297...98c3ed. Revision 23 push four-role fit runner tại 0289a94. Revision 24 ghi consumed authorization và correction harness fail-closed. Revision 25 hoàn tất one-use recovery formal/replay exact nhưng clean gate fail: AUROC 0,535520, 2 corrections/30 harms, macro/class-1 F1 giảm; evidence/closure SHA 868f8e40...dcfa9/a3cc3e36...bb634. CCR đóng negative-but-reusable; không XAI/downstream, validation/test, production edit hoặc command update."
         }
       ]
     },
