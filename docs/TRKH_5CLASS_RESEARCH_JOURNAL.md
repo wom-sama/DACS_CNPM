@@ -22642,3 +22642,32 @@ Date: 2026-07-02
   remain unauthorized. This self-review prevents process sophistication from
   being mistaken for information gain, while preserving a direct route to the
   first legitimate synthetic and score-independent executions.
+
+## Pre-Lock Test-Collection Incident - 2026-07-29
+
+- Withdraw the reported `55/55` combined result as pre-lock evidence. The main
+  process selected the complete geometry-metadata and fold-manifest test files.
+  Because the retained cache exists locally, one `skipif` integration test and
+  a module-scoped real-manifest fixture activated automatically.
+- The process opened the train-only CCR cohort container and packed validity
+  masks. Across the two integrations it read sample IDs, targets, source stems,
+  image paths and model boxes, propagated validity geometry, hashed the opaque
+  container and scanned the YOLO manifest's cross-split identity metadata. This
+  occurred without the S2 claim/member ledger required by the newly pushed
+  sequencing erratum.
+- No candidate/keeper score, checkpoint, raw pixel/label, optimizer, GPU,
+  validation/test label or metric was opened or produced; no locked artifact was
+  overwritten and no authorization existed to consume. These facts bound the
+  impact but do not excuse the access. Never import its in-memory results into
+  S2 or machine-lock evidence.
+- Preserve the exact command, scope and consequence in
+  `TRKH_5CLASS_PAIR_SURFACE_DDF_V2_PRELOCK_PROCESS_INCIDENT_20260729.md`,
+  current SHA-256 `c4c5eba2...32f7` pending independent review.
+  Require an independently reviewed test-classification manifest and a
+  pre-collection cache-open tripwire. Before S2, execute only enumerated
+  synthetic/tmp-fixture test nodes; the presence of local data must never
+  silently widen test authority again.
+- Update the installed skill immediately so the failure mode cannot recur by
+  habit. New skill SHA-256 is
+  `a65668f637ceaa8da91c5489a0405ff9e887c858dd33e160c22927a43b316019`;
+  test collection is now explicitly treated as an access-authorized action.

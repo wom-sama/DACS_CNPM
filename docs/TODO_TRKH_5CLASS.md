@@ -5183,3 +5183,18 @@
   one primary plus one fresh replay for each phase. Only their complete PASS
   roots may enter a later no-authority machine lock and exactly-one-formal plus
   replay authorization.
+- [x] Withdraw the apparent `55/55` combined result after detecting that test
+  collection activated live train-cache geometry and real fold-manifest
+  fixtures when local inputs existed. Preserve the exact unledgered read scope
+  in `TRKH_5CLASS_PAIR_SURFACE_DDF_V2_PRELOCK_PROCESS_INCIDENT_20260729.md`;
+  current incident SHA-256 is `c4c5eba2...32f7`, pending independent review.
+  Do not treat its in-memory recomputation as S2 or machine-lock evidence.
+- [ ] Independently review the process-incident classification, then pin a
+  test-authority manifest plus a pre-collection cache-open tripwire. Before S2,
+  run only exact `synthetic_safe`/tmp-fixture nodes; never rely on `skipif(cache
+  missing)` to protect a machine where the cache is present.
+- [x] Update the installed TRKH skill immediately after detecting the incident.
+  Skill SHA-256 is
+  `a65668f637ceaa8da91c5489a0405ff9e887c858dd33e160c22927a43b316019`;
+  test collection is now an access-controlled operation and the withdrawn
+  combined suite can never be cited as pre-lock evidence.
