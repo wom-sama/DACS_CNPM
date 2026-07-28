@@ -64,8 +64,18 @@ def test_cohort_loader_accesses_only_allowlisted_metadata_keys(
         "label_paths": np.asarray(["forbidden", "forbidden"]),
     }
     accessed = []
+    expected_contract = {
+        key: {
+            "shape": tuple(int(value) for value in arrays[key].shape),
+            "dtype": str(arrays[key].dtype),
+            "sha256": module._array_sha256(arrays[key]),
+        }
+        for key in module.METADATA_ARRAY_KEYS
+    }
 
     class FakeArchive:
+        files = list(arrays)
+
         def __enter__(self):
             return self
 
@@ -79,6 +89,7 @@ def test_cohort_loader_accesses_only_allowlisted_metadata_keys(
             return arrays[key]
 
     monkeypatch.setattr(module.np, "load", lambda *args, **kwargs: FakeArchive())
+    monkeypatch.setattr(module, "EXPECTED_METADATA_ARRAYS", expected_contract)
     loaded = module._load_cohort_metadata(Path("unused.npz"))
 
     assert tuple(accessed) == module.METADATA_ARRAY_KEYS
@@ -112,6 +123,27 @@ def test_union_is_transitive_and_order_independent(module: ModuleType) -> None:
     assert graph["edge_set_sha256"] == replay["edge_set_sha256"]
     assert graph["component_set_sha256"] == replay["component_set_sha256"]
     assert graph["component_order_sha256"] == replay["component_order_sha256"]
+
+
+def test_cohort_loader_rejects_archive_member_schema_before_deserializing(
+    module: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class BadArchive:
+        files = [*module.METADATA_ARRAY_KEYS, "unexpected_scores"]
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def __getitem__(self, key):
+            raise AssertionError(f"member must not be deserialized: {key}")
+
+    monkeypatch.setattr(module.np, "load", lambda *args, **kwargs: BadArchive())
+    with pytest.raises(ValueError, match="member schema differs"):
+        module._load_cohort_metadata(Path("unused.npz"))
 
 
 def test_lexicographic_milp_has_a_unique_score_independent_tie_break(
@@ -178,6 +210,20 @@ def test_manifest_join_rejects_duplicate_outputs(
         module._load_yolo_manifest(csv_path)
 
 
+def test_manifest_loader_rejects_malformed_short_row(
+    module: ModuleType,
+    tmp_path: Path,
+) -> None:
+    csv_path = tmp_path / "manifest.csv"
+    csv_path.write_text(
+        "split,leakage_group,output_image\n"
+        "train,g1\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="Malformed manifest row"):
+        module._load_yolo_manifest(csv_path)
+
+
 def test_canonical_join_rejects_group_crossing_output_splits(
     module: ModuleType,
 ) -> None:
@@ -208,12 +254,43 @@ def test_real_manifest_locks_graph_solver_mapping_and_counts(
     module: ModuleType,
     generated,
 ) -> None:
-    assert generated["scope"]["metadata_array_keys_accessed"] == list(
+    assert generated["scope"]["metadata_array_members_deserialized"] == list(
         module.METADATA_ARRAY_KEYS
     )
-    assert generated["scope"]["array_keys_forbidden_and_not_accessed"] == list(
+    assert generated["scope"]["forbidden_array_members_not_deserialized"] == list(
         module.FORBIDDEN_ARRAY_KEYS
     )
+    assert generated["scope"][
+        "whole_cohort_container_bytes_hashed_for_opaque_lineage"
+    ] is True
+    assert generated["scope"][
+        "whole_cohort_container_hash_used_as_assignment_feature"
+    ] is False
+    assert generated["scope"][
+        "keeper_probabilities_or_candidate_scores_deserialized"
+    ] is False
+    assert generated["scope"][
+        "cross_split_manifest_identity_metadata_read_for_group_audit"
+    ] is True
+    assert generated["inputs"]["predecessor_manifest"]["assignment_influence"] is False
+    assert generated["supersession"]["mapping_changed"] is False
+    selected = generated["inputs"]["selected_npz_members"]
+    expected_selected = {
+        key: {
+            "shape": list(module.EXPECTED_METADATA_ARRAYS[key]["shape"]),
+            "dtype": module.EXPECTED_METADATA_ARRAYS[key]["dtype"],
+            "sha256": module.EXPECTED_METADATA_ARRAYS[key]["sha256"],
+        }
+        for key in module.METADATA_ARRAY_KEYS
+    }
+    assert selected["members"] == expected_selected
+    assert selected["selected_member_set_sha256"] == module._json_sha256(
+        expected_selected
+    )
+    assert generated["identity_with_predecessor"]["all_equal"] is True
+    assert generated["identity_with_predecessor"]["fold_vector"] == generated[
+        "solver"
+    ]["fold_vector"]
     exporter = generated["inputs"]["leakage_group_exporter"]
     assert exporter["sha256"] == module.CVAT_EXPORTER_SHA256
     assert exporter["git_commit"] == module.CVAT_EXPORTER_GIT_COMMIT
@@ -275,7 +352,8 @@ def test_runtime_and_calibration_are_pinned_for_research_use(
 
     outer = generated["calibration"]["outer_folds"]
     assert generated["state"] == (
-        "frozen_train_only_metadata_manifest_group_numeric_neighborhood_disjoint"
+        "frozen_v2r2_provenance_hardened_train_metadata_"
+        "manifest_group_numeric_neighborhood_disjoint"
     )
     assert generated["calibration"]["authorized_mode"] == (
         "fixed_simple_one_fold_calibration_only"
@@ -329,12 +407,16 @@ def test_check_only_rejects_a_bad_sha_record(
 
 def test_cli_is_check_only_by_default_and_write_path_is_guarded(
     module: ModuleType,
+    generated,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     assert module.parse_args([]).write is False
     assert module.parse_args(["--check-only"]).write is False
     assert module.parse_args(["--write"]).write is True
+    assert generated["write_contract"]["default_check_only"] is True
+    assert generated["write_contract"]["pair_transactional"] is False
+    assert generated["write_contract"]["partial_pair_fails_closed"] is True
 
     monkeypatch.setattr(module, "EXPECTED_REPOSITORY_ROOT", tmp_path)
     with pytest.raises(RuntimeError, match="expected repository"):
@@ -376,3 +458,5 @@ def test_explicit_write_uses_fsync_and_atomic_replace(
     assert len(fsync_calls) == 2
     assert sidecar.read_text(encoding="ascii").split() == [digest, output.name]
     assert list(tmp_path.glob("*.tmp")) == []
+    with pytest.raises(FileExistsError, match="one-shot write refuses overwrite"):
+        module.write_manifest(generated)

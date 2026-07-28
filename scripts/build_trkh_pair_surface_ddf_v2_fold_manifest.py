@@ -38,11 +38,23 @@ CVAT_EXPORTER_PATH = (
 OUTPUT_PATH = (
     REPOSITORY_ROOT
     / "docs"
-    / "TRKH_5CLASS_PAIR_SURFACE_DDF_V2_FOLD_MANIFEST_20260729.json"
+    / "TRKH_5CLASS_PAIR_SURFACE_DDF_V2R2_FOLD_MANIFEST_20260729.json"
 )
 OUTPUT_SHA_PATH = OUTPUT_PATH.with_suffix(".sha256")
 
-COHORT_SHA256 = (
+PREDECESSOR_OUTPUT_PATH = (
+    REPOSITORY_ROOT
+    / "docs"
+    / "TRKH_5CLASS_PAIR_SURFACE_DDF_V2_FOLD_MANIFEST_20260729.json"
+)
+PREDECESSOR_OUTPUT_SHA256 = (
+    "8a084b171b12c4d8a4e85d09d748d30cdf46191ea7160748cdd03519b38f924b"
+)
+PREDECESSOR_SIDECAR_PATH = PREDECESSOR_OUTPUT_PATH.with_suffix(".sha256")
+PREDECESSOR_SIDECAR_SHA256 = (
+    "fe54c79b5976336768e6a6c2291d55a8d91bf004bb2095eb9ee20591b9a31912"
+)
+COHORT_CONTAINER_LINEAGE_SHA256 = (
     "a835d3498319d3d25d83c0279ab24d6fcc703a2266ff5f091dc2273bbb8baa9d"
 )
 YOLO_MANIFEST_SHA256 = (
@@ -92,6 +104,29 @@ FORBIDDEN_ARRAY_KEYS = (
     "crop_boxes",
     "label_paths",
 )
+EXPECTED_ARCHIVE_KEYS = tuple(sorted((*METADATA_ARRAY_KEYS, *FORBIDDEN_ARRAY_KEYS)))
+EXPECTED_METADATA_ARRAYS = {
+    "sample_indices": {
+        "shape": (763,),
+        "dtype": "int64",
+        "sha256": "ad51a9bdbf6acc7449ad8d8f65b3dc69971c318d7f64e2effd814bac8f77fe05",
+    },
+    "targets": {
+        "shape": (763,),
+        "dtype": "int64",
+        "sha256": "15c43ecc7335c7a7febc4e0fbf622df7ad593fc52e5d9f14e5cc27acc16fc000",
+    },
+    "source_stems": {
+        "shape": (763,),
+        "dtype": "<U11",
+        "sha256": "b127d4d6ef8d1ae6b7f6137f8b7ff461c105fd85de414afb2abdf678a3065b21",
+    },
+    "image_paths": {
+        "shape": (763,),
+        "dtype": "<U61",
+        "sha256": "6c42e9e7d5d7a34ecffee72dd96edf5240c54eed291d1a6f86c712016cdfb002",
+    },
+}
 
 ROWS = 763
 UNIQUE_STEMS = 735
@@ -155,6 +190,15 @@ def _json_sha256(value: object) -> str:
     return hashlib.sha256(_canonical_json_bytes(value)).hexdigest()
 
 
+def _array_sha256(value: np.ndarray) -> str:
+    array = np.ascontiguousarray(value)
+    digest = hashlib.sha256()
+    digest.update(str(array.dtype).encode("ascii"))
+    digest.update(np.asarray(array.shape, dtype=np.int64).tobytes())
+    digest.update(array.tobytes())
+    return digest.hexdigest()
+
+
 def _target_counts(rows: Iterable[Mapping[str, object]]) -> Dict[str, int]:
     materialized = list(rows)
     return {
@@ -186,9 +230,16 @@ def _assert_expected_repository_path() -> None:
 
 
 def _load_cohort_metadata(path: Path = COHORT_PATH) -> Dict[str, np.ndarray]:
-    # Deliberately address only the four metadata keys. In particular, do not
-    # inspect or load the legacy fold, candidate probability, or box arrays.
+    # The ZIP central-directory member names are inspected so schema drift
+    # fails closed. Only the four metadata members are deserialized; legacy
+    # folds, probabilities, boxes and label paths are never loaded or hashed.
     with np.load(path, allow_pickle=False) as archive:
+        observed_keys = tuple(sorted(str(key) for key in archive.files))
+        if observed_keys != EXPECTED_ARCHIVE_KEYS:
+            raise ValueError(
+                "Cohort archive member schema differs: "
+                f"observed={observed_keys}, expected={EXPECTED_ARCHIVE_KEYS}"
+            )
         arrays = {
             key: np.asarray(archive[key]).copy()
             for key in METADATA_ARRAY_KEYS
@@ -199,6 +250,19 @@ def _load_cohort_metadata(path: Path = COHORT_PATH) -> Dict[str, np.ndarray]:
     lengths = {shape[0] for shape in shapes.values()}
     if len(lengths) != 1:
         raise ValueError(f"Cohort metadata lengths differ: {shapes}")
+    observed_contract = {
+        key: {
+            "shape": tuple(int(value) for value in array.shape),
+            "dtype": str(array.dtype),
+            "sha256": _array_sha256(array),
+        }
+        for key, array in arrays.items()
+    }
+    if observed_contract != EXPECTED_METADATA_ARRAYS:
+        raise ValueError(
+            "Cohort metadata member contract differs: "
+            f"observed={observed_contract}, expected={EXPECTED_METADATA_ARRAYS}"
+        )
     return arrays
 
 
@@ -219,9 +283,20 @@ def _load_yolo_manifest(
         total_rows = 0
         for line_number, row in enumerate(reader, start=2):
             total_rows += 1
-            output_image = row["output_image"].strip()
-            leakage_group = row["leakage_group"].strip()
-            split = row["split"].strip().lower()
+            raw_output_image = row.get("output_image")
+            raw_leakage_group = row.get("leakage_group")
+            raw_split = row.get("split")
+            if (
+                raw_output_image is None
+                or raw_leakage_group is None
+                or raw_split is None
+            ):
+                raise ValueError(
+                    f"Malformed manifest row at CSV line {line_number}"
+                )
+            output_image = raw_output_image.strip()
+            leakage_group = raw_leakage_group.strip()
+            split = raw_split.strip().lower()
             if not output_image or not leakage_group or not split:
                 raise ValueError(
                     f"Blank manifest identity field at CSV line {line_number}"
@@ -890,13 +965,27 @@ def _assert_real_profile(
 
 def build_manifest() -> Dict[str, object]:
     _assert_expected_repository_path()
+    predecessor_sha256 = _sha256(PREDECESSOR_OUTPUT_PATH)
+    if predecessor_sha256 != PREDECESSOR_OUTPUT_SHA256:
+        raise RuntimeError(
+            "Predecessor fold manifest differs: "
+            f"observed={predecessor_sha256}, "
+            f"expected={PREDECESSOR_OUTPUT_SHA256}"
+        )
+    predecessor_sidecar_sha256 = _sha256(PREDECESSOR_SIDECAR_PATH)
+    if predecessor_sidecar_sha256 != PREDECESSOR_SIDECAR_SHA256:
+        raise RuntimeError(
+            "Predecessor fold-manifest SHA sidecar differs: "
+            f"observed={predecessor_sidecar_sha256}, "
+            f"expected={PREDECESSOR_SIDECAR_SHA256}"
+        )
     observed_input_hashes = {
-        "cohort_npz": _sha256(COHORT_PATH),
+        "cohort_container": _sha256(COHORT_PATH),
         "yolo_manifest_csv": _sha256(YOLO_MANIFEST_PATH),
         "cvat_exporter": _sha256(CVAT_EXPORTER_PATH),
     }
     expected_input_hashes = {
-        "cohort_npz": COHORT_SHA256,
+        "cohort_container": COHORT_CONTAINER_LINEAGE_SHA256,
         "yolo_manifest_csv": YOLO_MANIFEST_SHA256,
         "cvat_exporter": CVAT_EXPORTER_SHA256,
     }
@@ -907,6 +996,15 @@ def build_manifest() -> Dict[str, object]:
         )
     runtime = _runtime_payload(enforce=True)
     cohort = _load_cohort_metadata()
+    cohort_member_contract = {
+        key: {
+            "shape": [int(value) for value in cohort[key].shape],
+            "dtype": str(cohort[key].dtype),
+            "sha256": _array_sha256(cohort[key]),
+        }
+        for key in METADATA_ARRAY_KEYS
+    }
+    selected_member_set_sha256 = _json_sha256(cohort_member_contract)
     yolo_manifest = _load_yolo_manifest()
     rows, join_audit = _canonical_rows(cohort, yolo_manifest)
     metadata_sha = _json_sha256(rows)
@@ -958,32 +1056,62 @@ def build_manifest() -> Dict[str, object]:
         raise RuntimeError("Fold-disjoint graph audit failed")
 
     return {
-        "schema": "trkh_pair_surface_ddf_v2_fold_manifest/v1",
+        "schema": "trkh_pair_surface_ddf_v2_fold_manifest/v2",
         "state": (
-            "frozen_train_only_metadata_manifest_group_"
-            "numeric_neighborhood_disjoint"
+            "frozen_v2r2_provenance_hardened_train_metadata_"
+            "manifest_group_numeric_neighborhood_disjoint"
         ),
         "date": "2026-07-29",
         "builder": {
             "path": "scripts/build_trkh_pair_surface_ddf_v2_fold_manifest.py",
             "sha256": _sha256(Path(__file__).resolve()),
             "default_mode": "check_only",
-            "write_mode": "explicit_--write_only",
+            "write_mode": "one_shot_explicit_--write_only_refuses_existing_pair",
             "expected_repository_root": str(EXPECTED_REPOSITORY_ROOT),
         },
         "scope": {
             "train_only": True,
             "candidate_score_independent": True,
             "legacy_fold_independent": True,
-            "metadata_array_keys_accessed": list(METADATA_ARRAY_KEYS),
-            "array_keys_forbidden_and_not_accessed": list(FORBIDDEN_ARRAY_KEYS),
-            "validation_access": False,
-            "test_access": False,
+            "archive_member_names_inspected": True,
+            "metadata_array_members_deserialized": list(METADATA_ARRAY_KEYS),
+            "forbidden_array_members_not_deserialized": list(
+                FORBIDDEN_ARRAY_KEYS
+            ),
+            "whole_cohort_container_bytes_hashed_for_opaque_lineage": True,
+            "whole_cohort_container_hash_used_as_assignment_feature": False,
+            "keeper_probabilities_or_candidate_scores_deserialized": False,
+            "legacy_folds_deserialized": False,
+            "dataset_manifest_full_bytes_read": True,
+            "dataset_manifest_columns_semantically_used": [
+                "split",
+                "leakage_group",
+                "output_image",
+            ],
+            "cross_split_manifest_identity_metadata_read_for_group_audit": True,
+            "validation_pixels_labels_scores_or_checkpoints_accessed": False,
+            "test_pixels_labels_scores_or_checkpoints_accessed": False,
         },
         "inputs": {
-            "cohort_npz": {
+            "predecessor_manifest": {
+                "path": str(PREDECESSOR_OUTPUT_PATH),
+                "sha256": predecessor_sha256,
+                "sha_sidecar_path": str(PREDECESSOR_SIDECAR_PATH),
+                "sha_sidecar_sha256": predecessor_sidecar_sha256,
+                "role": "immutable lineage and identical-mapping comparison only",
+                "assignment_influence": False,
+            },
+            "cohort_container": {
                 "path": str(COHORT_PATH),
-                "sha256": observed_input_hashes["cohort_npz"],
+                "sha256": observed_input_hashes["cohort_container"],
+                "role": "opaque_lineage_provenance_only",
+                "bytes_hashed": True,
+                "decoded_for_assignment": False,
+            },
+            "selected_npz_members": {
+                "members": cohort_member_contract,
+                "selected_member_set_sha256": selected_member_set_sha256,
+                "assignment_inputs": True,
             },
             "yolo_manifest_csv": {
                 "path": str(YOLO_MANIFEST_PATH),
@@ -1097,7 +1225,38 @@ def build_manifest() -> Dict[str, object]:
                 "fresh-process replay differs from the frozen JSON or SHA record",
                 "candidate output, legacy fold, probability, or box data influences assignment",
                 "fit/calibration/held components overlap or held data fits a calibrator",
+                "the output JSON or SHA sidecar already exists in write mode",
             ],
+        },
+        "supersession": {
+            "scope": "provenance disclosure and immutable-write semantics only",
+            "predecessor_schema": "trkh_pair_surface_ddf_v2_fold_manifest/v1",
+            "predecessor_sha256": predecessor_sha256,
+            "predecessor_mapping_sha256": MAPPING_SHA256,
+            "mapping_changed": False,
+            "component_set_changed": False,
+            "formal_or_replay_runs_consumed_before_supersession": 0,
+            "candidate_scores_observed_before_supersession": False,
+        },
+        "identity_with_predecessor": {
+            "canonical_metadata_sha256": CANONICAL_METADATA_SHA256,
+            "edge_set_sha256": EDGE_SET_SHA256,
+            "component_set_sha256": COMPONENT_SET_SHA256,
+            "component_order_sha256": COMPONENT_ORDER_SHA256,
+            "mapping_sha256": MAPPING_SHA256,
+            "component_assignments_sha256": COMPONENT_ASSIGNMENTS_SHA256,
+            "fold_vector": assignment["fold_vector"],
+            "all_equal": True,
+        },
+        "write_contract": {
+            "default_check_only": True,
+            "one_shot_output_absent_required": True,
+            "expected_repository_root_guard": True,
+            "per_file_atomic_fsync_replace": True,
+            "pair_transactional": False,
+            "partial_pair_fails_closed": True,
+            "recovery_requires_separate_reviewed_action": True,
+            "effective_only_after_builder_artifact_tests_commit_and_push": True,
         },
     }
 
@@ -1122,6 +1281,16 @@ def _atomic_write_bytes(path: Path, payload: bytes) -> None:
 
 def write_manifest(manifest: Mapping[str, object]) -> str:
     _assert_expected_repository_path()
+    existing = [
+        str(path)
+        for path in (OUTPUT_PATH, OUTPUT_SHA_PATH)
+        if path.exists()
+    ]
+    if existing:
+        raise FileExistsError(
+            "Frozen fold-manifest outputs already exist; one-shot write refuses "
+            f"overwrite: {existing}"
+        )
     payload = (
         json.dumps(manifest, indent=2, ensure_ascii=False, sort_keys=True) + "\n"
     ).encode("utf-8")
@@ -1160,8 +1329,8 @@ def _assert_check_only_matches_frozen(manifest: Mapping[str, object]) -> None:
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Build or replay-check the deterministic TRKH Pair-Surface DDF v2 "
-            "train-only fold manifest."
+            "Build or replay-check the provenance-hardened deterministic TRKH "
+            "Pair-Surface DDF v2R2 train-only fold manifest."
         )
     )
     modes = parser.add_mutually_exclusive_group()
@@ -1169,7 +1338,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--write",
         action="store_true",
         help=(
-            "Explicitly write the frozen JSON and SHA sidecar. Without this flag "
+            "Explicitly perform the one-shot write of the frozen JSON and SHA "
+            "sidecar. Existing output is never overwritten. Without this flag "
             "the builder is check-only."
         ),
     )
