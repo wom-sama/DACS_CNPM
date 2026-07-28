@@ -8,6 +8,8 @@ param(
     [bool]$PairedViewTrain = $false,
     [string]$RunName = "mango_cls_256_5class_attention_views_v8_30e",
     [string]$ResumeCheckpoint = "runs\mango_cls_256_5class_hardneg_maskfix_v4_30e\checkpoints\best.pt",
+    [ValidateSet("Scratch", "WarmStart", "StatefulResume")]
+    [string]$ResumeMode = "WarmStart",
     [int]$ImageSize = 256,
     [ValidateSet("conv_pool", "coatnet_mbconv", "dbb_conv_pool")]
     [string]$StemArchitecture = "conv_pool",
@@ -1304,8 +1306,34 @@ if ($SourceContextFocusSuppressionProbabilityPower -lt 0.0) {
 if ($SourceContextFocusSuppressionLossWeight -gt 0.0 -and -not $ClassificationSourceContextAux) {
     throw "SourceContextFocusSuppressionLossWeight > 0 can ClassificationSourceContextAux."
 }
-if (-not [string]::IsNullOrWhiteSpace($ResumeCheckpoint) -and -not (Test-Path -LiteralPath $ResumeCheckpoint)) {
-    throw "Khong tim thay resume checkpoint: $ResumeCheckpoint"
+if ($ResumeMode -eq "Scratch") {
+    if (
+        $PSBoundParameters.ContainsKey("ResumeCheckpoint") -and
+        -not [string]::IsNullOrWhiteSpace($ResumeCheckpoint)
+    ) {
+        throw "ResumeMode=Scratch tu choi ResumeCheckpoint khong rong de tranh vo tinh nap weights."
+    }
+    # The parameter has a historical non-empty default. Explicit Scratch mode
+    # overrides that default so callers do not need to pass an empty native
+    # PowerShell argument (which powershell.exe can drop).
+    $ResumeCheckpoint = ""
+}
+else {
+    if ([string]::IsNullOrWhiteSpace($ResumeCheckpoint)) {
+        throw "ResumeMode=$ResumeMode yeu cau ResumeCheckpoint."
+    }
+    if (-not (Test-Path -LiteralPath $ResumeCheckpoint)) {
+        throw "Khong tim thay resume checkpoint: $ResumeCheckpoint"
+    }
+    if ($ResumeMode -eq "StatefulResume") {
+        $expectedLast = [System.IO.Path]::GetFullPath(
+            (Join-Path $ProjectRoot ("runs\{0}\checkpoints\last.pt" -f $RunName))
+        )
+        $observedResume = [System.IO.Path]::GetFullPath($ResumeCheckpoint)
+        if (-not [string]::Equals($observedResume, $expectedLast, [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "StatefulResume must use the same run's checkpoints\last.pt: $expectedLast"
+        }
+    }
 }
 if (-not [string]::IsNullOrWhiteSpace($SampleWeightManifest) -and -not (Test-Path -LiteralPath $SampleWeightManifest)) {
     throw "Khong tim thay sample weight manifest: $SampleWeightManifest"
@@ -1647,6 +1675,7 @@ if ($PreflightOnly) {
         auxiliary_train_classification_folder_yolo_data = $AuxiliaryTrainClassificationFolderYoloData
         auxiliary_train_weight = $AuxiliaryTrainWeight
         paired_view_train = $PairedViewTrain
+        resume_mode = $ResumeMode
         resume_checkpoint = $ResumeCheckpoint
         split_counts = $SplitCounts
         gpu = $GpuStatus
@@ -3000,18 +3029,26 @@ try {
         $TrainArgs += @("--classification-mlp-head")
     }
 
-    if ([string]::IsNullOrWhiteSpace($ResumeCheckpoint)) {
-        $TrainArgs += @("--disable-resume")
-    }
-    else {
-        $TrainArgs += @(
-            "--resume", $ResumeCheckpoint,
-            "--resume-use-cli-config",
-            "--resume-reset-epoch",
-            "--resume-reset-optimizer",
-            "--resume-reset-scheduler",
-            "--resume-reset-scaler"
-        )
+    switch ($ResumeMode) {
+        "Scratch" {
+            $TrainArgs += @("--disable-resume")
+        }
+        "WarmStart" {
+            $TrainArgs += @(
+                "--resume", $ResumeCheckpoint,
+                "--resume-use-cli-config",
+                "--resume-reset-epoch",
+                "--resume-reset-optimizer",
+                "--resume-reset-scheduler",
+                "--resume-reset-scaler"
+            )
+        }
+        "StatefulResume" {
+            $TrainArgs += @("--resume", $ResumeCheckpoint)
+        }
+        default {
+            throw "ResumeMode khong duoc ho tro: $ResumeMode"
+        }
     }
     if (-not [string]::IsNullOrWhiteSpace($ClassificationFolderYoloData)) {
         $TrainArgs += @("--classification-folder-yolo-data", "$ClassificationFolderYoloData")
@@ -3612,6 +3649,7 @@ if ($ClassIndependentHead) {
         auxiliary_train_classification_folder_yolo_data = $AuxiliaryTrainClassificationFolderYoloData
         auxiliary_train_weight = $AuxiliaryTrainWeight
         paired_view_train = $PairedViewTrain
+        resume_mode = $ResumeMode
         resume_checkpoint = $ResumeCheckpoint
         batch_size = $BatchSize
         seed = $Seed

@@ -119,6 +119,7 @@ if ($RunPair) {
     $Shared = @{
         Python = $Python
         DataYaml = $FitOnlyDataYaml
+        ResumeMode = "Scratch"
         ResumeCheckpoint = ""
         ImageSize = 256
         StemArchitecture = "conv_pool"

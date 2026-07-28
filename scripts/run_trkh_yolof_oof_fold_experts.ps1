@@ -70,6 +70,7 @@ foreach ($FoldId in $FoldIds) {
     $TrainParams = @{
         DataYaml = $DataYaml
         RunName = $RunName
+        ResumeMode = if ([string]::IsNullOrWhiteSpace($ResumeCheckpoint)) { "Scratch" } else { "WarmStart" }
         ResumeCheckpoint = $ResumeCheckpoint
         Epochs = $Epochs
         Patience = $Patience

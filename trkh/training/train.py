@@ -9018,7 +9018,7 @@ def _load_training_checkpoint(
     if scheduler_state is not None and hasattr(scheduler, "load_state_dict"):
         scheduler.load_state_dict(scheduler_state)
         scheduler_restored = True
-    elif scheduler is not None and hasattr(scheduler, "step"):
+    elif restore_scheduler and scheduler is not None and hasattr(scheduler, "step"):
         scheduler.step(float(int(checkpoint.get("epoch", 0) or 0)))
 
     scaler_state = checkpoint.get("scaler_state") if restore_scaler else None
@@ -9039,6 +9039,20 @@ def _load_training_checkpoint(
         "epochs_without_improvement": int(checkpoint.get("epochs_without_improvement", 0) or 0),
     }
     return summary, checkpoint
+
+
+def _copy_checkpoint_payload_with_kind(
+    checkpoint_payload: Mapping[str, object],
+    checkpoint_kind: str,
+) -> Dict[str, object]:
+    payload = dict(checkpoint_payload)
+    resume_state = payload.get("resume_state")
+    if isinstance(resume_state, Mapping):
+        payload["resume_state"] = {
+            **dict(resume_state),
+            "checkpoint_kind": str(checkpoint_kind),
+        }
+    return payload
 
 
 def _initial_training_progress_from_resume(
@@ -33773,7 +33787,10 @@ def main() -> None:
                     best_epoch = int(epoch)
                     selected_checkpoint_macro_f1 = float(current_macro_f1)
                     epochs_without_improvement = 0
-                    best_payload = dict(checkpoint_payload)
+                    best_payload = _copy_checkpoint_payload_with_kind(
+                        checkpoint_payload,
+                        "best",
+                    )
                     best_payload["best_macro_f1"] = best_macro_f1
                     best_payload["best_macro_f1_epoch"] = best_macro_f1_epoch
                     best_payload["selected_checkpoint_macro_f1"] = selected_checkpoint_macro_f1

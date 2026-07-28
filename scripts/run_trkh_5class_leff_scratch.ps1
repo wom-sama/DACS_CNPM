@@ -48,6 +48,7 @@ $Args = @{
     Python = $Python
     DataYaml = $DataYaml
     RunName = $RunName
+    ResumeMode = "Scratch"
     ResumeCheckpoint = ""
     StemArchitecture = "conv_pool"
     Epochs = $Epochs

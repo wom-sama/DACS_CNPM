@@ -127,6 +127,7 @@ if ($RunPair) {
     $Shared = @{
         Python = $Python
         DataYaml = $FoldDataYaml
+        ResumeMode = "Scratch"
         ResumeCheckpoint = ""
         ImageSize = 256
         Epochs = 5

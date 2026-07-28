@@ -30,6 +30,37 @@ function Resolve-RequiredPath {
     return $fullPath
 }
 
+function Get-LatestPromotedCheckpoint {
+    param([string]$LatestPath)
+
+    if (-not (Test-Path -LiteralPath $LatestPath)) {
+        throw "Checkpoint/RunName not provided and latest_full_pipeline.json is missing. Run the full pipeline first."
+    }
+    $latest = Get-Content -LiteralPath $LatestPath -Raw | ConvertFrom-Json
+    $gate = $latest.validation_gate
+    $selection = $gate.train_selection
+    $usesCurrentPromotionContract = (
+        $null -ne $gate -and
+        ($gate.passed -is [bool]) -and
+        [bool]$gate.passed -and
+        $null -ne $selection -and
+        ($selection.name_matches_expected -is [bool]) -and
+        [bool]$selection.name_matches_expected -and
+        ($selection.direction_matches_expected -is [bool]) -and
+        [bool]$selection.direction_matches_expected
+    )
+    if (-not $usesCurrentPromotionContract) {
+        throw (
+            "latest_full_pipeline.json is stale or was promoted by a legacy validation gate. " +
+            "Pass -Checkpoint/-RunName explicitly or complete a run under the current fair-selection gate."
+        )
+    }
+    if ([string]::IsNullOrWhiteSpace([string]$latest.checkpoint)) {
+        throw "latest_full_pipeline.json passed the gate contract but has no checkpoint path."
+    }
+    return [string]$latest.checkpoint
+}
+
 function Invoke-NativeChecked {
     param([string]$FilePath, [string[]]$Arguments, [string]$Name)
     $previousErrorActionPreference = $ErrorActionPreference
@@ -54,11 +85,7 @@ if ([string]::IsNullOrWhiteSpace($Checkpoint)) {
     }
     else {
         $latestPath = Join-Path $ProjectRoot "runs\latest_full_pipeline.json"
-        if (-not (Test-Path -LiteralPath $latestPath)) {
-            throw "Checkpoint/RunName not provided and latest_full_pipeline.json is missing. Run the full pipeline first."
-        }
-        $latest = Get-Content -LiteralPath $latestPath -Raw | ConvertFrom-Json
-        $Checkpoint = [string]$latest.checkpoint
+        $Checkpoint = Get-LatestPromotedCheckpoint -LatestPath $latestPath
     }
 }
 $CheckpointPath = Resolve-RequiredPath -Value $Checkpoint -Label "Checkpoint"

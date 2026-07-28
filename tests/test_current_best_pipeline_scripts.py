@@ -19,6 +19,20 @@ def test_full_pipeline_avoids_native_stderr_pipeline_and_orders_final_test() -> 
     assert "SkipFinalTest = $true" in script
     assert "MinimumRawValMacroF1" in script
     assert "MinimumRawValClass1F1" in script
+    assert "MinimumTrainSelectionMetric" in script
+    assert "best_selection_metric_value" in script
+    assert '[ValidateSet("Scratch", "WarmStart", "StatefulResume")]' in script
+    assert "ResumeMode = $TrainingMode" in script
+    assert "TrainingMode=Scratch refuses a non-empty -ResumeCheckpoint" in script
+    assert '$PSBoundParameters.ContainsKey("ResumeCheckpoint")' in script
+    assert "SchedulerTotalEpochs = $SchedulerTotalEpochsEffective" in script
+    assert "LearningRate = $LearningRate" in script
+    assert "AttentionViewStartEpoch = $AttentionViewStartEpochEffective" in script
+    assert 'elseif ($TrainingMode -eq "WarmStart")' in script
+    assert "DisableBalancedEpochSampling = [bool]$DisableBalancedEpochSampling" in script
+    assert "StatefulResume requires the existing run directory" in script
+    assert "Scratch/WarmStart requires a new RunName" in script
+    assert "StatefulResume refuses a normally completed run" in script
     assert "validation_promotion_gate.json" in script
     assert "if ($RunFinalTest -and $ValidationGatePassed)" in script
     assert script.index('Invoke-Evaluation -Split "val"') < script.index('if ($RunFinalTest -and $ValidationGatePassed)')
@@ -30,6 +44,29 @@ def test_full_pipeline_avoids_native_stderr_pipeline_and_orders_final_test() -> 
     assert "trkh.tools.audit_trkh_artifact_retention" in script
 
 
+def test_promotion_gate_requires_expected_fair_metric_semantics() -> None:
+    script = _read("scripts/run_trkh_current_best_full_pipeline.ps1")
+
+    assert (
+        '$ExpectedTrainSelectionMetricName = '
+        '"fair_macro_f1_min_class_gap_penalty"'
+    ) in script
+    assert (
+        "[string]$TrainSummary.best_selection_metric_name -ceq "
+        "$ExpectedTrainSelectionMetricName"
+    ) in script
+    assert "$TrainSummary.best_selection_metric_higher_is_better -is [bool]" in script
+    assert "$TrainSelectionMetricNameMatches -and" in script
+    assert "$TrainSelectionMetricDirectionMatches -and" in script
+    assert "train_selection_metric_name = $ExpectedTrainSelectionMetricName" in script
+    assert "train_selection_metric_higher_is_better = $true" in script
+    assert "name_matches_expected = [bool]$TrainSelectionMetricNameMatches" in script
+    assert (
+        "direction_matches_expected = [bool]$TrainSelectionMetricDirectionMatches"
+        in script
+    )
+
+
 def test_export_and_video_wrappers_are_single_native_command_paths() -> None:
     export_script = _read("scripts/run_trkh_export_engine.ps1")
     video_script = _read("scripts/run_trkh_test_video.ps1")
@@ -39,6 +76,10 @@ def test_export_and_video_wrappers_are_single_native_command_paths() -> None:
         assert "ForEach-Object" not in script
         assert "$LASTEXITCODE" in script
         assert "Invoke-NativeChecked" in script
+        assert "Get-LatestPromotedCheckpoint" in script
+        assert "name_matches_expected" in script
+        assert "direction_matches_expected" in script
+        assert "stale or was promoted by a legacy validation gate" in script
 
     assert "trkh.inference.deploy" in export_script
     assert "model_fp32_fp16.engine" in export_script

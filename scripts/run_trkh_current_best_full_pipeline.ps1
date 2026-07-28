@@ -3,12 +3,28 @@ param(
     [string]$DataYaml = "D:\DataAI\AIEx\newdataset\yolo_f\data.yaml",
     [string]$RunName = ("full_v8_yolof_current_best_30e_{0}" -f (Get-Date -Format "yyyyMMdd_HHmmss")),
     [string]$ResumeCheckpoint = "runs\probe_v8_yolof_pairroute_teacherfocusbinary015_boundarydrop_bboxprior_120b_2e_20260701\checkpoints\best.pt",
+    [ValidateSet("Scratch", "WarmStart", "StatefulResume")]
+    [string]$TrainingMode = "WarmStart",
     [string]$TeacherCsv = "runs\weighted_ensemble_no_pretrain_6expert_val_gate_20260701\teacher_probs_train_sampleindex_focus005.csv",
     [string]$VerifierJson = "runs\patch_evidence_mil_yolof_keeper_01only_exportparams_20260705\pair_verifier_model_params.json",
     [int]$Epochs = 30,
+    [int]$SchedulerTotalEpochs = 0,
     [int]$Patience = 3,
+    [int]$BatchSize = 32,
+    [int]$GradAccumSteps = 2,
+    [int]$NumWorkers = 4,
+    [int]$EvalNumWorkers = 2,
+    [int]$MaxTrainBatches = 0,
+    [int]$MaxValBatches = 0,
+    [int]$Seed = 42,
+    [double]$LearningRate = 8e-5,
+    [double]$MinLearningRate = 1e-6,
+    [int]$WarmupEpochs = 1,
+    [int]$AttentionViewStartEpoch = 0,
+    [switch]$DisableBalancedEpochSampling,
     [double]$MinimumRawValMacroF1 = 0.8829248547554016,
     [double]$MinimumRawValClass1F1 = 0.678260862827301,
+    [double]$MinimumTrainSelectionMetric = 0.762948716878891,
     [double]$ValidationGateTolerance = 1e-6,
     [switch]$RunFinalTest,
     [switch]$PreflightOnly
@@ -56,7 +72,18 @@ function Write-JsonNoBom {
 
 $PythonPath = Resolve-ProjectPath -Value $Python -Label "Python"
 $DataYamlPath = Resolve-ProjectPath -Value $DataYaml -Label "Data YAML"
-$ResumeCheckpointPath = Resolve-ProjectPath -Value $ResumeCheckpoint -Label "Resume checkpoint"
+$ResumeCheckpointPath = if ($TrainingMode -eq "Scratch") {
+    if (
+        $PSBoundParameters.ContainsKey("ResumeCheckpoint") -and
+        -not [string]::IsNullOrWhiteSpace($ResumeCheckpoint)
+    ) {
+        throw "TrainingMode=Scratch refuses a non-empty -ResumeCheckpoint."
+    }
+    ""
+}
+else {
+    Resolve-ProjectPath -Value $ResumeCheckpoint -Label "Resume checkpoint"
+}
 $TeacherCsvPath = Resolve-ProjectPath -Value $TeacherCsv -Label "Teacher CSV"
 $VerifierJsonPath = Resolve-ProjectPath -Value $VerifierJson -Label "Verifier JSON"
 $TrainLauncher = Resolve-ProjectPath `
@@ -72,6 +99,35 @@ if ($Epochs -lt 1 -or $Epochs -gt 30) {
 if ($Patience -lt 1) {
     throw "Patience must be >= 1."
 }
+$SchedulerTotalEpochsEffective = if ($SchedulerTotalEpochs -gt 0) { $SchedulerTotalEpochs } else { $Epochs }
+if ($SchedulerTotalEpochsEffective -lt $Epochs) {
+    throw "SchedulerTotalEpochs must be zero or >= Epochs."
+}
+if ($BatchSize -lt 1 -or $GradAccumSteps -lt 1) {
+    throw "BatchSize and GradAccumSteps must be >= 1."
+}
+if ($NumWorkers -lt 0 -or $EvalNumWorkers -lt 0) {
+    throw "NumWorkers and EvalNumWorkers must be >= 0."
+}
+if ($MaxTrainBatches -lt 0 -or $MaxValBatches -lt 0) {
+    throw "MaxTrainBatches and MaxValBatches must be >= 0."
+}
+if ($LearningRate -le 0.0 -or $MinLearningRate -lt 0.0 -or $MinLearningRate -gt $LearningRate) {
+    throw "LearningRate/MinLearningRate are invalid."
+}
+if ($WarmupEpochs -lt 0 -or $AttentionViewStartEpoch -lt 0) {
+    throw "WarmupEpochs and AttentionViewStartEpoch must be >= 0."
+}
+$AttentionViewStartEpochEffective = if ($AttentionViewStartEpoch -gt 0) {
+    $AttentionViewStartEpoch
+}
+elseif ($TrainingMode -eq "WarmStart") {
+    1
+}
+else {
+    2
+}
+$ExpectedTrainSelectionMetricName = "fair_macro_f1_min_class_gap_penalty"
 
 $RunDir = Join-Path $ProjectRoot ("runs\" + $RunName)
 $AuditRoot = Join-Path $RunDir "final_audit"
@@ -79,8 +135,26 @@ $Checkpoint = Join-Path $RunDir "checkpoints\best.pt"
 $PipelineStatusPath = Join-Path $RunDir "pipeline_status.json"
 $LatestPointerPath = Join-Path $ProjectRoot "runs\latest_full_pipeline.json"
 
-if (-not $PreflightOnly -and (Test-Path -LiteralPath $RunDir)) {
-    throw "Run directory already exists. Use a new RunName: $RunDir"
+if (-not $PreflightOnly) {
+    if ($TrainingMode -eq "StatefulResume") {
+        $ExpectedLastCheckpoint = [System.IO.Path]::GetFullPath((Join-Path $RunDir "checkpoints\last.pt"))
+        if (-not (Test-Path -LiteralPath $RunDir)) {
+            throw "StatefulResume requires the existing run directory: $RunDir"
+        }
+        if (-not [string]::Equals($ResumeCheckpointPath, $ExpectedLastCheckpoint, [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "StatefulResume must use the same run's checkpoints\last.pt: $ExpectedLastCheckpoint"
+        }
+        $ExistingTrainSummaryPath = Join-Path $RunDir "summary.json"
+        if (Test-Path -LiteralPath $ExistingTrainSummaryPath) {
+            $ExistingTrainSummary = Get-Content -LiteralPath $ExistingTrainSummaryPath -Raw | ConvertFrom-Json
+            if ($ExistingTrainSummary.stop_reason -in @("completed", "early_stopping")) {
+                throw "StatefulResume refuses a normally completed run (stop_reason=$($ExistingTrainSummary.stop_reason))."
+            }
+        }
+    }
+    elseif (Test-Path -LiteralPath $RunDir) {
+        throw "Scratch/WarmStart requires a new RunName; directory already exists: $RunDir"
+    }
 }
 
 $env:PYTHONPATH = $ProjectRoot
@@ -136,20 +210,22 @@ $TrainParameters = @{
     Python = $PythonPath
     DataYaml = $DataYamlPath
     RunName = $RunName
+    ResumeMode = $TrainingMode
     ResumeCheckpoint = $ResumeCheckpointPath
     Epochs = $Epochs
-    SchedulerTotalEpochs = $Epochs
+    SchedulerTotalEpochs = $SchedulerTotalEpochsEffective
     Patience = $Patience
-    BatchSize = 32
-    GradAccumSteps = 2
-    NumWorkers = 4
-    EvalNumWorkers = 2
-    MaxTrainBatches = 0
-    MaxValBatches = 0
-    Seed = 42
-    LearningRate = 8e-5
-    MinLearningRate = 1e-6
-    WarmupEpochs = 1
+    BatchSize = $BatchSize
+    GradAccumSteps = $GradAccumSteps
+    NumWorkers = $NumWorkers
+    EvalNumWorkers = $EvalNumWorkers
+    MaxTrainBatches = $MaxTrainBatches
+    MaxValBatches = $MaxValBatches
+    Seed = $Seed
+    DisableBalancedEpochSampling = [bool]$DisableBalancedEpochSampling
+    LearningRate = $LearningRate
+    MinLearningRate = $MinLearningRate
+    WarmupEpochs = $WarmupEpochs
     WeightDecay = 0.05
     BackboneLrScale = 1.0
     ImageSize = 256
@@ -186,7 +262,7 @@ $TrainParameters = @{
     AttentionViewLossWeight = 0.35
     AttentionCropProbability = 0.40
     AttentionDropProbability = 0.20
-    AttentionViewStartEpoch = 2
+    AttentionViewStartEpoch = $AttentionViewStartEpochEffective
     AttentionViewScoreSource = "learned_attention"
     AttentionViewForegroundWeight = 0.40
     AttentionDropMinAreaRatio = 0.06
@@ -229,11 +305,27 @@ if ($PreflightOnly) {
         run_name = $RunName
         python = $PythonPath
         data_yaml = $DataYamlPath
+        training_mode = $TrainingMode
         resume_checkpoint = $ResumeCheckpointPath
         verifier_json = $VerifierJsonPath
         epochs = $Epochs
+        scheduler_total_epochs = $SchedulerTotalEpochsEffective
+        batch_size = $BatchSize
+        grad_accum_steps = $GradAccumSteps
+        effective_batch_size = $BatchSize * $GradAccumSteps
+        num_workers = $NumWorkers
+        eval_num_workers = $EvalNumWorkers
+        max_train_batches = $MaxTrainBatches
+        max_val_batches = $MaxValBatches
+        seed = $Seed
+        learning_rate = $LearningRate
+        min_learning_rate = $MinLearningRate
+        warmup_epochs = $WarmupEpochs
+        attention_view_start_epoch = $AttentionViewStartEpochEffective
+        disable_balanced_epoch_sampling = [bool]$DisableBalancedEpochSampling
         minimum_raw_val_macro_f1 = $MinimumRawValMacroF1
         minimum_raw_val_class_1_f1 = $MinimumRawValClass1F1
+        minimum_train_selection_metric = $MinimumTrainSelectionMetric
         validation_gate_tolerance = $ValidationGateTolerance
         final_test_requested = [bool]$RunFinalTest
         native_stderr_policy = "direct invocation; no 2>&1 pipeline; LASTEXITCODE checked"
@@ -374,6 +466,7 @@ $PipelineState = [ordered]@{
     run_name = $RunName
     started_at = (Get-Date).ToString("o")
     final_test_requested = [bool]$RunFinalTest
+    training_mode = $TrainingMode
     native_stderr_policy = "direct invocation; no 2>&1 pipeline; LASTEXITCODE checked"
     steps = $script:StepRecords
 }
@@ -450,16 +543,30 @@ try {
     if ($null -eq $ValRawClass1 -or $null -eq $ValSoftClass1) {
         throw "Validation metrics do not contain class index 1."
     }
+    $TrainSelectionMetricNameMatches = (
+        [string]$TrainSummary.best_selection_metric_name -ceq $ExpectedTrainSelectionMetricName
+    )
+    $TrainSelectionMetricDirectionMatches = (
+        ($TrainSummary.best_selection_metric_higher_is_better -is [bool]) -and
+        ([bool]$TrainSummary.best_selection_metric_higher_is_better)
+    )
     $ValidationGatePassed = (
         [double]$ValRawMetrics.macro_f1 + $ValidationGateTolerance -ge $MinimumRawValMacroF1 -and
-        [double]$ValRawClass1.f1 + $ValidationGateTolerance -ge $MinimumRawValClass1F1
+        [double]$ValRawClass1.f1 + $ValidationGateTolerance -ge $MinimumRawValClass1F1 -and
+        $TrainSelectionMetricNameMatches -and
+        $TrainSelectionMetricDirectionMatches -and
+        $null -ne $TrainSummary.best_selection_metric_value -and
+        [double]$TrainSummary.best_selection_metric_value + $ValidationGateTolerance -ge $MinimumTrainSelectionMetric
     )
     $ValidationGate = [ordered]@{
         passed = [bool]$ValidationGatePassed
-        policy = "raw checkpoint must match or exceed both selected raw keeper thresholds before test/deploy promotion"
+        policy = "raw checkpoint must match both independent-reload keeper thresholds and the in-training fair-selection keeper before test/deploy promotion"
         thresholds = [ordered]@{
             macro_f1 = $MinimumRawValMacroF1
             class_1_f1 = $MinimumRawValClass1F1
+            train_selection_metric_name = $ExpectedTrainSelectionMetricName
+            train_selection_metric_higher_is_better = $true
+            train_selection_metric = $MinimumTrainSelectionMetric
             numeric_tolerance = $ValidationGateTolerance
         }
         raw = [ordered]@{
@@ -467,6 +574,13 @@ try {
             class_1_precision = [double]$ValRawClass1.precision
             class_1_recall = [double]$ValRawClass1.recall
             class_1_f1 = [double]$ValRawClass1.f1
+        }
+        train_selection = [ordered]@{
+            name = $TrainSummary.best_selection_metric_name
+            value = $TrainSummary.best_selection_metric_value
+            higher_is_better = $TrainSummary.best_selection_metric_higher_is_better
+            name_matches_expected = [bool]$TrainSelectionMetricNameMatches
+            direction_matches_expected = [bool]$TrainSelectionMetricDirectionMatches
         }
         softboost001_diagnostic = [ordered]@{
             macro_f1 = [double]$ValSoftMetrics.macro_f1
@@ -501,6 +615,8 @@ try {
     $PipelineSummary = [ordered]@{
         status = if ($ValidationGatePassed) { "completed" } else { "validation_gate_rejected" }
         run_name = $RunName
+        training_mode = $TrainingMode
+        resume_checkpoint = $ResumeCheckpointPath
         checkpoint = $Checkpoint
         train_summary = $TrainSummaryPath
         audit_root = $AuditRoot

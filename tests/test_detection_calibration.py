@@ -88,6 +88,7 @@ from trkh.training.train import (
     ModelEMA,
     apply_balance_file_auto_adjustment,
     _initial_training_progress_from_resume,
+    _copy_checkpoint_payload_with_kind,
     _load_resume_configs_from_checkpoint,
     _load_training_checkpoint,
     _apply_adaptive_detection_loss,
@@ -3757,6 +3758,132 @@ dataset_balance:
         self.assertAlmostEqual(restored_scheduler.get_last_lr()[0], expected_lr)
         for original, restored in zip(model.parameters(), restored_model.parameters()):
             self.assertTrue(torch.allclose(original, restored))
+
+    def test_resume_reset_scheduler_preserves_new_phase_warmup_lr(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            resume_path = Path(temp_dir) / "best.pt"
+            source_model = torch.nn.Linear(2, 2)
+            source_optimizer = torch.optim.AdamW(source_model.parameters(), lr=0.01)
+            source_scheduler = build_warmup_decay_scheduler(
+                optimizer=source_optimizer,
+                warmup_epochs=1,
+                warmup_start_factor=0.1,
+                total_epochs=10,
+                min_learning_rate=1e-5,
+                decay_style="cosine",
+            )
+            source_scheduler.step(8.0)
+            save_checkpoint(
+                resume_path,
+                {
+                    "epoch": 8,
+                    "model_state": source_model.state_dict(),
+                    "optimizer_state": source_optimizer.state_dict(),
+                    "scheduler_state": source_scheduler.state_dict(),
+                    "class_names": ["a", "b"],
+                },
+            )
+
+            restored_model = torch.nn.Linear(2, 2)
+            restored_optimizer = torch.optim.AdamW(restored_model.parameters(), lr=0.01)
+            restored_scheduler = build_warmup_decay_scheduler(
+                optimizer=restored_optimizer,
+                warmup_epochs=2,
+                warmup_start_factor=0.1,
+                total_epochs=30,
+                min_learning_rate=1e-5,
+                decay_style="cosine",
+            )
+            expected_warmup_lr = restored_scheduler.get_last_lr()[0]
+
+            summary, _ = _load_training_checkpoint(
+                resume_path=resume_path,
+                model=restored_model,
+                optimizer=restored_optimizer,
+                scheduler=restored_scheduler,
+                scaler=None,
+                device=torch.device("cpu"),
+                class_names=["a", "b"],
+                restore_optimizer=False,
+                restore_scheduler=False,
+            )
+
+        self.assertFalse(summary["optimizer_restored"])
+        self.assertFalse(summary["scheduler_restored"])
+        self.assertAlmostEqual(expected_warmup_lr, 0.001)
+        self.assertAlmostEqual(restored_scheduler.get_last_lr()[0], expected_warmup_lr)
+
+    def test_resume_missing_scheduler_state_uses_checkpoint_epoch_fallback(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            resume_path = Path(temp_dir) / "legacy.pt"
+            source_model = torch.nn.Linear(2, 2)
+            save_checkpoint(
+                resume_path,
+                {
+                    "epoch": 3,
+                    "model_state": source_model.state_dict(),
+                    "class_names": ["a", "b"],
+                },
+            )
+
+            restored_model = torch.nn.Linear(2, 2)
+            restored_optimizer = torch.optim.AdamW(restored_model.parameters(), lr=0.01)
+            restored_scheduler = build_warmup_decay_scheduler(
+                optimizer=restored_optimizer,
+                warmup_epochs=1,
+                warmup_start_factor=0.1,
+                total_epochs=10,
+                min_learning_rate=1e-5,
+                decay_style="cosine",
+            )
+            initial_warmup_lr = restored_scheduler.get_last_lr()[0]
+
+            summary, _ = _load_training_checkpoint(
+                resume_path=resume_path,
+                model=restored_model,
+                optimizer=restored_optimizer,
+                scheduler=restored_scheduler,
+                scaler=None,
+                device=torch.device("cpu"),
+                class_names=["a", "b"],
+                restore_optimizer=False,
+                restore_scheduler=True,
+            )
+
+        self.assertFalse(summary["scheduler_restored"])
+        self.assertNotAlmostEqual(restored_scheduler.get_last_lr()[0], initial_warmup_lr)
+        expected_optimizer = torch.optim.AdamW(torch.nn.Linear(2, 2).parameters(), lr=0.01)
+        expected_scheduler = build_warmup_decay_scheduler(
+            optimizer=expected_optimizer,
+            warmup_epochs=1,
+            warmup_start_factor=0.1,
+            total_epochs=10,
+            min_learning_rate=1e-5,
+            decay_style="cosine",
+        )
+        expected_scheduler.step(3.0)
+        self.assertAlmostEqual(
+            restored_scheduler.get_last_lr()[0],
+            expected_scheduler.get_last_lr()[0],
+        )
+
+    def test_best_checkpoint_kind_does_not_mutate_last_payload_metadata(self):
+        last_payload = {
+            "epoch": 4,
+            "resume_state": {
+                "last_completed_epoch": 4,
+                "next_epoch": 5,
+                "checkpoint_kind": "last",
+            },
+        }
+
+        best_payload = _copy_checkpoint_payload_with_kind(last_payload, "best")
+
+        self.assertEqual(best_payload["resume_state"]["checkpoint_kind"], "best")
+        self.assertEqual(best_payload["resume_state"]["last_completed_epoch"], 4)
+        self.assertEqual(best_payload["resume_state"]["next_epoch"], 5)
+        self.assertEqual(last_payload["resume_state"]["checkpoint_kind"], "last")
+        self.assertIsNot(best_payload["resume_state"], last_payload["resume_state"])
 
     def test_auto_resume_resolves_last_checkpoint(self):
         with tempfile.TemporaryDirectory() as temp_dir:
