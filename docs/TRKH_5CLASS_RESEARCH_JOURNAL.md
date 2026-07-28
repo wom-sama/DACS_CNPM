@@ -22699,3 +22699,55 @@ Date: 2026-07-02
   The replacement trusted-runner test must pin its full import closure before
   collection and emit a new-schema create-once manifest only after source and
   authority are committed and pushed.
+
+## Fail-Closed Scientific and Trusted-Runner V3 Foundations - 2026-07-29
+
+- Push the corrected scientific foundation at
+  `9ea25ea87ae6d497b80dd86c27e59391d21c4a9b`. The 250 role/fold/head
+  calibrators and action thresholds are fitted/selected internally from their
+  exact calibration preimages, every aggregate is recomputed from raw held
+  arrays, geometry/keeper/component/CIDT identities are bound, and Gate 14 has
+  a fixed 69-record registry. The exact production entry remains deliberately
+  fail-closed, so this commit establishes derivation logic but no candidate,
+  metric, S1/S2, formal, validation, test or GPU observation.
+- Independently red-team the next runner snapshot twice. Correct combined
+  primary/replay authorization semantics, create-once claims, target-release
+  ordering, typed CIDT clean/causal receipts, primary-root/handoff replay
+  binding, protected-untracked inventories and exact command/resource/stop/
+  retention policy. Freeze and push the six-file, 4,114-line foundation at
+  `3942f140efdf84ad1882aed8ecf7185b7868bef3`.
+- Exact source SHA-256 identities are: contracts
+  `e8614a9f1b733182c298f99549315ab554edbb5f5663c1f48d4af26723573e16`,
+  runtime `dfce5a7a1f23418fc2669c06c97c40924be4032d2506e27fb2ca0c7c8336d2bc`,
+  handoff `276b10c8f5ec258dfc6e6b8327cf5bd1fee88333510fddd4c2ddde2fa606675c`,
+  guard `a4d8d5953fed2f6136346374b78c4c87779aa9396df1caf8fa15a46ce85dc995`,
+  isolated test launcher
+  `0a6adadaeb8a0c4356dd0812c4158395d0063fe207e3b52a1fe60e0c1a4a0f55`
+  and developmental tests
+  `3e2fdfff52b37f4ce3ebe56c7081a48fb9c0fb8f5b58536c4a90a078ea805ebe`.
+  Static AST/compile review passes; no pytest/import/project data/cache/
+  checkpoint/GPU access was performed for this boundary.
+- Classify the result narrowly: safe to commit as a fail-closed foundation,
+  not clean for activation. `PRELOCK_VERIFIER_REVIEWED=False` blocks every
+  public open and constructor; machine-lock builder and authorization issuer
+  also raise unconditionally. A future pinned execution launcher must install
+  the process-wide direct-open/member/child/network tripwire before importing
+  project code, prospectively load the full local closure, bind external
+  reviewed receipts, reject invalidated manifests semantically, verify exact
+  transition/ledger evidence and enforce resource ceilings externally.
+- Keep the stale `f36f95e2...e4c6af` manifest, its authority, the rejected
+  prelock-validator prototype and both old builder/issuer scripts untracked and
+  outside this commit. They are developmental or rejected evidence, not
+  machine-lock inputs. The protected `BaoCao/` and two deep-research reports
+  remain untouched; no cleanup or artifact deletion occurred.
+- Update the installed `trkh-5class` skill to SHA-256
+  `cb78d47dba6567a1220fffef5e294dfcbdf23b11c2fe4686ab1d012a8fb249dd`.
+  The stop rule now forbids growing a generic hostile-code sandbox: only a
+  concrete false-authority reproducer can justify more harness work. Python
+  tokens are not security boundaries, producer/evidence schema freezes before
+  verifier implementation, and a green developmental test is never pre-lock
+  evidence without a prospective full-import-closure authority.
+- Progress remains honest: presentation retention, protocol/fold/engine and
+  raw scientific derivation are complete foundations; trusted activation,
+  verifier, S1, S2, machine lock, A0, XAI, matched integration, scratch probe,
+  full train and a newly sealed source/time/site cohort all remain pending.

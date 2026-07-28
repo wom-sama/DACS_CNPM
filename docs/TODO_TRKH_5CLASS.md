@@ -5160,24 +5160,29 @@
   `096bc1731bec5460e2e753b3e4ef945bf997006d080f9f55fc86a4dcb255b423`;
   it permits only verifier/runner implementation next and keeps S1, S2,
   machine lock, formal A0, integration and full train unauthorized.
-- [ ] Close the scientific-auditor raw-to-derived binding gap before commit.
-  Current primitives pass focused/combined tests `13/13` and `55/55`, but a
-  red-team reproduction can replace `pooled_metrics_f64` with byte-equal zero
-  formal/replay arrays while retaining a self-reported KUP AUROC of `0.84` and
-  still obtain all-gates PASS. Recompute/cross-bind pooled, fold, pair, causal
-  and bootstrap metrics from their raw score/label/component arrays; derive
-  actions from keeper/calibrated probabilities plus the locked policy rather
-  than accepting replacement arrays; derive Gate 12/13 from raw maps/filters
-  with the exact 751 usable + 12 unusable identities; and bind the exact CIDT
-  row/target/baseline projection rather than only its row count.
-- [ ] Replace the uncommitted v2 execution-guard prototype before use. Its
-  seven tests do not protect a 3,911-line surface: same-process replay can fake
-  caller-supplied PIDs, target members have no fold/stage firewall, handoff can
-  extend authority without byte/object binding, and deterministic runtime is
-  declarative. Require an internally captured process capability, genuine
-  fresh subprocess replay, target-release state machine, exhaustive handoff,
-  actual runtime checks and at least the red-team negative suite. Do not build
-  a machine lock or pending authorization from this prototype.
+- [x] Close the scientific-auditor raw-to-derived binding gap in the pushed
+  fail-closed foundation at
+  `9ea25ea87ae6d497b80dd86c27e59391d21c4a9b`. Calibrators, policies,
+  actions, pooled/fold/pair/causal/bootstrap metrics, geometry and CIDT
+  identities are derived from typed raw preimages rather than caller-owned
+  summaries. The exact production conjunctive evaluator deliberately raises
+  until a reviewed runner/verifier supplies provenance; no prior `13/13` or
+  withdrawn `55/55` result is reused as evidence.
+- [x] Replace the rejected 3,911-line guard prototype with the bounded,
+  explicitly fail-closed runner-v3 foundation pushed at
+  `3942f140efdf84ad1882aed8ecf7185b7868bef3`. It uses one combined
+  primary-plus-replay authorization, create-once claims, typed target release,
+  exhaustive handoff/final roots, exact protected-untracked inventory and a
+  mandatory future execution-launcher role. Independent source review classifies
+  this commit as safe to retain only because production open, builder and issuer
+  remain hard-blocked by `PRELOCK_VERIFIER_REVIEWED=False`; it is not activation
+  evidence and its tests have not yet been run.
+- [ ] Before changing that hard block, implement and review the pinned
+  fresh-process execution launcher: prospective full-import-closure loading,
+  process-wide direct-open/member/child/network tripwire, exact receipt and
+  invalidated-manifest rejection, external resource watchdog and stronger
+  transition/ledger adversarial checks. Current synthetic lifecycle fixtures
+  may prove software behavior only and can never issue scientific authority.
 - [ ] Implement and independently test the finalized-evidence prelock verifier,
   then freeze/push separate S1 and S2 contracts/authorizations. Consume at most
   one primary plus one fresh replay for each phase. Only their complete PASS
@@ -5212,3 +5217,10 @@
   `a65668f637ceaa8da91c5489a0405ff9e887c858dd33e160c22927a43b316019`;
   test collection is now an access-controlled operation and the withdrawn
   combined suite can never be cited as pre-lock evidence.
+- [x] Reassess the installed skill after the independent false-authority and
+  process-overengineering review. Current skill SHA-256 is
+  `cb78d47dba6567a1220fffef5e294dfcbdf23b11c2fe4686ab1d012a8fb249dd`.
+  Python-private tokens are no longer treated as security boundaries; producer
+  schema must freeze before verifier code, import closure must be transitive and
+  pre-import pinned, and only a concrete reproducer may justify more harness
+  work. Protocol complexity alone is not information gain.
