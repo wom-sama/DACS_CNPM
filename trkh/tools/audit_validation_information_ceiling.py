@@ -276,6 +276,28 @@ def _write_csv(path: Path, rows: Sequence[Mapping[str, object]]) -> None:
         writer.writerows(rows)
 
 
+def _write_markdown_table(
+    path: Path,
+    rows: Sequence[Mapping[str, object]],
+    fieldnames: Sequence[str],
+) -> None:
+    def render(value: object) -> str:
+        if isinstance(value, float):
+            value = f"{value:.6f}"
+        return str(value).replace("|", "\\|").replace("\n", " ")
+
+    headers = [str(field) for field in fieldnames]
+    lines = [
+        "| " + " | ".join(headers) + " |",
+        "| " + " | ".join("---" for _ in headers) + " |",
+    ]
+    for row in rows:
+        lines.append(
+            "| " + " | ".join(render(row.get(field, "")) for field in headers) + " |"
+        )
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 def _validate_tables(
     specs: Sequence[InputSpec],
     tables: Mapping[str, PredictionTable],
@@ -772,6 +794,24 @@ def audit_validation_information_ceiling(
     ]
 
     _write_csv(output_dir / "model_metrics.csv", model_rows)
+    _write_markdown_table(
+        output_dir / "model_metrics.md",
+        model_rows,
+        (
+            "family",
+            "model",
+            "samples",
+            "accuracy",
+            "macro_f1",
+            "focus_class_index",
+            "focus_f1",
+            "focus_precision",
+            "focus_recall",
+            "focus_tp",
+            "focus_fp",
+            "focus_fn",
+        ),
+    )
     _write_csv(output_dir / "per_class_metrics.csv", per_class_rows)
     _write_csv(output_dir / "pairwise_vs_base.csv", pairwise_rows)
     _write_csv(output_dir / "exact_oracle_metrics.csv", oracle_rows)
@@ -823,6 +863,7 @@ def audit_validation_information_ceiling(
         },
         "outputs": {
             "model_metrics": "model_metrics.csv",
+            "model_metrics_markdown": "model_metrics.md",
             "per_class_metrics": "per_class_metrics.csv",
             "pairwise_vs_base": "pairwise_vs_base.csv",
             "exact_oracle_metrics": "exact_oracle_metrics.csv",

@@ -84,6 +84,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--checkpoint", type=Path, required=True)
     parser.add_argument("--data", type=Path, required=True, help="ImageFolder root with train/val/test.")
     parser.add_argument("--split", choices=("train", "val", "test"), default="val")
+    parser.add_argument(
+        "--allow-test",
+        action="store_true",
+        help="Required with --split test so the sealed test split cannot be opened accidentally.",
+    )
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--workers", type=int, default=4)
@@ -106,7 +111,10 @@ def parse_args() -> argparse.Namespace:
             "Probabilities may still use TTA; features are exported from the unaugmented view."
         ),
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.split == "test" and not args.allow_test:
+        parser.error("--split test requires the explicit --allow-test acknowledgement")
+    return args
 
 
 def _parse_float_list(value: str) -> List[float]:

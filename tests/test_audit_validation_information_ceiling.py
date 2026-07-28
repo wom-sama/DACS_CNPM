@@ -85,6 +85,12 @@ def test_information_ceiling_is_strict_aligned_and_deterministic(tmp_path: Path)
         "minimum_total_corrections"
     ] == 2
     assert (tmp_path / "first" / "bootstrap_delta_vs_base.csv").is_file()
+    markdown_table = tmp_path / "first" / "model_metrics.md"
+    assert markdown_table.is_file()
+    assert "| family | model | samples | accuracy | macro_f1 |" in markdown_table.read_text(
+        encoding="utf-8"
+    )
+    assert first["outputs"]["model_metrics_markdown"] == "model_metrics.md"
     assert (tmp_path / "first" / "all_models_wrong_cases.csv").is_file()
     assert (tmp_path / "first" / "focus_binary_residual_cases.csv").is_file()
     assert (tmp_path / "first" / "exact_oracle_per_class_metrics.csv").is_file()
