@@ -5143,3 +5143,43 @@
   Obtain a new source/time/site-held cohort before making a confirmatory paper
   claim; do not relabel the old test as final merely because the code ledger is
   clean.
+- [x] Freeze and push the validity-aware v2 engine, corrected fold provenance
+  and schema-v3 no-repeat registry through
+  `f463506d20e8ff8669ad97163cb8e815acd93701`. Registry SHA-256 is
+  `49b1d342...566d`; it binds the exact v2R2/protocol/engine/test boundary and
+  records zero candidate, formal, replay, validation/test or GPU execution.
+- [x] Resolve the pre-machine-lock circularity before any cache or GPU use.
+  Independently review, commit and push the S1-synthetic-GPU then
+  S2-score-independent-CPU sequencing erratum at
+  `12da367c556710db9db4b43ee092cb87cf0d8013`, document SHA-256
+  `b986835a...d1a0`. It separates per-fold fit/calibration/held targets, defers
+  CIDT/XAI target-bearing artifacts and never treats an NPZ/container hash as
+  member authorization.
+- [x] Reassess the installed `trkh-5class` skill after that pushed boundary.
+  Skill SHA-256 is
+  `096bc1731bec5460e2e753b3e4ef945bf997006d080f9f55fc86a4dcb255b423`;
+  it permits only verifier/runner implementation next and keeps S1, S2,
+  machine lock, formal A0, integration and full train unauthorized.
+- [ ] Close the scientific-auditor raw-to-derived binding gap before commit.
+  Current primitives pass focused/combined tests `13/13` and `55/55`, but a
+  red-team reproduction can replace `pooled_metrics_f64` with byte-equal zero
+  formal/replay arrays while retaining a self-reported KUP AUROC of `0.84` and
+  still obtain all-gates PASS. Recompute/cross-bind pooled, fold, pair, causal
+  and bootstrap metrics from their raw score/label/component arrays; derive
+  actions from keeper/calibrated probabilities plus the locked policy rather
+  than accepting replacement arrays; derive Gate 12/13 from raw maps/filters
+  with the exact 751 usable + 12 unusable identities; and bind the exact CIDT
+  row/target/baseline projection rather than only its row count.
+- [ ] Replace the uncommitted v2 execution-guard prototype before use. Its
+  seven tests do not protect a 3,911-line surface: same-process replay can fake
+  caller-supplied PIDs, target members have no fold/stage firewall, handoff can
+  extend authority without byte/object binding, and deterministic runtime is
+  declarative. Require an internally captured process capability, genuine
+  fresh subprocess replay, target-release state machine, exhaustive handoff,
+  actual runtime checks and at least the red-team negative suite. Do not build
+  a machine lock or pending authorization from this prototype.
+- [ ] Implement and independently test the finalized-evidence prelock verifier,
+  then freeze/push separate S1 and S2 contracts/authorizations. Consume at most
+  one primary plus one fresh replay for each phase. Only their complete PASS
+  roots may enter a later no-authority machine lock and exactly-one-formal plus
+  replay authorization.

@@ -22581,3 +22581,64 @@ Date: 2026-07-02
   DDF v2 as protocol/fold/geometry only. The next permissible implementation
   stage is the immutable v2 engine and its tests; formal A0/GPU remains
   unauthorized until a later machine lock and access authorization are frozen.
+
+## Pair-Surface DDF V2R2 Engine, Pre-Lock Sequencing and Red-Team Reset - 2026-07-29
+
+- Freeze the validity-aware v2 engine/protocol/fold boundary, then rebuild the
+  no-repeat registry from exact Git objects. Registry schema v3 is pushed at
+  `f463506d20e8ff8669ad97163cb8e815acd93701`, SHA-256
+  `49b1d342...566d`. It binds the effective v2R2 fold, both errata, engine and
+  focused tests while recording zero candidate/formal/replay/validation/test/GPU
+  observations. This is a reproducible implementation boundary, not efficacy.
+- Independent review exposed a real sequencing cycle: the future machine lock
+  must contain TensorRT/timing and full donor/random/target-shard evidence, but
+  those artifacts cannot be created without a narrowly authorized GPU/cache
+  phase. Resolve it prospectively with S1 synthetic-only GPU qualification plus
+  replay, followed only after a pushed PASS by S2 CPU score-independent
+  derivation plus replay. The reviewed erratum is pushed at
+  `12da367c556710db9db4b43ee092cb87cf0d8013`, SHA-256
+  `b986835a...d1a0`; neither phase authorizes formal training or a metric.
+- S2A must freeze target-blind masks, ranks, six-priority donor assignments,
+  offsets, initialization/order and random arrays before S2B opens target
+  metadata. S2B emits separate per-fold fit/calibration/held targets and
+  deferred CIDT/XAI artifacts. The formal runtime may release each only after
+  its exact prior state is frozen; the all-row target member remains unreadable.
+  XAI IDs themselves encode target strata and are therefore late-release data,
+  not harmless identifiers.
+- Correct a backend reproducibility overclaim before running S1. ONNX bytes,
+  build configuration, workload, numerical/parity results and gate decisions
+  remain exact. Independently built TensorRT plan bytes are retained with both
+  hashes as excluded backend identities unless a deterministic tactic-cache
+  contract is established; each plan must still pass identical locked checks.
+- Red-team the first uncommitted formal guard instead of accepting seven green
+  tests. It is stop-ship: caller-supplied fake PIDs can simulate a fresh replay;
+  path-level formal/replay policy has no fold/stage target firewall; handoff can
+  extend reads without binding the in-memory object to bytes just opened; no
+  transition requires a capability from effective authorization; deterministic
+  runtime is mostly declared rather than observed. Do not commit or use this
+  3,911-line prototype. Refactor into small pure contracts, runtime/target FSM,
+  byte-bound handoff and a thin facade, with genuine subprocess and adversarial
+  tests before any machine lock can exist.
+- The scientific primitives independently pass `13/13` focused and `55/55`
+  combined tests, including joint Gate-4 fold wins, target-blind donor
+  covariate recomputation, exact A0 identity hashes, raw action/repeat/CIDT
+  derivation and a fixed 63-record Gate-14 registry. Do not commit them yet:
+  main-thread falsification replaced the formal/replay `pooled_metrics_f64`
+  record with equal all-zero arrays while leaving reported KUP AUROC `0.84`;
+  all fourteen gates still passed. Exact replay is not the same as scientific
+  correctness. Raw scores/labels/folds/components must recompute or cross-bind
+  every pooled/fold/pair/causal/bootstrap aggregate. Actions must be derived
+  from keeper/calibrated probabilities and the frozen policy rather than an
+  accepted replacement array; map/filter gates must derive from raw tensors and
+  enforce the exact 751 usable + 12 unusable identities; exact CIDT
+  IDs/targets/baseline must be bound rather than accepting any 9,215 ascending
+  rows. Gate 14 also needs exact per-record shapes/axes and S1/S2 lineage, not
+  one-element arrays plus arbitrary valid-looking 64-hex strings.
+- Update the installed `trkh-5class` skill only after the pushed sequencing
+  boundary. Skill SHA-256 becomes
+  `096bc1731bec5460e2e753b3e4ef945bf997006d080f9f55fc86a4dcb255b423`.
+  Its next permissible action is verifier/runner implementation; S1, S2,
+  machine lock, formal A0, integration, full train and historical-test promotion
+  remain unauthorized. This self-review prevents process sophistication from
+  being mistaken for information gain, while preserving a direct route to the
+  first legitimate synthetic and score-independent executions.
