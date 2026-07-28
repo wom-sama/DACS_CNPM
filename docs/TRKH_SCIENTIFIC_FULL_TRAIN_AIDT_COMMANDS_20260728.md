@@ -5,7 +5,12 @@ Date: 2026-07-28; scientific-state revision: 2026-07-29
 Repository state reviewed through DDF engine commit
 `fb9880c77057d887d9e3b3ab91e9dbb55e47cfe9`, resume/promotion fix commit
 `2456dde06e9a2aa6de15c0f60a0af5c951beb1d6`, and pretrained-export safety
-commit `2ee8d032f0c82bb8ada4bcbdc3ceae1ac685ddd2`.
+commit `2ee8d032f0c82bb8ada4bcbdc3ceae1ac685ddd2`. The v1-supersession/v2-fold/
+protocol/geometry/presentation boundary is pushed at
+`742fce03700b17f8e8f4449eac8a49dc0a03e211`. Registry schema v2 is derived
+only from that Git snapshot; its current SHA-256 is
+`e1b2b7de5aaf262bb3674fdc8a5694699cdec3458d189f3088483aec55bb8d93`
+and `authorizes_formal_or_gpu=false`.
 
 Machine used to size the commands:
 
@@ -93,7 +98,8 @@ candidate-blind 158-component v2 fold manifest, and the fully numeric v2
 protocol/geometry preflight. They consumed no candidate score, validation,
 test, formal run or replay. The remaining allowed scientific sequence is:
 
-1. commit/push the v2 boundary and the pinned no-repeat registry;
+1. commit/push the pinned no-repeat registry and update the installed skill
+   from that pushed lineage;
 2. implement the v2 engine, machine lock, access ledger, authorization and
    exact replay harness without reading validation/test;
 3. execute exactly one formal train-only A0 plus one replay only after all

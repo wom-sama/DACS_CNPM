@@ -8,7 +8,7 @@
     "pair_surface_ddf_engine_commit": "fb9880c77057d887d9e3b3ab91e9dbb55e47cfe9",
     "resume_and_promotion_fix_commit": "2456dde06e9a2aa6de15c0f60a0af5c951beb1d6",
     "pretrained_export_safety_commit": "2ee8d032f0c82bb8ada4bcbdc3ceae1ac685ddd2",
-    "upstream_pushed_commit_at_freeze": "2ee8d032f0c82bb8ada4bcbdc3ceae1ac685ddd2"
+    "upstream_pushed_commit_at_freeze": "742fce03700b17f8e8f4449eac8a49dc0a03e211"
   },
   "guardrails": {
     "delete_anything": false,

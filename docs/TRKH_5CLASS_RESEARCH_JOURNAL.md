@@ -22528,3 +22528,30 @@ Date: 2026-07-02
   full-train/final-test command until A0 passes and matched integration is
   prospectively frozen. A confirmatory paper claim still requires a newly
   sealed source/time/site cohort.
+
+## Mechanism Registry V2 Boundary - 2026-07-29
+
+- Push the full v1-supersession/v2-protocol/fold/geometry/presentation boundary
+  at `742fce03700b17f8e8f4449eac8a49dc0a03e211` before rebuilding the registry.
+  The protected `BaoCao/` and two deep-research reports remain untracked and
+  untouched.
+- Rebuild only from the Git object database at that commit. Pin 11 complete
+  source blobs: journal, TODO, post-CAP screen, v1/v2 protocols, v1
+  supersession, v1 lock/sidecar and v2 fold manifest/sidecar. Index every H2/H3
+  heading in the six pinned Markdown sources; 601 headings resolve exactly.
+- Split the ambiguous DDF record. `pair_surface_ddf_a0_v1` is
+  `superseded_before_formal`; `pair_surface_ddf_a0_v2` is
+  `prospective_protocol_and_fold_only_no_engine_or_formal_authorization`.
+  Keep eight other critical dynamic-convolution/pairwise families and their
+  no-repeat criteria, for ten curated entries total.
+- Use schema v2 and disclose coverage honestly: the heading index is complete
+  for its pinned Markdown set, while curated semantic coverage is a
+  critical-family registry rather than an exhaustive ontology. It does not
+  prove novelty and its `authorizes_formal_or_gpu` field is false. Registry
+  bytes are `180690`; SHA-256 is
+  `e1b2b7de5aaf262bb3674fdc8a5694699cdec3458d189f3088483aec55bb8d93`.
+  Deterministic rebuild/check and focused tests pass `9/9`.
+- Remaining blocker is explicit: push the registry, update the installed skill
+  from that pushed lineage, then implement/test the v2 engine, machine lock,
+  access authorization and replay harness. No formal/GPU run is authorized by
+  this registry.

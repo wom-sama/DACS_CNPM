@@ -5117,10 +5117,20 @@
   A geometry audit locks 751 usable + 12 unusable bbox rows and catches the
   former `packbits(little)`/default-`unpackbits(big)` q error with a negative
   regression signature.
-- [ ] Commit and push the v2 boundary, then replace the stale mechanism
-  registry with a pinned v1-superseded/v2-prospective no-repeat registry and
-  update the installed skill from that pushed lineage. Do not call the current
-  protocol a machine authorization before this is complete.
+- [x] Commit and push the v1 supersession, v2 protocol/fold/geometry and
+  presentation-retention boundary at
+  `742fce03700b17f8e8f4449eac8a49dc0a03e211`.
+- [x] Replace the stale registry with schema v2 derived only from Git objects at
+  `742fce0`: 601 complete pinned H2/H3 headings plus ten curated critical
+  families. DDF v1 is `superseded_before_formal`; v2 is
+  `prospective_protocol_and_fold_only_no_engine_or_formal_authorization`.
+  Registry SHA is `e1b2b7de...bb8d93`; it explicitly neither proves novelty
+  nor authorizes formal/GPU work. This becomes effective when its containing
+  commit is pushed.
+- [ ] After the registry commit is pushed, update the installed `trkh-5class`
+  skill from that exact lineage and record the new evidence-gap/no-repeat/
+  leakage/value self-review loop. Do not call the protocol a machine
+  authorization before the later engine and machine lock exist.
 - [ ] Only after the clean v2 boundary is committed and pushed, implement its
   formal train-only auditor, access ledger, authorization, exact replay, and
   retention boundary. Do not issue a new-model full-train command until the

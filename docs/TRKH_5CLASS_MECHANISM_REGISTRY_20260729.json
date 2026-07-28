@@ -1,0 +1,4514 @@
+{
+  "coverage": {
+    "authorizes_formal_or_gpu": false,
+    "curated_semantic_scope": "critical_mechanism_families_only_not_an_exhaustive_ontology",
+    "heading_index_complete_for_pinned_markdown": true,
+    "proves_novelty": false
+  },
+  "heading_normalization": {
+    "algorithm": "trim-trailing-hashes-casefold-nfkd-strip-combining-ascii-alnum-hyphen",
+    "scope": "all Markdown H2/H3 headings in every pinned Markdown heading source"
+  },
+  "headings": [
+    {
+      "document": "docs/TODO_TRKH_5CLASS.md",
+      "level": 2,
+      "line": 3,
+      "normalized_heading": "cap-nhat-2026-07-02",
+      "title": "Cap nhat 2026-07-02"
+    },
+    {
+      "document": "docs/TODO_TRKH_5CLASS.md",
+      "level": 2,
+      "line": 22,
+      "normalized_heading": "da-hoan-thanh",
+      "title": "Da hoan thanh"
+    },
+    {
+      "document": "docs/TODO_TRKH_5CLASS.md",
+      "level": 2,
+      "line": 116,
+      "normalized_heading": "can-tiep-tuc",
+      "title": "Can tiep tuc"
+    },
+    {
+      "document": "docs/TODO_TRKH_5CLASS.md",
+      "level": 2,
+      "line": 202,
+      "normalized_heading": "cap-nhat-2026-06-25",
+      "title": "Cap nhat 2026-06-25"
+    },
+    {
+      "document": "docs/TODO_TRKH_5CLASS.md",
+      "level": 2,
+      "line": 246,
+      "normalized_heading": "cap-nhat-2026-06-26",
+      "title": "Cap nhat 2026-06-26"
+    },
+    {
+      "document": "docs/TODO_TRKH_5CLASS.md",
+      "level": 2,
+      "line": 315,
+      "normalized_heading": "cap-nhat-2026-06-27",
+      "title": "Cap nhat 2026-06-27"
+    },
+    {
+      "document": "docs/TODO_TRKH_5CLASS.md",
+      "level": 2,
+      "line": 397,
+      "normalized_heading": "cap-nhat-2026-06-30",
+      "title": "Cap nhat 2026-06-30"
+    },
+    {
+      "document": "docs/TODO_TRKH_5CLASS.md",
+      "level": 2,
+      "line": 2279,
+      "normalized_heading": "cap-nhat-2026-07-14-precision-deployment-and-next-representation-gate",
+      "title": "Cap nhat 2026-07-14 - Precision Deployment and Next Representation Gate"
+    },
+    {
+      "document": "docs/TODO_TRKH_5CLASS.md",
+      "level": 2,
+      "line": 2369,
+      "normalized_heading": "cap-nhat-2026-07-14-more-parameter-space-rebalancing",
+      "title": "Cap nhat 2026-07-14 - MORE Parameter-Space Rebalancing"
+    },
+    {
+      "document": "docs/TODO_TRKH_5CLASS.md",
+      "level": 2,
+      "line": 2407,
+      "normalized_heading": "cap-nhat-2026-07-14-linear-differential-visual-contrast-attention",
+      "title": "Cap nhat 2026-07-14 - Linear Differential Visual-Contrast Attention"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_PROTOCOL_20260725.md",
+      "level": 2,
+      "line": 9,
+      "normalized_heading": "question",
+      "title": "Question"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_PROTOCOL_20260725.md",
+      "level": 2,
+      "line": 29,
+      "normalized_heading": "primary-source-and-provenance",
+      "title": "Primary Source And Provenance"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_PROTOCOL_20260725.md",
+      "level": 2,
+      "line": 58,
+      "normalized_heading": "why-this-is-not-a-reopened-closed-family",
+      "title": "Why This Is Not A Reopened Closed Family"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_PROTOCOL_20260725.md",
+      "level": 2,
+      "line": 93,
+      "normalized_heading": "immutable-inputs",
+      "title": "Immutable Inputs"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_PROTOCOL_20260725.md",
+      "level": 2,
+      "line": 128,
+      "normalized_heading": "locked-input-transform",
+      "title": "Locked Input Transform"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_PROTOCOL_20260725.md",
+      "level": 2,
+      "line": 147,
+      "normalized_heading": "candidate-architecture",
+      "title": "Candidate Architecture"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_PROTOCOL_20260725.md",
+      "level": 2,
+      "line": 200,
+      "normalized_heading": "matched-roles",
+      "title": "Matched Roles"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_PROTOCOL_20260725.md",
+      "level": 2,
+      "line": 251,
+      "normalized_heading": "loss-and-optimization",
+      "title": "Loss And Optimization"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_PROTOCOL_20260725.md",
+      "level": 2,
+      "line": 303,
+      "normalized_heading": "source-held-protocol",
+      "title": "Source-Held Protocol"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_PROTOCOL_20260725.md",
+      "level": 2,
+      "line": 327,
+      "normalized_heading": "fixed-information-readout",
+      "title": "Fixed Information Readout"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_PROTOCOL_20260725.md",
+      "level": 2,
+      "line": 373,
+      "normalized_heading": "conjunctive-scientific-gates",
+      "title": "Conjunctive Scientific Gates"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_PROTOCOL_20260725.md",
+      "level": 2,
+      "line": 410,
+      "normalized_heading": "engineering-and-deployment-gates",
+      "title": "Engineering And Deployment Gates"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_PROTOCOL_20260725.md",
+      "level": 2,
+      "line": 439,
+      "normalized_heading": "xai-and-shifted-conditions",
+      "title": "XAI And Shifted Conditions"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_PROTOCOL_20260725.md",
+      "level": 2,
+      "line": 465,
+      "normalized_heading": "reproducibility-and-access-ledger",
+      "title": "Reproducibility And Access Ledger"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_PROTOCOL_20260725.md",
+      "level": 2,
+      "line": 504,
+      "normalized_heading": "stop-and-promotion-rules",
+      "title": "Stop And Promotion Rules"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V1_SUPERSESSION_20260729.md",
+      "level": 2,
+      "line": 3,
+      "normalized_heading": "decision",
+      "title": "Decision"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V1_SUPERSESSION_20260729.md",
+      "level": 2,
+      "line": 16,
+      "normalized_heading": "why-exact-stem-disjointness-was-insufficient",
+      "title": "Why exact-stem disjointness was insufficient"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V1_SUPERSESSION_20260729.md",
+      "level": 2,
+      "line": 48,
+      "normalized_heading": "reproducible-evidence",
+      "title": "Reproducible evidence"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V1_SUPERSESSION_20260729.md",
+      "level": 2,
+      "line": 61,
+      "normalized_heading": "v2-minimum-boundary",
+      "title": "V2 minimum boundary"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V2_PROTOCOL_20260729.md",
+      "level": 2,
+      "line": 3,
+      "normalized_heading": "prospective-state-and-supersession",
+      "title": "Prospective state and supersession"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V2_PROTOCOL_20260729.md",
+      "level": 2,
+      "line": 19,
+      "normalized_heading": "defensible-contribution-claim",
+      "title": "Defensible contribution claim"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V2_PROTOCOL_20260729.md",
+      "level": 2,
+      "line": 41,
+      "normalized_heading": "scientific-question",
+      "title": "Scientific question"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V2_PROTOCOL_20260729.md",
+      "level": 2,
+      "line": 54,
+      "normalized_heading": "inputs-and-forbidden-information",
+      "title": "Inputs and forbidden information"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V2_PROTOCOL_20260729.md",
+      "level": 2,
+      "line": 93,
+      "normalized_heading": "group-and-fold-construction",
+      "title": "Group and fold construction"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V2_PROTOCOL_20260729.md",
+      "level": 2,
+      "line": 160,
+      "normalized_heading": "v2-sidecar-and-validity-aware-surface-input",
+      "title": "V2 sidecar and validity-aware surface input"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V2_PROTOCOL_20260729.md",
+      "level": 2,
+      "line": 262,
+      "normalized_heading": "fixed-loss-and-mini-batch-semantics",
+      "title": "Fixed loss and mini-batch semantics"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V2_PROTOCOL_20260729.md",
+      "level": 2,
+      "line": 307,
+      "normalized_heading": "optimization-and-matched-exposure",
+      "title": "Optimization and matched exposure"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V2_PROTOCOL_20260729.md",
+      "level": 2,
+      "line": 378,
+      "normalized_heading": "raw-scores-calibrators-and-pair-attribution",
+      "title": "Raw scores, calibrators and pair attribution"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V2_PROTOCOL_20260729.md",
+      "level": 2,
+      "line": 426,
+      "normalized_heading": "locked-action-rule",
+      "title": "Locked action rule"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V2_PROTOCOL_20260729.md",
+      "level": 2,
+      "line": 461,
+      "normalized_heading": "group-aware-uncertainty",
+      "title": "Group-aware uncertainty"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V2_PROTOCOL_20260729.md",
+      "level": 2,
+      "line": 487,
+      "normalized_heading": "same-weight-causal-controls",
+      "title": "Same-weight causal controls"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V2_PROTOCOL_20260729.md",
+      "level": 3,
+      "line": 491,
+      "normalized_heading": "cross-fold-capacity-balanced-filter-substitution",
+      "title": "Cross-fold capacity-balanced filter substitution"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V2_PROTOCOL_20260729.md",
+      "level": 3,
+      "line": 529,
+      "normalized_heading": "non-wrap-spatial-displacement",
+      "title": "Non-wrap spatial displacement"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V2_PROTOCOL_20260729.md",
+      "level": 3,
+      "line": 548,
+      "normalized_heading": "neutral-factors",
+      "title": "Neutral factors"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V2_PROTOCOL_20260729.md",
+      "level": 3,
+      "line": 555,
+      "normalized_heading": "invalid-fill-invariance",
+      "title": "Invalid-fill invariance"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V2_PROTOCOL_20260729.md",
+      "level": 3,
+      "line": 562,
+      "normalized_heading": "exact-map-and-filter-statistics",
+      "title": "Exact map and filter statistics"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V2_PROTOCOL_20260729.md",
+      "level": 2,
+      "line": 591,
+      "normalized_heading": "conjunctive-clean-scientific-gates",
+      "title": "Conjunctive clean scientific gates"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V2_PROTOCOL_20260729.md",
+      "level": 2,
+      "line": 658,
+      "normalized_heading": "synthetic-engineering-gates",
+      "title": "Synthetic engineering gates"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V2_PROTOCOL_20260729.md",
+      "level": 2,
+      "line": 678,
+      "normalized_heading": "conditional-xai-and-shifted-conditions",
+      "title": "Conditional XAI and shifted conditions"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V2_PROTOCOL_20260729.md",
+      "level": 2,
+      "line": 725,
+      "normalized_heading": "access-ledger-replay-and-resources",
+      "title": "Access ledger, replay and resources"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V2_PROTOCOL_20260729.md",
+      "level": 2,
+      "line": 759,
+      "normalized_heading": "progression-after-a0",
+      "title": "Progression after A0"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_POST_CAP_SUCCESSOR_NO_RUN_SCREEN_20260725.md",
+      "level": 2,
+      "line": 8,
+      "normalized_heading": "purpose",
+      "title": "Purpose"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_POST_CAP_SUCCESSOR_NO_RUN_SCREEN_20260725.md",
+      "level": 2,
+      "line": 33,
+      "normalized_heading": "candidate-screen",
+      "title": "Candidate Screen"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_POST_CAP_SUCCESSOR_NO_RUN_SCREEN_20260725.md",
+      "level": 2,
+      "line": 44,
+      "normalized_heading": "primary-sources",
+      "title": "Primary Sources"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_POST_CAP_SUCCESSOR_NO_RUN_SCREEN_20260725.md",
+      "level": 2,
+      "line": 63,
+      "normalized_heading": "decision",
+      "title": "Decision"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_POST_CAP_SUCCESSOR_NO_RUN_SCREEN_20260725.md",
+      "level": 2,
+      "line": 86,
+      "normalized_heading": "selected-successor-boundary",
+      "title": "Selected Successor Boundary"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 7,
+      "normalized_heading": "operating-rules",
+      "title": "Operating Rules"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 20,
+      "normalized_heading": "current-keeper-artifacts",
+      "title": "Current Keeper Artifacts"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 43,
+      "normalized_heading": "cleanup-log",
+      "title": "Cleanup Log"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 45,
+      "normalized_heading": "2026-07-02-obsolete-smoke-probe-cleanup",
+      "title": "2026-07-02 obsolete smoke/probe cleanup"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 60,
+      "normalized_heading": "method-ledger",
+      "title": "Method Ledger"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 62,
+      "normalized_heading": "teacher-focus-binary-route-is-still-the-best-no-pretrain-anchor",
+      "title": "Teacher-focus-binary route is still the best no-pretrain anchor"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 72,
+      "normalized_heading": "wide-context-and-two-view-data-did-not-solve-the-class-1-boundary",
+      "title": "Wide-context and two-view data did not solve the class-1 boundary"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 85,
+      "normalized_heading": "objectness-bbox-and-foreground-forcing-are-not-the-bottleneck-by-themselves",
+      "title": "Objectness, bbox, and foreground forcing are not the bottleneck by themselves"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 95,
+      "normalized_heading": "distillation-and-ensemble-transfer-are-useful-diagnostics-but-weak-students",
+      "title": "Distillation and ensemble transfer are useful diagnostics but weak students"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 114,
+      "normalized_heading": "router-model-soup-prototype-tta-and-oof-attempts-are-not-current-routes-to-gate",
+      "title": "Router, model soup, prototype, TTA, and OOF attempts are not current routes to gate"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 127,
+      "normalized_heading": "ssl-mim-reconstruction-attempts-did-not-create-enough-boundary-signal",
+      "title": "SSL/MIM/reconstruction attempts did not create enough boundary signal"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 137,
+      "normalized_heading": "elr-on-the-current-yolo-f-anchor-did-not-improve-class-1",
+      "title": "ELR on the current `yolo_f` anchor did not improve class 1"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 168,
+      "normalized_heading": "teacher-guided-supervised-contrastive-did-not-clear-the-boundary-errors",
+      "title": "Teacher-guided supervised contrastive did not clear the boundary errors"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 219,
+      "normalized_heading": "pairwise-confusion-regularization-worsened-class-1-precision",
+      "title": "Pairwise Confusion regularization worsened class-1 precision"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 263,
+      "normalized_heading": "mutual-channel-loss-did-not-improve-the-current-anchor",
+      "title": "Mutual-Channel Loss did not improve the current anchor"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 312,
+      "normalized_heading": "complement-entropy-did-not-control-class-1-false-positives",
+      "title": "Complement entropy did not control class-1 false positives"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 358,
+      "normalized_heading": "ordinal-distribution-emd-smoke-was-rejected-before-probe",
+      "title": "Ordinal-distribution / EMD smoke was rejected before probe"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 401,
+      "normalized_heading": "sam-rho-0-015-was-rejected-before-probe",
+      "title": "SAM rho 0.015 was rejected before probe"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 446,
+      "normalized_heading": "snscl-lite-weighted-stochastic-teacher-guided-supcon-was-rejected-before-probe",
+      "title": "SNSCL-lite weighted/stochastic teacher-guided SupCon was rejected before probe"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 493,
+      "normalized_heading": "do-not-repeat-list",
+      "title": "Do-Not-Repeat List"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 529,
+      "normalized_heading": "cleanup-log-2026-07-02",
+      "title": "Cleanup Log 2026-07-02"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 611,
+      "normalized_heading": "next-useful-checks",
+      "title": "Next Useful Checks"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 619,
+      "normalized_heading": "literature-check-2026-07-02",
+      "title": "Literature Check 2026-07-02"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 675,
+      "normalized_heading": "audit-2026-07-02-aidt-teacher-csv-view-guard-and-corrected-supcon-smoke",
+      "title": "Audit 2026-07-02 - AIDT Teacher CSV View Guard and Corrected SupCon Smoke"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 713,
+      "normalized_heading": "audit-2026-07-02-narrow-angular-margin-smoke-probe",
+      "title": "Audit 2026-07-02 - Narrow Angular Margin Smoke/Probe"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 743,
+      "normalized_heading": "audit-2026-07-02-teacher-gated-boundary-center-smoke-probe",
+      "title": "Audit 2026-07-02 - Teacher-Gated Boundary Center Smoke/Probe"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 773,
+      "normalized_heading": "audit-2026-07-02-micro-detail-token-selection-smoke",
+      "title": "Audit 2026-07-02 - Micro-Detail Token Selection Smoke"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 799,
+      "normalized_heading": "diagnostic-2026-07-02-class-1-pairwise-calibration-guard",
+      "title": "Diagnostic 2026-07-02 - Class-1 Pairwise Calibration Guard"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 836,
+      "normalized_heading": "diagnostic-2026-07-02-why-aidt-looks-stronger",
+      "title": "Diagnostic 2026-07-02 - Why AIDT Looks Stronger"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 857,
+      "normalized_heading": "diagnostic-2026-07-02-aidt-disagreement-gate",
+      "title": "Diagnostic 2026-07-02 - AIDT Disagreement Gate"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 882,
+      "normalized_heading": "cleanup-2026-07-02-documented-rejected-source-aux-probes",
+      "title": "Cleanup 2026-07-02 - Documented Rejected Source-Aux Probes"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 892,
+      "normalized_heading": "cleanup-2026-07-02-historical-rejected-probe-artifacts",
+      "title": "Cleanup 2026-07-02 - Historical Rejected Probe Artifacts"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 905,
+      "normalized_heading": "diagnostic-2026-07-02-aidt-disagreement-compression-check",
+      "title": "Diagnostic 2026-07-02 - AIDT Disagreement Compression Check"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 923,
+      "normalized_heading": "audit-2026-07-02-aidt-reliability-sample-reweight-smoke",
+      "title": "Audit 2026-07-02 - AIDT Reliability Sample Reweight Smoke"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 958,
+      "normalized_heading": "audit-2026-07-02-aidt-feature-relation-distillation-smoke",
+      "title": "Audit 2026-07-02 - AIDT Feature Relation Distillation Smoke"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 1003,
+      "normalized_heading": "audit-2026-07-02-boundary-gated-aidt-feature-rkd-smoke",
+      "title": "Audit 2026-07-02 - Boundary-Gated AIDT Feature RKD Smoke"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 1037,
+      "normalized_heading": "audit-2026-07-02-patch-source-boundary-aidt-feature-rkd-smoke",
+      "title": "Audit 2026-07-02 - Patch-Source Boundary AIDT Feature RKD Smoke"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 1065,
+      "normalized_heading": "audit-2026-07-02-residual-mlp-classification-head-smokes",
+      "title": "Audit 2026-07-02 - Residual MLP Classification Head Smokes"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 1115,
+      "normalized_heading": "cleanup-2026-07-02-legacy-detection-4-class-and-old-probe-artifacts",
+      "title": "Cleanup 2026-07-02 - Legacy Detection/4-Class and Old Probe Artifacts"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 1139,
+      "normalized_heading": "audit-2026-07-02-self-adaptive-target-loss-probe",
+      "title": "Audit 2026-07-02 - Self-Adaptive Target Loss Probe"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 1183,
+      "normalized_heading": "audit-2026-07-02-confusion-pair-manifold-mixup-smoke",
+      "title": "Audit 2026-07-02 - Confusion-Pair Manifold Mixup Smoke"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 1237,
+      "normalized_heading": "audit-2026-07-02-cnn-branch-token-smoke",
+      "title": "Audit 2026-07-02 - CNN Branch Token Smoke"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 1286,
+      "normalized_heading": "diagnostic-2026-07-02-train-holdout-class-1-margin-guard",
+      "title": "Diagnostic 2026-07-02 - Train-Holdout Class-1 Margin Guard"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 1307,
+      "normalized_heading": "audit-2026-07-02-r-drop-dropout-consistency-smoke",
+      "title": "Audit 2026-07-02 - R-Drop Dropout Consistency Smoke"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 1352,
+      "normalized_heading": "audit-2026-07-02-semantic-attribute-hierarchical-loss-smoke",
+      "title": "Audit 2026-07-02 - Semantic Attribute Hierarchical Loss Smoke"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 1400,
+      "normalized_heading": "audit-2026-07-02-grabcut-foreground-crop-smoke",
+      "title": "Audit 2026-07-02 - GrabCut Foreground Crop Smoke"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 1438,
+      "normalized_heading": "audit-2026-07-02-illumination-consistency-smoke",
+      "title": "Audit 2026-07-02 - Illumination Consistency Smoke"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 1489,
+      "normalized_heading": "diagnostic-2026-07-02-hsv-lab-texture-color-guard",
+      "title": "Diagnostic 2026-07-02 - HSV/Lab/Texture Color Guard"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 1515,
+      "normalized_heading": "cleanup-2026-07-02-legacy-mango-cls-large-runs",
+      "title": "Cleanup 2026-07-02 - Legacy Mango-Cls Large Runs"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 1529,
+      "normalized_heading": "audit-2026-07-02-bbox-object-erasure-negative-smoke",
+      "title": "Audit 2026-07-02 - BBox Object-Erasure Negative Smoke"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 1574,
+      "normalized_heading": "audit-2026-07-02-sample-index-class-cartography-groupdro-smoke",
+      "title": "Audit 2026-07-02 - Sample-Index Class-Cartography GroupDRO Smoke"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 1626,
+      "normalized_heading": "audit-2026-07-02-foreground-snapmix-smoke",
+      "title": "Audit 2026-07-02 - Foreground SnapMix Smoke"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 1674,
+      "normalized_heading": "audit-2026-07-02-cross-entropy-classification-loss-ablation-smoke",
+      "title": "Audit 2026-07-02 - Cross-Entropy Classification-Loss Ablation Smoke"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 1709,
+      "normalized_heading": "audit-2026-07-02-quantized-label-cpu-pu-ambiguous-hard-label-smoke",
+      "title": "Audit 2026-07-02 - Quantized Label CPU/PU Ambiguous-Hard-Label Smoke"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 1759,
+      "normalized_heading": "audit-2026-07-02-ffvt-lite-intermediate-layer-token-fusion-smoke",
+      "title": "Audit 2026-07-02 - FFVT-Lite Intermediate Layer-Token Fusion Smoke"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 1814,
+      "normalized_heading": "audit-2026-07-02-foreground-chroma-consistency-smoke",
+      "title": "Audit 2026-07-02 - Foreground Chroma Consistency Smoke"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 1867,
+      "normalized_heading": "diagnostic-2026-07-02-probability-router-and-teacher-consensus-check",
+      "title": "Diagnostic 2026-07-02 - Probability Router And Teacher-Consensus Check"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 1897,
+      "normalized_heading": "audit-2026-07-02-bbox-weighted-train-time-masked-reconstruction-smoke",
+      "title": "Audit 2026-07-02 - BBox-Weighted Train-Time Masked Reconstruction Smoke"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 1949,
+      "normalized_heading": "diagnostic-2026-07-02-yolo-f-foreground-surface-stats-object-level-probe",
+      "title": "Diagnostic 2026-07-02 - YOLO-F Foreground Surface Stats Object-Level Probe"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 1989,
+      "normalized_heading": "smoke-2026-07-02-local-zoom-defect-spot-score",
+      "title": "Smoke 2026-07-02 - Local Zoom Defect-Spot Score"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 2053,
+      "normalized_heading": "smoke-2026-07-02-local-zoom-defect-spot-interior-suppression",
+      "title": "Smoke 2026-07-02 - Local Zoom Defect-Spot Interior Suppression"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 2113,
+      "normalized_heading": "smoke-2026-07-02-oracle-teacher-kd-0-03-from-train-only-expert-oracle",
+      "title": "Smoke 2026-07-02 - Oracle-Teacher KD 0.03 From Train-Only Expert Oracle"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 2172,
+      "normalized_heading": "smoke-2026-07-02-ldam-gce-robust-loss",
+      "title": "Smoke 2026-07-02 - LDAM-GCE Robust Loss"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 2223,
+      "normalized_heading": "smoke-2026-07-02-multi-granularity-auxiliary-ce-heads",
+      "title": "Smoke 2026-07-02 - Multi-Granularity Auxiliary CE Heads"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 2288,
+      "normalized_heading": "smoke-2026-07-02-multi-granularity-contrastive-deep-supervision",
+      "title": "Smoke 2026-07-02 - Multi-Granularity Contrastive Deep Supervision"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 2350,
+      "normalized_heading": "diagnostic-2026-07-02-current-keeper-color-tta",
+      "title": "Diagnostic 2026-07-02 - Current Keeper Color TTA"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 2385,
+      "normalized_heading": "diagnostic-2026-07-02-reliable-entropy-test-time-adaptation",
+      "title": "Diagnostic 2026-07-02 - Reliable Entropy Test-Time Adaptation"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 2434,
+      "normalized_heading": "cleanup-2026-07-02-legacy-mango-classification-leftovers",
+      "title": "Cleanup 2026-07-02 - Legacy Mango Classification Leftovers"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 2446,
+      "normalized_heading": "diagnostic-2026-07-03-yolo-source-group-consistency-audit",
+      "title": "Diagnostic 2026-07-03 - YOLO Source-Group Consistency Audit"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 2480,
+      "normalized_heading": "smoke-2026-07-03-low-lr-keeper-continuation",
+      "title": "Smoke 2026-07-03 - Low-LR Keeper Continuation"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 2518,
+      "normalized_heading": "diagnostic-smoke-2026-07-03-spectral-fine-embedding-ambiguity",
+      "title": "Diagnostic/Smoke 2026-07-03 - Spectral/FINE Embedding Ambiguity"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 2588,
+      "normalized_heading": "smoke-2026-07-03-focus-class-tversky-f1-surrogate-loss",
+      "title": "Smoke 2026-07-03 - Focus-Class Tversky/F1 Surrogate Loss"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 2638,
+      "normalized_heading": "smoke-2026-07-03-class-independent-ova-auxiliary-head",
+      "title": "Smoke 2026-07-03 - Class-Independent OVA Auxiliary Head"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 2692,
+      "normalized_heading": "smoke-2026-07-03-dcl-lite-bbox-region-shuffle",
+      "title": "Smoke 2026-07-03 - DCL-Lite BBox Region Shuffle"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 2747,
+      "normalized_heading": "smoke-2026-07-03-boundary-aidt-feature-crd",
+      "title": "Smoke 2026-07-03 - Boundary AIDT Feature CRD"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 2805,
+      "normalized_heading": "smoke-2026-07-03-self-paced-small-loss-reweighting",
+      "title": "Smoke 2026-07-03 - Self-Paced Small-Loss Reweighting"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 2865,
+      "normalized_heading": "smoke-2026-07-03-learnable-adapter-aidt-feature-crd",
+      "title": "Smoke 2026-07-03 - Learnable Adapter AIDT Feature CRD"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 2925,
+      "normalized_heading": "smoke-probe-2026-07-03-balanced-softmax-tau-0-25",
+      "title": "Smoke/Probe 2026-07-03 - Balanced Softmax Tau 0.25"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 2981,
+      "normalized_heading": "smoke-2026-07-03-seesaw-compensation-only-loss",
+      "title": "Smoke 2026-07-03 - Seesaw Compensation-Only Loss"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 3022,
+      "normalized_heading": "smoke-2026-07-03-disable-balanced-epoch-sampling",
+      "title": "Smoke 2026-07-03 - Disable Balanced Epoch Sampling"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 3056,
+      "normalized_heading": "smoke-2026-07-03-border-attention-suppression",
+      "title": "Smoke 2026-07-03 - Border Attention Suppression"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 3113,
+      "normalized_heading": "smoke-2026-07-03-sub-center-proxy-head",
+      "title": "Smoke 2026-07-03 - Sub-Center Proxy Head"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 3167,
+      "normalized_heading": "smoke-2026-07-03-compact-bilinear-patch-fusion",
+      "title": "Smoke 2026-07-03 - Compact Bilinear Patch Fusion"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 3220,
+      "normalized_heading": "smoke-2026-07-03-part-token-pairwise-head",
+      "title": "Smoke 2026-07-03 - Part-Token Pairwise Head"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 3263,
+      "normalized_heading": "smoke-2026-07-03-teacher-pairwise-margin-distillation",
+      "title": "Smoke 2026-07-03 - Teacher Pairwise Margin Distillation"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 3316,
+      "normalized_heading": "smoke-2026-07-03-yolo-primary-with-class-f-auxiliary-training",
+      "title": "Smoke 2026-07-03 - YOLO Primary With Class-F Auxiliary Training"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 3372,
+      "normalized_heading": "smoke-probe-2026-07-03-frequency-selective-pooling-on-current-anchor",
+      "title": "Smoke/Probe 2026-07-03 - Frequency-Selective Pooling On Current Anchor"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 3435,
+      "normalized_heading": "smoke-2026-07-03-focus-class-residual-head-on-current-anchor",
+      "title": "Smoke 2026-07-03 - Focus-Class Residual Head On Current Anchor"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 3490,
+      "normalized_heading": "diagnostic-2026-07-03-counterfactual-color-guard",
+      "title": "Diagnostic 2026-07-03 - Counterfactual Color Guard"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 3546,
+      "normalized_heading": "diagnostic-2026-07-03-geometric-hflip-tta",
+      "title": "Diagnostic 2026-07-03 - Geometric HFlip TTA"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 3591,
+      "normalized_heading": "diagnostic-2026-07-03-head-pooling-ablation-on-current-keeper",
+      "title": "Diagnostic 2026-07-03 - Head Pooling Ablation On Current Keeper"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 3615,
+      "normalized_heading": "smoke-2026-07-03-patch-memory-local-adapter-on-current-keeper",
+      "title": "Smoke 2026-07-03 - Patch-Memory Local Adapter On Current Keeper"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 3673,
+      "normalized_heading": "smoke-2026-07-03-logitnorm-loss-on-current-keeper",
+      "title": "Smoke 2026-07-03 - LogitNorm Loss On Current Keeper"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 3725,
+      "normalized_heading": "smoke-2026-07-03-foreground-background-recombination-on-current-keeper",
+      "title": "Smoke 2026-07-03 - Foreground/Background Recombination On Current Keeper"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 3781,
+      "normalized_heading": "smoke-2026-07-03-crop-bbox-foreground-background-recombination-on-current-keeper",
+      "title": "Smoke 2026-07-03 - Crop-BBox Foreground/Background Recombination On Current Keeper"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 3834,
+      "normalized_heading": "smoke-2026-07-03-light-background-focus-suppression-retest",
+      "title": "Smoke 2026-07-03 - Light Background-Focus Suppression Retest"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 3889,
+      "normalized_heading": "smoke-2026-07-03-peer-small-loss-co-teaching-diagnostic",
+      "title": "Smoke 2026-07-03 - Peer Small-Loss Co-Teaching Diagnostic"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 3951,
+      "normalized_heading": "diagnostic-2026-07-03-frozen-pairwise-feature-verifier",
+      "title": "Diagnostic 2026-07-03 - Frozen Pairwise Feature Verifier"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 4026,
+      "normalized_heading": "diagnostic-2026-07-03-patch-evidence-mil-dense-readout",
+      "title": "Diagnostic 2026-07-03 - Patch-Evidence MIL Dense Readout"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 4101,
+      "normalized_heading": "smoke-2026-07-03-train-time-patch-evidence-mil-loss",
+      "title": "Smoke 2026-07-03 - Train-Time Patch-Evidence MIL Loss"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 4165,
+      "normalized_heading": "smoke-2026-07-03-gated-patch-evidence-router-head",
+      "title": "Smoke 2026-07-03 - Gated Patch-Evidence Router Head"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 4225,
+      "normalized_heading": "smoke-2026-07-03-oof-patch-verifier-teacher-for-pairwise-head",
+      "title": "Smoke 2026-07-03 - OOF Patch-Verifier Teacher for Pairwise Head"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 4292,
+      "normalized_heading": "probe-2026-07-03-auxiliary-class-f-patch-evidence-verifier",
+      "title": "Probe 2026-07-03 - Auxiliary class_f Patch-Evidence Verifier"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 4347,
+      "normalized_heading": "probe-2026-07-03-spatial-interior-border-patch-evidence-features",
+      "title": "Probe 2026-07-03 - Spatial Interior/Border Patch-Evidence Features"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 4397,
+      "normalized_heading": "smoke-2026-07-03-oof-patch-verifier-disagreement-sample-deweighting",
+      "title": "Smoke 2026-07-03 - OOF Patch-Verifier Disagreement Sample Deweighting"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 4453,
+      "normalized_heading": "final-test-diagnostic-2026-07-03-0-1-patch-evidence-verifier",
+      "title": "Final-Test Diagnostic 2026-07-03 - 0-1 Patch-Evidence Verifier"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 4496,
+      "normalized_heading": "probe-2026-07-03-directional-selective-gate-for-patch-verifier",
+      "title": "Probe 2026-07-03 - Directional Selective Gate for Patch Verifier"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 4548,
+      "normalized_heading": "smoke-2026-07-03-patch-directional-targeted-margin",
+      "title": "Smoke 2026-07-03 - Patch-Directional Targeted Margin"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 4610,
+      "normalized_heading": "cleanup-2026-07-03-obsolete-train-to-val-reroute-focus-probes",
+      "title": "Cleanup 2026-07-03 - Obsolete Train-to-Val Reroute/Focus Probes"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 4629,
+      "normalized_heading": "diagnostic-2026-07-03-patch-evidence-direction-filter-val-trap",
+      "title": "Diagnostic 2026-07-03 - Patch-Evidence Direction Filter Val Trap"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 4649,
+      "normalized_heading": "diagnostic-final-audit-2026-07-03-stacked-patch-feature-selective-verifier",
+      "title": "Diagnostic/Final Audit 2026-07-03 - Stacked Patch+Feature Selective Verifier"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 4717,
+      "normalized_heading": "diagnostic-2026-07-03-top-5-teacher-recall-protector-reject",
+      "title": "Diagnostic 2026-07-03 - Top-5 Teacher Recall Protector Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 4748,
+      "normalized_heading": "diagnostic-2026-07-03-trkh-top-5-soft-ensemble-upper-bound",
+      "title": "Diagnostic 2026-07-03 - TRKH + Top-5 Soft Ensemble Upper Bound"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 4782,
+      "normalized_heading": "diagnostic-2026-07-03-top-5-train-teacher-cache-is-in-sample-hard-label",
+      "title": "Diagnostic 2026-07-03 - Top-5 Train Teacher Cache Is In-Sample Hard-Label"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 4808,
+      "normalized_heading": "diagnostic-2026-07-03-sample-index-top-5-trkh-router-reject",
+      "title": "Diagnostic 2026-07-03 - Sample-Index Top-5/TRKH Router Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 4835,
+      "normalized_heading": "smoke-2026-07-03-augmix-jsd-lite-consistency-reject",
+      "title": "Smoke 2026-07-03 - AugMix/JSD-lite Consistency Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 4887,
+      "normalized_heading": "smoke-2026-07-03-high-frequency-texture-expert-reject",
+      "title": "Smoke 2026-07-03 - High-Frequency Texture Expert Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 4929,
+      "normalized_heading": "smoke-2026-07-03-oof-patch-verifier-soft-target-reject",
+      "title": "Smoke 2026-07-03 - OOF Patch-Verifier Soft Target Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 4984,
+      "normalized_heading": "diagnostic-2026-07-03-cleanlab-on-oof-patch-verifier-teacher",
+      "title": "Diagnostic 2026-07-03 - Cleanlab on OOF Patch-Verifier Teacher"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 5014,
+      "normalized_heading": "probe-2026-07-03-extratrees-patch-evidence-verifier-reject",
+      "title": "Probe 2026-07-03 - ExtraTrees Patch-Evidence Verifier Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 5055,
+      "normalized_heading": "smoke-2026-07-03-cyflod-smoothstep-loss-damping-reject",
+      "title": "Smoke 2026-07-03 - CYFLOD SmoothStep Loss Damping Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 5103,
+      "normalized_heading": "smoke-2026-07-03-register-attention-alignment-reject",
+      "title": "Smoke 2026-07-03 - Register Attention Alignment Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 5149,
+      "normalized_heading": "smoke-2026-07-03-yolo-source-group-sample-weights-reject",
+      "title": "Smoke 2026-07-03 - YOLO Source-Group Sample Weights Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 5199,
+      "normalized_heading": "smoke-2026-07-03-internal-vicreg-yolof-warmup-reject",
+      "title": "Smoke 2026-07-03 - Internal VICReg YOLOF Warmup Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 5250,
+      "normalized_heading": "smoke-2026-07-03-focus-class-1-auc-rank-loss-reject",
+      "title": "Smoke 2026-07-03 - Focus Class-1 AUC-Rank Loss Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 5307,
+      "normalized_heading": "smoke-2026-07-03-surface-detail-attention-view-reject-on-current-keeper",
+      "title": "Smoke 2026-07-03 - Surface-Detail Attention View Reject On Current Keeper"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 5352,
+      "normalized_heading": "smoke-2026-07-03-class-balanced-self-paced-loss-reject",
+      "title": "Smoke 2026-07-03 - Class-Balanced Self-Paced Loss Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 5410,
+      "normalized_heading": "smoke-2026-07-03-focus-partial-auc-fpr-range-guard-reject",
+      "title": "Smoke 2026-07-03 - Focus Partial-AUC FPR-Range Guard Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 5465,
+      "normalized_heading": "smoke-2026-07-03-coupled-patch-evidence-router-reject",
+      "title": "Smoke 2026-07-03 - Coupled Patch-Evidence Router Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 5526,
+      "normalized_heading": "smoke-2026-07-03-patch-evidence-router-max-margin-prior-reject",
+      "title": "Smoke 2026-07-03 - Patch-Evidence Router Max-Margin Prior Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 5580,
+      "normalized_heading": "smoke-2026-07-03-oof-reliability-patch-router-teacher-reject",
+      "title": "Smoke 2026-07-03 - OOF-Reliability Patch-Router Teacher Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 5644,
+      "normalized_heading": "smoke-2026-07-03-oof-router-teacher-head-only-high-lr-reject",
+      "title": "Smoke 2026-07-03 - OOF-Router Teacher Head-Only High-LR Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 5693,
+      "normalized_heading": "diagnostic-2026-07-03-aidt-top-5-trkh-consensus-is-useful-but-not-a-no-pretrain-solution",
+      "title": "Diagnostic 2026-07-03 - AIDT/Top-5/TRKH Consensus Is Useful But Not A No-Pretrain Solution"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 5724,
+      "normalized_heading": "smoke-2026-07-03-symmetric-cross-entropy-robust-loss-reject",
+      "title": "Smoke 2026-07-03 - Symmetric Cross Entropy Robust Loss Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 5778,
+      "normalized_heading": "diagnostic-2026-07-03-high-resolution-multi-scale-validation-reject",
+      "title": "Diagnostic 2026-07-03 - High-Resolution / Multi-Scale Validation Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 5820,
+      "normalized_heading": "smoke-2026-07-03-fixres-style-320-head-position-adaptation-reject",
+      "title": "Smoke 2026-07-03 - FixRes-Style 320 Head/Position Adaptation Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 5865,
+      "normalized_heading": "smoke-2026-07-03-natural-prior-crt-head-pair-adaptation-reject",
+      "title": "Smoke 2026-07-03 - Natural-Prior cRT Head/Pair Adaptation Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 5913,
+      "normalized_heading": "smoke-2026-07-03-los-label-over-smooth-crt-reject",
+      "title": "Smoke 2026-07-03 - LOS / Label-Over-Smooth cRT Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 5961,
+      "normalized_heading": "diagnostic-2026-07-03-relative-mahalanobis-class-1-conformity-reject",
+      "title": "Diagnostic 2026-07-03 - Relative Mahalanobis / Class-1 Conformity Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 6015,
+      "normalized_heading": "diagnostic-2026-07-04-fixed-etf-neural-collapse-ridge-prototype-reject",
+      "title": "Diagnostic 2026-07-04 - Fixed-ETF / Neural-Collapse Ridge Prototype Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 6063,
+      "normalized_heading": "smoke-2026-07-04-efficientnetv2-s-feature-crd-adapter-reject",
+      "title": "Smoke 2026-07-04 - EfficientNetV2-S Feature CRD Adapter Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 6128,
+      "normalized_heading": "diagnostic-2026-07-04-entropy-test-time-adaptation-reject",
+      "title": "Diagnostic 2026-07-04 - Entropy Test-Time Adaptation Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 6184,
+      "normalized_heading": "diagnostic-2026-07-04-t3a-target-template-classifier-adjustment-reject",
+      "title": "Diagnostic 2026-07-04 - T3A Target-Template Classifier Adjustment Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 6234,
+      "normalized_heading": "smoke-2026-07-04-herbs-style-multi-granularity-high-temperature-refinement-reject",
+      "title": "Smoke 2026-07-04 - HERBS-Style Multi-Granularity High-Temperature Refinement Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 6289,
+      "normalized_heading": "smoke-2026-07-04-self-boosting-cam-attention-reject",
+      "title": "Smoke 2026-07-04 - Self-Boosting CAM Attention Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 6348,
+      "normalized_heading": "smoke-2026-07-04-cmt-leff-block-local-sparse-patch-mixer-reject",
+      "title": "Smoke 2026-07-04 - CMT/LeFF Block-Local Sparse Patch Mixer Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 6409,
+      "normalized_heading": "smoke-2026-07-04-block-local-part-token-pairwise-reject",
+      "title": "Smoke 2026-07-04 - Block-Local + Part-Token Pairwise Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 6468,
+      "normalized_heading": "smoke-2026-07-04-paired-view-local-patch-token-alignment-reject",
+      "title": "Smoke 2026-07-04 - Paired-View Local Patch-Token Alignment Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 6542,
+      "normalized_heading": "diagnostic-2026-07-04-yolo-crop-margin-sensitivity-reject",
+      "title": "Diagnostic 2026-07-04 - YOLO Crop-Margin Sensitivity Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 6597,
+      "normalized_heading": "diagnostic-2026-07-04-train-only-crop-margin-router-reject",
+      "title": "Diagnostic 2026-07-04 - Train-Only Crop-Margin Router Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 6654,
+      "normalized_heading": "diagnostic-2026-07-04-bbox-token-region-separability-reject",
+      "title": "Diagnostic 2026-07-04 - BBox Token Region Separability Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 6721,
+      "normalized_heading": "diagnostic-2026-07-04-token-prune-keep-rate-sensitivity-reject",
+      "title": "Diagnostic 2026-07-04 - Token-Prune Keep-Rate Sensitivity Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 6778,
+      "normalized_heading": "diagnostic-2026-07-04-current-keeper-boundary-review-and-xai-dataset-crop-fix",
+      "title": "Diagnostic 2026-07-04 - Current Keeper Boundary Review and XAI Dataset-Crop Fix"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 6849,
+      "normalized_heading": "smoke-2026-07-04-local-neighbor-cmsf-feature-cache-reject",
+      "title": "Smoke 2026-07-04 - Local-Neighbor CMSF Feature Cache Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 6926,
+      "normalized_heading": "diagnostic-2026-07-04-train-only-patch-part-prototypes-reject",
+      "title": "Diagnostic 2026-07-04 - Train-Only Patch Part-Prototypes Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 6987,
+      "normalized_heading": "smoke-2026-07-04-top-5-expert-vote-disagreement-sample-weights-reject",
+      "title": "Smoke 2026-07-04 - Top-5 Expert Vote-Disagreement Sample Weights Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 7063,
+      "normalized_heading": "diagnostic-2026-07-04-efficientnetv2-s-feature-oof-readout-reject",
+      "title": "Diagnostic 2026-07-04 - EfficientNetV2-S Feature OOF Readout Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 7102,
+      "normalized_heading": "smoke-2026-07-04-cumulative-ordinal-head-reject",
+      "title": "Smoke 2026-07-04 - Cumulative Ordinal Head Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 7162,
+      "normalized_heading": "diagnostic-2026-07-04-convnext-tiny-pretrained-head-only-reject",
+      "title": "Diagnostic 2026-07-04 - ConvNeXt Tiny Pretrained Head-Only Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 7222,
+      "normalized_heading": "smoke-2026-07-04-convnext-tiny-stage3-head-partial-auc-reject",
+      "title": "Smoke 2026-07-04 - ConvNeXt Tiny Stage3+Head Partial-AUC Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 7277,
+      "normalized_heading": "diagnostic-2026-07-04-dinov2-remapped-feature-oof-readout-reject",
+      "title": "Diagnostic 2026-07-04 - DINOv2 Remapped Feature OOF Readout Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 7343,
+      "normalized_heading": "diagnostic-2026-07-04-yolo-oof-folds-mobilenetv3-fold00-reject",
+      "title": "Diagnostic 2026-07-04 - YOLO OOF Folds + MobileNetV3 Fold00 Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 7410,
+      "normalized_heading": "smoke-2026-07-04-efficientnetv2-s-fold00-reload-xai-reject",
+      "title": "Smoke 2026-07-04 - EfficientNetV2-S Fold00 Reload/XAI Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 7474,
+      "normalized_heading": "correction-2026-07-04-efficientnetv2-s-normfix-reload-xai-reject",
+      "title": "Correction 2026-07-04 - EfficientNetV2-S Normfix Reload/XAI Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 7533,
+      "normalized_heading": "smoke-2026-07-04-coatnet-0-fold00-hybrid-cnn-attention-reject",
+      "title": "Smoke 2026-07-04 - CoAtNet-0 Fold00 Hybrid CNN-Attention Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 7594,
+      "normalized_heading": "smoke-2026-07-04-maxvit-256-fold00-hybrid-local-global-attention-reject",
+      "title": "Smoke 2026-07-04 - MaxViT-256 Fold00 Hybrid Local-Global Attention Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 7651,
+      "normalized_heading": "smoke-2026-07-04-patch-evidence-router-summary-stats-reject",
+      "title": "Smoke 2026-07-04 - Patch-Evidence Router Summary-Stats Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 7725,
+      "normalized_heading": "diagnostic-2026-07-04-aidt-and-source-group-status-check",
+      "title": "Diagnostic 2026-07-04 - AIDT and Source-Group Status Check"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 7759,
+      "normalized_heading": "status-clarification-2026-07-04-external-smoke-runs-remain-diagnostic",
+      "title": "Status Clarification 2026-07-04 - External Smoke Runs Remain Diagnostic"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 7775,
+      "normalized_heading": "diagnostic-2026-07-04-direct-yolo-f-dinov2-feature-readout-reject",
+      "title": "Diagnostic 2026-07-04 - Direct `yolo_f` DINOv2 Feature Readout Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 7822,
+      "normalized_heading": "diagnostic-2026-07-04-mobilenetv3-fold00-no-warmup-fair-probe-reject",
+      "title": "Diagnostic 2026-07-04 - MobileNetV3 Fold00 No-Warmup/Fair Probe Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 7866,
+      "normalized_heading": "diagnostic-2026-07-04-class-f-mobilenetv3-fold00-probe-reject",
+      "title": "Diagnostic 2026-07-04 - `class_f` MobileNetV3 Fold00 Probe Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 7929,
+      "normalized_heading": "diagnostic-2026-07-04-late-class-attention-pooling-reject",
+      "title": "Diagnostic 2026-07-04 - Late Class-Attention Pooling Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 7988,
+      "normalized_heading": "diagnostic-2026-07-04-late-class-attention-plus-head-reject",
+      "title": "Diagnostic 2026-07-04 - Late Class-Attention Plus Head Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 8034,
+      "normalized_heading": "diagnostic-2026-07-04-current-keeper-train-boundary-review-batch-01",
+      "title": "Diagnostic 2026-07-04 - Current-Keeper Train Boundary Review Batch 01"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 8074,
+      "normalized_heading": "diagnostic-2026-07-04-yolo-bbox-geometry-selector-reject",
+      "title": "Diagnostic 2026-07-04 - YOLO BBox Geometry Selector Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 8108,
+      "normalized_heading": "diagnostic-2026-07-04-aidt-top-5-consensus-train-signal-audit",
+      "title": "Diagnostic 2026-07-04 - AIDT/Top-5 Consensus Train-Signal Audit"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 8154,
+      "normalized_heading": "smoke-2026-07-04-manual-boundary-review-policy-v1-reject",
+      "title": "Smoke 2026-07-04 - Manual Boundary Review Policy V1 Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 8210,
+      "normalized_heading": "smoke-2026-07-04-aidt-top-5-consensus-hard-case-policy-v1-reject",
+      "title": "Smoke 2026-07-04 - AIDT/Top-5 Consensus Hard-Case Policy V1 Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 8265,
+      "normalized_heading": "smoke-2026-07-05-internal-ssl-dino-keeper-init-surface-detail-reject",
+      "title": "Smoke 2026-07-05 - Internal SSL-DINO Keeper-Init Surface-Detail Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 8317,
+      "normalized_heading": "smoke-2026-07-05-light-randaugment-on-current-keeper-reject",
+      "title": "Smoke 2026-07-05 - Light RandAugment On Current Keeper Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 8377,
+      "normalized_heading": "audit-2026-07-05-consensus-review-queue-no-train-decision",
+      "title": "Audit 2026-07-05 - Consensus Review Queue No-Train Decision"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 8405,
+      "normalized_heading": "diagnostic-2026-07-05-patch-evidence-verifier-full-export-for-trkh-reuse",
+      "title": "Diagnostic 2026-07-05 - Patch-Evidence Verifier Full Export For TRKH Reuse"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 8469,
+      "normalized_heading": "implementation-2026-07-05-in-model-runtime-patch-evidence-linear-verifier",
+      "title": "Implementation 2026-07-05 - In-Model Runtime Patch-Evidence Linear Verifier"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 8566,
+      "normalized_heading": "diagnostic-2026-07-05-train-oof-patch-verifier-acceptance-meta-gate-rejected",
+      "title": "Diagnostic 2026-07-05 - Train-OOF Patch Verifier Acceptance Meta-Gate Rejected"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 8614,
+      "normalized_heading": "forensics-2026-07-05-softboost-verifier-remaining-error-atlas",
+      "title": "Forensics 2026-07-05 - Softboost Verifier Remaining Error Atlas"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 8653,
+      "normalized_heading": "experiment-2026-07-05-ssl-dino-bbox-fusion-compatible-retest",
+      "title": "Experiment 2026-07-05 - SSL-DINO BBox-Fusion-Compatible Retest"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 8718,
+      "normalized_heading": "experiment-2026-07-05-complementary-patch-suppression-head",
+      "title": "Experiment 2026-07-05 - Complementary Patch Suppression Head"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 8786,
+      "normalized_heading": "experiment-2026-07-05-train-time-soft-patch-linear-verifier",
+      "title": "Experiment 2026-07-05 - Train-Time Soft Patch Linear Verifier"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 8847,
+      "normalized_heading": "experiment-2026-07-05-bbox-interior-token-label-auxiliary-loss",
+      "title": "Experiment 2026-07-05 - Bbox-Interior Token Label Auxiliary Loss"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 8922,
+      "normalized_heading": "experiment-2026-07-05-color-statistic-fusion-head-only-adapter",
+      "title": "Experiment 2026-07-05 - Color-Statistic Fusion Head-Only Adapter"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 8983,
+      "normalized_heading": "diagnostic-2026-07-05-current-patch-oof-cleanlab-feature-neighbor-policy",
+      "title": "Diagnostic 2026-07-05 - Current Patch-OOF Cleanlab + Feature-Neighbor Policy"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 9027,
+      "normalized_heading": "experiment-2026-07-05-blocklocalpatchmixer-layers-5-8-head-adapter",
+      "title": "Experiment 2026-07-05 - BlockLocalPatchMixer Layers 5-8 + Head Adapter"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 9087,
+      "normalized_heading": "experiment-2026-07-05-teacher-guided-contrastive-memory-queue",
+      "title": "Experiment 2026-07-05 - Teacher-Guided Contrastive Memory Queue"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 9170,
+      "normalized_heading": "experiment-2026-07-05-class-1-intra-class-foreground-snapmix",
+      "title": "Experiment 2026-07-05 - Class-1 Intra-Class Foreground SnapMix"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 9233,
+      "normalized_heading": "experiment-2026-07-05-class-1-foreground-counterexample-mix",
+      "title": "Experiment 2026-07-05 - Class-1 Foreground Counterexample Mix"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 9296,
+      "normalized_heading": "experiment-2026-07-05-register-diversity-loss-smoke",
+      "title": "Experiment 2026-07-05 - Register Diversity Loss Smoke"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 9353,
+      "normalized_heading": "experiment-2026-07-05-auxiliary-class-f-multi-pair-patch-evidence-diagnostic",
+      "title": "Experiment 2026-07-05 - Auxiliary Class-F Multi-Pair Patch Evidence Diagnostic"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 9419,
+      "normalized_heading": "diagnostic-2026-07-05-trkh-scope-vs-external-upper-bounds",
+      "title": "Diagnostic 2026-07-05 - TRKH Scope vs External Upper Bounds"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 9453,
+      "normalized_heading": "cleanup-2026-07-05-compact-obsolete-rejected-xai-case-images",
+      "title": "Cleanup 2026-07-05 - Compact Obsolete Rejected XAI Case Images"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 9478,
+      "normalized_heading": "diagnostic-2026-07-05-gradient-feature-readout-token-injection-precheck",
+      "title": "Diagnostic 2026-07-05 - Gradient Feature Readout / Token-Injection Precheck"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 9519,
+      "normalized_heading": "diagnostic-2026-07-05-border-interior-counterfactual-tta-probe",
+      "title": "Diagnostic 2026-07-05 - Border/Interior Counterfactual TTA Probe"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 9580,
+      "normalized_heading": "smoke-2026-07-05-bbox-compatible-surface-amplified-auxiliary-retest",
+      "title": "Smoke 2026-07-05 - Bbox-Compatible Surface-Amplified Auxiliary Retest"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 9648,
+      "normalized_heading": "cleanup-2026-07-05-compact-more-obsolete-v8-xai-case-images",
+      "title": "Cleanup 2026-07-05 - Compact More Obsolete V8 XAI Case Images"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 9671,
+      "normalized_heading": "diagnostic-2026-07-05-remaining-error-external-support-consensus",
+      "title": "Diagnostic 2026-07-05 - Remaining Error External Support Consensus"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 9768,
+      "normalized_heading": "diagnostic-2026-07-05-train-oof-support-for-patch-cleanlab-queue",
+      "title": "Diagnostic 2026-07-05 - Train OOF Support For Patch-Cleanlab Queue"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 9799,
+      "normalized_heading": "smoke-2026-07-05-train-oof-external-reliability-margin-recall-protect-reject",
+      "title": "Smoke 2026-07-05 - Train-OOF External Reliability Margin Recall-Protect Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 9870,
+      "normalized_heading": "diagnostic-2026-07-05-trkh-only-softboost-internal-ensemble-blend",
+      "title": "Diagnostic 2026-07-05 - TRKH-Only Softboost + Internal Ensemble Blend"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 9911,
+      "normalized_heading": "cleanup-2026-07-05-compact-obsolete-non-smoke-xai-case-images",
+      "title": "Cleanup 2026-07-05 - Compact Obsolete Non-Smoke XAI Case Images"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 9938,
+      "normalized_heading": "diagnostic-2026-07-05-scope-clarification-and-train-only-softboost-review",
+      "title": "Diagnostic 2026-07-05 - Scope Clarification and Train-Only Softboost Review"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 9993,
+      "normalized_heading": "review-2026-07-05-softboost-train-triage-batch-01",
+      "title": "Review 2026-07-05 - Softboost Train Triage Batch 01"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 10030,
+      "normalized_heading": "diagnostic-2026-07-05-selfreview-draft-dry-run-from-triage-batch-01",
+      "title": "Diagnostic 2026-07-05 - Selfreview Draft Dry-Run From Triage Batch 01"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 10059,
+      "normalized_heading": "diagnostic-2026-07-05-balanced-train-reliability-batch-02",
+      "title": "Diagnostic 2026-07-05 - Balanced Train Reliability Batch 02"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 10114,
+      "normalized_heading": "diagnostic-2026-07-05-batch02-strict-review-filter",
+      "title": "Diagnostic 2026-07-05 - Batch02 Strict Review Filter"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 10144,
+      "normalized_heading": "diagnostic-2026-07-05-structural-label-precheck-on-batch02-strict-rows",
+      "title": "Diagnostic 2026-07-05 - Structural-Label Precheck on Batch02 Strict Rows"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 10181,
+      "normalized_heading": "diagnostic-2026-07-05-external-feature-structural-support",
+      "title": "Diagnostic 2026-07-05 - External-Feature Structural Support"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 10224,
+      "normalized_heading": "review-2026-07-05-effv2-structural-priority-worklist",
+      "title": "Review 2026-07-05 - EffV2 Structural Priority Worklist"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 10264,
+      "normalized_heading": "literature-check-2026-07-05-review-fold-safe-reliability-before-more-smokes",
+      "title": "Literature Check 2026-07-05 - Review/Fold-Safe Reliability Before More Smokes"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 10290,
+      "normalized_heading": "cleanup-2026-07-05-compact-class-f-oof-fold-materialization",
+      "title": "Cleanup 2026-07-05 - Compact class_f OOF Fold Materialization"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 10325,
+      "normalized_heading": "guardrail-2026-07-05-review-worklist-readiness-audit",
+      "title": "Guardrail 2026-07-05 - Review Worklist Readiness Audit"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 10351,
+      "normalized_heading": "guardrail-2026-07-05-review-queue-readiness-matrix",
+      "title": "Guardrail 2026-07-05 - Review Queue Readiness Matrix"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 10374,
+      "normalized_heading": "guardrail-2026-07-05-reviewed-manifest-builder-cli-readiness-gate",
+      "title": "Guardrail 2026-07-05 - Reviewed-Manifest Builder CLI Readiness Gate"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 10395,
+      "normalized_heading": "cleanup-2026-07-05-compact-rejected-verifier-xai-case-images",
+      "title": "Cleanup 2026-07-05 - Compact Rejected Verifier XAI Case Images"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 10430,
+      "normalized_heading": "diagnostic-2026-07-05-distribution-aware-soft-centroid-prototype-precheck",
+      "title": "Diagnostic 2026-07-05 - Distribution-Aware Soft Centroid Prototype Precheck"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 10468,
+      "normalized_heading": "diagnostic-2026-07-05-hflip-decision-instability-precheck",
+      "title": "Diagnostic 2026-07-05 - HFlip Decision-Instability Precheck"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 10515,
+      "normalized_heading": "cleanup-2026-07-05-compact-rejected-hflip-xai-case-images",
+      "title": "Cleanup 2026-07-05 - Compact Rejected HFlip XAI Case Images"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 10537,
+      "normalized_heading": "diagnostic-2026-07-05-class-specific-patch-query-readout-precheck",
+      "title": "Diagnostic 2026-07-05 - Class-Specific Patch-Query Readout Precheck"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 10587,
+      "normalized_heading": "cleanup-2026-07-05-compact-rejected-class-query-artifacts",
+      "title": "Cleanup 2026-07-05 - Compact Rejected Class-Query Artifacts"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 10605,
+      "normalized_heading": "guardrail-2026-07-05-effv2-priority-worklist-visual-pass",
+      "title": "Guardrail 2026-07-05 - EffV2 Priority Worklist Visual Pass"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 10623,
+      "normalized_heading": "cleanup-2026-07-06-compact-recent-rejected-xai-case-images",
+      "title": "Cleanup 2026-07-06 - Compact Recent Rejected XAI Case Images"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 10655,
+      "normalized_heading": "route-audit-2026-07-06-vlm-noisy-label-literature-does-not-unlock-auto-training",
+      "title": "Route Audit 2026-07-06 - VLM/Noisy-Label Literature Does Not Unlock Auto-Training"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 10684,
+      "normalized_heading": "diagnostic-2026-07-06-softboost-class-1-correction-budget",
+      "title": "Diagnostic 2026-07-06 - Softboost Class-1 Correction Budget"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 10716,
+      "normalized_heading": "diagnostic-2026-07-06-external-support-scope-check-for-current-trkh",
+      "title": "Diagnostic 2026-07-06 - External Support Scope Check for Current TRKH"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 10753,
+      "normalized_heading": "diagnostic-2026-07-06-signal-gap-readiness-crosswalk",
+      "title": "Diagnostic 2026-07-06 - Signal-Gap Readiness Crosswalk"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 10790,
+      "normalized_heading": "route-audit-2026-07-06-literature-after-signal-gap-crosswalk",
+      "title": "Route Audit 2026-07-06 - Literature After Signal-Gap Crosswalk"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 10818,
+      "normalized_heading": "review-worklist-2026-07-06-class1-rival2-4-gap-coverage",
+      "title": "Review Worklist 2026-07-06 - Class1 Rival2/4 Gap Coverage"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 10848,
+      "normalized_heading": "diagnostic-2026-07-06-softboost-validation-rival2-4-forensics-xai",
+      "title": "Diagnostic 2026-07-06 - Softboost Validation Rival2/4 Forensics + XAI"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 10901,
+      "normalized_heading": "preservation-2026-07-06-current-trkh-artifact-inventory",
+      "title": "Preservation 2026-07-06 - Current TRKH Artifact Inventory"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 10916,
+      "normalized_heading": "tooling-2026-07-06-reusable-xai-transition-summary",
+      "title": "Tooling 2026-07-06 - Reusable XAI Transition Summary"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 10948,
+      "normalized_heading": "tooling-2026-07-06-review-worklist-readiness-matrix",
+      "title": "Tooling 2026-07-06 - Review Worklist Readiness Matrix"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 10988,
+      "normalized_heading": "tooling-2026-07-06-trkh-smoke-gate-audit",
+      "title": "Tooling 2026-07-06 - TRKH Smoke Gate Audit"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 11025,
+      "normalized_heading": "cleanup-2026-07-06-rejected-eval-smoke-leftovers",
+      "title": "Cleanup 2026-07-06 - Rejected Eval-Smoke Leftovers"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 11055,
+      "normalized_heading": "cleanup-2026-07-06-legacy-mobilenetv3-class-f-oof-fold-train-dirs",
+      "title": "Cleanup 2026-07-06 - Legacy MobileNetV3 class_f OOF Fold Train Dirs"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 11087,
+      "normalized_heading": "audit-2026-07-06-current-artifact-retention-snapshot",
+      "title": "Audit 2026-07-06 - Current Artifact Retention Snapshot"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 11121,
+      "normalized_heading": "tooling-2026-07-06-manual-review-minimum-fill-plan",
+      "title": "Tooling 2026-07-06 - Manual Review Minimum Fill Plan"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 11163,
+      "normalized_heading": "review-packet-2026-07-06-current-manual-fill-plan-html",
+      "title": "Review Packet 2026-07-06 - Current Manual Fill Plan HTML"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 11191,
+      "normalized_heading": "cleanup-2026-07-06-legacy-embedding-retrieval-feature-caches",
+      "title": "Cleanup 2026-07-06 - Legacy Embedding Retrieval Feature Caches"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 11223,
+      "normalized_heading": "cleanup-2026-07-06-legacy-quality-boundary-review-images",
+      "title": "Cleanup 2026-07-06 - Legacy Quality/Boundary Review Images"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 11254,
+      "normalized_heading": "cleanup-2026-07-06-legacy-selector-posthoc-sweep-artifacts",
+      "title": "Cleanup 2026-07-06 - Legacy Selector/Posthoc Sweep Artifacts"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 11288,
+      "normalized_heading": "tooling-2026-07-06-current-signal-gap-crosswalk-rerun",
+      "title": "Tooling 2026-07-06 - Current Signal-Gap Crosswalk Rerun"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 11329,
+      "normalized_heading": "command-packet-2026-07-06-current-best-full-train-test-xai",
+      "title": "Command Packet 2026-07-06 - Current Best Full Train/Test/XAI"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 11348,
+      "normalized_heading": "tooling-2026-07-06-artifact-retention-audit-rerun",
+      "title": "Tooling 2026-07-06 - Artifact Retention Audit Rerun"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 11400,
+      "normalized_heading": "tooling-2026-07-06-patch-score-point-in-box-audit",
+      "title": "Tooling 2026-07-06 - Patch Score Point-in-Box Audit"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 11442,
+      "normalized_heading": "probe-2026-07-06-crop-bbox-token-prior-source-rejected",
+      "title": "Probe 2026-07-06 - Crop-BBox Token Prior Source Rejected"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 11485,
+      "normalized_heading": "launcher-2026-07-10-full-train-command-packet-revalidated",
+      "title": "Launcher 2026-07-10 - Full-Train Command Packet Revalidated"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 11534,
+      "normalized_heading": "diagnostic-2026-07-10-self-neighbor-consistency-rejected-before-smoke",
+      "title": "Diagnostic 2026-07-10 - Self/Neighbor Consistency Rejected Before Smoke"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 11592,
+      "normalized_heading": "smoke-2026-07-11-detail-preserving-stem-pooling-rejected",
+      "title": "Smoke 2026-07-11 - Detail-Preserving Stem Pooling Rejected"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 11679,
+      "normalized_heading": "smoke-2026-07-11-shifted-patch-token-residual-rejected",
+      "title": "Smoke 2026-07-11 - Shifted Patch Token Residual Rejected"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 11768,
+      "normalized_heading": "smoke-2026-07-11-gated-relative-position-attention-rejected",
+      "title": "Smoke 2026-07-11 - Gated Relative-Position Attention Rejected"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 11849,
+      "normalized_heading": "diagnostic-2026-07-11-locality-self-attention-precheck-rejected",
+      "title": "Diagnostic 2026-07-11 - Locality Self-Attention Precheck Rejected"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 11908,
+      "normalized_heading": "full-train-2026-07-11-best-recipe-continuation-rejected",
+      "title": "Full Train 2026-07-11 - Best-Recipe Continuation Rejected"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 11973,
+      "normalized_heading": "diagnostic-2026-07-11-bbox-aligned-raw-context-crop-transfer-rejected",
+      "title": "Diagnostic 2026-07-11 - BBox-Aligned Raw-Context/Crop Transfer Rejected"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 12033,
+      "normalized_heading": "diagnostic-2026-07-11-bbox-position-reconstruction-target-rejected",
+      "title": "Diagnostic 2026-07-11 - BBox Position Reconstruction Target Rejected"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 12083,
+      "normalized_heading": "diagnostic-2026-07-11-ciconv-w-shared-trunk-complementarity-rejected",
+      "title": "Diagnostic 2026-07-11 - CIConv-W Shared-Trunk Complementarity Rejected"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 12149,
+      "normalized_heading": "research-synthesis-2026-07-11-external-reports-14-15",
+      "title": "Research Synthesis 2026-07-11 - External Reports 14/15"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 12189,
+      "normalized_heading": "diagnostic-2026-07-11-context-gray-edge-color-constancy-rejected",
+      "title": "Diagnostic 2026-07-11 - Context Gray-Edge Color Constancy Rejected"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 12236,
+      "normalized_heading": "diagnostic-2026-07-11-interior-core-second-order-readout-rejected",
+      "title": "Diagnostic 2026-07-11 - Interior-Core Second-Order Readout Rejected"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 12295,
+      "normalized_heading": "probe-2026-07-11-mobilevit-s-concurrent-compact-hybrid-rejected",
+      "title": "Probe 2026-07-11 - MobileViT-S Concurrent Compact Hybrid Rejected"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 12356,
+      "normalized_heading": "probe-2026-07-11-edgenext-x-small-rejected-before-continuation",
+      "title": "Probe 2026-07-11 - EdgeNeXt X-Small Rejected Before Continuation"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 12396,
+      "normalized_heading": "probe-2026-07-11-edgenext-small-parameter-matched-check-rejected",
+      "title": "Probe 2026-07-11 - EdgeNeXt Small Parameter-Matched Check Rejected"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 12431,
+      "normalized_heading": "diagnostic-2026-07-11-teacher-uncertainty-critic-gate-rejected",
+      "title": "Diagnostic 2026-07-11 - Teacher Uncertainty Critic Gate Rejected"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 12479,
+      "normalized_heading": "probe-2026-07-11-coatnet-nano-stage-wise-hybrid-rejected",
+      "title": "Probe 2026-07-11 - CoAtNet-Nano Stage-Wise Hybrid Rejected"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 12546,
+      "normalized_heading": "diagnostic-2026-07-11-coatnet-softboost-complementarity-is-not-routable",
+      "title": "Diagnostic 2026-07-11 - CoAtNet/Softboost Complementarity Is Not Routable"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 12564,
+      "normalized_heading": "probe-2026-07-11-trkh-stage-wise-mbconv-stem-rejected",
+      "title": "Probe 2026-07-11 - TRKH Stage-Wise MBConv Stem Rejected"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 12635,
+      "normalized_heading": "diagnostic-2026-07-11-multi-model-information-ceiling-and-residual-neighbors",
+      "title": "Diagnostic 2026-07-11 - Multi-Model Information Ceiling and Residual Neighbors"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 12669,
+      "normalized_heading": "smoke-2026-07-11-deep-abstaining-classifier-rejected",
+      "title": "Smoke 2026-07-11 - Deep Abstaining Classifier Rejected"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 12703,
+      "normalized_heading": "probe-2026-07-11-concurrent-trkh-leff-from-scratch-rejected",
+      "title": "Probe 2026-07-11 - Concurrent TRKH LeFF From Scratch Rejected"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 12762,
+      "normalized_heading": "probe-2026-07-11-persistent-concurrent-local-global-coupling-rejected",
+      "title": "Probe 2026-07-11 - Persistent Concurrent Local-Global Coupling Rejected"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 12819,
+      "normalized_heading": "smoke-2026-07-11-fixed-ldr-kl-stage-2-rejected",
+      "title": "Smoke 2026-07-11 - Fixed LDR-KL Stage-2 Rejected"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 12875,
+      "normalized_heading": "diagnostic-2026-07-11-adaptive-ldr-readiness-rejected",
+      "title": "Diagnostic 2026-07-11 - Adaptive LDR Readiness Rejected"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 12916,
+      "normalized_heading": "diagnostic-2026-07-11-class-noise-transition-correction-rejected",
+      "title": "Diagnostic 2026-07-11 - Class-Noise Transition Correction Rejected"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 12950,
+      "normalized_heading": "probe-2026-07-11-efficientformerv2-s0-scratch-hybrid-rejected",
+      "title": "Probe 2026-07-11 - EfficientFormerV2-S0 Scratch Hybrid Rejected"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 13003,
+      "normalized_heading": "infrastructure-2026-07-11-vs-code-full-pipeline-and-deployment-commands",
+      "title": "Infrastructure 2026-07-11 - VS Code Full Pipeline and Deployment Commands"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 13058,
+      "normalized_heading": "2026-07-11-deep-research-pack-refresh-and-promotion-invariant",
+      "title": "2026-07-11 - Deep-research pack refresh and promotion invariant"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 13087,
+      "normalized_heading": "diagnostic-2026-07-11-generic-multi-stage-teacher-features-rejected",
+      "title": "Diagnostic 2026-07-11 - Generic Multi-Stage Teacher Features Rejected"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 13127,
+      "normalized_heading": "infrastructure-2026-07-11-worktree-hygiene-baseline",
+      "title": "Infrastructure 2026-07-11 - Worktree Hygiene Baseline"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 13182,
+      "normalized_heading": "diagnostic-2026-07-11-fixed-wavelet-scattering-rejected",
+      "title": "Diagnostic 2026-07-11 - Fixed Wavelet Scattering Rejected"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 13239,
+      "normalized_heading": "probe-2026-07-11-full-frame-detection-curriculum-rejected",
+      "title": "Probe 2026-07-11 - Full-Frame Detection Curriculum Rejected"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 13309,
+      "normalized_heading": "diagnostic-2026-07-11-learned-context-illuminant-estimator-rejected",
+      "title": "Diagnostic 2026-07-11 - Learned Context Illuminant Estimator Rejected"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 13379,
+      "normalized_heading": "diagnostic-2026-07-11-pooled-head-api-net-interaction-rejected",
+      "title": "Diagnostic 2026-07-11 - Pooled-Head API-Net Interaction Rejected"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 13490,
+      "normalized_heading": "diagnostic-2026-07-11-token-level-natural-distractor-pwca-below-gate",
+      "title": "Diagnostic 2026-07-11 - Token-Level Natural-Distractor PWCA Below Gate"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 13573,
+      "normalized_heading": "diagnostic-2026-07-11-keeper-relative-pwca-scalar-residual-rejected",
+      "title": "Diagnostic 2026-07-11 - Keeper-Relative PWCA Scalar Residual Rejected"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 13617,
+      "normalized_heading": "diagnostic-2026-07-12-maskfeat-rgb-hog-target-rejected-before-gpu",
+      "title": "Diagnostic 2026-07-12 - MaskFeat RGB-HOG Target Rejected Before GPU"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 13682,
+      "normalized_heading": "diagnostic-2026-07-12-dinov2-dense-patch-surface-target-rejected-before-gpu",
+      "title": "Diagnostic 2026-07-12 - DINOv2 Dense Patch Surface Target Rejected Before GPU"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 13761,
+      "normalized_heading": "diagnostic-2026-07-12-two-stage-re-edl-keeper-residual-rejected-before-gpu",
+      "title": "Diagnostic 2026-07-12 - Two-Stage Re-EDL Keeper Residual Rejected Before GPU"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 13836,
+      "normalized_heading": "diagnostic-2026-07-12-joint-spatial-pcgrad-passed-gradient-readiness-but-failed-image-smoke",
+      "title": "Diagnostic 2026-07-12 - Joint Spatial-PCGrad Passed Gradient Readiness but Failed Image Smoke"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 13918,
+      "normalized_heading": "diagnostic-2026-07-12-bbn-bilateral-classifier-space-rejected-before-image-smoke",
+      "title": "Diagnostic 2026-07-12 - BBN Bilateral Classifier Space Rejected Before Image Smoke"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 13977,
+      "normalized_heading": "diagnostic-2026-07-12-fixed-interior-lbp-surface-texture-rejected-before-image-smoke",
+      "title": "Diagnostic 2026-07-12 - Fixed Interior LBP Surface Texture Rejected Before Image Smoke"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 14039,
+      "normalized_heading": "diagnostic-2026-07-12-bioclip-domain-representation-rejected-before-transfer-smoke",
+      "title": "Diagnostic 2026-07-12 - BioCLIP Domain Representation Rejected Before Transfer Smoke"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 14123,
+      "normalized_heading": "diagnostic-2026-07-12-deep-ten-stem-interior-texture-rejected-before-image-smoke",
+      "title": "Diagnostic 2026-07-12 - Deep-TEN Stem-Interior Texture Rejected Before Image Smoke"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 14176,
+      "normalized_heading": "diagnostic-2026-07-12-vicregl-crop-local-objective-rejected-before-trainer-smoke",
+      "title": "Diagnostic 2026-07-12 - VICRegL Crop-Local Objective Rejected Before Trainer Smoke"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 14227,
+      "normalized_heading": "diagnostic-2026-07-12-original-resolution-surface-tiles-rejected",
+      "title": "Diagnostic 2026-07-12 - Original-Resolution Surface Tiles Rejected"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 14273,
+      "normalized_heading": "diagnostic-2026-07-12-finer-cam-class-contrastive-attribution-rejected-before-smoke",
+      "title": "Diagnostic 2026-07-12 - Finer-CAM Class-Contrastive Attribution Rejected Before Smoke"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 14327,
+      "normalized_heading": "diagnostic-2026-07-12-surface-blob-morphology-rejected-before-smoke",
+      "title": "Diagnostic 2026-07-12 - Surface-Blob Morphology Rejected Before Smoke"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 14369,
+      "normalized_heading": "diagnostic-2026-07-12-mcr2-frozen-embedding-geometry-rejected-before-smoke",
+      "title": "Diagnostic 2026-07-12 - MCR2 Frozen-Embedding Geometry Rejected Before Smoke"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 14403,
+      "normalized_heading": "diagnostic-2026-07-12-raw-pretrained-aidt-fusion-rejected-as-fold-safe-teacher",
+      "title": "Diagnostic 2026-07-12 - Raw-Pretrained AIDT Fusion Rejected as Fold-Safe Teacher"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 14455,
+      "normalized_heading": "diagnostic-2026-07-12-raw-aidt-object-wide-context-fusion-rejected",
+      "title": "Diagnostic 2026-07-12 - Raw AIDT Object + Wide-Context Fusion Rejected"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 14499,
+      "normalized_heading": "diagnostic-2026-07-12-dinov3-frozen-dense-representation-rejected",
+      "title": "Diagnostic 2026-07-12 - DINOv3 Frozen Dense Representation Rejected"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 14553,
+      "normalized_heading": "probe-2026-07-12-scratch-mambavision-nano-rejected-at-epoch-5",
+      "title": "Probe 2026-07-12 - Scratch MambaVision-Nano Rejected At Epoch 5"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 14613,
+      "normalized_heading": "smoke-2026-07-12-friendly-foreground-adversarial-rejected",
+      "title": "Smoke 2026-07-12 - Friendly Foreground Adversarial Rejected"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 14654,
+      "normalized_heading": "readiness-2026-07-12-same-class-fourier-amplitude-mix-rejected",
+      "title": "Readiness 2026-07-12 - Same-Class Fourier Amplitude Mix Rejected"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 14707,
+      "normalized_heading": "smoke-2026-07-12-fp-informed-class-1-augmentation-reduction-rejected",
+      "title": "Smoke 2026-07-12 - FP-Informed Class-1 Augmentation Reduction Rejected"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 14755,
+      "normalized_heading": "readiness-2026-07-12-pdiscoformer-style-semantic-parts-rejected",
+      "title": "Readiness 2026-07-12 - PDiscoFormer-Style Semantic Parts Rejected"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 14803,
+      "normalized_heading": "full-run-2026-07-14-random-init-recall-complement-precision-ensemble",
+      "title": "Full Run 2026-07-14 - Random-Init Recall Complement, Precision Ensemble"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 14859,
+      "normalized_heading": "late-member-readiness-2026-07-14-splice-directional-dense-kl",
+      "title": "Late-Member Readiness 2026-07-14 - Splice, Directional, Dense KL"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 14915,
+      "normalized_heading": "feature-basis-stitching-2026-07-14-compatible-precision-unsafe",
+      "title": "Feature-Basis Stitching 2026-07-14 - Compatible, Precision-Unsafe"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 14957,
+      "normalized_heading": "deployment-closure-2026-07-14-pytorch-and-onnx-cpu-certified",
+      "title": "Deployment Closure 2026-07-14 - PyTorch and ONNX CPU Certified"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 15003,
+      "normalized_heading": "cidt-full-readiness-2026-07-14-dense-but-label-destructive",
+      "title": "CIDT Full Readiness 2026-07-14 - Dense but Label-Destructive"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 15024,
+      "normalized_heading": "bicar-readiness-2026-07-14-locked-before-formal-audit",
+      "title": "BiCAR Readiness 2026-07-14 - Locked Before Formal Audit"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 15042,
+      "normalized_heading": "bicar-formal-audit-2026-07-14-all-readiness-gates-passed",
+      "title": "BiCAR Formal Audit 2026-07-14 - All Readiness Gates Passed"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 15064,
+      "normalized_heading": "bicar-matched-smoke-2026-07-14-correct-direction-insufficient-effect",
+      "title": "BiCAR Matched Smoke 2026-07-14 - Correct Direction, Insufficient Effect"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 15102,
+      "normalized_heading": "bicar-evidence-compaction-2026-07-14-rejected-runs-removed-safely",
+      "title": "BiCAR Evidence Compaction 2026-07-14 - Rejected Runs Removed Safely"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 15128,
+      "normalized_heading": "more-readiness-lock-2026-07-14-parameter-space-tail-capacity",
+      "title": "MORE Readiness Lock 2026-07-14 - Parameter-Space Tail Capacity"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 15157,
+      "normalized_heading": "more-functional-closure-2026-07-14-correct-algebra-no-selective-effect",
+      "title": "MORE Functional Closure 2026-07-14 - Correct Algebra, No Selective Effect"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 15198,
+      "normalized_heading": "vca-readiness-lock-2026-07-14-full-grid-regional-contrast",
+      "title": "VCA Readiness Lock 2026-07-14 - Full-Grid Regional Contrast"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 15223,
+      "normalized_heading": "vca-stage-a-implementation-and-result",
+      "title": "VCA Stage-A implementation and result"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 15245,
+      "normalized_heading": "vca-matched-smoke-closure-2026-07-15-regional-contrast-is-precision-unsafe",
+      "title": "VCA Matched Smoke Closure 2026-07-15 - Regional Contrast Is Precision-Unsafe"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 15280,
+      "normalized_heading": "full-run-interpretation-and-precision-priority",
+      "title": "Full-run interpretation and precision priority"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 15296,
+      "normalized_heading": "vca-retention-and-worktree-hygiene",
+      "title": "VCA retention and worktree hygiene"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 15315,
+      "normalized_heading": "moga-tokenizer-readiness-lock-2026-07-15-multi-order-surface-encoding",
+      "title": "Moga Tokenizer Readiness Lock 2026-07-15 - Multi-Order Surface Encoding"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 15333,
+      "normalized_heading": "moga-tokenizer-stage-a-closure-2026-07-15-functional-but-too-slow",
+      "title": "Moga Tokenizer Stage-A Closure 2026-07-15 - Functional but Too Slow"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 15377,
+      "normalized_heading": "next-representation-direction",
+      "title": "Next representation direction"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 15387,
+      "normalized_heading": "inceptionnext-atto-tokenizer-lock-2026-07-15-parallel-surface-paths",
+      "title": "InceptionNeXt-Atto Tokenizer Lock 2026-07-15 - Parallel Surface Paths"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 15405,
+      "normalized_heading": "inceptionnext-atto-closure-2026-07-15-foreground-focus-without-selectivity",
+      "title": "InceptionNeXt-Atto Closure 2026-07-15 - Foreground Focus Without Selectivity"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 15459,
+      "normalized_heading": "next-representation-research",
+      "title": "Next representation research"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 15477,
+      "normalized_heading": "inceptionnext-engineering-closure",
+      "title": "InceptionNeXt engineering closure"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 15495,
+      "normalized_heading": "starnet-s2-tokenizer-lock-2026-07-15-local-multiplicative-evidence",
+      "title": "StarNet-S2 Tokenizer Lock 2026-07-15 - Local Multiplicative Evidence"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 15517,
+      "normalized_heading": "starnet-s2-stage-a-result",
+      "title": "StarNet-S2 Stage-A result"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 15536,
+      "normalized_heading": "starnet-s2-closure-2026-07-15-fp-reduction-by-discarding-class1-tp",
+      "title": "StarNet-S2 Closure 2026-07-15 - FP Reduction by Discarding Class1 TP"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 15581,
+      "normalized_heading": "audit-throughput-repair",
+      "title": "Audit throughput repair"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 15594,
+      "normalized_heading": "starnet-s2-evidence-compaction-and-retention",
+      "title": "StarNet-S2 evidence compaction and retention"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 15615,
+      "normalized_heading": "starnet-s2-engineering-closure",
+      "title": "StarNet-S2 engineering closure"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 15634,
+      "normalized_heading": "next-representation-research",
+      "title": "Next representation research"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 15657,
+      "normalized_heading": "2026-07-15-learnable-gabor-texture-residual-protocol-lock",
+      "title": "2026-07-15 - Learnable-Gabor texture residual protocol lock"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 15688,
+      "normalized_heading": "learnable-gabor-closure-2026-07-15-rng-neutral-but-precision-negative",
+      "title": "Learnable-Gabor Closure 2026-07-15 - RNG-Neutral but Precision-Negative"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 15690,
+      "normalized_heading": "causal-repair-and-stage-a",
+      "title": "Causal repair and Stage A"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 15708,
+      "normalized_heading": "sole-corrected-matched-smoke",
+      "title": "Sole corrected matched smoke"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 15728,
+      "normalized_heading": "mechanism-robustness-and-xai",
+      "title": "Mechanism, robustness, and XAI"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 15756,
+      "normalized_heading": "operational-closure",
+      "title": "Operational closure"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 15779,
+      "normalized_heading": "active-gabor-semantic-sum-closure-2026-07-15-material-but-collapsed",
+      "title": "Active Gabor Semantic-Sum Closure 2026-07-15 - Material but Collapsed"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 15781,
+      "normalized_heading": "locked-active-route-and-deterministic-smoke",
+      "title": "Locked active route and deterministic smoke"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 15809,
+      "normalized_heading": "mechanism-and-robustness-diagnosis",
+      "title": "Mechanism and robustness diagnosis"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 15824,
+      "normalized_heading": "exact-changed-case-xai-repair",
+      "title": "Exact changed-case XAI repair"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 15855,
+      "normalized_heading": "evidence-retention-and-command-decision",
+      "title": "Evidence retention and command decision"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 15879,
+      "normalized_heading": "engineering-verification",
+      "title": "Engineering verification"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 15895,
+      "normalized_heading": "octave-convolution-stem-lock-2026-07-15-parameter-matched-frequency-paths",
+      "title": "Octave Convolution Stem Lock 2026-07-15 - Parameter-Matched Frequency Paths"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 15935,
+      "normalized_heading": "octave-convolution-stem-closure-2026-07-15-cleaner-maps-worse-decisions",
+      "title": "Octave Convolution Stem Closure 2026-07-15 - Cleaner Maps, Worse Decisions"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 15937,
+      "normalized_heading": "stage-a-and-sole-matched-smoke",
+      "title": "Stage A and sole matched smoke"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 15954,
+      "normalized_heading": "robustness-and-xai-diagnosis",
+      "title": "Robustness and XAI diagnosis"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 15975,
+      "normalized_heading": "command-and-next-method-decision",
+      "title": "Command and next-method decision"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 16002,
+      "normalized_heading": "shared-projection-xca-lock-2026-07-15-channel-axis-without-losing-mhsa",
+      "title": "Shared-Projection XCA Lock 2026-07-15 - Channel Axis Without Losing MHSA"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 16030,
+      "normalized_heading": "shared-projection-xca-closure-2026-07-15-live-mixer-no-class-1-action",
+      "title": "Shared-Projection XCA Closure 2026-07-15 - Live Mixer, No Class-1 Action"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 16032,
+      "normalized_heading": "train-only-readiness-result",
+      "title": "Train-only readiness result"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 16051,
+      "normalized_heading": "decision-level-failure",
+      "title": "Decision-level failure"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 16071,
+      "normalized_heading": "export-evidence-and-command-decision",
+      "title": "Export, evidence, and command decision"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 16088,
+      "normalized_heading": "self-review-verification-and-retention",
+      "title": "Self-review, verification, and retention"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 16110,
+      "normalized_heading": "patch-style-srm-ffn-lock-2026-07-15-learned-hidden-style-suppression",
+      "title": "Patch-Style SRM FFN Lock 2026-07-15 - Learned Hidden-Style Suppression"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 16149,
+      "normalized_heading": "patch-style-srm-ffn-closure-2026-07-15-live-style-gates-wrong-fp-direction",
+      "title": "Patch-Style SRM FFN Closure 2026-07-15 - Live Style Gates, Wrong FP Direction"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 16151,
+      "normalized_heading": "train-only-readiness-result",
+      "title": "Train-only readiness result"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 16169,
+      "normalized_heading": "decision-level-failure",
+      "title": "Decision-level failure"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 16187,
+      "normalized_heading": "evidence-cleanup-and-command-decision",
+      "title": "Evidence, cleanup, and command decision"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 16208,
+      "normalized_heading": "vig-max-relative-graph-closure-2026-07-15-active-non-local-mixing-broke-class-1-tp",
+      "title": "ViG Max-Relative Graph Closure 2026-07-15 - Active Non-Local Mixing Broke Class-1 TP"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 16210,
+      "normalized_heading": "research-and-readiness-scope",
+      "title": "Research and readiness scope"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 16228,
+      "normalized_heading": "stage-a-result",
+      "title": "Stage-A result"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 16255,
+      "normalized_heading": "decision-and-provenance",
+      "title": "Decision and provenance"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 16281,
+      "normalized_heading": "deep-class-prompt-closure-2026-07-15-diverse-prompts-unsafe-class-suppression",
+      "title": "Deep Class-Prompt Closure 2026-07-15 - Diverse Prompts, Unsafe Class Suppression"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 16283,
+      "normalized_heading": "source-and-implementation",
+      "title": "Source and implementation"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 16296,
+      "normalized_heading": "decision-and-xai",
+      "title": "Decision and XAI"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 16316,
+      "normalized_heading": "infrastructure-repair-evidence-and-command-decision",
+      "title": "Infrastructure repair, evidence, and command decision"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 16338,
+      "normalized_heading": "soft-moe-patch-adapter-selection-2026-07-15-locked-before-code",
+      "title": "Soft-MoE Patch Adapter Selection 2026-07-15 - Locked Before Code"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 16340,
+      "normalized_heading": "fresh-no-repeat-and-primary-source-review",
+      "title": "Fresh no-repeat and primary-source review"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 16361,
+      "normalized_heading": "locked-hypothesis",
+      "title": "Locked hypothesis"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 16381,
+      "normalized_heading": "soft-moe-patch-adapter-closure-2026-07-15-active-routing-zero-clean-decisions",
+      "title": "Soft-MoE Patch Adapter Closure 2026-07-15 - Active Routing, Zero Clean Decisions"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 16417,
+      "normalized_heading": "class-1-protected-rsc-selection-2026-07-15-locked-before-code",
+      "title": "Class-1-Protected RSC Selection 2026-07-15 - Locked Before Code"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 16419,
+      "normalized_heading": "primary-source-and-no-repeat-screen",
+      "title": "Primary-source and no-repeat screen"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 16437,
+      "normalized_heading": "locked-adaptation-and-a0-evidence",
+      "title": "Locked adaptation and A0 evidence"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 16462,
+      "normalized_heading": "class-1-protected-rsc-closure-2026-07-15-small-recall-gain-no-fp-reduction",
+      "title": "Class-1-Protected RSC Closure 2026-07-15 - Small Recall Gain, No FP Reduction"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 16504,
+      "normalized_heading": "high-resolution-shifted-window-bridge-a0-closure-2026-07-15-aligned-detail-is-unsafe",
+      "title": "High-Resolution Shifted-Window Bridge A0 Closure 2026-07-15 - Aligned Detail Is Unsafe"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 16544,
+      "normalized_heading": "natural-prior-continuation-closure-2026-07-15-class-1-suppression-not-precision",
+      "title": "Natural-Prior Continuation Closure 2026-07-15 - Class-1 Suppression, Not Precision"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 16575,
+      "normalized_heading": "ip-dpp-information-gate-2026-07-15-selected-before-trainer-integration",
+      "title": "IP-DPP Information Gate 2026-07-15 - Selected Before Trainer Integration"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 16593,
+      "normalized_heading": "ip-dpp-information-gate-closure-2026-07-15-official-path-is-random",
+      "title": "IP-DPP Information Gate Closure 2026-07-15 - Official Path Is Random"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 16629,
+      "normalized_heading": "class-1-reference-a-gem-closure-2026-07-15-precision-by-tp-suppression",
+      "title": "Class-1-Reference A-GEM Closure 2026-07-15 - Precision by TP Suppression"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 16675,
+      "normalized_heading": "class-1-boundary-stratified-gem-closure-2026-07-15-exact-qp-loses-to-its-control",
+      "title": "Class-1 Boundary-Stratified GEM Closure 2026-07-15 - Exact QP Loses to Its Control"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 16712,
+      "normalized_heading": "class-1-boundary-v-rex-selection-2026-07-15-locked-before-code",
+      "title": "Class-1 Boundary V-REx Selection 2026-07-15 - Locked Before Code"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 16739,
+      "normalized_heading": "class-1-boundary-v-rex-closure-2026-07-15-variance-penalty-widens-false-positives",
+      "title": "Class-1 Boundary V-REx Closure 2026-07-15 - Variance Penalty Widens False Positives"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 16770,
+      "normalized_heading": "class-1-boundary-cagrad-selection-2026-07-15-last-condition-gradient-screen",
+      "title": "Class-1 Boundary CAGrad Selection 2026-07-15 - Last Condition-Gradient Screen"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 16806,
+      "normalized_heading": "class-1-boundary-cagrad-closure-2026-07-16-worst-direction-gain-still-widens-class-1",
+      "title": "Class-1 Boundary CAGrad Closure 2026-07-16 - Worst-Direction Gain Still Widens Class 1"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 16837,
+      "normalized_heading": "class-axis-and-multimodal-closure-2026-07-15-density-signal-breaks-class-1-tp",
+      "title": "Class-Axis and Multimodal Closure 2026-07-15 - Density Signal Breaks Class-1 TP"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 16877,
+      "normalized_heading": "gsfl-shared-feature-closure-2026-07-16-precision-by-unsafe-class-1-suppression",
+      "title": "GSFL Shared-Feature Closure 2026-07-16 - Precision by Unsafe Class-1 Suppression"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 16907,
+      "normalized_heading": "ddhts-positive-evidence-closure-2026-07-16-fixed-deep-binary-histograms-do-not-separate-class-1",
+      "title": "DDHTS Positive-Evidence Closure 2026-07-16 - Fixed Deep Binary Histograms Do Not Separate Class 1"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 16939,
+      "normalized_heading": "ceconv-stem-residual-closure-2026-07-16-color-equivariance-widens-class-1",
+      "title": "CEConv Stem Residual Closure 2026-07-16 - Color Equivariance Widens Class 1"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 16982,
+      "normalized_heading": "augself-color-adapter-closure-2026-07-16-color-prediction-collapses-multiclass-precision",
+      "title": "AugSelf Color-Adapter Closure 2026-07-16 - Color Prediction Collapses Multiclass Precision"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 17017,
+      "normalized_heading": "mutual-channel-patch-a0-lock-2026-07-16-natural-geometry-before-channel-diversity",
+      "title": "Mutual-Channel Patch A0 Lock 2026-07-16 - Natural Geometry Before Channel Diversity"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 17049,
+      "normalized_heading": "mutual-channel-patch-a0-closure-2026-07-16-diversity-works-true-class-1-support-does-not",
+      "title": "Mutual-Channel Patch A0 Closure 2026-07-16 - Diversity Works, True Class-1 Support Does Not"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 17091,
+      "normalized_heading": "support-constrained-capsule-alm-closure-2026-07-16-support-is-protected-but-routing-is-uniform",
+      "title": "Support-Constrained Capsule ALM Closure 2026-07-16 - Support Is Protected but Routing Is Uniform"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 17129,
+      "normalized_heading": "supervised-minority-condition-view-a0-lock-2026-07-16-primary-source-before-adaptation",
+      "title": "Supervised-Minority Condition-View A0 Lock 2026-07-16 - Primary Source Before Adaptation"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 17146,
+      "normalized_heading": "supervised-minority-a0-numeric-closure-2026-07-16-fp16-cannot-replay-fp32-cidt-near-ties",
+      "title": "Supervised-Minority A0 Numeric Closure 2026-07-16 - FP16 Cannot Replay FP32 CIDT Near Ties"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 17168,
+      "normalized_heading": "supervised-minority-condition-view-a1-closure-2026-07-16-exact-replay-nonselective-shifted-geometry",
+      "title": "Supervised-Minority Condition-View A1 Closure 2026-07-16 - Exact Replay, Nonselective Shifted Geometry"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 17196,
+      "normalized_heading": "foveal-aggregated-attention-a1-closure-2026-07-16-correct-equation-insufficient-joint-routing",
+      "title": "Foveal Aggregated Attention A1 Closure 2026-07-16 - Correct Equation, Insufficient Joint Routing"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 17229,
+      "normalized_heading": "deformable-attention-a1-lock-2026-07-16-image-conditioned-spatial-sampling",
+      "title": "Deformable Attention A1 Lock 2026-07-16 - Image-Conditioned Spatial Sampling"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 17259,
+      "normalized_heading": "deformable-attention-a1-closure-2026-07-16-precision-signal-without-stable-selectivity",
+      "title": "Deformable Attention A1 Closure 2026-07-16 - Precision Signal Without Stable Selectivity"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 17305,
+      "normalized_heading": "diverse-branch-stem-a0-lock-2026-07-16-train-rich-deploy-plain",
+      "title": "Diverse-Branch Stem A0 Lock 2026-07-16 - Train Rich, Deploy Plain"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 17344,
+      "normalized_heading": "diverse-branch-stem-a0-closure-2026-07-16-correct-structure-excess-precision-and-resource-cost",
+      "title": "Diverse-Branch Stem A0 Closure 2026-07-16 - Correct Structure, Excess Precision And Resource Cost"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 17375,
+      "normalized_heading": "bi-level-routing-attention-a1-lock-2026-07-16-query-specific-context-filtering",
+      "title": "Bi-Level Routing Attention A1 Lock 2026-07-16 - Query-Specific Context Filtering"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 17421,
+      "normalized_heading": "bi-level-routing-attention-a1-implementation-readiness-2026-07-16",
+      "title": "Bi-Level Routing Attention A1 Implementation Readiness 2026-07-16"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 17461,
+      "normalized_heading": "bi-level-routing-attention-a1-closure-2026-07-16-average-focus-without-reliable-coverage",
+      "title": "Bi-Level Routing Attention A1 Closure 2026-07-16 - Average Focus Without Reliable Coverage"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 17505,
+      "normalized_heading": "research-lock-2026-07-16-evit-style-inattentive-token-fusion-a0",
+      "title": "Research Lock 2026-07-16 - EViT-Style Inattentive-Token Fusion A0"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 17541,
+      "normalized_heading": "evit-a0-prospective-cohort-clarification-2026-07-16",
+      "title": "EViT A0 Prospective Cohort Clarification 2026-07-16"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 17557,
+      "normalized_heading": "evit-a0-implementation-readiness-2026-07-16",
+      "title": "EViT A0 Implementation Readiness 2026-07-16"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 17607,
+      "normalized_heading": "evit-inattentive-token-fusion-a0-closure-2026-07-16",
+      "title": "EViT Inattentive-Token Fusion A0 Closure 2026-07-16"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 17647,
+      "normalized_heading": "cropr-token-selector-a0-closure-2026-07-17-learned-routing-widens-class-1",
+      "title": "Cropr Token Selector A0 Closure 2026-07-17 - Learned Routing Widens Class 1"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 17694,
+      "normalized_heading": "domain-nbdt-a0-closure-2026-07-17-unequal-depth-soft-path-collapses-to-class-4",
+      "title": "Domain NBDT A0 Closure 2026-07-17 - Unequal-Depth Soft Path Collapses To Class 4"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 17723,
+      "normalized_heading": "sparse-over-parameterization-a0-lock-2026-07-17-gradient-safety-before-trainer-work",
+      "title": "Sparse Over-Parameterization A0 Lock 2026-07-17 - Gradient Safety Before Trainer Work"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 17751,
+      "normalized_heading": "sparse-over-parameterization-a0-closure-2026-07-17-official-noise-buffers-stay-inactive",
+      "title": "Sparse Over-Parameterization A0 Closure 2026-07-17 - Official Noise Buffers Stay Inactive"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 17787,
+      "normalized_heading": "pixel-difference-stem-signal-a0-lock-2026-07-17-object-evidence-before-integration",
+      "title": "Pixel-Difference Stem Signal A0 Lock 2026-07-17 - Object Evidence Before Integration"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 17832,
+      "normalized_heading": "pixel-difference-stem-signal-a0-closure-2026-07-17-boundary-without-class-direction",
+      "title": "Pixel-Difference Stem Signal A0 Closure 2026-07-17 - Boundary Without Class Direction"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 17864,
+      "normalized_heading": "meta-acon-activation-signal-a0-closure-2026-07-17-active-but-not-selective-enough",
+      "title": "Meta-ACON Activation Signal A0 Closure 2026-07-17 - Active But Not Selective Enough"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 17901,
+      "normalized_heading": "global-response-normalization-signal-a0-lock-2026-07-17-channel-competition-before-training",
+      "title": "Global Response Normalization Signal A0 Lock 2026-07-17 - Channel Competition Before Training"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 17944,
+      "normalized_heading": "global-response-normalization-a0-closure-2026-07-17-invalid-outside-control-and-runtime-rejection",
+      "title": "Global Response Normalization A0 Closure 2026-07-17 - Invalid Outside Control And Runtime Rejection"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 17984,
+      "normalized_heading": "fcanet-object-frequency-signal-a0-lock-2026-07-17-object-dct-with-full-context-preserved",
+      "title": "FcaNet Object-Frequency Signal A0 Lock 2026-07-17 - Object DCT With Full Context Preserved"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 18028,
+      "normalized_heading": "fcanet-object-frequency-signal-a0-closure-2026-07-17-precision-gain-is-broad-tp-suppression",
+      "title": "FcaNet Object-Frequency Signal A0 Closure 2026-07-17 - Precision Gain Is Broad TP Suppression"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 18074,
+      "normalized_heading": "dolg-orthogonal-local-global-signal-a0-lock-2026-07-17-subtractive-fusion-before-training",
+      "title": "DOLG Orthogonal Local-Global Signal A0 Lock 2026-07-17 - Subtractive Fusion Before Training"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 18132,
+      "normalized_heading": "dolg-orthogonal-local-global-signal-a0-closure-2026-07-17-runtime-reject-before-oof",
+      "title": "DOLG Orthogonal Local-Global Signal A0 Closure 2026-07-17 - Runtime Reject Before OOF"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 18155,
+      "normalized_heading": "dart-recurrent-aggregation-a0-lock-2026-07-17-same-basin-repeat-before-integration",
+      "title": "DART Recurrent Aggregation A0 Lock 2026-07-17 - Same-Basin Repeat Before Integration"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 18220,
+      "normalized_heading": "dart-recurrent-aggregation-a0-closure-2026-07-17-recall-expansion-no-repeat-benefit",
+      "title": "DART Recurrent Aggregation A0 Closure 2026-07-17 - Recall Expansion, No Repeat Benefit"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 18255,
+      "normalized_heading": "learnable-polyphase-downsampling-a0-lock-2026-07-17-shift-signal-before-training",
+      "title": "Learnable Polyphase Downsampling A0 Lock 2026-07-17 - Shift Signal Before Training"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 18302,
+      "normalized_heading": "learnable-polyphase-downsampling-a0-closure-2026-07-17-real-shift-signal-deployment-reject",
+      "title": "Learnable Polyphase Downsampling A0 Closure 2026-07-17 - Real Shift Signal, Deployment Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 18335,
+      "normalized_heading": "spatial-worst-shift-robust-optimization-a0-lock-2026-07-17-train-time-shift-selection",
+      "title": "Spatial Worst-Shift Robust Optimization A0 Lock 2026-07-17 - Train-Time Shift Selection"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 18359,
+      "normalized_heading": "spatial-worst-shift-robust-optimization-a0-closure-2026-07-17-one-clean-correction-recall-unsafe",
+      "title": "Spatial Worst-Shift Robust Optimization A0 Closure 2026-07-17 - One Clean Correction, Recall Unsafe"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 18405,
+      "normalized_heading": "push-pull-illumination-support-a0-lock-2026-07-17-positive-support-gate",
+      "title": "Push-Pull Illumination Support A0 Lock 2026-07-17 - Positive-Support Gate"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 18454,
+      "normalized_heading": "push-pull-illumination-support-a0-closure-2026-07-17-foreground-active-class-signal-absent",
+      "title": "Push-Pull Illumination Support A0 Closure 2026-07-17 - Foreground Active, Class Signal Absent"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 18486,
+      "normalized_heading": "wildcat-negative-evidence-a0-lock-2026-07-17-dense-class-specific-context",
+      "title": "WILDCAT Negative-Evidence A0 Lock 2026-07-17 - Dense Class-Specific Context"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 18521,
+      "normalized_heading": "wildcat-negative-evidence-a0-closure-2026-07-17-active-bottom-term-precision-reject",
+      "title": "WILDCAT Negative-Evidence A0 Closure 2026-07-17 - Active Bottom Term, Precision Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 18564,
+      "normalized_heading": "efficienttrain-a0-lock-2026-07-17-low-frequency-before-surface-detail",
+      "title": "EfficientTrain A0 Lock 2026-07-17 - Low Frequency Before Surface Detail"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 18595,
+      "normalized_heading": "efficienttrain-a0-implementation-2026-07-19-independent-replay-before-formal",
+      "title": "EfficientTrain A0 Implementation 2026-07-19 - Independent Replay Before Formal"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 18623,
+      "normalized_heading": "efficienttrain-a0-declaration-erratum-2026-07-19-known-near-tie-before-candidate-views",
+      "title": "EfficientTrain A0 Declaration Erratum 2026-07-19 - Known Near Tie Before Candidate Views"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 18652,
+      "normalized_heading": "efficienttrain-a0-closure-2026-07-19-frequency-curriculum-has-no-precision-signal",
+      "title": "EfficientTrain A0 Closure 2026-07-19 - Frequency Curriculum Has No Precision Signal"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 18693,
+      "normalized_heading": "sifer-feature-sieve-a0-lock-2026-07-19-early-feature-forgetting-before-integration",
+      "title": "SIFER Feature-Sieve A0 Lock 2026-07-19 - Early Feature Forgetting Before Integration"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 18740,
+      "normalized_heading": "sifer-feature-sieve-a0-closure-2026-07-20-clean-gain-robust-precision-reject",
+      "title": "SIFER Feature-Sieve A0 Closure 2026-07-20 - Clean Gain, Robust Precision Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 18786,
+      "normalized_heading": "autonomous-full-train-policy-2026-07-20-evidence-first-throughput-measured",
+      "title": "Autonomous Full-Train Policy 2026-07-20 - Evidence First, Throughput Measured"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 18803,
+      "normalized_heading": "spectral-decoupling-a0-closure-2026-07-20-fp-reduction-is-tp-unsafe",
+      "title": "Spectral Decoupling A0 Closure 2026-07-20 - FP Reduction Is TP-Unsafe"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 18846,
+      "normalized_heading": "schedule-free-adamw-a0-lock-2026-07-20-optimizer-trajectory-before-integration",
+      "title": "Schedule-Free AdamW A0 Lock 2026-07-20 - Optimizer Trajectory Before Integration"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 18889,
+      "normalized_heading": "schedule-free-adamw-a0-closure-2026-07-20-recall-expansion-is-precision-unsafe",
+      "title": "Schedule-Free AdamW A0 Closure 2026-07-20 - Recall Expansion Is Precision-Unsafe"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 18940,
+      "normalized_heading": "ms-lacunarity-stem-closure-2026-07-20-recall-expansion-precision-reject",
+      "title": "MS-Lacunarity Stem Closure 2026-07-20 - Recall Expansion, Precision Reject"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 18979,
+      "normalized_heading": "axial-color-topology-a0-closure-2026-07-20-precision-suppression-without-tp-selectivity",
+      "title": "Axial Color Topology A0 Closure 2026-07-20 - Precision Suppression Without TP Selectivity"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 19013,
+      "normalized_heading": "chromatic-cubical-persistence-a0-closure-2026-07-20-topology-loses-to-control-and-placebo",
+      "title": "Chromatic Cubical Persistence A0 Closure 2026-07-20 - Topology Loses To Control And Placebo"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 19056,
+      "normalized_heading": "shallow-ibn-a-stem-stage-a-2026-07-20-engineering-gate-passed",
+      "title": "Shallow IBN-a Stem Stage A 2026-07-20 - Engineering Gate Passed"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 19089,
+      "normalized_heading": "shallow-ibn-a-stem-a0-closure-2026-07-20-broad-class-1-fp-expansion",
+      "title": "Shallow IBN-a Stem A0 Closure 2026-07-20 - Broad Class-1 FP Expansion"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 19123,
+      "normalized_heading": "c4-rotation-consensus-a0-protocol-2026-07-20-prospectively-locked",
+      "title": "C4 Rotation-Consensus A0 Protocol 2026-07-20 - Prospectively Locked"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 19147,
+      "normalized_heading": "c4-rotation-consensus-a0-implementation-2026-07-20-pre-formal",
+      "title": "C4 Rotation-Consensus A0 Implementation 2026-07-20 - Pre-Formal"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 19170,
+      "normalized_heading": "c4-rotation-consensus-a0-closure-2026-07-20-reversed-tp-fp-selectivity",
+      "title": "C4 Rotation-Consensus A0 Closure 2026-07-20 - Reversed TP/FP Selectivity"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 19201,
+      "normalized_heading": "factor-concept-product-a0-protocol-2026-07-20-prospectively-locked",
+      "title": "Factor-Concept Product A0 Protocol 2026-07-20 - Prospectively Locked"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 19228,
+      "normalized_heading": "factor-concept-product-a0-closure-2026-07-20-transport-signal-failure",
+      "title": "Factor-Concept Product A0 Closure 2026-07-20 - Transport Signal Failure"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 19265,
+      "normalized_heading": "bbox-centered-log-polar-stem-a0-protocol-2026-07-20-prospectively-locked",
+      "title": "BBox-Centered Log-Polar Stem A0 Protocol 2026-07-20 - Prospectively Locked"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 19291,
+      "normalized_heading": "bbox-centered-log-polar-stem-a0-implementation-2026-07-20-pre-formal",
+      "title": "BBox-Centered Log-Polar Stem A0 Implementation 2026-07-20 - Pre-Formal"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 19319,
+      "normalized_heading": "bbox-centered-log-polar-stem-a0-closure-2026-07-20-nonselective-suppression",
+      "title": "BBox-Centered Log-Polar Stem A0 Closure 2026-07-20 - Nonselective Suppression"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 19358,
+      "normalized_heading": "validity-aware-attention-a0-protocol-2026-07-20-prospectively-locked",
+      "title": "Validity-Aware Attention A0 Protocol 2026-07-20 - Prospectively Locked"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 19380,
+      "normalized_heading": "validity-aware-attention-a0-closure-2026-07-20-nonselective-renormalization",
+      "title": "Validity-Aware Attention A0 Closure 2026-07-20 - Nonselective Renormalization"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 19414,
+      "normalized_heading": "validity-partial-conv-stem-protocol-2026-07-20-prospectively-locked",
+      "title": "Validity Partial-Conv Stem Protocol 2026-07-20 - Prospectively Locked"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 19440,
+      "normalized_heading": "validity-partial-conv-stem-implementation-2026-07-20-pre-formal",
+      "title": "Validity Partial-Conv Stem Implementation 2026-07-20 - Pre-Formal"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 19478,
+      "normalized_heading": "validity-partial-conv-stage-a-export-incident-2026-07-20",
+      "title": "Validity Partial-Conv Stage-A Export Incident 2026-07-20"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 19509,
+      "normalized_heading": "validity-partial-conv-formal-stage-a-and-stage-b-lock-2026-07-20",
+      "title": "Validity Partial-Conv Formal Stage A And Stage-B Lock 2026-07-20"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 19550,
+      "normalized_heading": "validity-partial-conv-stage-b-closure-2026-07-20",
+      "title": "Validity Partial-Conv Stage-B Closure 2026-07-20"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 19586,
+      "normalized_heading": "research-lock-2026-07-20-pmg-progressive-jigsaw-signal-a0",
+      "title": "Research Lock 2026-07-20 - PMG Progressive-Jigsaw Signal A0"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 19634,
+      "normalized_heading": "result-2026-07-20-pmg-progressive-jigsaw-signal-a0-rejected",
+      "title": "Result 2026-07-20 - PMG Progressive-Jigsaw Signal A0 Rejected"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 19666,
+      "normalized_heading": "result-2026-07-20-ielt-multi-head-voting-signal-a0-rejected",
+      "title": "Result 2026-07-20 - IELT Multi-Head Voting Signal A0 Rejected"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 19706,
+      "normalized_heading": "research-lock-2026-07-20-object-interior-cutpaste-surface-response-a0",
+      "title": "Research Lock 2026-07-20 - Object-Interior CutPaste Surface Response A0"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 3,
+      "line": 19738,
+      "normalized_heading": "prospective-geometry-erratum-before-formal-metrics",
+      "title": "Prospective Geometry Erratum - Before Formal Metrics"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 19770,
+      "normalized_heading": "cutpaste-surface-response-a0-closure-2026-07-20",
+      "title": "CutPaste Surface-Response A0 Closure - 2026-07-20"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 19801,
+      "normalized_heading": "research-lock-2026-07-20-hamburger-nmf-surface-decomposition-a0",
+      "title": "Research Lock 2026-07-20 - Hamburger-NMF Surface Decomposition A0"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 19886,
+      "normalized_heading": "research-lock-2026-07-20-natural-first-deferred-reweight-a0",
+      "title": "Research Lock 2026-07-20 - Natural-First Deferred Reweight A0"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 19912,
+      "normalized_heading": "deferred-reweight-a0-result-2026-07-20",
+      "title": "Deferred Reweight A0 Result - 2026-07-20"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 19936,
+      "normalized_heading": "deferred-reweight-stage-b-closure-2026-07-21",
+      "title": "Deferred Reweight Stage-B Closure - 2026-07-21"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 19987,
+      "normalized_heading": "research-lock-2026-07-21-hyperspherical-support-generation-a0",
+      "title": "Research Lock 2026-07-21 - Hyperspherical Support Generation A0"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 20011,
+      "normalized_heading": "hyperspherical-support-a0-reporting-interruption-2026-07-21",
+      "title": "Hyperspherical Support A0 Reporting Interruption - 2026-07-21"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 20035,
+      "normalized_heading": "hyperspherical-support-a0-closure-2026-07-21",
+      "title": "Hyperspherical Support A0 Closure - 2026-07-21"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 20064,
+      "normalized_heading": "research-lock-2026-07-21-deepbdc-stem-joint-dependence-a0",
+      "title": "Research Lock 2026-07-21 - DeepBDC Stem Joint Dependence A0"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 20103,
+      "normalized_heading": "deepbdc-a0-infrastructure-and-engineering-2026-07-21",
+      "title": "DeepBDC A0 Infrastructure And Engineering - 2026-07-21"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 20137,
+      "normalized_heading": "deepbdc-stem-joint-dependence-a0-closure-2026-07-21",
+      "title": "DeepBDC Stem Joint-Dependence A0 Closure - 2026-07-21"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 20171,
+      "normalized_heading": "research-lock-2026-07-21-quaternion-color-rotation-a0",
+      "title": "Research Lock 2026-07-21 - Quaternion Color-Rotation A0"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 20204,
+      "normalized_heading": "quaternion-color-rotation-a0-closure-2026-07-21",
+      "title": "Quaternion Color-Rotation A0 Closure - 2026-07-21"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 20255,
+      "normalized_heading": "research-lock-2026-07-21-sparse-class-evidence-a0",
+      "title": "Research Lock 2026-07-21 - Sparse Class-Evidence A0"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 20293,
+      "normalized_heading": "sparse-class-evidence-a0-infrastructure-and-engineering-2026-07-21",
+      "title": "Sparse Class-Evidence A0 Infrastructure And Engineering - 2026-07-21"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 20321,
+      "normalized_heading": "sparse-class-evidence-a0-closure-2026-07-21",
+      "title": "Sparse Class-Evidence A0 Closure - 2026-07-21"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 20352,
+      "normalized_heading": "research-lock-2026-07-21-boxinst-foreground-mask-a0",
+      "title": "Research Lock 2026-07-21 - BoxInst Foreground-Mask A0"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 20384,
+      "normalized_heading": "boxinst-foreground-mask-a0-infrastructure-and-engineering-2026-07-21",
+      "title": "BoxInst Foreground-Mask A0 Infrastructure And Engineering - 2026-07-21"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 20414,
+      "normalized_heading": "boxinst-foreground-mask-a0-closure-2026-07-21",
+      "title": "BoxInst Foreground-Mask A0 Closure - 2026-07-21"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 20459,
+      "normalized_heading": "research-lock-2026-07-21-attention-maxsep-local-prototypes",
+      "title": "Research Lock 2026-07-21 - Attention-MaxSep Local Prototypes"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 20490,
+      "normalized_heading": "attention-maxsep-prototype-a0-closure-2026-07-21",
+      "title": "Attention-MaxSep Prototype A0 Closure - 2026-07-21"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 20537,
+      "normalized_heading": "jpeg-dl-input-quantization-a0-closure-2026-07-23",
+      "title": "JPEG-DL Input Quantization A0 Closure - 2026-07-23"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 20581,
+      "normalized_heading": "synthetic-data-allowance-and-external-evidence-screen-2026-07-23",
+      "title": "Synthetic Data Allowance And External-Evidence Screen - 2026-07-23"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 20613,
+      "normalized_heading": "saspa-dual-view-synthetic-a0-prospective-lock-2026-07-23",
+      "title": "SaSPA Dual-View Synthetic A0 Prospective Lock - 2026-07-23"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 20655,
+      "normalized_heading": "saspa-a0-runtime-only-prospective-correction-2026-07-23",
+      "title": "SaSPA A0 Runtime-Only Prospective Correction - 2026-07-23"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 20678,
+      "normalized_heading": "saspa-synthetic-f0-infrastructure-and-preflight-2026-07-23",
+      "title": "SaSPA Synthetic F0 Infrastructure And Preflight - 2026-07-23"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 20714,
+      "normalized_heading": "saspa-f0-windows-redirector-fail-closed-2026-07-23",
+      "title": "SaSPA F0 Windows Redirector Fail-Closed - 2026-07-23"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 20740,
+      "normalized_heading": "saspa-f0-ram-scheduling-and-deferred-import-2026-07-24",
+      "title": "SaSPA F0 RAM Scheduling And Deferred Import - 2026-07-24"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 20770,
+      "normalized_heading": "saspa-f0-vae-slicing-api-fail-closed-2026-07-24",
+      "title": "SaSPA F0 VAE-Slicing API Fail-Closed - 2026-07-24"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 20798,
+      "normalized_heading": "saspa-f0-final-gate-observability-and-process-isolation-2026-07-24",
+      "title": "SaSPA F0 Final-Gate Observability And Process Isolation - 2026-07-24"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 20834,
+      "normalized_heading": "saspa-synthetic-f0-formal-pass-and-replay-2026-07-24",
+      "title": "SaSPA Synthetic F0 Formal Pass And Replay - 2026-07-24"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 20877,
+      "normalized_heading": "saspa-synthetic-f1-generation-and-fidelity-failure-2026-07-24",
+      "title": "SaSPA Synthetic F1 Generation And Fidelity Failure - 2026-07-24"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 20914,
+      "normalized_heading": "saspa-f1-duplicate-safety-frozen-keeper-xai-and-closure-2026-07-24",
+      "title": "SaSPA F1 Duplicate Safety, Frozen-Keeper XAI, And Closure - 2026-07-24"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 20970,
+      "normalized_heading": "research-process-report-revision-5-qa-2026-07-24",
+      "title": "Research Process Report Revision 5 QA - 2026-07-24"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 20996,
+      "normalized_heading": "lp-a3-inspired-hard-positive-a0-rejected-2026-07-24",
+      "title": "LP-A3-Inspired Hard-Positive A0 Rejected - 2026-07-24"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 21046,
+      "normalized_heading": "research-process-report-revision-6-qa-2026-07-24",
+      "title": "Research Process Report Revision 6 QA - 2026-07-24"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 21073,
+      "normalized_heading": "lp-a3-cleanup-and-regression-closure-2026-07-24",
+      "title": "LP-A3 Cleanup And Regression Closure - 2026-07-24"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 21097,
+      "normalized_heading": "nsa-class-pair-poisson-a0-prospective-lock-2026-07-24",
+      "title": "NSA Class-Pair Poisson A0 Prospective Lock - 2026-07-24"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 21141,
+      "normalized_heading": "nsa-poisson-geometry-preview-failure-and-prospective-erratum-2026-07-24",
+      "title": "NSA Poisson Geometry Preview Failure And Prospective Erratum - 2026-07-24"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 21177,
+      "normalized_heading": "nsa-poisson-geometry-v2-pass-and-formal-detail-lock-2026-07-24",
+      "title": "NSA Poisson Geometry V2 Pass And Formal Detail Lock - 2026-07-24"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 21205,
+      "normalized_heading": "nsa-poisson-formal-engine-and-resource-lock-2026-07-24",
+      "title": "NSA Poisson Formal Engine And Resource Lock - 2026-07-24"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 21246,
+      "normalized_heading": "nsa-formal-v2-replay-final-reject-and-retention-2026-07-24",
+      "title": "NSA Formal V2 Replay, Final Reject, And Retention - 2026-07-24"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 21305,
+      "normalized_heading": "rn-lisda-formal-replay-and-final-reject-2026-07-24",
+      "title": "RN-LISDA Formal Replay And Final Reject - 2026-07-24"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 21354,
+      "normalized_heading": "bal-bce-primary-source-screen-2026-07-24",
+      "title": "Bal-BCE Primary-Source Screen - 2026-07-24"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 21384,
+      "normalized_heading": "bal-bce-formal-replay-and-final-reject-2026-07-24",
+      "title": "Bal-BCE Formal Replay And Final Reject - 2026-07-24"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 21435,
+      "normalized_heading": "cap-integral-region-context-a0-prospective-lock-2026-07-24",
+      "title": "CAP Integral-Region Context A0 Prospective Lock - 2026-07-24"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 21501,
+      "normalized_heading": "cap-independent-engine-boundary-2026-07-24",
+      "title": "CAP Independent Engine Boundary - 2026-07-24"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 21538,
+      "normalized_heading": "cap-auditor-and-replay-boundary-2026-07-24",
+      "title": "CAP Auditor And Replay Boundary - 2026-07-24"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 21584,
+      "normalized_heading": "cap-xai-harness-erratum-and-resource-value-audit-2026-07-24",
+      "title": "CAP XAI Harness Erratum And Resource-Value Audit - 2026-07-24"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 21648,
+      "normalized_heading": "cap-same-lock-formal-exact-replay-and-closure-2026-07-24",
+      "title": "CAP Same-Lock Formal, Exact Replay, And Closure - 2026-07-24"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 21730,
+      "normalized_heading": "post-cap-successor-no-run-screen-2026-07-25",
+      "title": "Post-CAP Successor No-Run Screen - 2026-07-25"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 21767,
+      "normalized_heading": "revision-15-docx-compatibility-and-release-qa-2026-07-25",
+      "title": "Revision-15 DOCX Compatibility And Release QA - 2026-07-25"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 21789,
+      "normalized_heading": "cross-colour-ratio-surface-a0-prospective-lock-2026-07-25",
+      "title": "Cross Colour Ratio Surface A0 Prospective Lock - 2026-07-25"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 21860,
+      "normalized_heading": "ccr-pre-implementation-same-tensor-erratum-2026-07-25",
+      "title": "CCR Pre-Implementation Same-Tensor Erratum - 2026-07-25"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 21900,
+      "normalized_heading": "ccr-equation-engine-preflight-2026-07-25",
+      "title": "CCR Equation Engine Preflight - 2026-07-25"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 21944,
+      "normalized_heading": "ccr-direct-same-tensor-materializer-preflight-2026-07-25",
+      "title": "CCR Direct Same-Tensor Materializer Preflight - 2026-07-25"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 21987,
+      "normalized_heading": "ccr-materializer-execution-authorization-2026-07-25",
+      "title": "CCR Materializer Execution Authorization - 2026-07-25"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 22006,
+      "normalized_heading": "ccr-materializer-formal-attempt-1-failure-2026-07-25",
+      "title": "CCR Materializer Formal Attempt 1 Failure - 2026-07-25"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 22035,
+      "normalized_heading": "ccr-materializer-recovery-success-2026-07-25",
+      "title": "CCR Materializer Recovery Success - 2026-07-25"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 22063,
+      "normalized_heading": "ccr-four-role-fit-runner-pre-authorization-2026-07-25",
+      "title": "CCR Four-Role Fit Runner Pre-Authorization - 2026-07-25"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 22100,
+      "normalized_heading": "ccr-fit-formal-attempt-1-harness-failure-2026-07-25",
+      "title": "CCR Fit Formal Attempt 1 Harness Failure - 2026-07-25"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 22153,
+      "normalized_heading": "ccr-fit-recovery-formal-closure-and-no-repeat-boundary-2026-07-25",
+      "title": "CCR Fit Recovery, Formal Closure, And No-Repeat Boundary - 2026-07-25"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 22226,
+      "normalized_heading": "pair-surface-ddf-a0-prospective-selection-2026-07-25",
+      "title": "Pair-Surface DDF A0 Prospective Selection - 2026-07-25"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 22271,
+      "normalized_heading": "resume-scheduler-forensics-and-scientific-command-closure-2026-07-28",
+      "title": "Resume/Scheduler Forensics and Scientific Command Closure - 2026-07-28"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 22320,
+      "normalized_heading": "independent-runtime-skill-reassessment-2026-07-29",
+      "title": "Independent Runtime/Skill Reassessment - 2026-07-29"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 22363,
+      "normalized_heading": "pair-surface-ddf-v1-supersession-and-process-correction-2026-07-29",
+      "title": "Pair-Surface DDF V1 Supersession and Process Correction - 2026-07-29"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 22447,
+      "normalized_heading": "pair-surface-ddf-v2-pre-score-hardening-and-independent-review-2026-07-29",
+      "title": "Pair-Surface DDF V2 Pre-Score Hardening and Independent Review - 2026-07-29"
+    }
+  ],
+  "mechanisms": [
+    {
+      "aliases": [
+        "API-Net",
+        "pooled-head API",
+        "API pairwise interaction"
+      ],
+      "decision": "Both symmetric and corrected anchor-only pooled API failed matched transfer and produced class-unsafe probability shifts; no image-model smoke was authorized.",
+      "family": "training_only_cross_image_interaction",
+      "id": "api_net_pooled_interaction",
+      "reopen_or_advance_criterion": "Reopen only for a non-pooled, fold-safe interaction with natural anchor exposure, no partner-label amplification, a matched control, and locked class-1 false-positive plus true-positive preservation gates.",
+      "source_heading_refs": [
+        {
+          "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+          "level": 2,
+          "line": 13379,
+          "normalized_heading": "diagnostic-2026-07-11-pooled-head-api-net-interaction-rejected",
+          "title": "Diagnostic 2026-07-11 - Pooled-Head API-Net Interaction Rejected"
+        }
+      ],
+      "status": "closed_train_only_readiness"
+    },
+    {
+      "aliases": [
+        "CondConv",
+        "conditionally parameterized convolution"
+      ],
+      "decision": "Generic CondConv-style sample-conditioned kernels remain inside the closed dynamic-convolution family and are not a DDF control or successor.",
+      "family": "sample_conditioned_dynamic_convolution",
+      "id": "condconv",
+      "reopen_or_advance_criterion": "Reopen only if the operator has a mathematically distinct conditioning axis, a matched static control, prospective precision/recall gates, and evidence that cannot be obtained by changing expert count, routing, or kernel width.",
+      "source_heading_refs": [
+        {
+          "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+          "level": 2,
+          "line": 22226,
+          "normalized_heading": "pair-surface-ddf-a0-prospective-selection-2026-07-25",
+          "title": "Pair-Surface DDF A0 Prospective Selection - 2026-07-25"
+        }
+      ],
+      "status": "closed_no_repeat_family"
+    },
+    {
+      "aliases": [
+        "dynamic convolution",
+        "dynamic kernels",
+        "conditional kernels"
+      ],
+      "decision": "Generic multiplicative or expert-mixed dynamic convolution is closed; the v1 DDF route is superseded and the narrowly specified v2 route is prospective only, not an authorized exception to execute.",
+      "family": "sample_conditioned_dynamic_convolution",
+      "id": "dynamic_convolution_generic",
+      "reopen_or_advance_criterion": "A proposal must prove a new conditioning/evidence pathway, identify why it does not reduce to ODConv/CondConv/Involution or a failed stem route, and pass a train-only information gate before trainer integration.",
+      "source_heading_refs": [
+        {
+          "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+          "level": 2,
+          "line": 22226,
+          "normalized_heading": "pair-surface-ddf-a0-prospective-selection-2026-07-25",
+          "title": "Pair-Surface DDF A0 Prospective Selection - 2026-07-25"
+        }
+      ],
+      "status": "closed_no_repeat_family"
+    },
+    {
+      "aliases": [
+        "Involution",
+        "official involution replacement"
+      ],
+      "decision": "Rejected at the keeper's 256-channel third-stem geometry because measured runtime and memory multipliers were prohibitive and the fast path needs CuPy/custom CUDA.",
+      "family": "position_specific_channel_shared_kernel",
+      "id": "involution",
+      "reopen_or_advance_criterion": "Reopen only with a standard-operator implementation measured at the exact deployment geometry that passes the predeclared runtime/memory limits and adds a distinct, train-only class boundary signal.",
+      "source_heading_refs": [
+        {
+          "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+          "level": 2,
+          "line": 17864,
+          "normalized_heading": "meta-acon-activation-signal-a0-closure-2026-07-17-active-but-not-selective-enough",
+          "title": "Meta-ACON Activation Signal A0 Closure 2026-07-17 - Active But Not Selective Enough"
+        }
+      ],
+      "status": "rejected_engineering_exact_geometry"
+    },
+    {
+      "aliases": [
+        "ODConv",
+        "omni-dimensional dynamic convolution"
+      ],
+      "decision": "Multiplicative sample-conditioned convolution overlaps failed stem routes and its official recipe requires schedules outside the current value gate.",
+      "family": "sample_conditioned_dynamic_convolution",
+      "id": "odconv",
+      "reopen_or_advance_criterion": "Reopen only for a prospectively specified mechanism that is not an ODConv kernel/weight/schedule sweep and first proves new class-1-vs-0/2/4 train-only information within the locked resource envelope.",
+      "source_heading_refs": [
+        {
+          "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+          "level": 2,
+          "line": 16208,
+          "normalized_heading": "vig-max-relative-graph-closure-2026-07-15-active-non-local-mixing-broke-class-1-tp",
+          "title": "ViG Max-Relative Graph Closure 2026-07-15 - Active Non-Local Mixing Broke Class-1 TP"
+        }
+      ],
+      "status": "closed_no_run_overlap"
+    },
+    {
+      "aliases": [
+        "DDF v1",
+        "pair-surface DDF v1",
+        "2026-07-25 DDF A0"
+      ],
+      "decision": "The v1 protocol, lock and synthetic engine remain immutable engineering lineage, but its folds split manifest groups and numeric neighborhoods. It consumed zero formal and replay runs and cannot support an OOF claim.",
+      "family": "position_conditioned_dynamic_filter",
+      "id": "pair_surface_ddf_a0_v1",
+      "reopen_or_advance_criterion": "Never reopen the exact v1 fold assignment or formal authorization. Preserve it only as superseded lineage; any advance must use the separately pinned v2 protocol, fold manifest, engine, machine lock and authorization.",
+      "source_heading_refs": [
+        {
+          "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V1_SUPERSESSION_20260729.md",
+          "level": 2,
+          "line": 3,
+          "normalized_heading": "decision",
+          "title": "Decision"
+        }
+      ],
+      "status": "superseded_before_formal"
+    },
+    {
+      "aliases": [
+        "DDF v2",
+        "pair-surface DDF v2",
+        "validity-aware DDF sidecar"
+      ],
+      "decision": "The component-disjoint fold manifest, validity-aware protocol and geometry preflight are prospectively pinned. No v2 engine, machine lock, candidate score, formal run, replay, validation result, test result or GPU run exists.",
+      "family": "position_conditioned_dynamic_filter",
+      "id": "pair_surface_ddf_a0_v2",
+      "reopen_or_advance_criterion": "Advance only after this registry is pushed, then implement and test the v2 engine/access ledger/replay, write a machine lock and explicit authorization, and consume exactly one formal plus one replay if every preflight passes.",
+      "source_heading_refs": [
+        {
+          "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V2_PROTOCOL_20260729.md",
+          "level": 2,
+          "line": 3,
+          "normalized_heading": "prospective-state-and-supersession",
+          "title": "Prospective state and supersession"
+        }
+      ],
+      "status": "prospective_protocol_and_fold_only_no_engine_or_formal_authorization"
+    },
+    {
+      "aliases": [
+        "Pairwise Confusion",
+        "pairwise confusion loss"
+      ],
+      "decision": "The exact regularizer raised class-1 recall pressure but worsened precision and false positives; weight/source variants are not a new mechanism.",
+      "family": "pairwise_feature_regularization",
+      "id": "pairwise_confusion_regularizer",
+      "reopen_or_advance_criterion": "Reopen only with a genuinely new representation or causal signal that has a prospective false-positive control and matched class-1 precision/recall gate; do not repeat weight=0.005 with head/patch/register/logit sources.",
+      "source_heading_refs": [
+        {
+          "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+          "level": 3,
+          "line": 219,
+          "normalized_heading": "pairwise-confusion-regularization-worsened-class-1-precision",
+          "title": "Pairwise Confusion regularization worsened class-1 precision"
+        }
+      ],
+      "status": "rejected_probe_precision_regression"
+    },
+    {
+      "aliases": [
+        "PWCA scalar residual",
+        "keeper-relative PWCA residual"
+      ],
+      "decision": "Only alpha=0 preserved the keeper constraints; scalar interpolation contains no usable class-1 correction signal and is closed.",
+      "family": "posthoc_pairwise_residual_calibration",
+      "id": "pwca_keeper_relative_scalar_residual",
+      "reopen_or_advance_criterion": "Reopen only for a new learned representation with fold-safe causal evidence; no alpha-grid, threshold, or other post-hoc interpolation sweep may reuse this closure.",
+      "source_heading_refs": [
+        {
+          "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+          "level": 2,
+          "line": 13573,
+          "normalized_heading": "diagnostic-2026-07-11-keeper-relative-pwca-scalar-residual-rejected",
+          "title": "Diagnostic 2026-07-11 - Keeper-Relative PWCA Scalar Residual Rejected"
+        }
+      ],
+      "status": "closed_no_repeat"
+    },
+    {
+      "aliases": [
+        "PWCA",
+        "DCAL PWCA",
+        "natural-distractor PWCA"
+      ],
+      "decision": "PWCA showed a small positive relative direction but missed macro/class-1 gates and broke keeper class-1 true positives; no end-to-end smoke was authorized.",
+      "family": "training_only_cross_image_token_attention",
+      "id": "pwca_token_natural_distractor",
+      "reopen_or_advance_criterion": "Reopen only from a prospectively locked keeper-preserving representation path with explicit recall protection; do not sweep projection rank, top-k, heads, dropout, optimizer, loss weight, pair distribution, or epochs on the closed proxy.",
+      "source_heading_refs": [
+        {
+          "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+          "level": 2,
+          "line": 13490,
+          "normalized_heading": "diagnostic-2026-07-11-token-level-natural-distractor-pwca-below-gate",
+          "title": "Diagnostic 2026-07-11 - Token-Level Natural-Distractor PWCA Below Gate"
+        }
+      ],
+      "status": "closed_below_gate"
+    }
+  ],
+  "purpose": "Prospective machine-checkable critical-family no-repeat boundary for TRKH 5-class research. It is not an exhaustive semantic ontology, novelty proof, training, validation, test, candidate, formal, replay, or GPU authorization.",
+  "schema_version": 2,
+  "source_snapshot": {
+    "files": [
+      {
+        "byte_representation": "canonical_committed_git_blob",
+        "bytes": 1437035,
+        "git_blob_oid": "5188e8e8515cccd20efa0800c4ac07e0d4e3cd04",
+        "path": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+        "sha256": "02e37247d5b9cc2f079760304e597a42f8b85bd519b565930b06d2a04a73995a"
+      },
+      {
+        "byte_representation": "canonical_committed_git_blob",
+        "bytes": 726892,
+        "git_blob_oid": "10307086c2ed91ee530ec4c7efc5005bc13ec2f8",
+        "path": "docs/TODO_TRKH_5CLASS.md",
+        "sha256": "32e041aa8386b7b5f884e32cfa29e5c3c036aad522240496606ee996efd33a5f"
+      },
+      {
+        "byte_representation": "canonical_committed_git_blob",
+        "bytes": 9146,
+        "git_blob_oid": "9167a3aa5e75c0689a71400cc45d9faf70074f6c",
+        "path": "docs/TRKH_5CLASS_POST_CAP_SUCCESSOR_NO_RUN_SCREEN_20260725.md",
+        "sha256": "4fcb046e90fa79e36a31256c892dbec8c7b90a106eb5332966c19f6a125df0f5"
+      },
+      {
+        "byte_representation": "canonical_committed_git_blob",
+        "bytes": 22869,
+        "git_blob_oid": "50e45b554450101a27f250a34cc7a79a2513bb73",
+        "path": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_PROTOCOL_20260725.md",
+        "sha256": "724f63ef7a0701f4a250cb9aabc04bf2d474ffe9929b9680f05e14fb2dc0fc42"
+      },
+      {
+        "byte_representation": "canonical_committed_git_blob",
+        "bytes": 3618,
+        "git_blob_oid": "e15709615c5dbb1681c93b88fb34fe04e38e8f36",
+        "path": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V1_SUPERSESSION_20260729.md",
+        "sha256": "40afa829986efd90c72901fca057552e9a531b5566c8bf79024026c64eaef5e8"
+      },
+      {
+        "byte_representation": "canonical_committed_git_blob",
+        "bytes": 42297,
+        "git_blob_oid": "9ed0fdb81414c34fd145c4e4e4048c54bc1bdf09",
+        "path": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V2_PROTOCOL_20260729.md",
+        "sha256": "b5fa5e2ada7e078a08276902f5897a0358d21ae03658c0d398402c4277c0b679"
+      },
+      {
+        "byte_representation": "canonical_committed_git_blob",
+        "bytes": 57815,
+        "git_blob_oid": "8f1badec17db80e1d407873db0f15356ba81e481",
+        "path": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_LOCK_20260725.json",
+        "sha256": "e6809c5947b77f61315538fb763d98b54798544d31595edeeeab6ee26561463d"
+      },
+      {
+        "byte_representation": "canonical_committed_git_blob",
+        "bytes": 117,
+        "git_blob_oid": "0b029609d9af1f0a3946e3bbc73316c85581de96",
+        "path": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_LOCK_20260725.sha256",
+        "sha256": "3d5c8a6ccef298d0b6f2428a3642c895be34d0ddab3da7d812490f163dc14053"
+      },
+      {
+        "byte_representation": "canonical_committed_git_blob",
+        "bytes": 3770,
+        "git_blob_oid": "79db91e5882a1429f53d89c1e94eefeaca241db1",
+        "path": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V1_SUPERSESSION_20260729.json",
+        "sha256": "0de869a55e3045f7f7015d9265c0c79b6d5756fa2d910ae485e2d861bbf8ea39"
+      },
+      {
+        "byte_representation": "canonical_committed_git_blob",
+        "bytes": 207794,
+        "git_blob_oid": "6a4f1613451761762605c775a4f0f971da08f488",
+        "path": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_V2_FOLD_MANIFEST_20260729.json",
+        "sha256": "8a084b171b12c4d8a4e85d09d748d30cdf46191ea7160748cdd03519b38f924b"
+      },
+      {
+        "byte_representation": "canonical_committed_git_blob",
+        "bytes": 126,
+        "git_blob_oid": "c427404538269e133c2e246332b5ffd0af7135db",
+        "path": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_V2_FOLD_MANIFEST_20260729.sha256",
+        "sha256": "fe54c79b5976336768e6a6c2291d55a8d91bf004bb2095eb9ee20591b9a31912"
+      }
+    ],
+    "git_commit": "742fce03700b17f8e8f4449eac8a49dc0a03e211",
+    "read_mode": "git_object_database_only_no_worktree"
+  },
+  "state": "critical_family_no_repeat_registry_no_training_authorization"
+}
