@@ -5189,10 +5189,24 @@
   in `TRKH_5CLASS_PAIR_SURFACE_DDF_V2_PRELOCK_PROCESS_INCIDENT_20260729.md`;
   current incident SHA-256 is `c4c5eba2...32f7`, pending independent review.
   Do not treat its in-memory recomputation as S2 or machine-lock evidence.
-- [ ] Independently review the process-incident classification, then pin a
-  test-authority manifest plus a pre-collection cache-open tripwire. Before S2,
-  run only exact `synthetic_safe`/tmp-fixture nodes; never rely on `skipif(cache
-  missing)` to protect a machine where the cache is present.
+- [x] Independently review the process-incident classification without
+  rewriting the pushed incident. Preserve the corrected source-bounded scope
+  in
+  `TRKH_5CLASS_PAIR_SURFACE_DDF_V2_PRELOCK_PROCESS_INCIDENT_INDEPENDENT_REVIEW_ERRATUM_20260729.md`:
+  live train target/geometry and cross-split identity access is confirmed, the
+  complete `55/55` remains withdrawn, synthetic forward/loss/update did occur,
+  and whole-container hashing read opaque keeper-member bytes without decoding
+  that member. All authority remains zero.
+- [x] Separately invalidate the later developmental guard `55 passed` manifest
+  because it omitted a transitively imported pre-lock verifier. Record zero
+  demonstrated live/scientific/quota effect in
+  `TRKH_5CLASS_PAIR_SURFACE_DDF_V2_RUNTIME_GUARD_TEST_ATTESTATION_INVALIDATION_20260729.md`;
+  never cite its SHA `f36f95e2...e4c6af` as guard or pre-lock evidence.
+- [ ] Pin a replacement test-authority manifest plus a true pre-import/
+  pre-collection tripwire. Before S2, run only exact
+  `synthetic_safe`/tmp-fixture nodes and pin their full local import closure;
+  never rely on `skipif(cache missing)` to protect a machine where the cache
+  is present.
 - [x] Update the installed TRKH skill immediately after detecting the incident.
   Skill SHA-256 is
   `a65668f637ceaa8da91c5489a0405ff9e887c858dd33e160c22927a43b316019`;

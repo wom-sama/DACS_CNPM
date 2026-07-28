@@ -22671,3 +22671,31 @@ Date: 2026-07-02
   habit. New skill SHA-256 is
   `a65668f637ceaa8da91c5489a0405ff9e887c858dd33e160c22927a43b316019`;
   test collection is now explicitly treated as an access-authorized action.
+
+## Pre-Lock Incident Independent Review and Guard-Attestation Invalidation - 2026-07-29
+
+- Independently confirm the original incident as unauthorized live train
+  target/geometry and cross-split identity-metadata access. Preserve the
+  original pushed record, but correct its scope prospectively in
+  `TRKH_5CLASS_PAIR_SURFACE_DDF_V2_PRELOCK_PROCESS_INCIDENT_INDEPENDENT_REVIEW_ERRATUM_20260729.md`.
+  The exact one-line pytest argv is retained; the untracked scientific blob
+  cannot be reconstructed, so impact claims are source-bounded rather than
+  telemetry-complete.
+- Clarify that the process did execute synthetic forwards, loss, gradients,
+  an optimizer update and synthetic calibrator fitting. It did not demonstrate
+  live/formal candidate execution, checkpoint use, raw-pixel/raw-label access,
+  validation/test efficacy metrics or GPU compute. Whole-container hashing did
+  physically read opaque bytes encoding the keeper-probability member, but the
+  member was not decoded, inspected or used as a score array.
+- Keep the entire `55/55` result and every intermediate/hash permanently out of
+  S1, S2, machine-lock, A0 and paper evidence. No scientific promotion or quota
+  is accepted; all authority remains zero.
+- Independently invalidate the later developmental runtime-guard `55 passed`
+  manifest, SHA `f36f95e2...e4c6af`, because its declared six-file identity
+  omitted the transitively imported pre-lock verifier. This later issue has
+  zero demonstrated live-data/scientific/quota effect and is recorded
+  separately in
+  `TRKH_5CLASS_PAIR_SURFACE_DDF_V2_RUNTIME_GUARD_TEST_ATTESTATION_INVALIDATION_20260729.md`.
+  The replacement trusted-runner test must pin its full import closure before
+  collection and emit a new-schema create-once manifest only after source and
+  authority are committed and pushed.
