@@ -5127,10 +5127,14 @@
   Registry SHA is `e1b2b7de...bb8d93`; it explicitly neither proves novelty
   nor authorizes formal/GPU work. This becomes effective when its containing
   commit is pushed.
-- [ ] After the registry commit is pushed, update the installed `trkh-5class`
-  skill from that exact lineage and record the new evidence-gap/no-repeat/
-  leakage/value self-review loop. Do not call the protocol a machine
-  authorization before the later engine and machine lock exist.
+- [x] After pushing registry commit
+  `1d50f2eb4f1ade68d2d9ead7bc8883e491462f3b`, update the installed
+  `trkh-5class` skill from that exact lineage. Skill SHA-256 is
+  `92d99ee3d9e67023e513fd60168a779e37713d30d56e2cbe468aea8752971b78`.
+  The revised loop now starts from the evidence gap and tries metadata/
+  leakage/geometry falsification before architecture or GPU work; it separates
+  protocol evidence from execution authorization, treats the opened project
+  test as retrospective only, and makes cleanup fail closed on retention.
 - [ ] Only after the clean v2 boundary is committed and pushed, implement its
   formal train-only auditor, access ledger, authorization, exact replay, and
   retention boundary. Do not issue a new-model full-train command until the

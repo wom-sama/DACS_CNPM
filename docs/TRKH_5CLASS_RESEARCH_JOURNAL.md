@@ -22555,3 +22555,29 @@ Date: 2026-07-02
   from that pushed lineage, then implement/test the v2 engine, machine lock,
   access authorization and replay harness. No formal/GPU run is authorized by
   this registry.
+
+## Skill Self-Review and Process Correction - 2026-07-29
+
+- Update the installed `trkh-5class` skill only after the registry is pushed at
+  `1d50f2eb4f1ade68d2d9ead7bc8883e491462f3b`. The resulting skill is 454,919
+  bytes with SHA-256
+  `92d99ee3d9e67023e513fd60168a779e37713d30d56e2cbe468aea8752971b78`.
+- Correct three accumulated process hazards. The already-opened project test is
+  now retrospective evidence rather than a reusable confirmatory holdout;
+  protocol/registry/synthetic tests are explicitly separated from formal GPU
+  authorization; and generated runs cannot be deleted merely because their
+  metrics and XAI were summarized.
+- Replace the mechanical edit-smoke-probe loop with an evidence-first loop:
+  identify the unresolved scientific claim and nearest closed mechanisms,
+  attempt metadata/leakage/geometry/oracle falsification first, freeze causal
+  controls and replay, then create a distinct machine/access/single-run
+  authorization. This prevents momentum from the previous command from being
+  mistaken for information gain.
+- Preserve the presentation keeper bundle, random-init full baseline, rejected
+  warm-start and natural-only controls, seven-model comparison, CCR/DDF
+  closures, and v1/v2 audits through the complete retention inventory. Cleanup
+  remains a separately reviewed future action; no artifact was deleted here.
+- The corrected skill records DDF v1 as superseded before formal execution and
+  DDF v2 as protocol/fold/geometry only. The next permissible implementation
+  stage is the immutable v2 engine and its tests; formal A0/GPU remains
+  unauthorized until a later machine lock and access authorization are frozen.

@@ -37,9 +37,12 @@ WHY THESE COMMANDS ARE SAFE TO PASTE IN VS CODE
   VS Code screenshot when Python wrote valid INFO logs to stderr.
 - Every native process is checked with `$LASTEXITCODE`; a failed step stops the
   next step and writes pipeline_status.json.
-- Training always uses -SkipFinalTest internally. The explicit -RunFinalTest
-  phase opens test only after training, architecture trace, all validation
-  audits, and the raw validation promotion gate pass. The gate requires both
+- Training always uses -SkipFinalTest internally. Because the project test has
+  already been opened historically, the explicit -RunFinalTest phase is now a
+  retrospective project-test audit only; it cannot create confirmatory evidence
+  or authorize scientific promotion. The wrapper opens it only after training,
+  architecture trace, all validation audits, and the raw validation comparison
+  gate pass. The gate requires both
   independent-reload macro F1 >= 0.882925 and class-1 F1 >= 0.678261. This
   compares the new checkpoint with the keeper through the same evaluator;
   0.884675/0.686047 remains the in-training anchor, not the reload gate.
@@ -48,7 +51,7 @@ WHY THESE COMMANDS ARE SAFE TO PASTE IN VS CODE
 
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "D:\DataAI\AIEx\TRKH\scripts\run_trkh_current_best_full_pipeline.ps1" -RunName "preflight_current_best_$(Get-Date -Format yyyyMMdd_HHmmss)" -RunFinalTest -PreflightOnly
 
-2) ONE-COMMAND FULL PIPELINE: TRAIN + VALIDATION AUDITS + FINAL TEST + XAI
+2) ONE-COMMAND FULL PIPELINE: TRAIN + VALIDATION AUDITS + HISTORICAL TEST + XAI
 
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "D:\DataAI\AIEx\TRKH\scripts\run_trkh_current_best_full_pipeline.ps1" -RunName "full_v8_yolof_current_best_30e_$(Get-Date -Format yyyyMMdd_HHmmss)" -RunFinalTest
 
@@ -60,16 +63,18 @@ The one command above runs, in order:
 - full validation robustness audit;
 - raw and verifier-aware validation XAI with robustness probes and transition summaries;
 - a validation promotion gate against the selected raw keeper;
-- raw and verifier-aware locked final-test evaluation only when that gate passes;
-- final-test prediction forensics, confusion audits, verifier-aware boundary review;
-- verifier-aware final-test XAI and transition summary;
+- raw and verifier-aware historical-project-test evaluation only when that gate passes;
+- historical-test prediction forensics, confusion audits, verifier-aware boundary review;
+- verifier-aware historical-test XAI and transition summary;
 - final artifact-retention audit;
 - runs\latest_full_pipeline.json, which points export/video wrappers to the completed run.
 
 If the gate fails, the same command still preserves all validation audits,
-writes status `validation_gate_rejected`, skips test, and does not update the
-latest deploy pointer. Do not use final-test outputs to alter thresholds,
-losses, or model selection; test remains a final report only.
+writes status `validation_gate_rejected`, skips the historical test, and does
+not update the latest deploy pointer. Do not use historical-test outputs to
+alter thresholds, losses, model selection, or a confirmatory claim. A new paper
+claim requires a prospectively sealed source/time/site cohort and separate
+authorization.
 
 3) ONE-COMMAND OPTIONAL PRECISION PACKAGE + FULL VAL PARITY + ONNX CPU + XAI
 
@@ -87,7 +92,7 @@ PyTorch parity, exports a fixed-batch three-input/six-output ONNX model, runs
 full ONNX Runtime CPU parity, then runs member-specific native attention,
 rollout, Grad-CAM, and robustness XAI on 12 locked validation cases per member.
 It writes runs\latest_precision_ensemble.json only after every gate passes.
-The final test is not rerun because its frozen one-time result is already
+The historical project test is not rerun because its frozen result is already
 recorded and this command performs no model/rule selection.
 
 4) EXPORT THE SINGLE-CHECKPOINT PIPELINE TO ONNX + TENSORRT FP16 .ENGINE
