@@ -1,4 +1,5 @@
 * text=auto
+.gitattributes text eol=lf
 
 *.pt binary
 *.pth binary
@@ -8,3 +9,10 @@
 *.plan binary
 *.trt binary
 *.safetensors binary
+
+# Byte-hashed July-29 scientific protocol/manifest sources must survive a
+# Windows checkout without CRLF rewriting.
+docs/TRKH_*_20260729.* text eol=lf
+scripts/build_trkh_pair_surface_ddf*.py text eol=lf
+trkh/tools/audit_pair_surface_ddf*.py text eol=lf
+tests/test_*pair_surface_ddf*.py text eol=lf

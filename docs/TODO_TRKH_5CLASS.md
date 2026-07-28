@@ -5049,12 +5049,17 @@
   `724f63ef...0fc42` / `d0d93579...2a16f`; focused/full tests pass
   `7/7` and `1983/1983`. This checkbox becomes an effective implementation
   boundary only after its containing commit is pushed.
-- [ ] Only after the prospective lock is pushed, implement and independently
-  test the standard-op DDF equation, 9,380-parameter sidecar,
-  9,435-parameter static control, train-only auditor, access ledger, ONNX/ORT/
-  TensorRT checks, and fail-closed retention. Do not access validation/test,
-  integrate the keeper, launch a full train, or update current-best commands
-  unless the complete A0 conjunction later passes.
+- [x] Implement and independently test the synthetic-only standard-op DDF
+  equation, 9,380-parameter sidecar, 9,435-parameter static control, causal
+  role checks, FP64 oracle, ONNX/ORT, and TensorRT engineering path. Final
+  engineering status is `passed_mechanism_unproven`; this does not establish
+  classification value.
+- [x] Supersede the v1 formal-A0 implementation before it reads candidate
+  pixels or scores. Metadata-only audit found `150/531` dataset
+  `leakage_group` values and `974` window-3 numeric row pairs crossing the
+  locked folds; no formal/replay authorization was consumed. Preserve the v1
+  protocol/lock/engine as historical engineering evidence, but forbid an OOF
+  claim from those folds.
 - [x] Rebuild research-process report revision 16 from its JSON source and
   verify the prospective CCR boundary. Focused lock/report tests pass `9/9`,
   full pytest passes `1934/1934` with 296 existing warnings, visual QA passes
@@ -5073,3 +5078,54 @@
   passes all `16/16` pages without clipping, overlap, or an orphan trailing
   page; accessibility passes `0/0/0`. A DOCX regression test now proves the
   compact source spacing is applied after numbering.
+- [x] Audit the user-executed scratch-natural probe instead of extending it.
+  Record completion without runtime error but reject full-val macro/class-1
+  `0.754579/0.246154`; remove the 24-epoch/full-test recommendation and do not
+  repeat the closed natural-only family.
+- [x] Reuse and strictly remap the complete ResNet50, MobileNetV3,
+  EfficientNetV2-S, ConvNeXt-Tiny, and AIDT checkpoints on all 2,606 validation
+  objects. Preserve the seven-row TRKH/external table, source-group bootstrap,
+  checkpoint hashes, confusion, and cached-image forensics under
+  `runs/paper_pretrained_compare_val_reuse_20260729_001455` without test access.
+- [x] Make default engine/video deployment fail closed when
+  `latest_full_pipeline.json` lacks the current fair-selection promotion
+  contract. Verify both wrappers reject the legacy pointer and focused tests
+  pass `16/16`.
+- [x] Reassess and update the installed TRKH skill: distinguish balanced epoch
+  exposure from global class-1 oversampling, record DDF status
+  `passed_mechanism_unproven`, and cache repeated image forensics.
+- [x] Preserve the complete presentation baseline before further cleanup:
+  keeper, July-14 random-init full baseline, rejected warm-start/natural
+  controls, seven-model comparison, DDF/CCR dependencies, all checkpoint
+  hashes, source-only snapshots for non-Git AIDT/TIMM, and the current
+  inference-environment caveat. The fail-closed retention audit hashes all
+  5,007 files across 10 complete roots plus 9 essential files; all `10/10` and
+  `9/9` locks pass with zero blockers across 872 run directories.
+- [x] Implement and test a metadata-only v1 fold-leakage auditor and immutable
+  supersession closure that reproduce both manifest-group and
+  numeric-neighborhood counts. They become the effective boundary only when
+  their containing commit is pushed; no v1 formal score was consumed.
+- [x] Build the candidate-blind Pair-Surface DDF v2 fold manifest from the
+  transitive union of exact stem + `leakage_group` + numeric-window-3 edges.
+  The 158 components produce row-balanced folds `153/153/153/152/152`, exactly
+  two class-4 rows per fold, and zero cross-fold relation/component overlap;
+  this is not claimed as verified fruit/session independence.
+- [x] Write and independently review the prospective v2 scientific protocol:
+  masked validity/normalization, task-active bbox loss, keeper/union/head/pair
+  attribution, static/single-factor/causal controls, exact optimizer/RNG/action
+  rules, numeric gates, XAI/shift conventions, atomic FAIL retention and replay.
+  A geometry audit locks 751 usable + 12 unusable bbox rows and catches the
+  former `packbits(little)`/default-`unpackbits(big)` q error with a negative
+  regression signature.
+- [ ] Commit and push the v2 boundary, then replace the stale mechanism
+  registry with a pinned v1-superseded/v2-prospective no-repeat registry and
+  update the installed skill from that pushed lineage. Do not call the current
+  protocol a machine authorization before this is complete.
+- [ ] Only after the clean v2 boundary is committed and pushed, implement its
+  formal train-only auditor, access ledger, authorization, exact replay, and
+  retention boundary. Do not issue a new-model full-train command until the
+  conjunction passes and a separate matched integration protocol is frozen.
+- [ ] Treat all previously viewed test metrics as legacy development evidence.
+  Obtain a new source/time/site-held cohort before making a confirmatory paper
+  claim; do not relabel the old test as final merely because the code ledger is
+  clean.

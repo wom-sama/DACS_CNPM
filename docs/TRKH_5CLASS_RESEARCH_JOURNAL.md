@@ -22267,3 +22267,264 @@ Date: 2026-07-02
 - Builder compile/pyflakes and focused lock tests pass `7/7`; complete pytest
   passes `1983/1983` in `124.69 s` with 373 existing warnings. Commit and push
   this prospective boundary before candidate implementation.
+
+## Resume/Scheduler Forensics and Scientific Command Closure - 2026-07-28
+
+- Audit `runs/full_v8_yolof_current_best_30e_20260728_184850` against its
+  actual source checkpoint. The source fair selection score is
+  `0.7629487169`; every child epoch is lower and the child maximum is only
+  `0.7559386593`. The child phase stopped normally at epoch 5 with patience 3,
+  so this is a rejected warm-start continuation, not a failed 30-epoch
+  random-init convergence run.
+- Identify a real scheduler-reset defect: when scheduler restoration was
+  disabled, checkpoint loading still stepped the new scheduler to the old
+  epoch. The child consequently entered epoch 1 at `8e-5` instead of the
+  intended `8e-6` warmup LR. Fix the fallback so it runs only when scheduler
+  restoration is requested and add direct regression coverage.
+- Separate launcher semantics into `Scratch`, `WarmStart`, and
+  `StatefulResume`. Scratch proves an empty checkpoint; warm start resets the
+  phase state; stateful recovery requires the same run's `last.pt`. Update all
+  direct empty-resume scratch/OOF callers so the new explicit contract does
+  not break historical launchers.
+- Strengthen promotion/test authorization. Independent raw macro/class-1
+  thresholds are now conjoined with the exact case-sensitive
+  `fair_macro_f1_min_class_gap_penalty` name, Boolean higher-is-better
+  direction, and keeper score. Run `184850` would therefore be rejected before
+  test/deploy promotion under the corrected wrapper.
+- Make AIDT/TIMM development validation-only in fact, not only in naming:
+  lazy test dataset construction, fresh output roots, explicit `--allow-test`
+  for test exporters, faithful dual-branch AIDT preprocessing/inference, and
+  strict path/name-aligned comparison metrics.
+- Select Pair-Surface DDF as the prospective scratch-only scientific method,
+  while retaining status `passed_mechanism_unproven`. Do not fabricate a DDF
+  full-train command: formal train-only A0/replay/authorization and production
+  integration remain prerequisites. Keep AIDT/TIMM strictly outside the TRKH
+  inference graph as pretrained comparison baselines.
+- Add the dated command bundle
+  `docs/TRKH_SCIENTIFIC_FULL_TRAIN_AIDT_COMMANDS_20260728.md`: corrected
+  warm-start control, scratch probe/full static control with complete audits,
+  synthetic DDF preflight, seven-model pretrained benchmark training,
+  validation inference/remap/bootstrap table, per-model forensics, and
+  explicit one-time test reporting.
+- Verification: Python compile passes; 13 affected PowerShell scripts and all
+  10 PowerShell blocks in the command document parse; real full-pipeline
+  `-PreflightOnly` exits 0 and creates no run directory; combined
+  resume/export/table focused tests pass `153/153`, and DDF engineering tests `14/14`;
+  full pytest has `2006` passes and exactly two intentional lock
+  failures. Cropr detects the changed live v8 hash, and DDF check-only detects
+  the dirty post-lock worktree. Preserve both frozen hashes rather than
+  silently rewriting scientific history; formal DDF A0 remains blocked until
+  a clean, explicitly authorized revision. No GPU train and no new test read
+  occurred in this closure.
+
+## Independent Runtime/Skill Reassessment - 2026-07-29
+
+- Supersede the July-28 natural-sampling recommendation after executing it.
+  `runs/probe_v8_scratch_natural_120b_10e_20260728_223907` completed all ten
+  epochs and every validation audit without a crash, but independent full-val
+  macro/class-1 F1 was only `0.754579/0.246154`, class-1 P/R
+  `0.545455/0.158940`, and softboost class-1 F1 was `0`. This independently
+  reproduces the closed July-20/21 natural-only failure. Delete the proposed
+  24-epoch extension; do not resume, test, or sweep it.
+- Correct the conceptual error: no global class-1-only oversampling does not
+  imply disabling the strict-balanced epoch sampler. Retain the completed
+  July-14 strict-balanced random-init student as the historical full baseline;
+  bare V8 is not the Pair-Surface DDF parameter-matched static sidecar.
+- Reuse five complete pretrained checkpoints rather than retraining missing or
+  rejected families. Fresh FP32 validation inference and strict path remap
+  complete at
+  `runs/paper_pretrained_compare_val_reuse_20260729_001455`: every external
+  model maps `2606/2606` rows with zero missing/duplicates. AIDT leads at
+  macro/class-1 F1 `0.910267/0.718563`; MobileNetV3 is
+  `0.904089/0.707792`, ResNet50 `0.900284/0.690323`, EfficientNetV2-S
+  `0.899833/0.692557`, ConvNeXt-Tiny `0.896462/0.682119`, keeper
+  `0.882925/0.678261`, and full random-init TRKH `0.874172/0.654639`.
+  Store bootstrap/paired tables, checkpoint hashes, confusion, and forensics
+  artifacts; keep test closed.
+- Avoid redundant image decoding by producing foreground statistics once and
+  feeding `predictions_forensics.csv` to the remaining aligned models through
+  `--image-stats-cache`. The first audit took about four minutes; the other
+  five completed together in 17 seconds after cache reuse.
+- Rerun DDF synthetic engineering only. Tests pass `14/14`; preflight passes
+  equation error `8.88e-16`, ORT error `1.49e-8`, TensorRT construction, and
+  batch-1/batch-32 mean latency `0.175/0.547 ms`. Preserve status
+  `passed_mechanism_unproven`; formal train-only A0 auditor/ledger/replay/
+  authorization and production integration remain missing.
+- Fail closed on the stale `runs/latest_full_pipeline.json`, which was written
+  by the legacy two-metric gate for run `20260728_184850`. Engine/video wrappers
+  now require the current fair-selection contract before accepting a default
+  pointer; both live refusal checks exit 1 as intended. Four PowerShell scripts
+  parse and focused current-pipeline/export/comparison tests pass `16/16`.
+- Update the installed `trkh-5class` skill with these corrections and the DDF
+  state instead of following the stale command bundle mechanically. There is
+  currently no scientifically authorized new-model full-train or final-test
+  command; the next allowed work is formal train-only DDF A0 plus replay.
+
+## Pair-Surface DDF V1 Supersession and Process Correction - 2026-07-29
+
+- Push the existing synthetic DDF engine boundary at
+  `fb9880c77057d887d9e3b3ab91e9dbb55e47cfe9`. Commit the resume/scheduler,
+  explicit training-mode, fair-promotion, and stale-pointer correction at
+  `2456dde`; focused tests pass `145/145`. Commit internal pretrained export
+  test locks at `2ee8d03`; focused tests pass `6/6`. External AIDT/TIMM source
+  assertions were deliberately removed from the Git test suite because those
+  directories are not repositories and an absolute-path test would not replay
+  on a fresh checkout.
+- Preserve a complete presentation baseline before any cleanup. Keep the
+  historical keeper, the completed July-14 strict-balanced random-init full
+  baseline, the rejected pre-fix warm-start run, the rejected natural-only
+  control, and the complete seven-model validation comparison. Their five
+  roots total only `1,344.479 MB`; D: has about `87.390 GB` free. Create
+  `docs/TRKH_PRESENTATION_KEEPER_MANIFEST_20260729.{json,md}` and a source-only
+  snapshot of the non-Git AIDT/TIMM projects under
+  `runs/presentation_keeper_bundle_20260729`. The two archive hashes are
+  `c282974e...3b63bf` and `8083a21d...f8816`; no data, outputs, runs,
+  checkpoints, weights, downloads, caches, or secrets are copied. Refreshed
+  read-only retention scans `871` directories, finds zero protected misses or
+  blockers, and passes at
+  `runs/artifact_retention_audit_presentation_keeper_20260729`, summary SHA
+  `e447e61b...bc2d21`.
+- Stop before writing or running the v1 formal auditor. A metadata-only replay
+  of the locked 763-row cohort proves that exact source-stem disjointness is
+  insufficient. The original folds split `150/531` dataset
+  `leakage_group` values, covering `330` rows and creating `217` cross-fold
+  row pairs (`92` same-label, `125` cross-label); `105/150` split groups are
+  multi-label. Numeric `Image_N` proximity also crosses folds: window 1 gives
+  `393` row pairs over `541` rows (`316/77` same/cross-label), while window 3
+  gives `974` pairs over `659` rows (`748/226`). No pixel, candidate score,
+  validation, test, GPU, formal, or replay run is used to discover this.
+- Supersede v1 prospectively, preserving the immutable protocol, lock, engine,
+  and synthetic evidence. The replacement grouping unit is the transitive
+  union of exact stem, the dataset manifest's `leakage_group`, and every
+  connected numeric `Image_N` neighborhood with absolute pairwise gap `<=3`;
+  fruit/session identity must be added if trustworthy acquisition metadata is
+  later recovered. The fallback union yields `158` components, maximum `82`
+  rows and p95 `18.45`; a metadata-only feasibility proof finds a balanced
+  five-fold assignment with two class-4 rows per fold and zero group/window-1/
+  window-3 crossing. The exploratory assignment is not the lock; v2 must pin
+  the solver, objective, status, tie-break, complete mapping, and hashes before
+  any score.
+- Correct the novelty claim after checking the original literature. DDF is the
+  established CVPR-2021 decoupled dynamic filter, and fine-grained pairwise
+  interaction/regularization already exists in Pairwise Confusion (ECCV-2018)
+  and Dual Cross-Attention Learning (CVPR-2022). The defensible prospective
+  contribution is therefore a **scratch DDF sidecar with pairwise evidence
+  heads for TRKH plus causal/replay controls**, not a new DDF operator. Current
+  novelty is low at operator level, potentially moderate at application and
+  composition level, high at protocol/reproducibility level, and empirically
+  unproven.
+- V2 must repair specification and attribution before any candidate metric:
+  define the exact metric/minimum delta for the neutral-ablation gate; define
+  scale-invariant constant-map collapse thresholds; compare keeper-only,
+  keeper-plus-union, and keeper-plus-union-plus-matching-pair readouts; use
+  calibration-fold, capacity-balanced, rival/label/bbox-area/valid-fraction-matched
+  filter substitution; replace
+  full-map cyclic roll with validity-aware non-wrap spatial displacement; and
+  report pair `1-vs-4` as exploratory because it has only ten negatives.
+- V2 must also stop generic-localizer and padding shortcuts. The v1 bbox term
+  supervises all four maps on every row even when a rival pair has zero label
+  weight. The replacement must supervise the union and only task-active pair
+  maps with the same locked task balancing. Invalid padded pixels must be
+  neutralized and excluded from pooling, and padding/border causal controls
+  must be part of the clean conjunction rather than postponed until a
+  successful metric. Mini-batch weighted BCE is an order-dependent SGD
+  estimator of the full empirical objective, not an exact per-epoch equality;
+  v2 wording and replay telemetry must say so.
+- Create a machine-complete no-repeat mechanism registry; the old lock hashes
+  only five documents and does not cover the journal/TODO entries that close
+  ODConv, CondConv, Involution, or many earlier A0 families. Authorization must
+  pin the registry hash. The already viewed project test is permanently a
+  legacy/development test; no process ledger can erase researcher knowledge.
+  Any confirmatory paper claim requires a newly sealed source/time/site cohort.
+- Self-review gate before every further GPU allocation: provenance/group
+  independence; novelty/no-repeat; matched controls and pair attribution;
+  leakage/access ledger; exact stop rules; resource/value estimate; uncertainty
+  by v2 group; presentation retention. A 0/1/2 reviewer rubric may annotate
+  evidence quality but can never override a failed conjunctive gate. Current
+  progress is engineering `passed_mechanism_unproven`; empirical readiness is
+  zero until a v2 formal and exact replay exist.
+
+## Pair-Surface DDF V2 Pre-Score Hardening and Independent Review - 2026-07-29
+
+- Convert the exploratory component proof into a candidate-blind manifest.
+  The builder reads only frozen train-table sample indices/targets/stems/paths
+  plus the canonical YOLO manifest; it rejects keeper probabilities, boxes,
+  labels and old folds as assignment inputs. The transitive relation yields
+  158 components and folds of `153/153/153/152/152` rows with exactly two
+  class-4 rows each. Mapping SHA is `c0726d...0ea40`, component-set SHA is
+  `be6cec...f51c37`, and all exact-stem, manifest-group, complete-component,
+  numeric-window-1 and numeric-window-3 cross-fold counts are zero.
+- Pin the actual dataset-export provenance rather than describing
+  `leakage_group` as an unknown session ID. Clean CVAT commit
+  `0c7fd8b873d34d18c6f6f6588b772996528ba0ec`, blob
+  `d405bf...069195`, and exporter SHA `65e605...e4b5` define it as a
+  transitive union of normalized source families and dHash/quantized-colour
+  near-visual matches. Absolute source paths enter the group ID, so the current
+  manifest is canonical and group ID portability is explicitly disclaimed.
+- Independent code review caught a guaranteed infeasibility in an early donor
+  proposal: hard label/rival matching plus one-use donor constraints did not
+  satisfy Hall capacity for every fold. Replace it before execution with a
+  calibration-fold, rectangular capacity-balanced assignment whose metadata
+  mismatches are soft lexicographic costs. Add `support_matched_self` to
+  distinguish filter identity from validity-support geometry and retain donor
+  use/XOR/neutral-fill telemetry.
+- Replace unmasked BatchNorm with valid-only masked statistics and sequential
+  fit-only population-stat recalibration at all four sites. Mask before/after
+  every spatial operation and residual block, exclude invalid cells from
+  channel pooling and attention, use literal `+0.0` invalid fill, and add exact
+  zero-vs-noise invalid-fill invariance. This prevents padding fraction and the
+  final short batch from becoming hidden predictors.
+- Define the loss and optimizer without library-default ambiguity: union and
+  three pair labels/active sets are explicit; every BCE/bbox task uses fixed
+  denominator 64; 12 bbox/valid-empty rows retain classification but have zero
+  bbox weight; one AdamW group contains every trainable named parameter with
+  decay applied to weights, biases, masked-BN affine and channel scales; no
+  clipping/accumulation; `fit_indices` is ascending sample index before 20
+  successive PCG64 permutations.
+- Trace a subtle geometry-audit mismatch to its exact root cause. The retained
+  valid-mask cache was written with `np.packbits(...,bitorder="little")`, while
+  the first manual q calculation used NumPy's default big-endian unpack. The
+  wrong path reproduces all-row mean/median `0.349859786/0.34375`, preserves bit
+  counts and even preserves the same 12 bbox-unusable rows, so the mistake
+  survived count-only checks. A new executable audit uses explicit little
+  endian plus byte-exact independent NumPy/Torch mask propagation and a
+  wrong-big negative regression. Correct usable-row mean/median q is
+  `0.3585639994/0.3461538462`; correct all-row mean is `0.3529247229`.
+- Tighten attribution and actions after independent review. `KUH` controls
+  selected-head identity while `KUP-KUH` isolates numerical pair evidence.
+  Calibration targets may fit the logistic readout and threshold but never
+  enter features/head selection/replacement; held labels are evaluation-only.
+  Numeric actions require a nonzero change/restricted-FP rejection and
+  `corrections >= 2*(harms+neutral)`. Repeat agreement is measured on exactly
+  750 keeper-prediction-1 rows, not all 9,215 rows, and the redundant
+  deterministic replacement-agreement gate is removed.
+- Lock the remaining candidate-independent controls before scores: non-wrap
+  offsets use a balanced SHA-ordered eight-offset cycle; the component
+  bootstrap uses the manifest's ascending component hashes and one exact
+  `PCG64(20260729).integers(0,158,size=(2000,158),dtype=int64)` call; causal
+  gates explicitly aggregate pooled held rows. Scientific FAIL artifacts are
+  retained atomically and cannot be retried as a nearby sweep.
+- Extend determinism beyond PyTorch: pre-import OpenBLAS/OpenMP/MKL/BLIS/
+  NumExpr/vecLib thread counts are one, the formal/replay body is wrapped in
+  `threadpool_limits(1)`, and every `threadpool_info()` entry must audit to one.
+  PyTorch thread setters alone do not control SciPy/scikit-learn LBFGS pools.
+- Harden cleanup protection from existence checks to file-level integrity.
+  Nine essential checkpoints/export inputs and ten complete presentation roots
+  now have bytes/SHA or canonical full-inventory locks. The current inventory
+  covers 5,007 files and about `1,495.939 MiB`; no artifact was deleted. Preserve
+  the keeper, completed random-init baseline, rejected warm-start/natural
+  controls, seven-model comparison, CCR/DDF lineage, v1 leakage proof, v2
+  geometry proof and AIDT/TIMM source/environment snapshot together.
+- Process lesson: a manually plausible number, a passing shape/count check and
+  a sophisticated protocol are not sufficient evidence. Require executable
+  provenance, an independent implementation, a deliberately wrong negative
+  control, and a separate reviewer before spending GPU budget. The review
+  prevented fold leakage, infeasible donor matching, padding-coupled
+  normalization, wrong-endian geometry, trivial agreement and zero-change
+  action loopholes before any candidate score existed.
+- Current boundary remains prospective: v2 engine, machine lock,
+  authorization ledger, formal fit and replay do not yet exist; zero v2 GPU,
+  validation or test result has been consumed. Do not issue a proposed-model
+  full-train/final-test command until A0 passes and matched integration is
+  prospectively frozen. A confirmatory paper claim still requires a newly
+  sealed source/time/site cohort.

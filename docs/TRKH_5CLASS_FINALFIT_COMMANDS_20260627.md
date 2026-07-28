@@ -1,5 +1,10 @@
 # TRKH 5-Class Final-Fit Commands 2026-06-27
 
+> **Historical workflow only.** This file merges `train+val` and is not the
+> development/selection protocol for a new scientific candidate. Use
+> `docs/TRKH_SCIENTIFIC_FULL_TRAIN_AIDT_COMMANDS_20260728.md` for the current
+> test-locked train, audit, pretrained-inference, and comparison workflow.
+
 Muc tieu: dung validation da co de chon top-5 expert va so epoch, sau do
 train lai tren `train+val` voi checkpoint cuoi cung. Che do nay khong dung
 validation de chon checkpoint nua, vi validation da nam trong train.
