@@ -23,8 +23,36 @@ import unicodedata
 from typing import Any, Iterable
 
 
-DEFAULT_SOURCE_REVISION = "742fce03700b17f8e8f4449eac8a49dc0a03e211"
+DEFAULT_SOURCE_REVISION = "0d3b9d73ecc823ea406df777d27a2b581888d062"
 DEFAULT_OUTPUT = Path("docs/TRKH_5CLASS_MECHANISM_REGISTRY_20260729.json")
+
+V2_PROTOCOL = "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V2_PROTOCOL_20260729.md"
+V2_PROTOCOL_ERRATUM = (
+    "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V2_PROTOCOL_ERRATUM_20260729.md"
+)
+V2_FOLD_R2_ERRATUM = (
+    "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_V2R2_FOLD_ERRATUM_20260729.md"
+)
+V2_FOLD_R2_MANIFEST = (
+    "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_V2R2_FOLD_MANIFEST_20260729.json"
+)
+V2_FOLD_R2_SIDECAR = (
+    "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_V2R2_FOLD_MANIFEST_20260729.sha256"
+)
+V2_ENGINE = "trkh/tools/pair_surface_ddf_v2_engine.py"
+V2_ENGINE_TEST = "tests/test_pair_surface_ddf_v2_engine.py"
+
+EXPECTED_V2_EFFECTIVE_SHA256 = {
+    V2_PROTOCOL: "b5fa5e2ada7e078a08276902f5897a0358d21ae03658c0d398402c4277c0b679",
+    V2_PROTOCOL_ERRATUM: "0da08a193ca50f775047e28fcca763f8aafcc2391d54934480a3574ba1c89aeb",
+    V2_FOLD_R2_ERRATUM: "1e9c5e64b259b909c0d69591b7ea5dd42cfc72f7c8db1489f89de29d3f9206c7",
+    V2_FOLD_R2_MANIFEST: "81a404bedc25dc7b3e7dc3dbb8d79b4ca5e97d74374083c79e0686ececb7fb2d",
+    V2_ENGINE: "e6558d8cf9c00ec3d5f89b549902817a25afca21bff399a4766c397e80ba2774",
+    V2_ENGINE_TEST: "c310e0918933004b54921ceb5793965d508caafb65156e066e6134c26f3124d4",
+}
+EXPECTED_V2_MAPPING_SHA256 = (
+    "c0726d114df69290d68d9f9e1a40857074ccb1a66e5ca41883caa004f2b0ea40"
+)
 
 HEADING_SOURCES = (
     "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
@@ -32,7 +60,9 @@ HEADING_SOURCES = (
     "docs/TRKH_5CLASS_POST_CAP_SUCCESSOR_NO_RUN_SCREEN_20260725.md",
     "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_PROTOCOL_20260725.md",
     "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V1_SUPERSESSION_20260729.md",
-    "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V2_PROTOCOL_20260729.md",
+    V2_PROTOCOL,
+    V2_PROTOCOL_ERRATUM,
+    V2_FOLD_R2_ERRATUM,
 )
 
 PINNED_SOURCES = (
@@ -42,6 +72,14 @@ PINNED_SOURCES = (
     "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V1_SUPERSESSION_20260729.json",
     "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_V2_FOLD_MANIFEST_20260729.json",
     "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_V2_FOLD_MANIFEST_20260729.sha256",
+    V2_FOLD_R2_MANIFEST,
+    V2_FOLD_R2_SIDECAR,
+    "scripts/build_trkh_pair_surface_ddf_v2_fold_manifest.py",
+    "tests/test_build_trkh_pair_surface_ddf_v2_fold_manifest.py",
+    "trkh/tools/audit_pair_surface_ddf_v2_geometry_metadata.py",
+    "tests/test_audit_pair_surface_ddf_v2_geometry_metadata.py",
+    V2_ENGINE,
+    V2_ENGINE_TEST,
 )
 
 _HEADING_RE = re.compile(r"^(#{2,3})\s+(.+?)\s*$")
@@ -147,7 +185,6 @@ JOURNAL = "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md"
 V1_SUPERSESSION = (
     "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V1_SUPERSESSION_20260729.md"
 )
-V2_PROTOCOL = "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V2_PROTOCOL_20260729.md"
 
 # These entries are deliberately explicit rather than inferred from keywords.
 # Their source lines are resolved against the pinned Git snapshot below; a line
@@ -180,23 +217,29 @@ CURATED_MECHANISMS: tuple[dict[str, Any], ...] = (
         "id": "pair_surface_ddf_a0_v2",
         "family": "position_conditioned_dynamic_filter",
         "aliases": ["DDF v2", "pair-surface DDF v2", "validity-aware DDF sidecar"],
-        "status": "prospective_protocol_and_fold_only_no_engine_or_formal_authorization",
+        "status": "prospective_v2r2_engine_pinned_no_machine_lock_or_formal_authorization",
         "decision": (
-            "The component-disjoint fold manifest, validity-aware protocol and geometry "
-            "preflight are prospectively pinned. No v2 engine, machine lock, candidate "
-            "score, formal run, replay, validation result, test result or GPU run exists."
+            "The provenance-hardened R2 component-disjoint fold manifest, corrected "
+            "validity-aware protocol, geometry preflight, synthetic v2 engine and its "
+            "unit-test source are prospectively pinned. No machine lock, authorization, "
+            "candidate score, formal run, replay, validation/test-set result or GPU "
+            "execution exists; TensorRT, latency and VRAM gates remain outstanding."
         ),
         "reopen_or_advance_criterion": (
-            "Advance only after this registry is pushed, then implement and test the v2 "
-            "engine/access ledger/replay, write a machine lock and explicit authorization, "
-            "and consume exactly one formal plus one replay if every preflight passes."
+            "Advance only after this registry is pushed, then implement and independently "
+            "test the access guard, deterministic auditor and replay boundary; freeze the "
+            "machine lock and explicit single authorization; and consume exactly one "
+            "formal plus one replay only if every preflight passes."
         ),
         "source_heading_refs": [
             _heading_ref(
                 V2_PROTOCOL,
                 3,
                 "Prospective state and supersession",
-            )
+            ),
+            _heading_ref(V2_PROTOCOL_ERRATUM, 3, "Status and scope"),
+            _heading_ref(V2_PROTOCOL_ERRATUM, 262, "Authorization state"),
+            _heading_ref(V2_FOLD_R2_ERRATUM, 3, "Status"),
         ],
     },
     {
@@ -466,7 +509,7 @@ def _resolve_curated_entries(
 
 
 def validate_registry(registry: dict[str, Any]) -> None:
-    if registry.get("schema_version") != 2:
+    if registry.get("schema_version") != 3:
         raise RegistryError("unsupported mechanism-registry schema")
     if registry.get("state") != (
         "critical_family_no_repeat_registry_no_training_authorization"
@@ -520,6 +563,37 @@ def validate_registry(registry: dict[str, Any]) -> None:
     if tuple(source_paths) != PINNED_SOURCES:
         raise RegistryError("pinned source paths/order do not match the schema")
 
+    v2_boundary = registry.get("v2_effective_boundary")
+    if not isinstance(v2_boundary, dict):
+        raise RegistryError("v2 effective boundary is missing")
+    expected_v2_sources = [
+        {"path": path, "sha256": sha256}
+        for path, sha256 in EXPECTED_V2_EFFECTIVE_SHA256.items()
+    ]
+    expected_v2_boundary = {
+        "authorizes_formal_or_gpu": False,
+        "execution_evidence": {
+            "candidate_scores_observed": False,
+            "formal_runs": 0,
+            "gpu_executions": 0,
+            "replay_runs": 0,
+            "validation_or_test_results": 0,
+        },
+        "fold_identity": {
+            "component_count": 158,
+            "fold_rows": [153, 153, 153, 152, 152],
+            "manifest_schema": "trkh_pair_surface_ddf_v2_fold_manifest/v2",
+            "mapping_sha256": EXPECTED_V2_MAPPING_SHA256,
+        },
+        "next_gate": (
+            "independently_tested_guard_auditor_replay_then_machine_lock_and_single_authorization"
+        ),
+        "scientific_sources": expected_v2_sources,
+        "state": "v2r2_protocol_and_synthetic_engine_frozen_pre_machine_lock",
+    }
+    if v2_boundary != expected_v2_boundary:
+        raise RegistryError("v2 effective boundary differs from the frozen schema")
+
     headings = registry.get("headings")
     if not isinstance(headings, list) or not headings:
         raise RegistryError("heading index is empty")
@@ -562,7 +636,7 @@ def validate_registry(registry: dict[str, Any]) -> None:
     expected_ddf_statuses = {
         "pair_surface_ddf_a0_v1": "superseded_before_formal",
         "pair_surface_ddf_a0_v2": (
-            "prospective_protocol_and_fold_only_no_engine_or_formal_authorization"
+            "prospective_v2r2_engine_pinned_no_machine_lock_or_formal_authorization"
         ),
     }
     for entry_id, expected_status in expected_ddf_statuses.items():
@@ -631,9 +705,20 @@ def build_registry(repo_root: Path, source_revision: str = DEFAULT_SOURCE_REVISI
             "v2 fold-manifest sidecar mismatch: "
             f"expected {expected_v2_fold_sha}, got {actual_v2_fold_sha}"
         )
+
+    expected_v2_r2_sha = _parse_lock_sidecar(
+        blobs[V2_FOLD_R2_SIDECAR], Path(V2_FOLD_R2_MANIFEST).name
+    )
+    actual_v2_r2_sha = hashlib.sha256(blobs[V2_FOLD_R2_MANIFEST]).hexdigest()
+    if actual_v2_r2_sha != expected_v2_r2_sha:
+        raise RegistryError(
+            "v2r2 fold-manifest sidecar mismatch: "
+            f"expected {expected_v2_r2_sha}, got {actual_v2_r2_sha}"
+        )
     for json_path in (
         "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V1_SUPERSESSION_20260729.json",
         v2_fold_path,
+        V2_FOLD_R2_MANIFEST,
     ):
         try:
             value = json.loads(blobs[json_path].decode("utf-8", errors="strict"))
@@ -641,6 +726,30 @@ def build_registry(repo_root: Path, source_revision: str = DEFAULT_SOURCE_REVISI
             raise RegistryError(f"pinned source is not strict UTF-8 JSON: {json_path}") from exc
         if not isinstance(value, dict):
             raise RegistryError(f"pinned JSON source is not an object: {json_path}")
+
+    try:
+        v2_r2_manifest = json.loads(
+            blobs[V2_FOLD_R2_MANIFEST].decode("utf-8", errors="strict")
+        )
+        v2_mapping_sha = v2_r2_manifest["assignment"]["mapping_sha256"]
+        v2_component_count = v2_r2_manifest["relation_graph"]["component_count"]
+        v2_fold_rows = [item["rows"] for item in v2_r2_manifest["assignment"]["folds"]]
+        v2_manifest_schema = v2_r2_manifest["schema"]
+    except (KeyError, TypeError) as exc:
+        raise RegistryError("v2r2 fold manifest lacks the frozen identity fields") from exc
+    if v2_mapping_sha != EXPECTED_V2_MAPPING_SHA256:
+        raise RegistryError("v2r2 fold mapping SHA differs from the frozen mapping")
+
+    source_sha_by_path = {record["path"]: record["sha256"] for record in source_records}
+    effective_sources: list[dict[str, str]] = []
+    for path, expected_sha in EXPECTED_V2_EFFECTIVE_SHA256.items():
+        actual_sha = source_sha_by_path.get(path)
+        if actual_sha != expected_sha:
+            raise RegistryError(
+                f"effective v2 source SHA differs for {path}: "
+                f"expected {expected_sha}, got {actual_sha}"
+            )
+        effective_sources.append({"path": path, "sha256": actual_sha})
 
     headings: list[dict[str, Any]] = []
     for path in HEADING_SOURCES:
@@ -666,7 +775,7 @@ def build_registry(repo_root: Path, source_revision: str = DEFAULT_SOURCE_REVISI
             "5-class research. It is not an exhaustive semantic ontology, novelty proof, "
             "training, validation, test, candidate, formal, replay, or GPU authorization."
         ),
-        "schema_version": 2,
+        "schema_version": 3,
         "state": "critical_family_no_repeat_registry_no_training_authorization",
         "source_snapshot": {
             "files": source_records,
@@ -674,6 +783,27 @@ def build_registry(repo_root: Path, source_revision: str = DEFAULT_SOURCE_REVISI
             "read_mode": "git_object_database_only_no_worktree",
         },
         "headings": headings,
+        "v2_effective_boundary": {
+            "authorizes_formal_or_gpu": False,
+            "execution_evidence": {
+                "candidate_scores_observed": False,
+                "formal_runs": 0,
+                "gpu_executions": 0,
+                "replay_runs": 0,
+                "validation_or_test_results": 0,
+            },
+            "fold_identity": {
+                "component_count": v2_component_count,
+                "fold_rows": v2_fold_rows,
+                "manifest_schema": v2_manifest_schema,
+                "mapping_sha256": v2_mapping_sha,
+            },
+            "next_gate": (
+                "independently_tested_guard_auditor_replay_then_machine_lock_and_single_authorization"
+            ),
+            "scientific_sources": effective_sources,
+            "state": "v2r2_protocol_and_synthetic_engine_frozen_pre_machine_lock",
+        },
     }
     validate_registry(registry)
     return registry

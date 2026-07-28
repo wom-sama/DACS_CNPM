@@ -104,13 +104,13 @@ def test_curated_no_repeat_entries_are_present_and_canonically_referenced(builde
     assert "pair_surface_ddf_a0" not in by_id
     assert by_id["pair_surface_ddf_a0_v1"]["status"] == "superseded_before_formal"
     assert by_id["pair_surface_ddf_a0_v2"]["status"] == (
-        "prospective_protocol_and_fold_only_no_engine_or_formal_authorization"
+        "prospective_v2r2_engine_pinned_no_machine_lock_or_formal_authorization"
     )
 
 
 def test_registry_discloses_bounded_coverage_and_cannot_authorize_gpu(builder):
     registry = builder.build_registry(REPO_ROOT)
-    assert registry["schema_version"] == 2
+    assert registry["schema_version"] == 3
     assert registry["state"] == (
         "critical_family_no_repeat_registry_no_training_authorization"
     )
@@ -123,6 +123,28 @@ def test_registry_discloses_bounded_coverage_and_cannot_authorize_gpu(builder):
         "proves_novelty": False,
     }
     assert "not an exhaustive semantic ontology" in registry["purpose"]
+    boundary = registry["v2_effective_boundary"]
+    assert boundary["state"] == (
+        "v2r2_protocol_and_synthetic_engine_frozen_pre_machine_lock"
+    )
+    assert boundary["authorizes_formal_or_gpu"] is False
+    assert boundary["execution_evidence"] == {
+        "candidate_scores_observed": False,
+        "formal_runs": 0,
+        "gpu_executions": 0,
+        "replay_runs": 0,
+        "validation_or_test_results": 0,
+    }
+    assert boundary["fold_identity"] == {
+        "component_count": 158,
+        "fold_rows": [153, 153, 153, 152, 152],
+        "manifest_schema": "trkh_pair_surface_ddf_v2_fold_manifest/v2",
+        "mapping_sha256": builder.EXPECTED_V2_MAPPING_SHA256,
+    }
+    assert boundary["scientific_sources"] == [
+        {"path": path, "sha256": sha256}
+        for path, sha256 in builder.EXPECTED_V2_EFFECTIVE_SHA256.items()
+    ]
 
 
 def test_missing_duplicate_ids_and_duplicate_refs_fail_closed(builder):
@@ -148,6 +170,27 @@ def test_missing_duplicate_ids_and_duplicate_refs_fail_closed(builder):
         builder._resolve_curated_entries(headings, [duplicated_ref])
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("authorizes_formal_or_gpu", True),
+        ("state", "formal_authorized"),
+    ],
+)
+def test_v2_effective_boundary_tamper_fails_closed(builder, field, value):
+    registry = builder.build_registry(REPO_ROOT)
+    registry["v2_effective_boundary"][field] = value
+    with pytest.raises(builder.RegistryError, match="v2 effective boundary differs"):
+        builder.validate_registry(registry)
+
+
+def test_v2_effective_source_hash_tamper_fails_closed(builder):
+    registry = builder.build_registry(REPO_ROOT)
+    registry["v2_effective_boundary"]["scientific_sources"][-1]["sha256"] = "0" * 64
+    with pytest.raises(builder.RegistryError, match="v2 effective boundary differs"):
+        builder.validate_registry(registry)
+
+
 def test_deterministic_render_matches_checked_in_registry_and_sidecar(builder):
     first = builder.render_registry(builder.build_registry(REPO_ROOT))
     second = builder.render_registry(builder.build_registry(REPO_ROOT))
@@ -155,7 +198,7 @@ def test_deterministic_render_matches_checked_in_registry_and_sidecar(builder):
     assert REGISTRY_PATH.read_bytes() == first
     expected_sidecar = builder.render_sidecar(first, REGISTRY_PATH.name)
     assert SIDECAR_PATH.read_bytes() == expected_sidecar
-    assert json.loads(first)["schema_version"] == 2
+    assert json.loads(first)["schema_version"] == 3
 
 
 def test_cli_requires_explicit_write_and_check_fails_on_tamper(builder, tmp_path):
@@ -173,7 +216,7 @@ def test_cli_requires_explicit_write_and_check_fails_on_tamper(builder, tmp_path
     assert inspect.returncode == 0, inspect.stderr.decode(errors="replace")
     assert not output.exists()
     assert not output.with_suffix(".sha256").exists()
-    assert json.loads(inspect.stdout)["schema_version"] == 2
+    assert json.loads(inspect.stdout)["schema_version"] == 3
 
     write = subprocess.run([*base_command, "--write"], check=False, capture_output=True)
     assert write.returncode == 0, write.stderr.decode(errors="replace")

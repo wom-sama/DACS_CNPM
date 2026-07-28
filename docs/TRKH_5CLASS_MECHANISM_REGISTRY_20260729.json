@@ -368,6 +368,111 @@
       "title": "Progression after A0"
     },
     {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V2_PROTOCOL_ERRATUM_20260729.md",
+      "level": 2,
+      "line": 3,
+      "normalized_heading": "status-and-scope",
+      "title": "Status and scope"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V2_PROTOCOL_ERRATUM_20260729.md",
+      "level": 2,
+      "line": 14,
+      "normalized_heading": "1-held-label-firewall-and-donor-assignment",
+      "title": "1. Held-label firewall and donor assignment"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V2_PROTOCOL_ERRATUM_20260729.md",
+      "level": 2,
+      "line": 44,
+      "normalized_heading": "2-exact-replay-versus-operational-telemetry",
+      "title": "2. Exact replay versus operational telemetry"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V2_PROTOCOL_ERRATUM_20260729.md",
+      "level": 2,
+      "line": 66,
+      "normalized_heading": "3-exact-aggregation-for-clean-gates-12-and-13",
+      "title": "3. Exact aggregation for clean gates 12 and 13"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V2_PROTOCOL_ERRATUM_20260729.md",
+      "level": 2,
+      "line": 92,
+      "normalized_heading": "4-invalid-fill-rng-contract",
+      "title": "4. Invalid-fill RNG contract"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V2_PROTOCOL_ERRATUM_20260729.md",
+      "level": 2,
+      "line": 121,
+      "normalized_heading": "5-non-wrap-displacement-convention",
+      "title": "5. Non-wrap displacement convention"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V2_PROTOCOL_ERRATUM_20260729.md",
+      "level": 2,
+      "line": 139,
+      "normalized_heading": "6-seed-input-constants-bootstrap-and-import-canonicalization",
+      "title": "6. Seed, input constants, bootstrap and import canonicalization"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V2_PROTOCOL_ERRATUM_20260729.md",
+      "level": 2,
+      "line": 197,
+      "normalized_heading": "7-shifted-xai-bbox-geometry",
+      "title": "7. Shifted-XAI bbox geometry"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V2_PROTOCOL_ERRATUM_20260729.md",
+      "level": 2,
+      "line": 211,
+      "normalized_heading": "8-atomic-failure-evidence",
+      "title": "8. Atomic failure evidence"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V2_PROTOCOL_ERRATUM_20260729.md",
+      "level": 2,
+      "line": 234,
+      "normalized_heading": "9-updated-novelty-boundary",
+      "title": "9. Updated novelty boundary"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V2_PROTOCOL_ERRATUM_20260729.md",
+      "level": 2,
+      "line": 262,
+      "normalized_heading": "authorization-state",
+      "title": "Authorization state"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_V2R2_FOLD_ERRATUM_20260729.md",
+      "level": 2,
+      "line": 3,
+      "normalized_heading": "status",
+      "title": "Status"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_V2R2_FOLD_ERRATUM_20260729.md",
+      "level": 2,
+      "line": 20,
+      "normalized_heading": "what-was-corrected",
+      "title": "What was corrected"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_V2R2_FOLD_ERRATUM_20260729.md",
+      "level": 2,
+      "line": 56,
+      "normalized_heading": "scientific-identity-with-r1",
+      "title": "Scientific identity with r1"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_V2R2_FOLD_ERRATUM_20260729.md",
+      "level": 2,
+      "line": 82,
+      "normalized_heading": "immutable-write-and-use-contract",
+      "title": "Immutable write and use contract"
+    },
+    {
       "document": "docs/TRKH_5CLASS_POST_CAP_SUCCESSOR_NO_RUN_SCREEN_20260725.md",
       "level": 2,
       "line": 8,
@@ -4216,6 +4321,20 @@
       "line": 22447,
       "normalized_heading": "pair-surface-ddf-v2-pre-score-hardening-and-independent-review-2026-07-29",
       "title": "Pair-Surface DDF V2 Pre-Score Hardening and Independent Review - 2026-07-29"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 22532,
+      "normalized_heading": "mechanism-registry-v2-boundary-2026-07-29",
+      "title": "Mechanism Registry V2 Boundary - 2026-07-29"
+    },
+    {
+      "document": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
+      "level": 2,
+      "line": 22559,
+      "normalized_heading": "skill-self-review-and-process-correction-2026-07-29",
+      "title": "Skill Self-Review and Process Correction - 2026-07-29"
     }
   ],
   "mechanisms": [
@@ -4348,10 +4467,10 @@
         "pair-surface DDF v2",
         "validity-aware DDF sidecar"
       ],
-      "decision": "The component-disjoint fold manifest, validity-aware protocol and geometry preflight are prospectively pinned. No v2 engine, machine lock, candidate score, formal run, replay, validation result, test result or GPU run exists.",
+      "decision": "The provenance-hardened R2 component-disjoint fold manifest, corrected validity-aware protocol, geometry preflight, synthetic v2 engine and its unit-test source are prospectively pinned. No machine lock, authorization, candidate score, formal run, replay, validation/test-set result or GPU execution exists; TensorRT, latency and VRAM gates remain outstanding.",
       "family": "position_conditioned_dynamic_filter",
       "id": "pair_surface_ddf_a0_v2",
-      "reopen_or_advance_criterion": "Advance only after this registry is pushed, then implement and test the v2 engine/access ledger/replay, write a machine lock and explicit authorization, and consume exactly one formal plus one replay if every preflight passes.",
+      "reopen_or_advance_criterion": "Advance only after this registry is pushed, then implement and independently test the access guard, deterministic auditor and replay boundary; freeze the machine lock and explicit single authorization; and consume exactly one formal plus one replay only if every preflight passes.",
       "source_heading_refs": [
         {
           "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V2_PROTOCOL_20260729.md",
@@ -4359,9 +4478,30 @@
           "line": 3,
           "normalized_heading": "prospective-state-and-supersession",
           "title": "Prospective state and supersession"
+        },
+        {
+          "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V2_PROTOCOL_ERRATUM_20260729.md",
+          "level": 2,
+          "line": 3,
+          "normalized_heading": "status-and-scope",
+          "title": "Status and scope"
+        },
+        {
+          "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V2_PROTOCOL_ERRATUM_20260729.md",
+          "level": 2,
+          "line": 262,
+          "normalized_heading": "authorization-state",
+          "title": "Authorization state"
+        },
+        {
+          "document": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_V2R2_FOLD_ERRATUM_20260729.md",
+          "level": 2,
+          "line": 3,
+          "normalized_heading": "status",
+          "title": "Status"
         }
       ],
-      "status": "prospective_protocol_and_fold_only_no_engine_or_formal_authorization"
+      "status": "prospective_v2r2_engine_pinned_no_machine_lock_or_formal_authorization"
     },
     {
       "aliases": [
@@ -4426,22 +4566,22 @@
     }
   ],
   "purpose": "Prospective machine-checkable critical-family no-repeat boundary for TRKH 5-class research. It is not an exhaustive semantic ontology, novelty proof, training, validation, test, candidate, formal, replay, or GPU authorization.",
-  "schema_version": 2,
+  "schema_version": 3,
   "source_snapshot": {
     "files": [
       {
         "byte_representation": "canonical_committed_git_blob",
-        "bytes": 1437035,
-        "git_blob_oid": "5188e8e8515cccd20efa0800c4ac07e0d4e3cd04",
+        "bytes": 1440340,
+        "git_blob_oid": "837e612234d7f8ecf5e2985512b9c28a140bd202",
         "path": "docs/TRKH_5CLASS_RESEARCH_JOURNAL.md",
-        "sha256": "02e37247d5b9cc2f079760304e597a42f8b85bd519b565930b06d2a04a73995a"
+        "sha256": "d39f4749f367a020a8fdfdde41d8528ffb8d00ac82930535dd512da8121aa648"
       },
       {
         "byte_representation": "canonical_committed_git_blob",
-        "bytes": 726892,
-        "git_blob_oid": "10307086c2ed91ee530ec4c7efc5005bc13ec2f8",
+        "bytes": 727756,
+        "git_blob_oid": "2f3005f6fd5ab8701283798a0d77eb6ec60ccfb7",
         "path": "docs/TODO_TRKH_5CLASS.md",
-        "sha256": "32e041aa8386b7b5f884e32cfa29e5c3c036aad522240496606ee996efd33a5f"
+        "sha256": "ec291c1fa6266b9da87a46e49b6df4ae8197b57e7f11905ad701c924ec8cad64"
       },
       {
         "byte_representation": "canonical_committed_git_blob",
@@ -4470,6 +4610,20 @@
         "git_blob_oid": "9ed0fdb81414c34fd145c4e4e4048c54bc1bdf09",
         "path": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V2_PROTOCOL_20260729.md",
         "sha256": "b5fa5e2ada7e078a08276902f5897a0358d21ae03658c0d398402c4277c0b679"
+      },
+      {
+        "byte_representation": "canonical_committed_git_blob",
+        "bytes": 14749,
+        "git_blob_oid": "8cc55b191a6ce11b31df1c0d18b6aa0d1fd137df",
+        "path": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V2_PROTOCOL_ERRATUM_20260729.md",
+        "sha256": "0da08a193ca50f775047e28fcca763f8aafcc2391d54934480a3574ba1c89aeb"
+      },
+      {
+        "byte_representation": "canonical_committed_git_blob",
+        "bytes": 4718,
+        "git_blob_oid": "91e62efef8b7cd58b346d867e3b5512f7c2b7e11",
+        "path": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_V2R2_FOLD_ERRATUM_20260729.md",
+        "sha256": "1e9c5e64b259b909c0d69591b7ea5dd42cfc72f7c8db1489f89de29d3f9206c7"
       },
       {
         "byte_representation": "canonical_committed_git_blob",
@@ -4505,10 +4659,116 @@
         "git_blob_oid": "c427404538269e133c2e246332b5ffd0af7135db",
         "path": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_V2_FOLD_MANIFEST_20260729.sha256",
         "sha256": "fe54c79b5976336768e6a6c2291d55a8d91bf004bb2095eb9ee20591b9a31912"
+      },
+      {
+        "byte_representation": "canonical_committed_git_blob",
+        "bytes": 211966,
+        "git_blob_oid": "d7bb62832e1c8d1ccbc6f29a88e6204e18203ead",
+        "path": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_V2R2_FOLD_MANIFEST_20260729.json",
+        "sha256": "81a404bedc25dc7b3e7dc3dbb8d79b4ca5e97d74374083c79e0686ececb7fb2d"
+      },
+      {
+        "byte_representation": "canonical_committed_git_blob",
+        "bytes": 128,
+        "git_blob_oid": "6cd87cf0b2bf40f813deeca1068189ba4b26867c",
+        "path": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_V2R2_FOLD_MANIFEST_20260729.sha256",
+        "sha256": "d3521190cf8e706b67dcba9e05221a2ca532e8c23f0e9aed69f0288004b73fd0"
+      },
+      {
+        "byte_representation": "canonical_committed_git_blob",
+        "bytes": 52277,
+        "git_blob_oid": "e8461f11185fdcf46e4432d17ba095a61d9fc1f7",
+        "path": "scripts/build_trkh_pair_surface_ddf_v2_fold_manifest.py",
+        "sha256": "af92a30d8a0ab13f30d2a1fa4b85d977bf99a4094c8f13bf0c83837d738d7121"
+      },
+      {
+        "byte_representation": "canonical_committed_git_blob",
+        "bytes": 16323,
+        "git_blob_oid": "ecdb7ec9a49fe9c3e8b0a31ae8fb70d2e0635651",
+        "path": "tests/test_build_trkh_pair_surface_ddf_v2_fold_manifest.py",
+        "sha256": "9083ef072665bf5654217dc005a8a6857177d0ad3f19a994cfdce7443e3fc8fa"
+      },
+      {
+        "byte_representation": "canonical_committed_git_blob",
+        "bytes": 22243,
+        "git_blob_oid": "13244edde5cf54aea261715c174aa6dea10fd8a4",
+        "path": "trkh/tools/audit_pair_surface_ddf_v2_geometry_metadata.py",
+        "sha256": "630e9c8fc1271f6313db5e1d7480a041181111884baeb0e9aeeb70e944b0af37"
+      },
+      {
+        "byte_representation": "canonical_committed_git_blob",
+        "bytes": 6875,
+        "git_blob_oid": "22d28c74ab7258e22c3a98f4692729656108aca0",
+        "path": "tests/test_audit_pair_surface_ddf_v2_geometry_metadata.py",
+        "sha256": "8c069d128510378474e439778ab7c967a7f2810e33e6b2a898155958cb363bba"
+      },
+      {
+        "byte_representation": "canonical_committed_git_blob",
+        "bytes": 56406,
+        "git_blob_oid": "0877c30847fd8b9c79d34a7649696ddc039da4d2",
+        "path": "trkh/tools/pair_surface_ddf_v2_engine.py",
+        "sha256": "e6558d8cf9c00ec3d5f89b549902817a25afca21bff399a4766c397e80ba2774"
+      },
+      {
+        "byte_representation": "canonical_committed_git_blob",
+        "bytes": 33448,
+        "git_blob_oid": "6ec10531442477a00a52e1eff5a12e5f15bc4230",
+        "path": "tests/test_pair_surface_ddf_v2_engine.py",
+        "sha256": "c310e0918933004b54921ceb5793965d508caafb65156e066e6134c26f3124d4"
       }
     ],
-    "git_commit": "742fce03700b17f8e8f4449eac8a49dc0a03e211",
+    "git_commit": "0d3b9d73ecc823ea406df777d27a2b581888d062",
     "read_mode": "git_object_database_only_no_worktree"
   },
-  "state": "critical_family_no_repeat_registry_no_training_authorization"
+  "state": "critical_family_no_repeat_registry_no_training_authorization",
+  "v2_effective_boundary": {
+    "authorizes_formal_or_gpu": false,
+    "execution_evidence": {
+      "candidate_scores_observed": false,
+      "formal_runs": 0,
+      "gpu_executions": 0,
+      "replay_runs": 0,
+      "validation_or_test_results": 0
+    },
+    "fold_identity": {
+      "component_count": 158,
+      "fold_rows": [
+        153,
+        153,
+        153,
+        152,
+        152
+      ],
+      "manifest_schema": "trkh_pair_surface_ddf_v2_fold_manifest/v2",
+      "mapping_sha256": "c0726d114df69290d68d9f9e1a40857074ccb1a66e5ca41883caa004f2b0ea40"
+    },
+    "next_gate": "independently_tested_guard_auditor_replay_then_machine_lock_and_single_authorization",
+    "scientific_sources": [
+      {
+        "path": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V2_PROTOCOL_20260729.md",
+        "sha256": "b5fa5e2ada7e078a08276902f5897a0358d21ae03658c0d398402c4277c0b679"
+      },
+      {
+        "path": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V2_PROTOCOL_ERRATUM_20260729.md",
+        "sha256": "0da08a193ca50f775047e28fcca763f8aafcc2391d54934480a3574ba1c89aeb"
+      },
+      {
+        "path": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_V2R2_FOLD_ERRATUM_20260729.md",
+        "sha256": "1e9c5e64b259b909c0d69591b7ea5dd42cfc72f7c8db1489f89de29d3f9206c7"
+      },
+      {
+        "path": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_V2R2_FOLD_MANIFEST_20260729.json",
+        "sha256": "81a404bedc25dc7b3e7dc3dbb8d79b4ca5e97d74374083c79e0686ececb7fb2d"
+      },
+      {
+        "path": "trkh/tools/pair_surface_ddf_v2_engine.py",
+        "sha256": "e6558d8cf9c00ec3d5f89b549902817a25afca21bff399a4766c397e80ba2774"
+      },
+      {
+        "path": "tests/test_pair_surface_ddf_v2_engine.py",
+        "sha256": "c310e0918933004b54921ceb5793965d508caafb65156e066e6134c26f3124d4"
+      }
+    ],
+    "state": "v2r2_protocol_and_synthetic_engine_frozen_pre_machine_lock"
+  }
 }
