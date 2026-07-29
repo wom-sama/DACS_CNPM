@@ -22751,3 +22751,58 @@ Date: 2026-07-02
   raw scientific derivation are complete foundations; trusted activation,
   verifier, S1, S2, machine lock, A0, XAI, matched integration, scratch probe,
   full train and a newly sealed source/time/site cohort all remain pending.
+
+## Fail-Closed Pre-Lock Evidence Schema V3 Boundary - 2026-07-29
+
+- Freeze and push the reviewed pure serialization/evidence schema at
+  `1449cc08451efca38b4620a6914634844e44b03c`. Exact SHA-256 identities are
+  document `67b2c069498c817fb5015a79eff115444424784fbb511d1628998a7c17a4a99c`,
+  source `caa001600ad45f50bced2115b04c9598a5e09bf6e49355cfbbadd3d661d04968`
+  and developmental tests
+  `0e35d52058cebc8b45f295f50043e5bbaf56e65cc7acadaf9abca3182e0af930`.
+  The source is pure standard library, has no project/data/array/training/I/O
+  imports, and fixes exactly 12 S1, 10 S2A and 5 S2B scientific groups.
+- Two independent final reviews return `CLEAN FOR SCHEMA COMMIT`. Their
+  constructive attacks closed four false-schema paths: a caller could formerly
+  choose the claimed row count for a source-derived registry; registry bytes
+  were not tied to their group ArtifactRecord; semantic dtype/domain fields
+  accepted aliases; and CIDT carried an orphan source-member digest. The final
+  source instead makes all source-derived registry parses end fail-closed until
+  a stage-specific verifier, binds every registry's exact bytes/length to its
+  typed group record, freezes NumPy/TensorRT/standard-ONNX vocabularies, and
+  removes the orphan field while retaining exact top-level CIDT cross-binding.
+- Also correct the verifier lineage role to `v2_{stage}_bundle_manifest`, make
+  recursively immutable parsed documents serialize back to identical canonical
+  bytes, reject non-string JSON keys and non-string outer kinds, reject float
+  aliases for integer schema versions, and export the complete public schema
+  surface. Static AST/coverage checks confirm 27/27 groups, all JSON/binary
+  content schemas, exactly eight developmental test functions, no source
+  assertions, no forbidden import and no sensitive call. No module import,
+  pytest, dataset/cache/checkpoint read, GPU work or candidate/scientific metric
+  occurred; these checks have zero execution authority.
+- Keep activation blockers explicit. The six contract/authorization/bundle
+  outer payloads still reject; the future verifier must internally resolve all
+  source-derived counts, join actual archive/member/NPY bytes, derive target
+  classification and transitions, recompute scientific evidence/replay roots,
+  and use real ONNX opset-17 and TensorRT parsers on record-bound binaries. Only
+  the two reviewed verifier entries may emit finalization records, both with
+  downstream authority fixed to zero.
+- A separate process-value review finds the safeguards justified by the real
+  leakage and false-PASS incidents but identifies protocol drift as the dominant
+  new risk: the 4,114-line runner foundation has not yet produced S1, S2 or A0
+  evidence. Therefore the next change must be the smallest activation path
+  directly enabling S1 then S2; no generic sandbox, extra role/group/API/test or
+  convenience layer is allowed without a concrete reproducer. Reassess after
+  S2 before machine lock/A0 rather than chaining stages by momentum.
+- Reassess the installed skill without changing it mechanically. Its current
+  SHA `cb78d47d...49dd` already required schema-before-verifier, prospective
+  full-import closure, evidence authority separation and a concrete reproducer
+  for added harness complexity; the independent review operated as intended.
+  Adding schema-specific implementation details to the skill would overfit the
+  current incident rather than improve the reusable research loop.
+- The presentation fallback remains complete and untouched: 5,007 files across
+  10 retained roots plus 9 essential files, including keeper, strict scratch
+  full baseline, negative controls and the seven-model validation comparison.
+  What exists today is defensible baseline/negative-science/prospective-method
+  evidence, not a new model that has beaten the keeper. A confirmatory claim
+  still requires a newly sealed source/time/site cohort.

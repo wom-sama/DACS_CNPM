@@ -5224,3 +5224,28 @@
   schema must freeze before verifier code, import closure must be transitive and
   pre-import pinned, and only a concrete reproducer may justify more harness
   work. Protocol complexity alone is not information gain.
+- [x] Freeze, independently red-team, commit and push the pure evidence-schema
+  v3 boundary at `1449cc08451efca38b4620a6914634844e44b03c`. Exact SHA-256
+  identities are document `67b2c069...4a99c`, source
+  `caa00160...04968`, and eight-node developmental tests
+  `0e35d520...af930`. The schema fixes `12/10/5` scientific groups,
+  typed registry axes, exact artifact/path/media identities, CIDT/A0 hashes,
+  immutable canonical serialization and zero-authority finalization shapes.
+  Independent review closed caller-supplied dynamic counts, unbound registry
+  bytes, free-form dtype/domain aliases, the orphan CIDT member hash, the wrong
+  bundle role and mutable-roundtrip/type-alias paths. AST/static review only;
+  no import, pytest, dataset/cache/checkpoint, GPU or scientific observation was
+  performed.
+- [ ] Implement only the minimum activation boundary that leads directly to
+  evidence: external create-once repository receipt, prospective transitive
+  import closure, pre-import I/O/member/network/child tripwire, exact parsers
+  for the six contract/authorization/bundle payloads, internally resolved
+  source-derived counts, real ONNX/TensorRT re-derivation, and the two reviewed
+  verifier APIs. Keep the current eight developmental tests outside authority;
+  authorize only the separately pinned eight tmp-only nodes after review.
+- [ ] Do not add another stage role, scientific group, verifier API, test node
+  or generic sandbox without a concrete false-PASS reproducer. After S1 and S2
+  each complete primary plus fresh replay, stop and reassess expected scientific
+  information gain before machine lock/A0. If clean A0 fails, close nearby RGB
+  DDF sweeps and pivot to paired illumination/cross-polarization or a
+  longitudinal same-fruit firmness/TSS/transport-outcome cohort.
