@@ -5135,10 +5135,11 @@
   leakage/geometry falsification before architecture or GPU work; it separates
   protocol evidence from execution authorization, treats the opened project
   test as retrospective only, and makes cleanup fail closed on retention.
-- [ ] Only after the clean v2 boundary is committed and pushed, implement its
-  formal train-only auditor, access ledger, authorization, exact replay, and
-  retention boundary. Do not issue a new-model full-train command until the
-  conjunction passes and a separate matched integration protocol is frozen.
+- [x] Supersede without execution the former instruction to implement a formal
+  auditor directly from the clean v2 boundary. V2 activation is now closed;
+  only a new-ID value-first successor may define a later train-only auditor,
+  authorization and replay. No new-model full train is permitted until its
+  clean conjunction and a separate matched integration protocol pass.
 - [ ] Treat all previously viewed test metrics as legacy development evidence.
   Obtain a new source/time/site-held cohort before making a confirmatory paper
   claim; do not relabel the old test as final merely because the code ledger is
@@ -5177,17 +5178,14 @@
   this commit as safe to retain only because production open, builder and issuer
   remain hard-blocked by `PRELOCK_VERIFIER_REVIEWED=False`; it is not activation
   evidence and its tests have not yet been run.
-- [ ] Before changing that hard block, implement and review the pinned
-  fresh-process execution launcher: prospective full-import-closure loading,
-  process-wide direct-open/member/child/network tripwire, exact receipt and
-  invalidated-manifest rejection, external resource watchdog and stronger
-  transition/ledger adversarial checks. Current synthetic lifecycle fixtures
-  may prove software behavior only and can never issue scientific authority.
-- [ ] Implement and independently test the finalized-evidence prelock verifier,
-  then freeze/push separate S1 and S2 contracts/authorizations. Consume at most
-  one primary plus one fresh replay for each phase. Only their complete PASS
-  roots may enter a later no-authority machine lock and exactly-one-formal plus
-  replay authorization.
+- [x] Supersede without execution the former requirement to activate the v2
+  fresh-process launcher. The one bounded draft was rejected and deleted;
+  `PRELOCK_VERIFIER_REVIEWED=False` remains unchanged, so the pushed runner,
+  builder and issuer stay permanently closed under v2.
+- [x] Supersede without execution the former v2 verifier/S1/S2 authorization
+  sequence. No finalized verifier, S1/S2 contract, authorization, primary,
+  replay, PASS root or machine lock exists. The closure below replaces this
+  route; no later agent may resume it under the v2 protocol identity.
 - [x] Withdraw the apparent `55/55` combined result after detecting that test
   collection activated live train-cache geometry and real fold-manifest
   fixtures when local inputs existed. Preserve the exact unledgered read scope
@@ -5207,11 +5205,11 @@
   demonstrated live/scientific/quota effect in
   `TRKH_5CLASS_PAIR_SURFACE_DDF_V2_RUNTIME_GUARD_TEST_ATTESTATION_INVALIDATION_20260729.md`;
   never cite its SHA `f36f95e2...e4c6af` as guard or pre-lock evidence.
-- [ ] Pin a replacement test-authority manifest plus a true pre-import/
-  pre-collection tripwire. Before S2, run only exact
-  `synthetic_safe`/tmp-fixture nodes and pin their full local import closure;
-  never rely on `skipif(cache missing)` to protect a machine where the cache
-  is present.
+- [x] Supersede without execution the planned replacement v2 test authority.
+  No prospective committed/pushed authority bound the two rejected draft SHAs;
+  the old untracked authority/manifest files remain invalidated or rejected and
+  outside Git. Any successor must define a new protocol identity and test
+  surface rather than reusing these artifacts.
 - [x] Update the installed TRKH skill immediately after detecting the incident.
   Skill SHA-256 is
   `a65668f637ceaa8da91c5489a0405ff9e887c858dd33e160c22927a43b316019`;
@@ -5236,16 +5234,37 @@
   bundle role and mutable-roundtrip/type-alias paths. AST/static review only;
   no import, pytest, dataset/cache/checkpoint, GPU or scientific observation was
   performed.
-- [ ] Implement only the minimum activation boundary that leads directly to
-  evidence: external create-once repository receipt, prospective transitive
-  import closure, pre-import I/O/member/network/child tripwire, exact parsers
-  for the six contract/authorization/bundle payloads, internally resolved
-  source-derived counts, real ONNX/TensorRT re-derivation, and the two reviewed
-  verifier APIs. Keep the current eight developmental tests outside authority;
-  authorize only the separately pinned eight tmp-only nodes after review.
-- [ ] Do not add another stage role, scientific group, verifier API, test node
-  or generic sandbox without a concrete false-PASS reproducer. After S1 and S2
-  each complete primary plus fresh replay, stop and reassess expected scientific
-  information gain before machine lock/A0. If clean A0 fails, close nearby RGB
-  DDF sweeps and pivot to paired illumination/cross-polarization or a
-  longitudinal same-fruit firmness/TSS/transport-outcome cohort.
+- [x] Attempt the minimum v2 activation boundary once, then close it before
+  commit when it cannot lead directly to evidence. The reviewed drafts show
+  that exact source-derived resolvers, operational receipt semantics and a real
+  S1/S2 producer cannot fit the frozen surface without another foundation.
+  Keep the eight developmental tests outside authority and issue no replacement
+  exact-node authority for the rejected implementation.
+- [x] Apply the no-growth stop rule before adding another stage role,
+  scientific group, verifier API, test node or generic sandbox. S1 and S2 did
+  not execute; therefore no machine lock/A0 follows from v2. Reassess expected
+  information gain now and require the separately frozen value-first successor
+  below before any new execution.
+- [x] Stop the single bounded v2 activation attempt after independent review
+  rejects both untracked drafts. Verifier SHA `d52c16c1...f3caa` cannot resolve
+  the mandatory source-derived evidence and contains latent receipt/root/
+  transition/scientific false-PASS paths; launcher SHA `4193b0d9...004d3` has
+  a direct-child forged-receipt path and an unpinned dependency/GPU boundary.
+  Delete both drafts without staging them. No authority, import, test, cache,
+  data, checkpoint, GPU, S1, S2 or A0 execution occurred.
+- [x] Close Pair-Surface DDF v2 activation as
+  `engineering_incomplete_unexecuted_zero_authority` in
+  `TRKH_5CLASS_PAIR_SURFACE_DDF_V2_PRELOCK_ACTIVATION_CLOSURE_20260729.md`.
+  Closure SHA-256 is `d6343c7d...37cdd`.
+  Preserve the pushed engine/schema/runner as prospective-method and incident
+  evidence, not as a completed model or a negative scientific A0.
+- [ ] Freeze and independently review one lean value-first successor before
+  implementation. Reuse v2R2 folds, validity-aware engine, raw scientific
+  derivation and proven CCR create-once audit patterns; require target-blind
+  materialization before fold target release and exactly one primary plus one
+  fresh replay. Assign a new protocol ID and separate mechanism-registry
+  lineage, with an explicit retained-versus-superseded table. Freeze all
+  relative ONNX/TensorRT/latency/VRAM gates before A0; execute them only if the
+  train-only information conjunction passes, and require them before any
+  integration or promotion. Candidate accuracy may never relax those gates.
+  This checkbox grants zero execution.

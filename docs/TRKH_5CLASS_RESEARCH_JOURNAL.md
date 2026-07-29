@@ -22806,3 +22806,40 @@ Date: 2026-07-02
   What exists today is defensible baseline/negative-science/prospective-method
   evidence, not a new model that has beaten the keeper. A confirmatory claim
   still requires a newly sealed source/time/site cohort.
+
+## Pair-Surface DDF V2 Activation Closure and Value-First Pivot - 2026-07-29
+
+- Apply the process stop rule after one bounded activation attempt. Independent
+  static review rejects untracked verifier SHA `d52c16c1...f3caa` and launcher
+  SHA `4193b0d9...004d3`: the former could not complete under the frozen schema
+  and complexity budget without a new reviewed boundary and was unsafe behind
+  its hard stop; the latter permits a direct-child forged-receipt path and
+  leaves pytest/GPU dependencies outside prospective identity. Delete both v3
+  draft preimages and never issue their authority; retain their hashes only as
+  non-reproducible review tombstones. Older rejected untracked files remain
+  preserved and excluded from stage/import/run/authority. No prospective
+  committed/pushed authority bound either draft SHA. No import, pytest,
+  data/cache/checkpoint, GPU or scientific execution occurred.
+- Close v2 activation narrowly as
+  `engineering_incomplete_unexecuted_zero_authority`, not as a negative DDF
+  result. The exact closure is
+  `TRKH_5CLASS_PAIR_SURFACE_DDF_V2_PRELOCK_ACTIVATION_CLOSURE_20260729.md`,
+  SHA-256 `d6343c7d...37cdd`.
+  Pushed engine/scientific/schema/runner artifacts remain useful appendix and
+  incident-prevention evidence, while keeper, scratch baseline and seven-model
+  presentation comparison remain intact.
+- Reassess information gain per engineering line. The combined pushed schema
+  plus rejected verifier/launcher activation surface reached 3,086 nonblank
+  lines (`1,225/1,261/600`) near its 3,200-line ceiling without an S1/S2
+  producer or one new model observation. Under this branch's frozen budget and
+  one-attempt stop rule, further v2 guard work is classified as protocol drift,
+  not science.
+- Permit only a later, separately pushed value-first design: one external
+  parent, one combined primary/replay authorization, v2R2 train-only folds,
+  target-blind snapshot before target-shard release, raw scientific evidence
+  and atomic zero-authority retention. Move deployment qualification after a
+  clean A0 information gate, while freezing all relative deployment limits
+  beforehand and requiring them before integration/promotion regardless of
+  accuracy. Require a new protocol ID, separate registry lineage and explicit
+  retained-versus-superseded table. This journal entry itself authorizes no
+  test, cache, data, GPU, A0, validation, test, XAI, integration or full train.
