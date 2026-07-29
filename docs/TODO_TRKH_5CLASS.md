@@ -5258,6 +5258,12 @@
   Closure SHA-256 is `d6343c7d...37cdd`.
   Preserve the pushed engine/schema/runner as prospective-method and incident
   evidence, not as a completed model or a negative scientific A0.
+- [x] Reassess the installed `trkh-5class` skill after pushed closure commit
+  `377bdda4869fbe80f9a1809b7fe532b4f2006b98`. Skill SHA-256 is
+  `a8572ecff7ba954a976727c9a986855ab97f4d6ba741252e7f76b36aaa1e7d3f`;
+  `quick_validate.py` passes and an independent complete-file read confirms
+  that v2 S1/S2 cannot be resumed, the next action is new-ID protocol design,
+  and this update grants zero execution authority.
 - [ ] Freeze and independently review one lean value-first successor before
   implementation. Reuse v2R2 folds, validity-aware engine, raw scientific
   derivation and proven CCR create-once audit patterns; require target-blind

@@ -22834,6 +22834,14 @@ Date: 2026-07-02
   producer or one new model observation. Under this branch's frozen budget and
   one-attempt stop rule, further v2 guard work is classified as protocol drift,
   not science.
+- After pushed closure commit
+  `377bdda4869fbe80f9a1809b7fe532b4f2006b98`, update the installed
+  `trkh-5class` skill to SHA-256
+  `a8572ecff7ba954a976727c9a986855ab97f4d6ba741252e7f76b36aaa1e7d3f`.
+  Skill-creator structural validation passes. An independent complete-file
+  forward read finds no instruction that reopens v2: the next permitted action
+  is a new-ID value-first protocol, and no test/data/GPU authority follows from
+  the skill update.
 - Permit only a later, separately pushed value-first design: one external
   parent, one combined primary/replay authorization, v2R2 train-only folds,
   target-blind snapshot before target-shard release, raw scientific evidence
