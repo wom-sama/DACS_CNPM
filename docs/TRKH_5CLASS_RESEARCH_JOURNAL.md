@@ -22851,3 +22851,53 @@ Date: 2026-07-02
   accuracy. Require a new protocol ID, separate registry lineage and explicit
   retained-versus-superseded table. This journal entry itself authorizes no
   test, cache, data, GPU, A0, validation, test, XAI, integration or full train.
+
+## TRKH-PSDF-IG1 Value-First Design Freeze - 2026-07-29
+
+- Freeze the new protocol identity `trkh_psdf_information_gate_a0_r1` rather
+  than reopening v2. Exact identities are protocol
+  `1365a9aa022ce20d0c5d8429365e89b0c891c16fd61b65c4642ffbf650a4d78b`
+  and separate registry/sidecar
+  `cd1d16f7b0c6a906de8b5f43e84b64b0a38a8f817892fcba957befa567c24e70`.
+  Three independent exact-byte static reviews return ACCEPT. All ten retained
+  file hashes, six private scientific symbols and 21 frozen schema types match;
+  the JSON and sidecar bindings are exact.
+- Keep the scientific claim narrow. `TRKH-PSDF` is a scratch-only,
+  validity-aware pair-surface DDF composition whose operator novelty is low;
+  only a prospective validity-aware composition/application contribution may
+  become moderate after every information, causal, replay, deployment,
+  integration and new-cohort gate passes. IG1 alone can produce only
+  train-table conditional mechanism evidence, never a new best model claim.
+- Correct the staged-information model during red-team instead of preserving a
+  stronger but false isolation story. Across five outer folds, calibration
+  roles cover all 763 target bytes, so the trusted finalizer sees their union.
+  Protection is source-enforced per-fold role indexing and fold-worker
+  non-fit-target isolation; held transition is provenance authorization, not a
+  new-byte release. CIDT remains outside that union and opens only after both
+  pre-held commitments exist.
+- Commit complete primary and replay bundles independently before CIDT: each
+  contains `union_probabilities`, `pair_probabilities`, 250 calibrators, ten
+  selections, `action_probabilities`, and two `AppliedAction` objects with all
+  eight contained arrays. Every array is contiguous, read-only and hashed;
+  full derivation must refit and match all direct outputs bit-for-bit. Exact
+  ledger comparison permits only run-root-prefix canonicalization.
+- Limit implementation to one runner, one scientific adapter and one test file,
+  at most 2,200 nonblank lines and 12 test nodes. The future command is pinned
+  to CPython 3.9.11 with `-S -s -B`, cleaned Python path variables and an audit
+  hook installed before any authorized project/site import. Current authority
+  remains zero: no project import, test collection, data/cache/checkpoint read,
+  GPU, A0, validation, project test, XAI, deployment, integration or full train
+  occurred in this design freeze.
+- Freeze deployment gates now but run them only after an information PASS.
+  Scientific FAIL closes nearby RGB-DDF kernel/width/loss/seed/threshold
+  variants and redirects the research to paired diffuse/parallel/
+  cross-polarized acquisition with fruit/session identity or longitudinal
+  firmness/TSS/transport outcomes. A PASS only earns a separate zero-init
+  residual integration protocol; it does not update current-best by itself.
+- Reassess the installed skill without changing it mechanically. SHA-256
+  `a8572ecf...e7d3f` already requires a new protocol ID, one primary plus fresh
+  raw replay, pre-A0 deployment-gate freeze, reviewed/pushed boundaries and
+  zero execution during design. The reviews exposed and corrected target-byte,
+  Python-version and bundle-completeness errors under that loop; another skill
+  edit would add protocol-specific detail without improving the reusable
+  process.

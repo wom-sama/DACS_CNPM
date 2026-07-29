@@ -1,0 +1,256 @@
+{
+  "schema_version": 1,
+  "registry_id": "trkh_psdf_information_gate_a0_r1_registry",
+  "protocol_id": "trkh_psdf_information_gate_a0_r1",
+  "state": "prospective_design_zero_authority",
+  "created_date": "2026-07-29",
+  "separate_from_v2_registry_lineage": true,
+  "execution_authority": false,
+  "protocol": {
+    "path": "docs/TRKH_5CLASS_PSDF_INFORMATION_GATE_A0_R1_PROTOCOL_20260729.md",
+    "sha256": "1365a9aa022ce20d0c5d8429365e89b0c891c16fd61b65c4642ffbf650a4d78b"
+  },
+  "closure": {
+    "path": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_V2_PRELOCK_ACTIVATION_CLOSURE_20260729.md",
+    "sha256": "d6343c7dbd5858a58935b61329a5ca355cb1c0f3c4d16efef6bfb38479037cdd",
+    "commit": "377bdda4869fbe80f9a1809b7fe532b4f2006b98",
+    "classification": "engineering_incomplete_unexecuted_zero_authority"
+  },
+  "claim": {
+    "model_name": "TRKH-PSDF",
+    "expansion": "TRKH Pair-Surface Decoupled Filter",
+    "operator_novelty": "low",
+    "prospective_composition_application_novelty": "moderate_only_if_all_information_causal_replay_and_later_integration_gates_pass",
+    "a0_scope": "train_only_conditional_mechanism_evidence"
+  },
+  "retained": [
+    {
+      "id": "v2_protocol_equations_thresholds_only",
+      "path": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V2_PROTOCOL_20260729.md",
+      "sha256": "b5fa5e2ada7e078a08276902f5897a0358d21ae03658c0d398402c4277c0b679"
+    },
+    {
+      "id": "v2_corrected_semantics_only",
+      "path": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V2_PROTOCOL_ERRATUM_20260729.md",
+      "sha256": "0da08a193ca50f775047e28fcca763f8aafcc2391d54934480a3574ba1c89aeb"
+    },
+    {
+      "id": "v2r2_train_only_fold_mapping",
+      "path": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_V2R2_FOLD_MANIFEST_20260729.json",
+      "sha256": "81a404bedc25dc7b3e7dc3dbb8d79b4ca5e97d74374083c79e0686ececb7fb2d"
+    },
+    {
+      "id": "v2r2_fold_access_erratum",
+      "path": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_V2R2_FOLD_ERRATUM_20260729.md",
+      "sha256": "1e9c5e64b259b909c0d69591b7ea5dd42cfc72f7c8db1489f89de29d3f9206c7"
+    },
+    {
+      "id": "validity_aware_sidecar_engine",
+      "path": "trkh/tools/pair_surface_ddf_v2_engine.py",
+      "sha256": "e6558d8cf9c00ec3d5f89b549902817a25afca21bff399a4766c397e80ba2774"
+    },
+    {
+      "id": "raw_scientific_recomputation",
+      "path": "trkh/tools/pair_surface_ddf_v2_scientific.py",
+      "sha256": "a6168d9d438fe78dd77f87e48f4005c418c1a218e1811edbe3609a034ece850e"
+    },
+    {
+      "id": "process_incident_deny_evidence",
+      "path": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_V2_PRELOCK_PROCESS_INCIDENT_20260729.md",
+      "sha256": "c4c5eba21733d85b98b76c68312f1223ede3f6d5d1919ba25753037736b232f7"
+    },
+    {
+      "id": "process_incident_independent_review_scope",
+      "path": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_V2_PRELOCK_PROCESS_INCIDENT_INDEPENDENT_REVIEW_ERRATUM_20260729.md",
+      "sha256": "b7ef5a3847b125273d7771ec35dc935ba52a570279db18f3d3ae928a95b9b96c"
+    },
+    {
+      "id": "runtime_guard_invalidation_deny_evidence",
+      "path": "docs/TRKH_5CLASS_PAIR_SURFACE_DDF_V2_RUNTIME_GUARD_TEST_ATTESTATION_INVALIDATION_20260729.md",
+      "sha256": "5b52066708f419ab5ce728f64328585829ab5eaf84954da74c1909e2b58bd558"
+    },
+    {
+      "id": "historical_v2_mechanism_registry",
+      "path": "docs/TRKH_5CLASS_MECHANISM_REGISTRY_20260729.json",
+      "sha256": "49b1d3422fb0d592e56c7814289fde8fe058986cc7be671357bb95d4b297566d"
+    }
+  ],
+  "superseded": [
+    "pair_surface_ddf_a0_v2_protocol_identity",
+    "pair_surface_ddf_a0_v2_registry_identity",
+    "v2_s1_s2_s2a_s2b_activation_sequence",
+    "v2_27_group_prelock_schema_as_activation_boundary",
+    "v2_verifier_builder_issuer_launcher_family",
+    "v2_lineage_lock_and_public_exact_evaluator",
+    "v2_pre_a0_deployment_execution",
+    "v2_xai_integration_full_train_authority"
+  ],
+  "experiment": {
+    "rows": 763,
+    "components": 158,
+    "folds": 5,
+    "epochs": 20,
+    "batch_size": 64,
+    "optimizer_steps_per_fit": 160,
+    "fits_per_run_aggregate": 25,
+    "fits_per_fold_worker": 5,
+    "roles": [
+      "ddf_full",
+      "static_matched",
+      "ddf_spatial_only",
+      "ddf_channel_only",
+      "ddf_full_repeat"
+    ],
+    "primary_raw_aggregates": 1,
+    "fresh_fold_worker_raw_replay_aggregates": 1,
+    "full_fresh_process_consumer_replays": 0,
+    "scientific_finalizer_processes": 1,
+    "spawn_unit": "run_and_outer_fold",
+    "sequential_fold_workers": 10,
+    "sequential_child_processes_including_finalizer": 11,
+    "maximum_concurrent_child_processes": 1,
+    "target_isolation_claim": "trusted_parent_dataflow_and_fold_worker_non_fit_target_isolation_not_parent_byte_ignorance",
+    "calibration_union_target_visibility": "all_763_a0_target_bytes_visible_to_trusted_finalizer_before_held_role_attribution",
+    "leakage_control": "source_enforced_per_outer_fold_calibration_role_indexing_not_physical_finalizer_target_secrecy",
+    "pre_held_bundle_count": 2,
+    "pre_held_bundle_names": [
+      "primary",
+      "replay"
+    ],
+    "calibrators_per_pre_held_bundle": 250,
+    "action_selections_per_pre_held_bundle": 10,
+    "probability_arrays_per_pre_held_bundle": 3,
+    "probability_array_names": [
+      "union_probabilities",
+      "pair_probabilities",
+      "action_probabilities"
+    ],
+    "applied_action_objects_per_pre_held_bundle": 2,
+    "applied_action_contained_arrays_per_pre_held_bundle": 8,
+    "total_pre_held_calibrators": 500,
+    "total_pre_held_action_selections": 20,
+    "held_transition_semantics": "provenance_and_role_authorization_not_new_a0_target_byte_release",
+    "cidt_release_after_both_pre_held_bundles": true,
+    "producer_may_emit_pass_or_metrics": false,
+    "consumer_recomputes_science_from_raw_evidence": true
+  },
+  "access_ledger_comparison": {
+    "scope": "authoritative_project_input_member_write_events",
+    "only_normalization": "replace_authorized_primary_or_replay_output_root_prefix_with_same_run_relative_token",
+    "fields_that_must_remain_exact": [
+      "fold",
+      "member",
+      "operation",
+      "order",
+      "byte_count",
+      "sha256",
+      "all_other_event_fields"
+    ],
+    "bootstrap_event_order": "descriptive_platform_owned"
+  },
+  "allowed_new_source_paths": [
+    "trkh/tools/pair_surface_psdf_ig1_runner.py",
+    "trkh/tools/pair_surface_psdf_ig1_scientific.py",
+    "tests/test_pair_surface_psdf_ig1_runner.py"
+  ],
+  "implementation_budget": {
+    "maximum_total_nonblank_lines": 2200,
+    "maximum_production_nonblank_lines": 1600,
+    "maximum_test_nonblank_lines": 600,
+    "maximum_test_nodes": 12,
+    "public_cli_modes": [
+      "authorized-pair"
+    ],
+    "worker_mode": "private_multiprocessing_spawn_callable_no_cli",
+    "scientific_finalizer_mode": "private_multiprocessing_spawn_callable_no_cli"
+  },
+  "bootstrap": {
+    "interpreter_path": "D:/DataAI/.venv/Scripts/python.exe",
+    "interpreter_version": "3.9.11",
+    "flags": [
+      "-S",
+      "-s",
+      "-B"
+    ],
+    "unset_environment": [
+      "PYTHONPATH",
+      "PYTHONHOME",
+      "PYTHONSTARTUP",
+      "PYTHONUSERBASE"
+    ],
+    "process_start_hash_seed": "0",
+    "first_import": "sys_builtin_only",
+    "pre_nonbuiltin_import_actions": [
+      "remove_script_dir_cwd_repo_and_site_packages_from_sys_path",
+      "assert_pinned_stdlib_only_sys_path",
+      "install_audit_hook",
+      "emit_live_probe"
+    ],
+    "python_P_flag_allowed": false,
+    "python_I_flag_allowed": false
+  },
+  "pinned_scientific_internal_symbols": [
+    "_fit_all_calibrators",
+    "_apply_derived_actions",
+    "_validate_run",
+    "_derive_run",
+    "_gates_1_to_13",
+    "_build_comparison_records"
+  ],
+  "pinned_scientific_public_data_types": [
+    "FrozenArrayIdentity",
+    "FrozenTargetSlice",
+    "TargetShardLock",
+    "NamedArtifactIdentity",
+    "SidecarFoldPreimage",
+    "TrainingTraceEvidence",
+    "RawScientificRun",
+    "CalibratorState",
+    "NamedCalibratorState",
+    "ActionPolicy",
+    "ActionSelection",
+    "AppliedAction",
+    "ActionMetrics",
+    "BootstrapResult",
+    "MapStatistics",
+    "GateResult",
+    "RepeatActionComparisonV2",
+    "CIDTDiagnosticResult",
+    "DerivedRunEvidence",
+    "ScientificComparisonRecord",
+    "ConjunctiveGateEvaluationV2"
+  ],
+  "frozen_schema_array_contract": {
+    "deep_immutability_claim": false,
+    "required_before_pinned_call_or_persistence": [
+      "make_every_numpy_array_contiguous",
+      "set_writeable_false",
+      "commit_dtype_shape_bytes_and_sha256"
+    ],
+    "pre_held_commitment_form": "create_once_persisted_bytes_not_only_frozen_python_objects"
+  },
+  "forbidden_new_surface": [
+    "builder",
+    "issuer",
+    "separate_child_launcher",
+    "generic_sandbox",
+    "second_runner_family",
+    "additional_scientific_schema_module"
+  ],
+  "current_permissions": {
+    "import_project_module": false,
+    "collect_or_run_project_tests": false,
+    "read_cache_or_data": false,
+    "read_checkpoint": false,
+    "use_gpu": false,
+    "run_a0": false,
+    "run_validation": false,
+    "run_test": false,
+    "run_xai": false,
+    "run_deployment": false,
+    "run_integration": false,
+    "run_full_train": false,
+    "update_current_best": false
+  },
+  "next_required_state": "independent_design_review_then_pushed_protocol_before_implementation"
+}

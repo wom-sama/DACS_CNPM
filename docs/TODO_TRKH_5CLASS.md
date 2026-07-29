@@ -5264,7 +5264,7 @@
   `quick_validate.py` passes and an independent complete-file read confirms
   that v2 S1/S2 cannot be resumed, the next action is new-ID protocol design,
   and this update grants zero execution authority.
-- [ ] Freeze and independently review one lean value-first successor before
+- [x] Freeze and independently review one lean value-first successor before
   implementation. Reuse v2R2 folds, validity-aware engine, raw scientific
   derivation and proven CCR create-once audit patterns; require target-blind
   materialization before fold target release and exactly one primary plus one
@@ -5273,4 +5273,18 @@
   relative ONNX/TensorRT/latency/VRAM gates before A0; execute them only if the
   train-only information conjunction passes, and require them before any
   integration or promotion. Candidate accuracy may never relax those gates.
-  This checkbox grants zero execution.
+  `TRKH-PSDF-IG1` is frozen at protocol SHA-256
+  `1365a9aa...a4d78b` and separate registry/sidecar SHA-256
+  `cd1d16f7...c24e70`. Three independent exact-byte reviews accept its honest
+  763-target calibration-union visibility, separate primary/replay pre-held
+  bundles, complete direct-output commitments, Python-3.9 bootstrap, resource
+  ceilings and scientific stop/pivot rule. This checkbox grants zero
+  execution.
+- [ ] Implement exactly the three PSDF-IG1 files and remain within the frozen
+  2,200-nonblank-line/12-test-node budget. Perform static AST/import-closure,
+  source-hash, process-state-machine, bundle-completeness and protected-path
+  review; commit and push the implementation separately. Do not import project
+  code, collect tests, open data/cache/checkpoints, use GPU or issue A0
+  authority until that exact pushed source receives a separate prospective
+  test authorization and then a separately reviewed combined primary/replay
+  execution authorization.
