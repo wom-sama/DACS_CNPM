@@ -2,15 +2,18 @@ TRKH Kaggle two-ZIP upload set - 2026-07-31
 
 Run this notebook:
   TRKH_CLASSF_BEST_KAGGLE.ipynb
-  SHA256 8D679A328E67B9453ABBA620DFA646E2D60D48C7F167F17F4A9AAD78869986E7
+  Bytes  57807
+  SHA256 E154A00394CDBBFFE19F98D542CD8D94A01DF3D3AC25FFEC81B7CB16055186BA
 
 Attach these two ZIP files unchanged:
 
-1. TRKH_KAGGLE_B0_UPLOAD_BUNDLE_20260731.zip
-   Bytes  107523689
-   SHA256 CAE25F5549A17D38D9661303BE5EE4E5802F67721D71EC08C61269FB23204C0E
-   Contains the frozen B0 source snapshot, SOURCE_COMMIT marker, DINOv3-S/16
-   weight, notebook, README and a complete per-file SHA256 manifest.
+1. TRKH_KAGGLE_B2_UPLOAD_BUNDLE_20260731.zip
+   Bytes  107482966
+   SHA256 99CA131E33435ACFB1027A8B482577D07968F78E5ACDAE1441E548964DA0AD4E
+   Contains the exact B2 source snapshot at commit
+   f1d79def090e347c0586efae4003b2579d368a28, SOURCE_COMMIT marker,
+   DINOv3-S/16 weight, notebook, README and a complete per-file SHA256
+   manifest. The official recipe is called with experiment=b2-tempered-p05.
 
 2. TRKH_CLASSF_DEV_DATASET_20260731.zip
    Bytes  891390651
@@ -28,6 +31,8 @@ prefix TRKH_CLASSF_DEV_DATASET_, exactly five ordered class names, one data.yaml
 and train/val folders. Paths, image counts and image hashes may differ. Do not
 put a test folder or test key into the training ZIP.
 
-This upload set uses the current executable B0 control. Replace the asset ZIP
-and notebook together only after a newer configuration passes the same locked
-validation/audit gates.
+This upload set uses B2 tempered-p0.5, the current local winner. Its local
+probe reached accuracy 0.889875, macro-F1 0.851462 and class-1 F1 0.653409.
+These numbers are provenance, not promised metrics for another uploaded
+dataset. Replace the asset ZIP and notebook together only after a newer
+configuration passes the same locked validation/audit gates.

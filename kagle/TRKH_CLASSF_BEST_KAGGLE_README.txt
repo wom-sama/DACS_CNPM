@@ -1,15 +1,15 @@
-TRKH Kaggle recipe - current version: TRKH_PRETRAINED_CLASSF_B0_20260731
+TRKH Kaggle recipe - current version: TRKH_PRETRAINED_CLASSF_B2_TEMPERED_P05_20260731
 
 Run:
   TRKH_CLASSF_BEST_KAGGLE.ipynb
 
 Recommended upload: exactly two ZIP files
 
-1) TRKH_KAGGLE_B0_UPLOAD_BUNDLE_<version>.zip
+1) TRKH_KAGGLE_B2_UPLOAD_BUNDLE_<version>.zip
 
 Required root layout:
   TRKH_CLASSF_BEST_KAGGLE.ipynb
-  TRKH_KAGGLE_B0_UPLOAD_MANIFEST.json
+  TRKH_KAGGLE_B2_UPLOAD_MANIFEST.json
   TRKH_pretrained/SOURCE_COMMIT.txt
   TRKH_pretrained/trkh/...
   TRKH_pretrained/configs/...
@@ -17,17 +17,19 @@ Required root layout:
   weights/model.safetensors
 
 SOURCE_COMMIT.txt must contain:
-  73c96f3d8f42e80c62ab2c4e3c0691ff81f45b77
+  f1d79def090e347c0586efae4003b2579d368a28
 
 Locked model assets:
   normalized TRKH source tree:
-  d7de5ed0dcd5d9c4eb6e0eeaaef2939505749a6831c7b0885cde172ec822003a
+  61b860a5549ac172d06c64ee1c5f9fe035cc9853074312f2fe5a2de80390e747
   DINOv3-S/16 model.safetensors:
   2a1ec16ae28ffa07bc0ead0241ee7df9fc26451fe6f9f839b7b3afa0a906b040
 
 The asset manifest is a JSON object with notebook_contract set to
-TRKH_KAGGLE_TWO_ZIP_V1_20260731, plus source_commit, source_tree_sha256,
-dino_sha256 and a files array. Every extracted regular file except the root
+TRKH_KAGGLE_TWO_ZIP_B2_V1_20260731, protocol set to
+TRKH_PRETRAINED_CLASSF_B2_TEMPERED_P05_20260731, experiment set to
+b2-tempered-p05, plus source_commit, source_tree_sha256, dino_sha256 and a
+files array. Every extracted regular file except the root
 manifest itself must appear exactly once in files; no missing or extra file is
 accepted. Each entry has:
   {"path": "relative/posix/path", "size_bytes": 123, "sha256": "64-hex"}
@@ -67,9 +69,11 @@ Enable a Kaggle GPU and Internet for the locked dependency installation. Direct
 locks include timm 1.0.27, safetensors 0.7.0, PyYAML 6.0.3, Pillow 11.3.0,
 matplotlib 3.9.4 and pytest 8.4.2.
 
-The official local B0 build_train_args function supplies the model, optimizer,
-loss, augmentation, scheduler and effective batch-48 configuration. Kaggle
-changes only the uploaded data identity and GPU-sized micro-batch.
+The official local build_train_args function is called with
+experiment="b2-tempered-p05". It supplies the DINOv3 model, deterministic
+tempered class sampler q_c proportional to n_c**0.5, LDAM-Focal loss,
+augmentation, optimizer, scheduler and effective batch-48 configuration.
+Kaggle changes only the uploaded data identity and GPU-sized micro-batch.
 
 Run all cells from top to bottom. The 5-epoch probe must reach macro-F1 >= 0.55
 and class-1 F1 >= 0.30, then the notebook stops. Review it, set
