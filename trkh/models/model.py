@@ -34,6 +34,10 @@ from trkh.models.cross_covariance_attention import (
 from trkh.models.dynamic_graph_mixer import MaxRelativeDynamicGraphMixer
 from trkh.models.deep_class_prompt import DeepClassPrompt
 from trkh.models.soft_moe_patch_adapter import SoftMoEPatchAdapter
+from trkh.models.pretrained_semantic_branch import (
+    PretrainedSemanticResidualBranch,
+    load_verified_local_timm_model,
+)
 
 
 def _adaptive_average_matrix(
@@ -11274,6 +11278,229 @@ class VisionTransformerWithRegisters(nn.Module):
         return classification_logits_from_features(self, features)
 
 
+class PretrainedHybridVisionTransformerWithRegisters(VisionTransformerWithRegisters):
+    """Keeper TRKH with a hash-verified pretrained semantic residual.
+
+    The complete scratch keeper remains the primary path.  A timm ViT supplies
+    separate CLS/register and patch token statistics through a bounded ReZero adapter, so the
+    default zero gate preserves the keeper logits exactly at initialization.
+    """
+
+    def __init__(
+        self,
+        *,
+        pretrained: bool,
+        timm_model_name: str,
+        pretrained_checkpoint_path: str = "",
+        pretrained_checkpoint_sha256: str = "",
+        pretrained_source_url: str = "",
+        pretrained_source_revision: str = "",
+        pretrained_source_license: str = "",
+        pretrained_semantic_expected_prefix_tokens: int = 5,
+        pretrained_semantic_expected_embed_dim: int = 384,
+        pretrained_semantic_expected_patch_count: int = 256,
+        pretrained_semantic_dropout: float = 0.05,
+        pretrained_semantic_initial_scale: float = 0.0,
+        pretrained_semantic_max_scale: float = 0.25,
+        pretrained_backbone_gradient_checkpointing: bool = False,
+        architecture_only_checkpoint_rebuild: bool = False,
+        **keeper_config: Any,
+    ) -> None:
+        super().__init__(**keeper_config)
+        model_name = str(timm_model_name or "").strip()
+        if not model_name:
+            raise ValueError("Pretrained hybrid requires a non-empty timm_model_name.")
+
+        architecture_only = bool(architecture_only_checkpoint_rebuild)
+        if architecture_only and bool(pretrained):
+            raise ValueError(
+                "architecture_only_checkpoint_rebuild must not replay pretrained weights."
+            )
+        if bool(pretrained):
+            checkpoint_path = Path(pretrained_checkpoint_path).expanduser()
+            backbone, source_provenance = load_verified_local_timm_model(
+                model_name=model_name,
+                checkpoint_path=checkpoint_path,
+                expected_sha256=str(pretrained_checkpoint_sha256),
+                source_repository=str(pretrained_source_url),
+                source_revision=str(pretrained_source_revision),
+                license_id=str(pretrained_source_license),
+                model_kwargs={},
+                strict=True,
+            )
+            reset_classifier = getattr(backbone, "reset_classifier", None)
+            if callable(reset_classifier):
+                reset_classifier(0)
+        elif architecture_only:
+            try:
+                import timm
+            except ImportError as exc:  # pragma: no cover - environment dependent.
+                raise ImportError(
+                    "Checkpoint reconstruction for a pretrained hybrid requires timm."
+                ) from exc
+            backbone = timm.create_model(
+                model_name,
+                pretrained=False,
+                num_classes=0,
+            )
+            source_provenance = {
+                "schema_version": 1,
+                "model_name": model_name,
+                "initialization_source": "serialized_model_state",
+                "external_initialization_replayed": False,
+            }
+        else:
+            raise ValueError(
+                "vit_registers_pretrained_hybrid requires verified pretrained weights; "
+                "the scratch lineage must continue to use model_type=vit_registers."
+            )
+
+        expected_dim = int(pretrained_semantic_expected_embed_dim)
+        expected_prefix = int(pretrained_semantic_expected_prefix_tokens)
+        observed_dim = int(
+            getattr(backbone, "num_features", getattr(backbone, "embed_dim", 0)) or 0
+        )
+        observed_prefix = int(getattr(backbone, "num_prefix_tokens", 0) or 0)
+        if observed_dim != expected_dim:
+            raise ValueError(
+                "Pretrained semantic embedding contract changed: "
+                f"observed={observed_dim}, expected={expected_dim}."
+            )
+        if observed_prefix != expected_prefix:
+            raise ValueError(
+                "Pretrained semantic prefix-token contract changed: "
+                f"observed={observed_prefix}, expected={expected_prefix}."
+            )
+
+        if bool(pretrained_backbone_gradient_checkpointing):
+            checkpointing_hook = getattr(backbone, "set_grad_checkpointing", None)
+            if not callable(checkpointing_hook):
+                raise ValueError(
+                    f"timm backbone {model_name!r} has no gradient-checkpointing hook."
+                )
+            checkpointing_hook(enable=True)
+
+        self.pretrained_semantic_branch = PretrainedSemanticResidualBranch(
+            backbone,
+            output_dim=int(self.embed_dim),
+            backbone_dim=expected_dim,
+            num_prefix_tokens=expected_prefix,
+            expected_patch_count=int(pretrained_semantic_expected_patch_count),
+            dropout=float(pretrained_semantic_dropout),
+            initial_scale=float(pretrained_semantic_initial_scale),
+            max_scale=float(pretrained_semantic_max_scale),
+            source_provenance=source_provenance,
+        )
+        self.is_pretrained_hybrid_model = True
+        self.pretrained_backbone_gradient_checkpointing = bool(
+            pretrained_backbone_gradient_checkpointing
+        )
+        self.pretrained_provenance = {
+            "schema_version": 1,
+            "research_track": "pretrained",
+            "fusion": "bounded_rezero_semantic_residual",
+            "keeper_identity_at_initialization": (
+                float(pretrained_semantic_initial_scale) == 0.0
+            ),
+            "attention_audit": {
+                "trkh_native_attention": True,
+                "pretrained_branch_native_attention": False,
+                "reason": (
+                    "DINOv3 RoPE attention is not reconstructed by the TRKH QKV audit; "
+                    "use input-gradient, occlusion, or patch-energy audits for this branch."
+                ),
+            },
+            "semantic_branch": self.pretrained_semantic_branch.provenance(),
+        }
+
+    def no_weight_decay_keywords(self) -> Tuple[str, ...]:
+        inherited = list(super().no_weight_decay_keywords())
+        inherited.append("pretrained_semantic_branch.residual_gate")
+        no_weight_decay = getattr(
+            self.pretrained_semantic_branch.backbone,
+            "no_weight_decay",
+            None,
+        )
+        if callable(no_weight_decay):
+            inherited.extend(
+                f"pretrained_semantic_branch.backbone.{name}"
+                for name in sorted(no_weight_decay())
+            )
+        return tuple(dict.fromkeys(inherited))
+
+    @staticmethod
+    def _semantic_rng_scope(like: Tensor):
+        devices: List[int] = []
+        if like.device.type == "cuda":
+            devices = [
+                int(
+                    like.device.index
+                    if like.device.index is not None
+                    else torch.cuda.current_device()
+                )
+            ]
+        # The residual branch must not advance the keeper RNG stream. Otherwise
+        # a zero gate changes downstream keeper dropout masks during training
+        # and is not a valid identity control.
+        return torch.random.fork_rng(devices=devices, enabled=True)
+
+    def forward_features(
+        self,
+        x: Tensor,
+        image_valid_mask: Optional[Tensor] = None,
+        bbox_token_prior: Optional[Tensor] = None,
+        return_attention: bool = False,
+        attention_layers: Optional[Sequence[int]] = None,
+        return_trace: bool = False,
+    ) -> Dict[str, Tensor]:
+        features = super().forward_features(
+            x,
+            image_valid_mask=image_valid_mask,
+            bbox_token_prior=bbox_token_prior,
+            return_attention=return_attention,
+            attention_layers=attention_layers,
+            return_trace=return_trace,
+        )
+        with self._semantic_rng_scope(x):
+            features["pretrained_semantic_tokens"] = (
+                self.pretrained_semantic_branch.encode_tokens(x)
+            )
+        return features
+
+    def head_input_from_features(self, features: Dict[str, Tensor]) -> Tensor:
+        cached = features.get("pretrained_semantic_head_input")
+        if torch.is_tensor(cached):
+            return cached
+        keeper_head_input = super().head_input_from_features(features)
+        tokens = features.get("pretrained_semantic_tokens")
+        if not torch.is_tensor(tokens):
+            raise KeyError("Pretrained semantic tokens are missing from forward_features.")
+        return_trace = isinstance(features.get("trace"), dict)
+        with self._semantic_rng_scope(keeper_head_input):
+            semantic_output = self.pretrained_semantic_branch.forward_from_tokens(
+                keeper_head_input,
+                tokens,
+                return_trace=return_trace,
+            )
+        if return_trace:
+            fused_head_input, semantic_trace = semantic_output
+            trace = features["trace"]
+            trace["pretrained_semantic_effective_gate"] = semantic_trace[
+                "effective_gate"
+            ]
+            trace["pretrained_semantic_residual_norm"] = semantic_trace[
+                "residual_norm"
+            ]
+            trace["pretrained_semantic_gated_residual_norm_ratio"] = semantic_trace[
+                "gated_residual_norm_ratio"
+            ]
+        else:
+            fused_head_input = semantic_output
+        features["pretrained_semantic_keeper_head_input"] = keeper_head_input
+        features["pretrained_semantic_head_input"] = fused_head_input
+        return fused_head_input
+
+
 class MLP(nn.Module):
     def __init__(
         self,
@@ -13466,6 +13693,12 @@ def _build_timm_classifier(
     num_classes: int,
     model_name: str,
     pretrained: bool = False,
+    pretrained_checkpoint_path: str = "",
+    pretrained_checkpoint_sha256: str = "",
+    pretrained_source_url: str = "",
+    pretrained_source_revision: str = "",
+    pretrained_source_license: str = "",
+    architecture_only_checkpoint_rebuild: bool = False,
 ) -> nn.Module:
     try:
         import timm
@@ -13478,7 +13711,71 @@ def _build_timm_classifier(
     name = str(model_name or "").strip()
     if not name:
         raise ValueError("timm_classifier yeu cau timm_model_name khong rong.")
-    return timm.create_model(name, pretrained=bool(pretrained), num_classes=num_classes)
+
+    def mark_timm_classifier(
+        model: nn.Module,
+        *,
+        externally_pretrained: bool,
+    ) -> nn.Module:
+        classifier = model.get_classifier() if hasattr(model, "get_classifier") else None
+        classifier_prefixes = tuple(
+            f"{module_name}."
+            for module_name, module in model.named_modules()
+            if module_name and module is classifier
+        )
+        if not classifier_prefixes:
+            raise TypeError(
+                f"Cannot identify the classifier parameter prefix for timm model {name!r}."
+            )
+        model.is_timm_classifier = True
+        model.is_pretrained_timm_classifier = bool(externally_pretrained)
+        model.pretrained_classifier_parameter_prefixes = classifier_prefixes
+        return model
+
+    checkpoint_path = str(pretrained_checkpoint_path or "").strip()
+    if bool(pretrained) and checkpoint_path:
+        model, provenance = load_verified_local_timm_model(
+            model_name=name,
+            checkpoint_path=Path(checkpoint_path),
+            expected_sha256=str(pretrained_checkpoint_sha256),
+            source_repository=str(pretrained_source_url),
+            source_revision=str(pretrained_source_revision),
+            license_id=str(pretrained_source_license),
+            model_kwargs={},
+            strict=True,
+        )
+        reset_classifier = getattr(model, "reset_classifier", None)
+        if not callable(reset_classifier):
+            raise TypeError(
+                f"timm classifier {name!r} cannot replace its pretrained readout."
+            )
+        reset_classifier(int(num_classes))
+        model.pretrained_provenance = {
+            "schema_version": 1,
+            "research_track": "pretrained",
+            "initialization": provenance,
+            "classifier_reset_for_num_classes": int(num_classes),
+        }
+        return mark_timm_classifier(model, externally_pretrained=True)
+    if checkpoint_path:
+        raise ValueError(
+            "pretrained_checkpoint_path is only valid when pretrained=True."
+        )
+    if bool(architecture_only_checkpoint_rebuild):
+        model = timm.create_model(name, pretrained=False, num_classes=num_classes)
+        model.pretrained_provenance = {
+            "schema_version": 1,
+            "research_track": "pretrained",
+            "model_name": name,
+            "initialization_source": "serialized_model_state",
+            "external_initialization_replayed": False,
+        }
+        return mark_timm_classifier(model, externally_pretrained=True)
+    model = timm.create_model(name, pretrained=bool(pretrained), num_classes=num_classes)
+    return mark_timm_classifier(
+        model,
+        externally_pretrained=bool(pretrained),
+    )
 
 
 MAMBAVISION_NANO_SPEC = {
@@ -13640,28 +13937,96 @@ def create_model(
     separate_objectness = bool(config.pop("separate_objectness", True))
     objectness_prior_prob = float(config.pop("objectness_prior_prob", 0.125))
     model_type = str(config.pop("model_type", "vit_registers_hybrid")).strip().lower()
+    # Bare legacy dictionaries predate track metadata.  They remain loadable,
+    # while every current ModelConfig/CLI path declares no_pretrain or
+    # pretrained explicitly and is guarded below.
+    research_track = str(
+        config.pop("research_track", "legacy_unspecified")
+    ).strip().lower()
     timm_model_name = str(
         config.pop("timm_model_name", "mobilenetv3_large_100.ra_in1k")
     ).strip()
+    pretrained_checkpoint_path = str(
+        config.pop("pretrained_checkpoint_path", "") or ""
+    ).strip()
+    pretrained_checkpoint_sha256 = str(
+        config.pop("pretrained_checkpoint_sha256", "") or ""
+    ).strip().lower()
+    pretrained_source_url = str(
+        config.pop("pretrained_source_url", "") or ""
+    ).strip()
+    pretrained_source_revision = str(
+        config.pop("pretrained_source_revision", "") or ""
+    ).strip()
+    pretrained_source_license = str(
+        config.pop("pretrained_source_license", "") or ""
+    ).strip()
+    pretrained_semantic_expected_prefix_tokens = int(
+        config.pop("pretrained_semantic_expected_prefix_tokens", 5)
+    )
+    pretrained_semantic_expected_embed_dim = int(
+        config.pop("pretrained_semantic_expected_embed_dim", 384)
+    )
+    pretrained_semantic_expected_patch_count = int(
+        config.pop("pretrained_semantic_expected_patch_count", 256)
+    )
+    pretrained_semantic_dropout = float(
+        config.pop("pretrained_semantic_dropout", 0.05)
+    )
+    pretrained_semantic_initial_scale = float(
+        config.pop("pretrained_semantic_initial_scale", 0.0)
+    )
+    pretrained_semantic_max_scale = float(
+        config.pop("pretrained_semantic_max_scale", 0.25)
+    )
+    pretrained_backbone_gradient_checkpointing = bool(
+        config.pop("pretrained_backbone_gradient_checkpointing", False)
+    )
+    architecture_only_checkpoint_rebuild = bool(
+        config.pop("_architecture_only_checkpoint_rebuild", False)
+    )
     # Input normalization is consumed by the data transforms, not by model
     # constructors. Keep checkpoints/configs with these fields loadable.
     config.pop("input_mean", None)
     config.pop("input_std", None)
+    if pretrained and research_track == "no_pretrain":
+        raise ValueError(
+            "External pretrained initialization requires research_track=pretrained."
+        )
     if pretrained and model_type not in {
         "resnet50",
         "mobilenet_v3_large",
         "vit_b_16",
         "timm_classifier",
+        "vit_registers_pretrained_hybrid",
     }:
         raise ValueError(
             "pretrained/external weights: --pretrained hien chi ho tro model_type "
-            "resnet50, mobilenet_v3_large, vit_b_16, timm_classifier. "
-            "Cac kien truc TRKH custom vit_registers/vit_registers_hybrid van train tu dau; "
-            "neu can pretrained cho custom TRKH thi phai them adapter/teacher distillation rieng."
+            "resnet50, mobilenet_v3_large, vit_b_16, timm_classifier, hoac "
+            "vit_registers_pretrained_hybrid. Cac kien truc TRKH custom "
+            "vit_registers/vit_registers_hybrid van train tu dau."
         )
+    if pretrained_checkpoint_path and model_type not in {
+        "timm_classifier",
+        "vit_registers_pretrained_hybrid",
+    }:
+        raise ValueError(
+            "Explicit local pretrained checkpoints are supported only by timm_classifier "
+            "and vit_registers_pretrained_hybrid."
+        )
+    if pretrained_checkpoint_path and not pretrained:
+        raise ValueError("A local pretrained checkpoint requires pretrained=True.")
+    if model_type == "vit_registers_pretrained_hybrid":
+        if research_track != "pretrained":
+            raise ValueError(
+                "vit_registers_pretrained_hybrid belongs only to the pretrained track."
+            )
+        if not pretrained and not architecture_only_checkpoint_rebuild:
+            raise ValueError(
+                "vit_registers_pretrained_hybrid requires verified pretrained weights."
+            )
 
-    if model_type == "vit_registers":
-        for detector_only_key in (
+    detector_only_keys = (
             "bbox_head_hidden_dim",
             "num_queries",
             "decoder_depth",
@@ -13678,9 +14043,43 @@ def create_model(
             "count_head_hidden_dim",
             "count_head_dropout",
             "count_head_prior",
-        ):
+    )
+    if model_type == "vit_registers":
+        for detector_only_key in detector_only_keys:
             config.pop(detector_only_key, None)
         model = VisionTransformerWithRegisters(num_classes=num_classes, **config)
+    elif model_type == "vit_registers_pretrained_hybrid":
+        for detector_only_key in detector_only_keys:
+            config.pop(detector_only_key, None)
+        model = PretrainedHybridVisionTransformerWithRegisters(
+            num_classes=num_classes,
+            pretrained=pretrained,
+            timm_model_name=timm_model_name,
+            pretrained_checkpoint_path=pretrained_checkpoint_path,
+            pretrained_checkpoint_sha256=pretrained_checkpoint_sha256,
+            pretrained_source_url=pretrained_source_url,
+            pretrained_source_revision=pretrained_source_revision,
+            pretrained_source_license=pretrained_source_license,
+            pretrained_semantic_expected_prefix_tokens=(
+                pretrained_semantic_expected_prefix_tokens
+            ),
+            pretrained_semantic_expected_embed_dim=(
+                pretrained_semantic_expected_embed_dim
+            ),
+            pretrained_semantic_expected_patch_count=(
+                pretrained_semantic_expected_patch_count
+            ),
+            pretrained_semantic_dropout=pretrained_semantic_dropout,
+            pretrained_semantic_initial_scale=pretrained_semantic_initial_scale,
+            pretrained_semantic_max_scale=pretrained_semantic_max_scale,
+            pretrained_backbone_gradient_checkpointing=(
+                pretrained_backbone_gradient_checkpointing
+            ),
+            architecture_only_checkpoint_rebuild=(
+                architecture_only_checkpoint_rebuild
+            ),
+            **config,
+        )
     elif model_type in {"detr_vit_registers", "vit_registers_hybrid"}:
         model = DETRVisionTransformerWithRegisters(
             num_classes=num_classes,
@@ -13707,6 +14106,14 @@ def create_model(
             num_classes=num_classes,
             model_name=timm_model_name,
             pretrained=pretrained,
+            pretrained_checkpoint_path=pretrained_checkpoint_path,
+            pretrained_checkpoint_sha256=pretrained_checkpoint_sha256,
+            pretrained_source_url=pretrained_source_url,
+            pretrained_source_revision=pretrained_source_revision,
+            pretrained_source_license=pretrained_source_license,
+            architecture_only_checkpoint_rebuild=(
+                architecture_only_checkpoint_rebuild
+            ),
         )
     elif model_type == "mambavision_nano":
         if temporal_frames != 1:
@@ -13720,6 +14127,22 @@ def create_model(
         raise ValueError(f"Khong ho tro model_type: {model_type}.")
 
     model.model_type = model_type
+    model.research_track = research_track
+    if pretrained and not hasattr(model, "pretrained_provenance"):
+        model.pretrained_provenance = {
+            "schema_version": 1,
+            "research_track": research_track,
+            "model_name": timm_model_name,
+            "source_url": pretrained_source_url,
+            "source_revision": pretrained_source_revision,
+            "source_license": pretrained_source_license,
+            "checkpoint_sha256": pretrained_checkpoint_sha256,
+            "initialization_source": (
+                "verified_local_checkpoint"
+                if pretrained_checkpoint_path
+                else "framework_pretrained_registry"
+            ),
+        }
     if temporal_frames > 1:
         if model_type in {"detr_vit_registers", "vit_registers_hybrid"}:
             raise ValueError(
@@ -13743,6 +14166,60 @@ def load_model_state(model: nn.Module, state_dict: Dict[str, Tensor], strict: bo
     if hasattr(model, "load_flexible_state_dict"):
         return model.load_flexible_state_dict(state_dict, strict=strict)
     return model.load_state_dict(state_dict, strict=strict)
+
+
+def _checkpoint_architecture_only_config(config: Dict[str, Any]) -> Dict[str, Any]:
+    """Build an architecture without re-fetching external initialization weights.
+
+    A complete TRKH checkpoint already owns every parameter required for
+    inference/export. Re-running a pretrained factory here is both unnecessary
+    and a provenance/network hazard; the serialized state is loaded immediately
+    after construction.
+    """
+    runtime_config = dict(config)
+    externally_pretrained = bool(
+        _pretraining_option_enabled(runtime_config.get("pretrained"))
+        or str(runtime_config.get("research_track", "")).strip().lower()
+        == "pretrained"
+        or str(runtime_config.get("pretrained_checkpoint_path", "")).strip()
+    )
+    if _pretraining_option_enabled(runtime_config.get("pretrained")):
+        runtime_config["pretrained"] = False
+    runtime_config["pretrained_checkpoint_path"] = ""
+    runtime_config["pretrained_checkpoint_sha256"] = ""
+    runtime_config["_architecture_only_checkpoint_rebuild"] = externally_pretrained
+    return runtime_config
+
+
+def _attach_checkpoint_pretrained_provenance(
+    model: nn.Module,
+    model_config: Dict[str, Any],
+    serialized_provenance: Optional[Dict[str, Any]] = None,
+) -> None:
+    research_track = str(model_config.get("research_track", "legacy_unspecified")).strip()
+    model.research_track = research_track
+    if not (
+        bool(model_config.get("pretrained", False))
+        or research_track == "pretrained"
+    ):
+        return
+    if isinstance(serialized_provenance, dict):
+        restored_provenance = copy.deepcopy(serialized_provenance)
+        restored_provenance["initialization_source"] = "serialized_model_state"
+        restored_provenance["external_initialization_replayed"] = False
+        model.pretrained_provenance = restored_provenance
+        return
+    model.pretrained_provenance = {
+        "model_name": str(model_config.get("timm_model_name", "")),
+        "source_url": str(model_config.get("pretrained_source_url", "")),
+        "source_revision": str(model_config.get("pretrained_source_revision", "")),
+        "source_license": str(model_config.get("pretrained_source_license", "")),
+        "checkpoint_sha256": str(
+            model_config.get("pretrained_checkpoint_sha256", "")
+        ).lower(),
+        "initialization_source": "serialized_model_state",
+        "external_initialization_replayed": False,
+    }
 
 
 def build_model_from_checkpoint(
@@ -13781,13 +14258,15 @@ def build_model_from_checkpoint(
             keeper_config["stem_softpool_blend"] = float(override_stem_softpool_blend)
             candidate_config["stem_softpool_blend"] = float(override_stem_softpool_blend)
 
+        keeper_runtime_config = _checkpoint_architecture_only_config(keeper_config)
+        candidate_runtime_config = _checkpoint_architecture_only_config(candidate_config)
         keeper_model = create_model(
             num_classes=resolved_num_classes,
-            model_config=keeper_config,
+            model_config=keeper_runtime_config,
         )
         candidate_model = create_model(
             num_classes=resolved_num_classes,
-            model_config=candidate_config,
+            model_config=candidate_runtime_config,
         )
         from trkh.models.precision_ensemble import PrecisionEnsembleClassifier
 
@@ -13803,6 +14282,8 @@ def build_model_from_checkpoint(
             ),
         )
         load_model_state(model, checkpoint.get("model_state", {}), strict=True)
+        _attach_checkpoint_pretrained_provenance(keeper_model, keeper_config)
+        _attach_checkpoint_pretrained_provenance(candidate_model, candidate_config)
         model.validate_rule(
             candidate_weight=float(ensemble_config["candidate_weight"]),
             focus_class=int(ensemble_config["focus_class"]),
@@ -13863,7 +14344,11 @@ def build_model_from_checkpoint(
         model_config["stem_pooling_mode"] = str(override_stem_pooling_mode)
     if override_stem_softpool_blend is not None:
         model_config["stem_softpool_blend"] = float(override_stem_softpool_blend)
-    model = create_model(num_classes=resolved_num_classes, model_config=model_config)
+    runtime_model_config = _checkpoint_architecture_only_config(model_config)
+    model = create_model(
+        num_classes=resolved_num_classes,
+        model_config=runtime_model_config,
+    )
     load_state = state_dict
     if legacy_classifier_hybrid:
         load_state = {
@@ -13875,4 +14360,9 @@ def build_model_from_checkpoint(
             )
         }
     load_model_state(model, load_state, strict=True)
+    _attach_checkpoint_pretrained_provenance(
+        model,
+        model_config,
+        checkpoint.get("pretrained_provenance"),
+    )
     return model

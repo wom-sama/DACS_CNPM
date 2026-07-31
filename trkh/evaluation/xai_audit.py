@@ -51,6 +51,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--split", choices=("train", "val", "test"), default="val")
     parser.add_argument(
+        "--allow-test-split",
+        action="store_true",
+        default=False,
+        help="Explicit retrospective/final-report authorization for --split test.",
+    )
+    parser.add_argument(
         "--class-name-mode",
         choices=("auto", "raw", "mango"),
         default=None,
@@ -1293,6 +1299,10 @@ def _write_markdown(
 
 def main() -> None:
     args = parse_args()
+    if args.split == "test" and not bool(args.allow_test_split):
+        raise ValueError(
+            "XAI audit on test requires --allow-test-split; use val for model selection."
+        )
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model, checkpoint, class_names = load_model(args.checkpoint, device)
     model, ensemble_member_provenance = _select_xai_model(
@@ -1302,6 +1312,12 @@ def main() -> None:
         ensemble_member=args.ensemble_member,
     )
     model.to(device).eval()
+    if getattr(model, "source_context_fusion_head", None) is not None:
+        raise NotImplementedError(
+            "XAI is fail-closed for source-context fusion checkpoints: the "
+            "current heatmap explains only the primary crop while case "
+            "selection may use fused primary+context logits."
+        )
     patch_evidence_linear_verifier_summary = {"enabled": False}
     if args.patch_evidence_linear_verifier_json is not None:
         load_verifier = getattr(model, "load_patch_evidence_linear_verifier_export", None)
@@ -1332,6 +1348,12 @@ def main() -> None:
         expected_num_classes=args.expected_num_classes,
         checkpoint=checkpoint,
     )
+    dataset_class_names = [str(name) for name in getattr(dataset, "class_names", [])]
+    if dataset_class_names != [str(name) for name in class_names]:
+        raise ValueError(
+            "Checkpoint/data class order mismatch for XAI audit: "
+            f"checkpoint={list(class_names)!r}, data={dataset_class_names!r}."
+        )
     amp = bool(not args.disable_amp)
     records = _collect_predictions(
         model=model,
@@ -1448,13 +1470,10 @@ def main() -> None:
                         dtype=torch.float32,
                     )
         except Exception as exc:
-            print(
-                {
-                    "warning": "xai_audit_image_mask_unavailable",
-                    "sample_index": int(case["sample_index"]),
-                    "error": str(exc),
-                }
-            )
+            raise RuntimeError(
+                "XAI preprocessing parity failed for sample "
+                f"{int(case['sample_index'])}; refusing raw-image fallback."
+            ) from exc
         viz = analyze_tensor(
             model=model,
             class_names=class_names,
@@ -1474,6 +1493,25 @@ def main() -> None:
             bbox_token_prior=bbox_token_prior,
             image_valid_mask=image_valid_mask,
         )
+        viz_predictions = viz.get("predictions", [])
+        if not isinstance(viz_predictions, list) or not viz_predictions:
+            raise RuntimeError("XAI visualization did not return prediction provenance.")
+        viz_prediction = viz_predictions[0]
+        viz_prediction_index = int(viz_prediction.get("class_index", -1))
+        selected_prediction_index = int(case["prediction_index"])
+        if viz_prediction_index != selected_prediction_index:
+            raise RuntimeError(
+                "XAI forward parity failed: selected prediction "
+                f"{selected_prediction_index} != visualization prediction "
+                f"{viz_prediction_index}."
+            )
+        viz_probability = float(viz_prediction.get("probability", 0.0))
+        selected_probability = float(case.get("confidence", 0.0))
+        if abs(viz_probability - selected_probability) > 5e-3:
+            raise RuntimeError(
+                "XAI forward parity failed: selected/visualization probability "
+                f"delta={abs(viz_probability - selected_probability):.6f}."
+            )
         enriched = dict(case)
         enriched["ensemble_member_provenance"] = ensemble_member_provenance
         enriched["case_dir"] = str(case_dir.resolve())

@@ -160,7 +160,7 @@ def _apply_timm_input_normalization(model_config: ModelConfig) -> Dict[str, obje
             "input_size": [3, 256, 256],
             "configured_image_size": int(model_config.image_size),
         }
-    if model_type != "timm_classifier":
+    if model_type not in {"timm_classifier", "vit_registers_pretrained_hybrid"}:
         return {
             "enabled": False,
             "mean": tuple(float(value) for value in model_config.input_mean),
@@ -202,6 +202,11 @@ def _apply_timm_input_normalization(model_config: ModelConfig) -> Dict[str, obje
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train DETR ViT-Registers cho mango multi-object detection.")
     parser.add_argument("--data", type=Path, default=default_data_yaml())
+    parser.add_argument("--experiment-protocol-id", type=str, default="")
+    parser.add_argument("--source-commit", type=str, default="")
+    parser.add_argument("--source-tree-sha256", type=str, default="")
+    parser.add_argument("--dataset-image-tree-sha256", type=str, default="")
+    parser.add_argument("--recipe-train-contract-sha256", type=str, default="")
     parser.add_argument(
         "--classification-folder-yolo-data",
         type=Path,
@@ -290,6 +295,26 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         help="Khi resume, dung cau hinh CLI hien tai thay vi train/model config da luu trong checkpoint.",
     )
     parser.add_argument(
+        "--allow-cross-dataset-resume",
+        action="store_true",
+        default=False,
+        help=(
+            "Explicit historical/transfer override when checkpoint data_yaml "
+            "differs from --data. Never use this to initialize canonical "
+            "class_f from legacy yolo_f weights."
+        ),
+    )
+    parser.add_argument(
+        "--resume-weight-source",
+        choices=("auto", "selected", "train"),
+        default="auto",
+        help=(
+            "Nguon weights khi resume: selected=model_state dung voi best/EMA de "
+            "fine-tune phase moi; train=train_model_state de tiep tuc dung optimizer; "
+            "auto chon train khi restore optimizer, selected khi reset optimizer."
+        ),
+    )
+    parser.add_argument(
         "--resume-reset-optimizer",
         action="store_true",
         default=False,
@@ -328,6 +353,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
             "mobilenet_v3_large",
             "vit_b_16",
             "timm_classifier",
+            "vit_registers_pretrained_hybrid",
             "mambavision_nano",
         ),
         default="vit_registers_hybrid",
@@ -339,8 +365,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         action="store_true",
         default=False,
         help=(
-            "Dung weights ImageNet cua torchvision cho model_type resnet50/mobilenet_v3_large/vit_b_16. "
-            "Mac dinh tat de giu TRKH scratch/no-pretrain."
+            "Dung external pretrained weights cho baseline duoc ho tro hoac "
+            "vit_registers_pretrained_hybrid. Mac dinh tat de giu TRKH scratch/no-pretrain."
         ),
     )
     pretrained_group.add_argument(
@@ -358,6 +384,57 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
             "mobilenetv3_large_100.ra_in1k, efficientnet_b3.ra2_in1k, "
             "convnext_tiny.fb_in22k_ft_in1k."
         ),
+    )
+    parser.add_argument(
+        "--research-track",
+        choices=("no_pretrain", "pretrained"),
+        default="no_pretrain",
+        help=(
+            "Scientific lineage recorded in checkpoints. External pretrained initialization "
+            "requires the pretrained track; no_pretrain remains scratch-only."
+        ),
+    )
+    parser.add_argument(
+        "--pretrained-checkpoint-path",
+        type=Path,
+        default=None,
+        help=(
+            "Explicit local pretrained weight file. Prefer a revision-pinned .safetensors "
+            "snapshot so initialization never depends on a network lookup."
+        ),
+    )
+    parser.add_argument(
+        "--pretrained-checkpoint-sha256",
+        type=str,
+        default="",
+        help="Expected SHA-256 for --pretrained-checkpoint-path; required when the path is set.",
+    )
+    parser.add_argument("--pretrained-source-url", type=str, default="")
+    parser.add_argument("--pretrained-source-revision", type=str, default="")
+    parser.add_argument("--pretrained-source-license", type=str, default="")
+    parser.add_argument(
+        "--pretrained-semantic-expected-prefix-tokens",
+        type=int,
+        default=5,
+    )
+    parser.add_argument(
+        "--pretrained-semantic-expected-embed-dim",
+        type=int,
+        default=384,
+    )
+    parser.add_argument(
+        "--pretrained-semantic-expected-patch-count",
+        type=int,
+        default=256,
+    )
+    parser.add_argument("--pretrained-semantic-dropout", type=float, default=0.05)
+    parser.add_argument("--pretrained-semantic-initial-scale", type=float, default=0.0)
+    parser.add_argument("--pretrained-semantic-max-scale", type=float, default=0.25)
+    parser.add_argument(
+        "--pretrained-backbone-gradient-checkpointing",
+        action="store_true",
+        default=False,
+        help="Enable the timm backbone gradient-checkpointing hook when supported.",
     )
     parser.add_argument("--image-size", type=int, default=224)
     parser.add_argument("--patch-size", type=int, default=16)
@@ -6464,6 +6541,14 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         )
     if (
         args.distillation_teacher_checkpoint is not None
+        and args.distillation_teacher_csv is not None
+    ):
+        raise ValueError(
+            "Choose exactly one global distillation source: online teacher checkpoint "
+            "or offline teacher CSV. Supplying both would apply the same KD weight twice."
+        )
+    if (
+        args.distillation_teacher_checkpoint is not None
         and not args.distillation_teacher_checkpoint.is_file()
     ):
         raise FileNotFoundError(
@@ -6620,11 +6705,109 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         raise ValueError("--classification-mlp-dropout phai >= 0.")
     if args.classification_mlp_residual_scale < 0.0:
         raise ValueError("--classification-mlp-residual-scale phai >= 0.")
+    research_track = str(args.research_track).strip().lower()
+    if bool(args.pretrained) and research_track != "pretrained":
+        raise ValueError(
+            "--pretrained requires --research-track pretrained; the no_pretrain lineage "
+            "must remain free of external classifier weights."
+        )
+    pretrained_checkpoint_path = (
+        Path(args.pretrained_checkpoint_path).expanduser().absolute()
+        if args.pretrained_checkpoint_path is not None
+        else None
+    )
+    pretrained_checkpoint_sha256 = str(args.pretrained_checkpoint_sha256).strip().lower()
+    if pretrained_checkpoint_path is not None:
+        if not bool(args.pretrained):
+            raise ValueError("--pretrained-checkpoint-path requires --pretrained.")
+        if not pretrained_checkpoint_path.is_file():
+            raise FileNotFoundError(
+                f"Pretrained checkpoint does not exist: {pretrained_checkpoint_path}"
+            )
+        if len(pretrained_checkpoint_sha256) != 64 or any(
+            char not in "0123456789abcdef" for char in pretrained_checkpoint_sha256
+        ):
+            raise ValueError(
+                "--pretrained-checkpoint-sha256 must contain exactly 64 hexadecimal characters."
+            )
+        required_provenance = {
+            "--pretrained-source-url": args.pretrained_source_url,
+            "--pretrained-source-revision": args.pretrained_source_revision,
+            "--pretrained-source-license": args.pretrained_source_license,
+        }
+        missing_provenance = [
+            name for name, value in required_provenance.items() if not str(value).strip()
+        ]
+        if missing_provenance:
+            raise ValueError(
+                "Local pretrained provenance is incomplete: "
+                + ", ".join(missing_provenance)
+            )
+    elif pretrained_checkpoint_sha256:
+        raise ValueError(
+            "--pretrained-checkpoint-sha256 requires --pretrained-checkpoint-path."
+        )
+    if args.pretrained_semantic_expected_prefix_tokens < 1:
+        raise ValueError("--pretrained-semantic-expected-prefix-tokens must be >= 1.")
+    if args.pretrained_semantic_expected_embed_dim < 1:
+        raise ValueError("--pretrained-semantic-expected-embed-dim must be >= 1.")
+    if args.pretrained_semantic_expected_patch_count < 1:
+        raise ValueError("--pretrained-semantic-expected-patch-count must be >= 1.")
+    if not 0.0 <= args.pretrained_semantic_dropout < 1.0:
+        raise ValueError("--pretrained-semantic-dropout must be in [0, 1).")
+    if args.pretrained_semantic_max_scale <= 0.0:
+        raise ValueError("--pretrained-semantic-max-scale must be > 0.")
+    if abs(args.pretrained_semantic_initial_scale) >= args.pretrained_semantic_max_scale:
+        raise ValueError(
+            "abs(--pretrained-semantic-initial-scale) must be below the maximum scale."
+        )
+    if args.model_type == "vit_registers_pretrained_hybrid":
+        if research_track != "pretrained" or not bool(args.pretrained):
+            raise ValueError(
+                "vit_registers_pretrained_hybrid requires --research-track pretrained "
+                "and --pretrained."
+            )
+        if pretrained_checkpoint_path is None:
+            raise ValueError(
+                "vit_registers_pretrained_hybrid requires a revision-pinned "
+                "--pretrained-checkpoint-path and SHA-256."
+            )
+        required_provenance = {
+            "--pretrained-source-url": args.pretrained_source_url,
+            "--pretrained-source-revision": args.pretrained_source_revision,
+            "--pretrained-source-license": args.pretrained_source_license,
+        }
+        missing_provenance = [
+            name for name, value in required_provenance.items() if not str(value).strip()
+        ]
+        if missing_provenance:
+            raise ValueError(
+                "Pretrained hybrid provenance is incomplete: " + ", ".join(missing_provenance)
+            )
 
     model_config = ModelConfig(
         model_type=args.model_type,
+        research_track=research_track,
         pretrained=bool(args.pretrained),
         timm_model_name=args.timm_model_name,
+        pretrained_checkpoint_path=(
+            str(pretrained_checkpoint_path) if pretrained_checkpoint_path is not None else ""
+        ),
+        pretrained_checkpoint_sha256=pretrained_checkpoint_sha256,
+        pretrained_source_url=str(args.pretrained_source_url).strip(),
+        pretrained_source_revision=str(args.pretrained_source_revision).strip(),
+        pretrained_source_license=str(args.pretrained_source_license).strip(),
+        pretrained_semantic_expected_prefix_tokens=(
+            args.pretrained_semantic_expected_prefix_tokens
+        ),
+        pretrained_semantic_expected_embed_dim=args.pretrained_semantic_expected_embed_dim,
+        pretrained_semantic_expected_patch_count=args.pretrained_semantic_expected_patch_count,
+        pretrained_semantic_dropout=args.pretrained_semantic_dropout,
+        pretrained_semantic_initial_scale=args.pretrained_semantic_initial_scale,
+        pretrained_semantic_max_scale=args.pretrained_semantic_max_scale,
+        pretrained_backbone_gradient_checkpointing=bool(
+            args.pretrained_backbone_gradient_checkpointing
+        ),
         head_pooling=args.head_pooling,
         classification_mlp_head=bool(args.classification_mlp_head),
         classification_mlp_hidden_dim=args.classification_mlp_hidden_dim,
@@ -7021,6 +7204,15 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         temporal_kv_quant_bits=args.temporal_kv_quant_bits,
     )
     train_config = TrainConfig(
+        experiment_protocol_id=str(args.experiment_protocol_id or "").strip(),
+        source_commit=str(args.source_commit or "").strip().lower(),
+        source_tree_sha256=str(args.source_tree_sha256 or "").strip().lower(),
+        dataset_image_tree_sha256=str(
+            args.dataset_image_tree_sha256 or ""
+        ).strip().lower(),
+        recipe_train_contract_sha256=str(
+            args.recipe_train_contract_sha256 or ""
+        ).strip().lower(),
         batch_size=args.batch_size,
         grad_accum_steps=args.grad_accum_steps,
         epochs=args.epochs,
@@ -7965,6 +8157,42 @@ def _load_resume_configs_from_checkpoint(
         Path(str(data_yaml)) if data_yaml else None,
     )
 
+
+def _validate_resume_data_source(
+    *,
+    cli_data_yaml: Path,
+    checkpoint_data_yaml: Optional[Path],
+    allow_cross_dataset_resume: bool,
+) -> Dict[str, object]:
+    cli_path = Path(cli_data_yaml).resolve()
+    checkpoint_path = (
+        Path(checkpoint_data_yaml).resolve()
+        if checkpoint_data_yaml is not None
+        else None
+    )
+    # Missing provenance is not evidence of equality. This must fail closed:
+    # legacy checkpoints often predate data_yaml recording while retaining the
+    # same number/class names, which is insufficient after a semantic relabel.
+    matches = checkpoint_path is not None and checkpoint_path == cli_path
+    if not matches and not bool(allow_cross_dataset_resume):
+        raise ValueError(
+            "Resume checkpoint data_yaml is missing or differs from "
+            "explicit/current --data: "
+            f"checkpoint={checkpoint_path}, cli={cli_path}. "
+            "Ordinary resume cannot cross dataset semantics. Use a matching "
+            "--data checkpoint, or an explicitly reviewed transfer protocol "
+            "with --allow-cross-dataset-resume."
+        )
+    return {
+        "cli_data_yaml": str(cli_path),
+        "checkpoint_data_yaml": (
+            str(checkpoint_path) if checkpoint_path is not None else None
+        ),
+        "matches": bool(matches),
+        "cross_dataset_override": bool(not matches and allow_cross_dataset_resume),
+    }
+
+
 def _parse_trainable_module_prefixes(text: str) -> List[str]:
     prefixes: List[str] = []
     for raw_item in str(text or "").replace(";", ",").split(","):
@@ -8905,6 +9133,7 @@ ALLOWED_RESUME_EXTENSION_PREFIXES = (
     "gabor_texture_residual.",
     "gabor_texture_semantic_encoder.",
     "deep_class_prompt.",
+    "pretrained_semantic_branch.",
 )
 
 
@@ -8961,6 +9190,20 @@ def _load_model_state_allowing_extensions(
             for key in missing_keys
             if not _is_allowed_resume_extension_key(str(key))
         ]
+        source_has_pretrained_semantic_branch = any(
+            str(key).startswith("pretrained_semantic_branch.")
+            for key in state_dict
+        )
+        if source_has_pretrained_semantic_branch:
+            # keeper -> keeper+branch is an allowed extension. A checkpoint
+            # already declaring the branch must contain the whole branch;
+            # otherwise a corrupt hybrid resume would silently reinitialize it.
+            disallowed_missing.extend(
+                str(key)
+                for key in missing_keys
+                if str(key).startswith("pretrained_semantic_branch.")
+            )
+            disallowed_missing = list(dict.fromkeys(disallowed_missing))
         if disallowed_missing or unexpected_keys:
             raise RuntimeError(
                 "Resume partial load chi cho phep them cac module mo rong da duoc khai bao. "
@@ -8986,6 +9229,7 @@ def _load_training_checkpoint(
     restore_scheduler: bool = True,
     restore_scaler: bool = True,
     allow_added_detection_heads: bool = False,
+    weight_source: str = "auto",
 ) -> Tuple[Dict[str, object], Dict[str, object]]:
     checkpoint = load_checkpoint(resume_path, map_location="cpu")
     checkpoint_class_names = checkpoint.get("class_names")
@@ -8994,7 +9238,32 @@ def _load_training_checkpoint(
     if "model_state" not in checkpoint:
         raise ValueError(f"Checkpoint resume thieu model_state: {resume_path}")
 
-    resume_model_state = checkpoint.get("train_model_state", checkpoint["model_state"])
+    requested_weight_source = str(weight_source or "auto").strip().lower()
+    if requested_weight_source not in {"auto", "selected", "train"}:
+        raise ValueError(
+            "resume weight_source must be one of auto, selected, train."
+        )
+    resolved_weight_source = requested_weight_source
+    if resolved_weight_source == "auto":
+        resolved_weight_source = "train" if bool(restore_optimizer) else "selected"
+    if resolved_weight_source == "selected" and bool(restore_optimizer):
+        raise ValueError(
+            "Selected/best/EMA weights cannot be paired with optimizer state "
+            "from a different training trajectory. Use "
+            "--resume-reset-optimizer (and reset scheduler/scaler) or choose "
+            "--resume-weight-source train."
+        )
+    if resolved_weight_source == "train":
+        resume_model_state = checkpoint.get("train_model_state")
+        if not isinstance(resume_model_state, dict):
+            if requested_weight_source == "train":
+                raise ValueError(
+                    "--resume-weight-source train requires train_model_state in the checkpoint."
+                )
+            resume_model_state = checkpoint["model_state"]
+            resolved_weight_source = "selected"
+    else:
+        resume_model_state = checkpoint["model_state"]
     partial_load_summary = _load_model_state_allowing_extensions(
         model,
         resume_model_state,
@@ -9035,6 +9304,13 @@ def _load_training_checkpoint(
         "optimizer_restored": bool(optimizer_restored),
         "scheduler_restored": bool(scheduler_restored),
         "scaler_restored": bool(scaler_restored),
+        "requested_weight_source": requested_weight_source,
+        "resolved_weight_source": resolved_weight_source,
+        "weight_state_key": (
+            "train_model_state"
+            if resolved_weight_source == "train"
+            else "model_state"
+        ),
         "best_epoch": int(checkpoint.get("best_epoch", completed_epoch) or 0),
         "epochs_without_improvement": int(checkpoint.get("epochs_without_improvement", 0) or 0),
     }
@@ -9317,6 +9593,56 @@ def _forward_model_outputs(
         if bbox_metadata is not None:
             features["bbox"] = bbox_metadata
         logits = _classification_logits_from_features(model, features)
+        return features, logits
+    if (
+        bool(getattr(model, "is_timm_classifier", False))
+        and hasattr(model, "forward_features")
+        and hasattr(model, "forward_head")
+    ):
+        raw_features = model.forward_features(images)
+        if not torch.is_tensor(raw_features):
+            raise TypeError(
+                "TIMM classifier forward_features must return one tensor for "
+                "TRKH feature-aware training."
+            )
+        pooled = model.forward_head(raw_features, pre_logits=True)
+        if not torch.is_tensor(pooled) or pooled.ndim != 2:
+            raise ValueError(
+                "TIMM classifier pre-logits must have shape [B, D]; "
+                f"got {getattr(pooled, 'shape', None)}."
+            )
+        features: Dict[str, Tensor] = {
+            "pooled": pooled,
+            "raw_timm_features": raw_features,
+        }
+        if raw_features.ndim == 4:
+            features["patches"] = raw_features.flatten(2).transpose(1, 2)
+            features["cls"] = pooled
+        elif raw_features.ndim == 3:
+            prefix_tokens = max(
+                0,
+                min(
+                    int(getattr(model, "num_prefix_tokens", 0) or 0),
+                    int(raw_features.size(1)),
+                ),
+            )
+            features["patches"] = raw_features[:, prefix_tokens:]
+            features["cls"] = (
+                raw_features[:, 0]
+                if prefix_tokens > 0
+                else raw_features.mean(dim=1)
+            )
+            if prefix_tokens > 1:
+                features["registers"] = raw_features[:, 1:prefix_tokens]
+        elif raw_features.ndim == 2:
+            features["patches"] = raw_features.unsqueeze(1)
+            features["cls"] = raw_features
+        else:
+            raise ValueError(
+                "Unsupported TIMM feature shape for feature-aware training: "
+                f"{tuple(raw_features.shape)}."
+            )
+        logits = model.forward_head(raw_features, pre_logits=False)
         return features, logits
     return None, model(images)
 
@@ -16238,11 +16564,110 @@ def _mutual_channel_loss_from_features(
     ).to(dtype=stem.dtype)
 
 
+def _validated_rgb_normalization(
+    values: Sequence[float],
+    *,
+    name: str,
+    require_positive: bool,
+) -> Tuple[float, float, float]:
+    normalized = tuple(float(value) for value in values)
+    if len(normalized) != 3 or not all(math.isfinite(value) for value in normalized):
+        raise ValueError(f"{name} must contain three finite RGB values.")
+    if require_positive and not all(value > 0.0 for value in normalized):
+        raise ValueError(f"{name} must contain three positive RGB values.")
+    return normalized
+
+
+class DistillationTeacherInputAdapter(nn.Module):
+    """Map student-normalized inputs to a teacher's locked input contract."""
+
+    def __init__(
+        self,
+        teacher: nn.Module,
+        *,
+        student_mean: Sequence[float],
+        student_std: Sequence[float],
+        teacher_mean: Sequence[float],
+        teacher_std: Sequence[float],
+        teacher_image_size: int,
+    ) -> None:
+        super().__init__()
+        if int(teacher_image_size) <= 0:
+            raise ValueError("teacher_image_size must be positive.")
+        self.teacher = teacher
+        self.teacher_image_size = int(teacher_image_size)
+        student_mean_values = _validated_rgb_normalization(
+            student_mean,
+            name="student_mean",
+            require_positive=False,
+        )
+        student_std_values = _validated_rgb_normalization(
+            student_std,
+            name="student_std",
+            require_positive=True,
+        )
+        teacher_mean_values = _validated_rgb_normalization(
+            teacher_mean,
+            name="teacher_mean",
+            require_positive=False,
+        )
+        teacher_std_values = _validated_rgb_normalization(
+            teacher_std,
+            name="teacher_std",
+            require_positive=True,
+        )
+        self.register_buffer(
+            "student_mean",
+            torch.tensor(student_mean_values, dtype=torch.float32).view(1, 3, 1, 1),
+            persistent=False,
+        )
+        self.register_buffer(
+            "student_std",
+            torch.tensor(student_std_values, dtype=torch.float32).view(1, 3, 1, 1),
+            persistent=False,
+        )
+        self.register_buffer(
+            "teacher_mean",
+            torch.tensor(teacher_mean_values, dtype=torch.float32).view(1, 3, 1, 1),
+            persistent=False,
+        )
+        self.register_buffer(
+            "teacher_std",
+            torch.tensor(teacher_std_values, dtype=torch.float32).view(1, 3, 1, 1),
+            persistent=False,
+        )
+
+    def forward(self, images: Tensor) -> object:
+        if images.ndim != 4 or int(images.size(1)) != 3:
+            raise ValueError(
+                "Distillation teacher adapter expects student images [B,3,H,W]."
+            )
+        dtype = images.dtype
+        student_mean = self.student_mean.to(device=images.device, dtype=dtype)
+        student_std = self.student_std.to(device=images.device, dtype=dtype)
+        teacher_mean = self.teacher_mean.to(device=images.device, dtype=dtype)
+        teacher_std = self.teacher_std.to(device=images.device, dtype=dtype)
+        teacher_images = images * student_std + student_mean
+        target_size = (self.teacher_image_size, self.teacher_image_size)
+        if tuple(int(value) for value in teacher_images.shape[-2:]) != target_size:
+            teacher_images = F.interpolate(
+                teacher_images,
+                size=target_size,
+                mode="bilinear",
+                align_corners=False,
+                antialias=True,
+            )
+        teacher_images = (teacher_images - teacher_mean) / teacher_std
+        return self.teacher(teacher_images)
+
+
 def _build_pretrained_distillation_teacher(
     *,
     checkpoint_path: Path,
     target_class_names: Sequence[str],
     device: torch.device,
+    student_input_mean: Sequence[float] = IMAGENET_MEAN,
+    student_input_std: Sequence[float] = IMAGENET_STD,
 ) -> Tuple[nn.Module, Tensor, Dict[str, object]]:
     checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
     if not isinstance(checkpoint, dict):
@@ -16266,6 +16691,16 @@ def _build_pretrained_distillation_teacher(
             num_classes=len(teacher_classes),
         )
         teacher_backend = "trkh"
+        teacher_model_config = checkpoint.get("model_config", {})
+        teacher_image_size = int(teacher_model_config.get("image_size", 224))
+        teacher_mean = tuple(
+            float(value)
+            for value in teacher_model_config.get("input_mean", IMAGENET_MEAN)
+        )
+        teacher_std = tuple(
+            float(value)
+            for value in teacher_model_config.get("input_std", IMAGENET_STD)
+        )
     else:
         try:
             import timm
@@ -16293,16 +16728,53 @@ def _build_pretrained_distillation_teacher(
         )
         teacher.load_state_dict(teacher_state, strict=True)
         teacher_backend = "timm"
+        teacher_data_config = timm.data.resolve_model_data_config(teacher)
+        teacher_input_size = teacher_data_config.get("input_size", (3, 224, 224))
+        teacher_image_size = int(teacher_input_size[-1])
+        teacher_mean = tuple(
+            float(value)
+            for value in teacher_data_config.get("mean", IMAGENET_MEAN)
+        )
+        teacher_std = tuple(
+            float(value)
+            for value in teacher_data_config.get("std", IMAGENET_STD)
+        )
     missing_classes = sorted(set(target_class_names) - set(teacher_classes))
     if missing_classes or len(teacher_classes) != len(target_class_names):
         raise ValueError(
             "Teacher class names khong khop dataset: "
             f"teacher={teacher_classes} target={list(target_class_names)}"
         )
-    teacher_total_parameters = sum(
-        int(parameter.numel()) for parameter in teacher.parameters()
-    )
+    teacher_total_parameters = sum(int(parameter.numel()) for parameter in teacher.parameters())
     teacher.eval().requires_grad_(False).to(device)
+    student_mean = _validated_rgb_normalization(
+        student_input_mean,
+        name="student_input_mean",
+        require_positive=False,
+    )
+    student_std = _validated_rgb_normalization(
+        student_input_std,
+        name="student_input_std",
+        require_positive=True,
+    )
+    teacher_mean = _validated_rgb_normalization(
+        teacher_mean,
+        name="teacher_input_mean",
+        require_positive=False,
+    )
+    teacher_std = _validated_rgb_normalization(
+        teacher_std,
+        name="teacher_input_std",
+        require_positive=True,
+    )
+    teacher = DistillationTeacherInputAdapter(
+        teacher,
+        student_mean=student_mean,
+        student_std=student_std,
+        teacher_mean=teacher_mean,
+        teacher_std=teacher_std,
+        teacher_image_size=teacher_image_size,
+    ).eval().requires_grad_(False).to(device)
     target_to_teacher = torch.tensor(
         [teacher_classes.index(str(class_name)) for class_name in target_class_names],
         dtype=torch.long,
@@ -16322,6 +16794,15 @@ def _build_pretrained_distillation_teacher(
             for parameter in teacher.parameters()
             if parameter.requires_grad
         ),
+        "input_adapter": {
+            "student_mean": list(student_mean),
+            "student_std": list(student_std),
+            "teacher_mean": list(teacher_mean),
+            "teacher_std": list(teacher_std),
+            "teacher_image_size": int(teacher_image_size),
+            "renormalizes": bool(student_mean != teacher_mean or student_std != teacher_std),
+            "resizes_at_runtime": True,
+        },
     }
     return teacher, target_to_teacher, summary
 
@@ -16572,6 +17053,13 @@ def _probability_distillation_loss(
         dim=1,
         keepdim=True,
     ).clamp(min=1e-12)
+    # Offline CSV probabilities are normally exported at T=1. Reconstruct the
+    # same softened teacher distribution used by online KD instead of applying
+    # temperature only to the student.
+    teacher_probabilities = F.softmax(
+        torch.log(teacher_probabilities.clamp(min=1e-8)) / temperature,
+        dim=1,
+    )
     student_log_probabilities = F.log_softmax(
         student_logits.float() / temperature,
         dim=1,
@@ -26280,6 +26768,33 @@ def train_one_epoch(
     return loss_sum / max(1, batch_count), train_artifact_stats, float(final_lr)
 
 
+def _runtime_pretrained_provenance(model: nn.Module) -> Optional[Dict[str, object]]:
+    provenance_model = getattr(model, "module", model)
+    pretrained_provenance = getattr(
+        provenance_model,
+        "pretrained_provenance",
+        None,
+    )
+    if not isinstance(pretrained_provenance, Mapping):
+        return None
+    runtime_provenance = copy.deepcopy(dict(pretrained_provenance))
+    semantic_branch = getattr(
+        provenance_model,
+        "pretrained_semantic_branch",
+        None,
+    )
+    if semantic_branch is not None and callable(
+        getattr(semantic_branch, "provenance", None)
+    ):
+        runtime_provenance["semantic_branch"] = semantic_branch.provenance()
+        effective_gate = getattr(semantic_branch, "effective_gate", None)
+        if callable(effective_gate):
+            runtime_provenance["semantic_branch"]["runtime_effective_gate"] = float(
+                effective_gate().detach().float().cpu().item()
+            )
+    return to_serializable(runtime_provenance)
+
+
 def make_checkpoint_payload(
     model: nn.Module,
     optimizer: optim.Optimizer,
@@ -26324,7 +26839,7 @@ def make_checkpoint_payload(
         calibration["tta_enabled"] = metrics.get("tta_enabled", False)
         calibration["tta_brightness_delta"] = metrics.get("tta_brightness_delta", 0.0)
 
-    return {
+    payload = {
         "epoch": epoch,
         "best_macro_f1": best_macro_f1,
         "model_state": model.state_dict(),
@@ -26339,6 +26854,10 @@ def make_checkpoint_payload(
         "data_summary": to_serializable(data_summary),
         "imbalance_summary": to_serializable(imbalance_summary),
     }
+    runtime_provenance = _runtime_pretrained_provenance(model)
+    if runtime_provenance is not None:
+        payload["pretrained_provenance"] = runtime_provenance
+    return payload
 
 
 def _dataset_overview_payload(dataset: MangoYOLOCropDataset) -> Dict[str, object]:
@@ -27248,6 +27767,105 @@ def _dataset_cache_snapshot(dataset, prefix: str) -> Dict[str, float]:
     }
 
 
+def _validate_final_distillation_config(train_config: TrainConfig) -> None:
+    """Validate distillation after checkpoint config and CLI overrides are merged."""
+
+    checkpoint_text = str(train_config.distillation_teacher_checkpoint or "").strip()
+    csv_text = str(train_config.distillation_teacher_csv or "").strip()
+    if checkpoint_text and csv_text:
+        raise ValueError(
+            "Choose exactly one global distillation source after resume merge: "
+            "online teacher checkpoint or offline teacher CSV."
+        )
+    if bool(train_config.pretrained_distillation) and not (checkpoint_text or csv_text):
+        raise ValueError(
+            "pretrained_distillation requires one teacher checkpoint or teacher CSV "
+            "after resume merge."
+        )
+    if checkpoint_text and not Path(checkpoint_text).is_file():
+        raise FileNotFoundError(f"Missing merged teacher checkpoint: {checkpoint_text}")
+    if csv_text and not Path(csv_text).is_file():
+        raise FileNotFoundError(f"Missing merged teacher probability CSV: {csv_text}")
+
+    offline_weight_names = (
+        "teacher_non_target_distillation_loss_weight",
+        "teacher_focus_margin_loss_weight",
+        "teacher_focus_binary_loss_weight",
+        "teacher_pairwise_margin_loss_weight",
+        "teacher_guided_contrastive_loss_weight",
+    )
+    active_offline_weights = [
+        name
+        for name in offline_weight_names
+        if float(getattr(train_config, name, 0.0) or 0.0) > 0.0
+    ]
+    if active_offline_weights and not csv_text:
+        raise ValueError(
+            "Offline teacher losses require distillation_teacher_csv after resume merge: "
+            + ", ".join(active_offline_weights)
+        )
+
+    online_weight_names = (
+        "late_member_directional_loss_weight",
+        "late_member_precision_rule_distillation_loss_weight",
+    )
+    active_online_weights = [
+        name
+        for name in online_weight_names
+        if float(getattr(train_config, name, 0.0) or 0.0) > 0.0
+    ]
+    if active_online_weights and not checkpoint_text:
+        raise ValueError(
+            "Online teacher losses require distillation_teacher_checkpoint after "
+            "resume merge: "
+            + ", ".join(active_online_weights)
+        )
+
+
+def _validate_canonical_classf_teacher_lock(
+    data_spec,
+    train_config: TrainConfig,
+) -> None:
+    canonical_class_names = (
+        "Xoai_Song_Chua_KhoDap",
+        "Xoai_Song_ChuaNhe_CoNguyCo",
+        "Xoai_Chin_NgotThanh_DeDap",
+        "Xoai_ChinGia_NgotGat_KhongVanChuyen",
+        "Xoai_Hu_KhongAnDuoc",
+    )
+    is_canonical_semantics = (
+        str(getattr(data_spec, "data_format", "")).strip().lower()
+        == "classification_folder"
+        and tuple(getattr(data_spec, "class_names", ())) == canonical_class_names
+    )
+    if not is_canonical_semantics:
+        return
+    teacher_sources = {
+        "pretrained_distillation": bool(train_config.pretrained_distillation),
+        "distillation_teacher_checkpoint": str(
+            train_config.distillation_teacher_checkpoint or ""
+        ).strip(),
+        "distillation_teacher_csv": str(
+            train_config.distillation_teacher_csv or ""
+        ).strip(),
+        "teacher_feature_npz": str(
+            train_config.teacher_feature_npz or ""
+        ).strip(),
+        "patch_evidence_router_teacher_csv": str(
+            train_config.patch_evidence_router_teacher_csv or ""
+        ).strip(),
+    }
+    enabled = [name for name, value in teacher_sources.items() if bool(value)]
+    if enabled:
+        raise ValueError(
+            "Canonical class_f teacher/KD inputs are fail-closed because legacy "
+            "yolo_f targets changed materially, especially class 1. Regenerate "
+            "a class_f-native teacher/cache and implement the ordered "
+            "(path,target) manifest + teacher-checkpoint provenance gate before "
+            f"enabling KD. Active sources: {enabled}."
+        )
+
+
 class MultiScaleDatasetWrapper:
     def __init__(
         self,
@@ -27474,6 +28092,17 @@ def main() -> None:
     args = parse_args()
     preloaded_resume_path, preloaded_resume_checkpoint = _preload_resume_checkpoint_for_config(args)
     _validate_resume_runtime_requirements(args, preloaded_resume_checkpoint)
+    resume_data_contract = None
+    if preloaded_resume_checkpoint is not None:
+        raw_resume_data_yaml = preloaded_resume_checkpoint.get("data_yaml")
+        resume_data_contract = _validate_resume_data_source(
+            cli_data_yaml=args.data,
+            checkpoint_data_yaml=(
+                Path(str(raw_resume_data_yaml)) if raw_resume_data_yaml else None
+            ),
+            allow_cross_dataset_resume=bool(args.allow_cross_dataset_resume),
+        )
+        print({"resume_data_contract": resume_data_contract}, flush=True)
     if preloaded_resume_checkpoint is not None and not bool(args.resume_use_cli_config):
         (
             model_config,
@@ -27495,8 +28124,113 @@ def main() -> None:
             },
             flush=True,
         )
+        if args.model_type == "vit_registers_pretrained_hybrid":
+            if str(args.research_track).strip().lower() != "pretrained" or not bool(
+                args.pretrained
+            ):
+                raise ValueError(
+                    "Keeper-to-pretrained extension requires --research-track pretrained "
+                    "and --pretrained."
+                )
+            if args.pretrained_checkpoint_path is None:
+                raise ValueError(
+                    "Keeper-to-pretrained extension requires --pretrained-checkpoint-path."
+                )
+            # Preserve the logical .safetensors snapshot path. Hugging Face
+            # snapshots may symlink it to an extensionless blob, and the
+            # verified loader deliberately chooses the safe loader by the
+            # logical suffix while hashing the resolved target.
+            pretrained_path = Path(
+                args.pretrained_checkpoint_path
+            ).expanduser().absolute()
+            pretrained_sha256 = str(args.pretrained_checkpoint_sha256).strip().lower()
+            if not pretrained_path.is_file():
+                raise FileNotFoundError(
+                    f"Pretrained checkpoint does not exist: {pretrained_path}"
+                )
+            if len(pretrained_sha256) != 64 or any(
+                char not in "0123456789abcdef" for char in pretrained_sha256
+            ):
+                raise ValueError(
+                    "--pretrained-checkpoint-sha256 must contain exactly 64 hexadecimal characters."
+                )
+            required_provenance = {
+                "--pretrained-source-url": args.pretrained_source_url,
+                "--pretrained-source-revision": args.pretrained_source_revision,
+                "--pretrained-source-license": args.pretrained_source_license,
+            }
+            missing_provenance = [
+                name
+                for name, value in required_provenance.items()
+                if not str(value).strip()
+            ]
+            if missing_provenance:
+                raise ValueError(
+                    "Keeper-to-pretrained provenance is incomplete: "
+                    + ", ".join(missing_provenance)
+                )
+            if not 0.0 <= float(args.pretrained_semantic_dropout) < 1.0:
+                raise ValueError("--pretrained-semantic-dropout must be in [0, 1).")
+            if float(args.pretrained_semantic_max_scale) <= 0.0:
+                raise ValueError("--pretrained-semantic-max-scale must be > 0.")
+            if abs(float(args.pretrained_semantic_initial_scale)) >= float(
+                args.pretrained_semantic_max_scale
+            ):
+                raise ValueError(
+                    "abs(--pretrained-semantic-initial-scale) must be below max scale."
+                )
+            model_config.model_type = "vit_registers_pretrained_hybrid"
+            model_config.research_track = "pretrained"
+            model_config.pretrained = True
+            model_config.timm_model_name = str(args.timm_model_name).strip()
+            model_config.pretrained_checkpoint_path = str(pretrained_path)
+            model_config.pretrained_checkpoint_sha256 = pretrained_sha256
+            model_config.pretrained_source_url = str(args.pretrained_source_url).strip()
+            model_config.pretrained_source_revision = str(
+                args.pretrained_source_revision
+            ).strip()
+            model_config.pretrained_source_license = str(
+                args.pretrained_source_license
+            ).strip()
+            model_config.pretrained_semantic_expected_prefix_tokens = int(
+                args.pretrained_semantic_expected_prefix_tokens
+            )
+            model_config.pretrained_semantic_expected_embed_dim = int(
+                args.pretrained_semantic_expected_embed_dim
+            )
+            model_config.pretrained_semantic_expected_patch_count = int(
+                args.pretrained_semantic_expected_patch_count
+            )
+            model_config.pretrained_semantic_dropout = float(
+                args.pretrained_semantic_dropout
+            )
+            model_config.pretrained_semantic_initial_scale = float(
+                args.pretrained_semantic_initial_scale
+            )
+            model_config.pretrained_semantic_max_scale = float(
+                args.pretrained_semantic_max_scale
+            )
+            model_config.pretrained_backbone_gradient_checkpointing = bool(
+                args.pretrained_backbone_gradient_checkpointing
+            )
+            print(
+                {
+                    "resume_cli_model_extension": {
+                        "model_type": model_config.model_type,
+                        "research_track": model_config.research_track,
+                        "pretrained_backbone": model_config.timm_model_name,
+                        "pretrained_checkpoint_sha256": pretrained_sha256,
+                        "keeper_config_inherited": True,
+                    },
+                    "reason": (
+                        "isolated pretrained semantic residual over the exact keeper architecture"
+                    ),
+                },
+                flush=True,
+            )
         if (
-            float(args.patch_evidence_mil_loss_weight) > 0.0
+            args.model_type == "vit_registers_pretrained_hybrid"
+            or float(args.patch_evidence_mil_loss_weight) > 0.0
             or bool(args.patch_evidence_router_head)
             or str(args.stem_normalization) != "batch"
             or str(args.stem_convolution) != "standard"
@@ -27532,6 +28266,7 @@ def main() -> None:
             train_config.epochs = int(args.epochs)
             train_config.learning_rate = float(args.learning_rate)
             train_config.min_learning_rate = float(args.min_learning_rate)
+            train_config.backbone_lr_scale = float(args.backbone_lr_scale)
             train_config.trainable_module_prefixes = str(args.trainable_module_prefixes)
             train_config.warmup_epochs = int(args.warmup_epochs)
             train_config.warmup_start_factor = float(args.warmup_start_factor)
@@ -28543,6 +29278,7 @@ def main() -> None:
                 },
                 flush=True,
             )
+    _validate_final_distillation_config(train_config)
     detection_mode = model_config.model_type in DETECTION_MODEL_TYPES
     if detection_mode:
         train_config.balanced_epoch_sampling = False
@@ -28600,7 +29336,10 @@ def main() -> None:
             "Hay dung temporal smoothing trong stream_infer.py cho video."
         )
     input_normalization_summary = _apply_timm_input_normalization(model_config)
-    if input_normalization_summary.get("enabled") or model_config.model_type == "timm_classifier":
+    if input_normalization_summary.get("enabled") or model_config.model_type in {
+        "timm_classifier",
+        "vit_registers_pretrained_hybrid",
+    }:
         print({"input_normalization": input_normalization_summary}, flush=True)
 
     data_spec = load_data_spec(
@@ -28608,6 +29347,7 @@ def main() -> None:
         class_name_mode=args.class_name_mode,
         expected_num_classes=args.expected_num_classes or None,
     )
+    _validate_canonical_classf_teacher_lock(data_spec, train_config)
     if float(train_config.confusion_spectral_loss_weight) > 0.0:
         if detection_mode:
             raise ValueError("CAR/BiCAR chi ho tro classification-only training.")
@@ -28909,7 +29649,7 @@ def main() -> None:
             classification_bbox_metadata=classification_bbox_metadata_for_dataset,
         )
         test_dataset = None
-        if data_spec.has_test_split:
+        if data_spec.has_test_split and not bool(args.skip_final_test):
             test_dataset = ClassificationFolderDataset.from_data_spec(
                 data_spec=data_spec,
                 split="test",
@@ -29002,7 +29742,7 @@ def main() -> None:
             classification_bbox_metadata=classification_bbox_metadata_for_dataset,
         )
         test_dataset = None
-        if data_spec.has_test_split:
+        if data_spec.has_test_split and not bool(args.skip_final_test):
             test_dataset = MangoYOLOCropDataset.from_data_spec(
                 data_spec=data_spec,
                 split="test",
@@ -30061,6 +30801,8 @@ def main() -> None:
                     checkpoint_path=Path(train_config.distillation_teacher_checkpoint),
                     target_class_names=data_spec.class_names,
                     device=device,
+                    student_input_mean=model_config.input_mean,
+                    student_input_std=model_config.input_std,
                 )
             )
             distillation_summary.update(
@@ -30634,6 +31376,7 @@ def main() -> None:
             restore_scaler=not bool(args.resume_reset_scaler),
             allow_added_detection_heads=(
                 bool(args.resume_use_cli_config)
+                or model_config.model_type == "vit_registers_pretrained_hybrid"
                 or bool(args.patch_evidence_router_head)
                 or float(args.patch_evidence_router_loss_weight) > 0.0
                 or bool(args.visual_contrast_attention)
@@ -30650,6 +31393,7 @@ def main() -> None:
                 or bool(args.learnable_gabor_texture_residual)
                 or bool(args.learnable_gabor_texture_semantic_fusion)
             ),
+            weight_source=str(args.resume_weight_source),
         )
         print({"resume": resume_summary}, flush=True)
     confusion_spectral_state: Optional[ConfusionSpectralEMAState] = None
@@ -30735,6 +31479,7 @@ def main() -> None:
                 resume_checkpoint["ema_model_state"],
                 allow_extensions=(
                     bool(args.resume_use_cli_config)
+                    or model_config.model_type == "vit_registers_pretrained_hybrid"
                     or bool(args.patch_evidence_router_head)
                     or float(args.patch_evidence_router_loss_weight) > 0.0
                     or bool(args.visual_contrast_attention)
@@ -32127,6 +32872,8 @@ def main() -> None:
                     collect_artifact_stats=train_config.log_artifact_stats,
                     tta=train_config.eval_tta,
                     tta_brightness_delta=train_config.tta_brightness_delta,
+                    input_mean=model_config.input_mean,
+                    input_std=model_config.input_std,
                     confidence_threshold=None,
                     detection_nms_iou_threshold=train_config.eval_detection_nms_iou_threshold,
                     max_detections_per_image=(
@@ -33583,6 +34330,24 @@ def main() -> None:
                     ),
                     "epoch_seconds": time.time() - epoch_start,
                 }
+                row_model = getattr(validation_model, "module", validation_model)
+                row_semantic_branch = getattr(
+                    row_model,
+                    "pretrained_semantic_branch",
+                    None,
+                )
+                if row_semantic_branch is not None and callable(
+                    getattr(row_semantic_branch, "effective_gate", None)
+                ):
+                    row["pretrained_semantic_gate"] = float(
+                        row_semantic_branch.effective_gate()
+                        .detach()
+                        .float()
+                        .cpu()
+                        .item()
+                    )
+                else:
+                    row["pretrained_semantic_gate"] = 0.0
                 val_background_aware = val_metrics.get("background_aware_classification", {})
                 row["val_background_prediction_rate"] = val_background_aware.get(
                     "background_prediction_rate",
@@ -33805,6 +34570,13 @@ def main() -> None:
                         best_payload["train_model_state"] = best_payload["model_state"]
                         best_payload["model_state"] = model_ema.state_dict()
                         best_payload["checkpoint_weight_source"] = "ema"
+                        ema_pretrained_provenance = _runtime_pretrained_provenance(
+                            model_ema.module
+                        )
+                        if ema_pretrained_provenance is not None:
+                            best_payload["pretrained_provenance"] = (
+                                ema_pretrained_provenance
+                            )
                     checkpoint_start = time.time()
                     save_checkpoint(checkpoints_dir / "best.pt", best_payload)
                     checkpoint_seconds += time.time() - checkpoint_start
@@ -34262,6 +35034,7 @@ def main() -> None:
                         "selection_metric",
                         "val_best_confidence",
                         "val_background_prediction_rate",
+                        "pretrained_semantic_gate",
                         "train_register_patch_ratio",
                         "val_register_patch_ratio",
                         "val_high_norm_patch_fraction",

@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "recorded_at_local": "2026-07-29",
+  "status": "prospective_before_pipeline_smoke_or_candidate_training",
+  "lifecycle_status": "superseded_historical_yolo_f",
+  "superseded_at_local": "2026-07-31",
+  "superseded_by": "TRKH_PRETRAINED_CLASSF_B0_20260731",
+  "research_track": "pretrained",
+  "branch": "research/pretrained-hybrid-v1",
+  "worktree": "D:\\DataAI\\AIEx\\TRKH_pretrained",
+  "candidate": {
+    "model_type": "vit_registers_pretrained_hybrid",
+    "fusion": "separate_cls_register_patch_statistics_bounded_rezero_residual",
+    "initial_scale": 0.0,
+    "max_scale": 0.25
+  },
+  "keeper": {
+    "path": "D:\\DataAI\\AIEx\\TRKH\\runs\\probe_v8_yolof_pairroute_teacherfocusbinary015_boundarydrop_bboxprior_120b_2e_20260701\\checkpoints\\best.pt",
+    "sha256": "1f49d577240c69dc63c30af70db52ec2aa9da65a17aef1c4b1c09ece6c482677"
+  },
+  "pretrained_backbone": {
+    "model_name": "vit_small_patch16_dinov3.lvd1689m",
+    "logical_checkpoint_path": "C:\\Users\\ADMIN\\.cache\\huggingface\\hub\\models--timm--vit_small_patch16_dinov3.lvd1689m\\snapshots\\3bf4720a82ec2066db88137180ff1f83a675cef0\\model.safetensors",
+    "sha256": "2a1ec16ae28ffa07bc0ead0241ee7df9fc26451fe6f9f839b7b3afa0a906b040",
+    "source_url": "https://huggingface.co/timm/vit_small_patch16_dinov3.lvd1689m",
+    "source_revision": "3bf4720a82ec2066db88137180ff1f83a675cef0",
+    "license": "DINOv3 License"
+  },
+  "hardware": {
+    "gpu": "NVIDIA GeForce RTX 4060 Laptop GPU",
+    "vram_mib": 8188,
+    "bf16_supported": true
+  },
+  "measured_resource_smoke": {
+    "batch_size": 24,
+    "gate_for_gradient_stress_only": 0.1,
+    "optimizer": "AdamW",
+    "dino_gradient_tensor_count_nonzero": 162,
+    "peak_allocated_mib": 2209.7,
+    "peak_reserved_mib": 2976.0,
+    "free_after_mib": 4077.0,
+    "note": "Gate 0.1 was used only to prove the DINO gradient path. A0 initialization remains locked to 0.0."
+  },
+  "pipeline_smoke_lock": {
+    "batch_size": 8,
+    "grad_accum_steps": 1,
+    "max_train_batches": 2,
+    "max_val_batches": 2,
+    "epochs": 1,
+    "test_split_access": false
+  },
+  "formal_default": {
+    "batch_size": 24,
+    "grad_accum_steps": 2,
+    "effective_batch_size": 48,
+    "pretrained_backbone_lr_scale": 0.1,
+    "num_workers": 4,
+    "eval_num_workers": 2,
+    "test_split_access": false
+  }
+}

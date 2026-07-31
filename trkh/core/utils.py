@@ -228,7 +228,27 @@ def build_optimizer_param_groups(
         no_decay_keywords = ("bias", "norm")
 
     lr_scale = float(backbone_lr_scale)
-    use_split_lr = bool(getattr(model, "is_detr_model", False)) and abs(lr_scale - 1.0) > 1e-12
+    is_detection_model = bool(getattr(model, "is_detr_model", False))
+    is_pretrained_hybrid = bool(
+        getattr(model, "is_pretrained_hybrid_model", False)
+    )
+    is_pretrained_timm_classifier = bool(
+        getattr(model, "is_pretrained_timm_classifier", False)
+    )
+    exact_no_decay_names: set[str] = set()
+    timm_no_weight_decay = getattr(model, "no_weight_decay", None)
+    if is_pretrained_timm_classifier and callable(timm_no_weight_decay):
+        exact_no_decay_names.update(
+            str(name) for name in timm_no_weight_decay()
+        )
+    use_split_lr = bool(
+        (
+            is_detection_model
+            or is_pretrained_hybrid
+            or is_pretrained_timm_classifier
+        )
+        and abs(lr_scale - 1.0) > 1e-12
+    )
     grouped_params: Dict[Tuple[str, bool], List[nn.Parameter]] = {
         ("head", True): [],
         ("head", False): [],
@@ -239,9 +259,38 @@ def build_optimizer_param_groups(
     for name, parameter in model.named_parameters():
         if not parameter.requires_grad:
             continue
-        is_head = name.startswith(DETECTION_HEAD_PREFIXES) if use_split_lr else True
+        if use_split_lr and is_pretrained_hybrid:
+            # Only the externally initialized foundation backbone receives the
+            # reduced LR.  The inherited keeper, residual gate and projector
+            # stay at the experiment LR so the new branch can become useful.
+            is_head = not name.startswith(
+                "pretrained_semantic_branch.backbone."
+            )
+        elif use_split_lr and is_pretrained_timm_classifier:
+            classifier_prefixes = tuple(
+                str(prefix)
+                for prefix in getattr(
+                    model,
+                    "pretrained_classifier_parameter_prefixes",
+                    (),
+                )
+            )
+            if not classifier_prefixes:
+                raise ValueError(
+                    "Pretrained timm classifier is missing classifier parameter prefixes."
+                )
+            is_head = name.startswith(classifier_prefixes)
+        else:
+            is_head = name.startswith(DETECTION_HEAD_PREFIXES) if use_split_lr else True
         group_name = "head" if is_head else "backbone"
-        use_decay = not any(keyword in name for keyword in no_decay_keywords)
+        timm_shape_no_decay = (
+            is_pretrained_timm_classifier and parameter.ndim <= 1
+        )
+        use_decay = (
+            name not in exact_no_decay_names
+            and not timm_shape_no_decay
+            and not any(keyword in name for keyword in no_decay_keywords)
+        )
         grouped_params[(group_name, use_decay)].append(parameter)
 
     param_groups: List[Dict[str, Any]] = []

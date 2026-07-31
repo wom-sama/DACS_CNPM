@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+import matplotlib
+
+# Audit/evaluation commands must remain headless on Windows and CI hosts.
+matplotlib.use("Agg")
+
 import argparse
 import csv
 import math
@@ -19,7 +24,13 @@ try:
 except Exception:  # pragma: no cover - optional compiled torchvision op
     _torchvision_batched_nms = None
 
-from trkh.core.config import default_data_yaml, load_data_spec, to_serializable
+from trkh.core.config import (
+    IMAGENET_MEAN,
+    IMAGENET_STD,
+    default_data_yaml,
+    load_data_spec,
+    to_serializable,
+)
 from trkh.data.dataset import (
     ClassificationFolderDataset,
     MangoYOLOCropDataset,
@@ -441,8 +452,16 @@ def _build_baseline_comparison_summary(
     eval_loop_seconds = float(timing.get("eval_loop_seconds", 0.0)) if isinstance(timing, dict) else 0.0
     model_config = checkpoint.get("model_config", {})
     model_name = ""
+    research_track = "legacy_unspecified"
+    pretrained = False
     if isinstance(model_config, dict):
         model_name = str(model_config.get("model_type", "")).strip()
+        research_track = str(
+            model_config.get("research_track", "legacy_unspecified")
+        ).strip()
+        pretrained = bool(model_config.get("pretrained", False)) or (
+            research_track == "pretrained"
+        )
     if not model_name:
         model_name = str(checkpoint.get("model_type", "") or model.__class__.__name__)
     best_epoch = checkpoint.get("best_epoch", checkpoint.get("epoch", ""))
@@ -451,7 +470,8 @@ def _build_baseline_comparison_summary(
         "family": str(family),
         "backend": "trkh",
         "model": model_name,
-        "pretrained": False,
+        "pretrained": bool(pretrained),
+        "research_track": research_track,
         "test_size": int(len(rows)),
         "test_loss": float(metrics.get("loss", 0.0)),
         "metrics": metric_summary,
@@ -1121,6 +1141,8 @@ def evaluate_model(
     detection_score_mode: str = "foreground",
     collect_prediction_records: bool = False,
     bbox_token_prior_source: str = "bbox",
+    input_mean: Sequence[float] = IMAGENET_MEAN,
+    input_std: Sequence[float] = IMAGENET_STD,
 ) -> Dict[str, object]:
     eval_start = time.perf_counter()
     model.eval()
@@ -1173,6 +1195,8 @@ def evaluate_model(
             contrast_delta=tta_brightness_delta,
             saturation_delta=tta_brightness_delta,
             num_aug=4,
+            mean=input_mean,
+            std=input_std,
         )
     if max_batches is not None:
         total_batches = min(total_batches, max_batches)
@@ -1906,6 +1930,12 @@ def parse_args() -> argparse.Namespace:
         help="Neu > 0, validate so class trong data.yaml truoc khi evaluate.",
     )
     parser.add_argument("--split", choices=("train", "val", "test"), default="val")
+    parser.add_argument(
+        "--allow-test-split",
+        action="store_true",
+        default=False,
+        help="Explicit final/retrospective authorization required with --split test.",
+    )
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--seed", type=int, default=42)
@@ -1981,6 +2011,8 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    if args.split == "test" and not bool(args.allow_test_split):
+        raise ValueError("--split test requires explicit --allow-test-split authorization.")
     if args.adaptive_count_margin < 0:
         raise ValueError("--adaptive-count-margin phai >= 0.")
     if args.adaptive_min_detections < 0:
@@ -2004,8 +2036,13 @@ def main() -> None:
             flush=True,
         )
     class_names = list(checkpoint.get("class_names", data_spec.class_names))
-    if len(class_names) != data_spec.num_classes:
-        raise ValueError("So lop trong checkpoint khong khop data.yaml")
+    if [str(name) for name in class_names] != [
+        str(name) for name in data_spec.class_names
+    ]:
+        raise ValueError(
+            "Checkpoint/data class order mismatch. Refusing evaluation because "
+            f"checkpoint={class_names!r}, data={list(data_spec.class_names)!r}."
+        )
 
     model = build_model_from_checkpoint(
         checkpoint=checkpoint,
@@ -2221,6 +2258,8 @@ def main() -> None:
         adaptive_min_detections=args.adaptive_min_detections,
         collect_prediction_records=True,
         bbox_token_prior_source=args.bbox_token_prior_source,
+        input_mean=input_mean,
+        input_std=input_std,
     )
     metrics["patch_evidence_linear_verifier"] = patch_evidence_linear_verifier_summary
 

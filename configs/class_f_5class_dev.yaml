@@ -2,13 +2,8 @@ format: classification_folder
 path: D:/DataAI/AIEx/newdataset/class_f
 train: train
 val: val
-test: test
 nc: 5
 class_name_mode: raw
-image_size:
-  - 640
-  - 640
-resize_mode: letterbox
 names:
   0: Xoai_Song_Chua_KhoDap
   1: Xoai_Song_ChuaNhe_CoNguyCo

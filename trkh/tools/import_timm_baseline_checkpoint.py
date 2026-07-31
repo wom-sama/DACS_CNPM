@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 from typing import Dict, List, Mapping
@@ -24,7 +25,25 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--expected-num-classes", type=int, default=5)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--image-size", type=int, default=224)
+    parser.add_argument(
+        "--research-track",
+        choices=("pretrained", "no_pretrain"),
+        required=True,
+    )
+    parser.add_argument("--expected-source-checkpoint-sha256", default="")
+    parser.add_argument("--pretrained-source-url", default="")
+    parser.add_argument("--pretrained-source-revision", default="")
+    parser.add_argument("--pretrained-source-license", default="")
+    parser.add_argument("--pretrained-initializer-sha256", default="")
     return parser.parse_args()
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        for chunk in iter(lambda: handle.read(8 * 1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _load_checkpoint(path: Path) -> Mapping[str, object]:
@@ -66,6 +85,26 @@ def _reorder_state_dict(
 
 def main() -> None:
     args = parse_args()
+    source_checkpoint_sha256 = _sha256_file(args.checkpoint)
+    expected_source_sha256 = str(args.expected_source_checkpoint_sha256 or "").strip().lower()
+    if expected_source_sha256 and source_checkpoint_sha256 != expected_source_sha256:
+        raise ValueError(
+            "Source checkpoint SHA-256 mismatch: "
+            f"observed={source_checkpoint_sha256}, expected={expected_source_sha256}."
+        )
+    if args.research_track == "pretrained":
+        required_provenance = {
+            "--expected-source-checkpoint-sha256": expected_source_sha256,
+            "--pretrained-source-url": args.pretrained_source_url,
+            "--pretrained-source-revision": args.pretrained_source_revision,
+            "--pretrained-source-license": args.pretrained_source_license,
+            "--pretrained-initializer-sha256": args.pretrained_initializer_sha256,
+        }
+        missing = [name for name, value in required_provenance.items() if not str(value).strip()]
+        if missing:
+            raise ValueError(
+                "Pretrained import provenance is incomplete: " + ", ".join(missing)
+            )
     baseline = _load_checkpoint(args.checkpoint)
     if "model" not in baseline or "classes" not in baseline:
         raise ValueError("Checkpoint baseline phai co keys 'model' va 'classes'.")
@@ -101,7 +140,11 @@ def main() -> None:
         "model_config": {
             "model_type": "timm_classifier",
             "timm_model_name": model_name,
-            "pretrained": False,
+            "research_track": str(args.research_track),
+            "pretrained": args.research_track == "pretrained",
+            "pretrained_source_url": str(args.pretrained_source_url),
+            "pretrained_source_revision": str(args.pretrained_source_revision),
+            "pretrained_source_license": str(args.pretrained_source_license),
             "image_size": int(args.image_size),
             "input_mean": input_mean,
             "input_std": input_std,
@@ -115,18 +158,46 @@ def main() -> None:
             "resize_mode": "stretch",
         },
         "source_checkpoint": str(args.checkpoint.resolve()),
+        "source_checkpoint_sha256": source_checkpoint_sha256,
         "source_classes": baseline_classes,
         "class_remap": {
             target_name: int(baseline_classes.index(target_name))
             for target_name in target_classes
         },
     }
+    if args.research_track == "pretrained":
+        payload["pretrained_provenance"] = {
+            "schema_version": 1,
+            "research_track": "pretrained",
+            "initialization_source": "imported_finetuned_timm_checkpoint",
+            "external_initialization_replayed": False,
+            "fine_tuned_checkpoint": {
+                "path": str(args.checkpoint.resolve()),
+                "sha256": source_checkpoint_sha256,
+            },
+            "imagenet_initializer": {
+                "model_name": model_name,
+                "source_url": str(args.pretrained_source_url),
+                "source_revision": str(args.pretrained_source_revision),
+                "license_id": str(args.pretrained_source_license),
+                "sha256": str(args.pretrained_initializer_sha256).strip().lower(),
+            },
+            "class_remap": dict(payload["class_remap"]),
+            "input_contract": {
+                "image_size": int(args.image_size),
+                "resize_mode": "stretch",
+                "mean": list(input_mean),
+                "std": list(input_std),
+            },
+        }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     torch.save(payload, args.output)
     summary = {
         "output": str(args.output.resolve()),
         "model_name": model_name,
         "source_checkpoint": str(args.checkpoint.resolve()),
+        "source_checkpoint_sha256": source_checkpoint_sha256,
+        "research_track": str(args.research_track),
         "target_data_yaml": str(data_spec.data_yaml.resolve()),
         "target_classes": target_classes,
         "source_classes": baseline_classes,

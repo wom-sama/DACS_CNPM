@@ -9,21 +9,28 @@ import time
 from pathlib import Path
 from typing import Dict, List, Mapping, Optional, Sequence, Tuple, Union
 
+import numpy as np
 import torch
 from torch import nn
 from torch.ao.quantization import quantize_dynamic
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 
 from trkh.core.config import default_data_yaml, load_data_spec, to_serializable
 from trkh.data.dataset import (
+    ClassificationFolderDataset,
     MangoYOLOCropDataset,
     PseudoVideoAugmenter,
     build_eval_transform,
     build_train_collate_fn,
 )
 from trkh.evaluation.evaluate import evaluate_model, resolve_crop_to_primary_object
+from trkh.evaluation.input_normalization import checkpoint_input_normalization
+from trkh.evaluation.metrics import build_metrics
 from trkh.inference.inference import export_onnx
-from trkh.models.model import build_model_from_checkpoint as build_checkpoint_model
+from trkh.models.model import (
+    build_model_from_checkpoint as build_checkpoint_model,
+    extract_bbox_from_model_output,
+)
 from trkh.core.utils import (
     build_safe_dataloader_kwargs,
     ensure_dir,
@@ -69,6 +76,29 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--benchmark-runs", type=int, default=20)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--skip-onnx", action="store_true", default=False)
+    parser.add_argument(
+        "--onnx-static-int8",
+        action="store_true",
+        default=False,
+        help="Build train-calibrated QDQ INT8 ONNX for Conv/MatMul/Gemm mobile proxy.",
+    )
+    parser.add_argument("--onnx-static-int8-calibration-samples", type=int, default=512)
+    parser.add_argument(
+        "--require-mobile-proxy-gates",
+        action="store_true",
+        default=False,
+        help="Fail after writing deploy_summary.json unless static INT8 desktop proxy gates pass.",
+    )
+    parser.add_argument("--mobile-proxy-max-fp32-probability-error", type=float, default=1e-5)
+    parser.add_argument("--mobile-proxy-max-macro-f1-drop", type=float, default=0.005)
+    parser.add_argument("--mobile-proxy-max-class1-f1-drop", type=float, default=0.010)
+    parser.add_argument("--mobile-proxy-min-int8-macro-f1", type=float, default=0.80)
+    parser.add_argument("--mobile-proxy-min-int8-class1-f1", type=float, default=0.60)
+    parser.add_argument("--mobile-proxy-min-int8-class1-precision", type=float, default=0.55)
+    parser.add_argument("--mobile-proxy-min-int8-class1-recall", type=float, default=0.55)
+    parser.add_argument("--mobile-proxy-min-qdq-target-op-coverage", type=float, default=0.90)
+    parser.add_argument("--mobile-proxy-max-int8-mib", type=float, default=6.0)
+    parser.add_argument("--mobile-proxy-max-parameters", type=int, default=5_000_000)
     parser.add_argument("--skip-trt-engine", action="store_true", default=False)
     parser.add_argument(
         "--allow-uncertified-precision-ensemble-tensorrt",
@@ -82,11 +112,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--trtexec-path", type=Path, default=None)
     parser.add_argument("--trt-int8", action="store_true", default=False)
     parser.add_argument("--trt-calibration-samples", type=int, default=128)
-    parser.add_argument("--trt-calibration-split", choices=("auto", "train", "val", "test"), default="train")
+    parser.add_argument(
+        "--trt-calibration-split",
+        choices=("train",),
+        default="train",
+        help="Reportable INT8 calibration is train-only; val remains the deployment gate.",
+    )
     parser.add_argument("--trt-calibration-cache", type=Path, default=None)
     parser.add_argument("--skip-accuracy", action="store_true", default=False)
     parser.add_argument("--skip-benchmark", action="store_true", default=False)
     parser.add_argument("--split", choices=("auto", "train", "val", "test"), default="auto")
+    parser.add_argument(
+        "--allow-test-split",
+        action="store_true",
+        default=False,
+        help="Explicit retrospective/final-report authorization for --split test.",
+    )
     return parser.parse_args()
 
 
@@ -191,6 +232,7 @@ def build_runtime_transform(
     augmentation_config = checkpoint.get("augmentation_config", {})
     if not isinstance(augmentation_config, dict):
         augmentation_config = {}
+    input_mean, input_std = checkpoint_input_normalization(checkpoint)
     base_transform = build_eval_transform(
         image_size=image_size,
         resize_mode=augmentation_config.get("resize_mode", "pad"),
@@ -227,6 +269,8 @@ def build_runtime_transform(
         eval_surface_detail_amplification=bool(
             augmentation_config.get("eval_surface_detail_amplification", False)
         ),
+        mean=input_mean,
+        std=input_std,
     )
     if temporal_frames > 1:
         return PseudoVideoAugmenter(
@@ -283,33 +327,61 @@ def build_eval_loader(
     override_image_size: Optional[int] = None,
     class_name_mode: Optional[str] = None,
     expected_num_classes: Optional[int] = None,
+    allow_test_split: bool = False,
+    stratified_max_samples: int = 0,
+    sampling_seed: int = 42,
 ) -> tuple[DataLoader, list[str]]:
     data_spec = load_data_spec(
         data_yaml,
         class_name_mode=class_name_mode,
         expected_num_classes=expected_num_classes,
     )
-    class_names = checkpoint["class_names"]
+    class_names = [str(name) for name in checkpoint["class_names"]]
+    if list(data_spec.class_names) != class_names:
+        raise ValueError(
+            "Checkpoint/data class order mismatch. Refusing deploy evaluation because "
+            f"checkpoint={class_names!r}, data={list(data_spec.class_names)!r}."
+        )
     image_size = int(override_image_size or checkpoint["model_config"].get("image_size", 224))
     temporal_frames = resolve_temporal_frames(checkpoint)
-    resolved_split = "test" if split == "auto" and data_spec.has_test_split else split
-    if resolved_split == "auto":
-        resolved_split = "val"
+    resolved_split = "val" if split == "auto" else str(split)
+    if resolved_split == "test" and not bool(allow_test_split):
+        raise ValueError(
+            "Deploy evaluation on test requires --allow-test-split; auto always uses val."
+        )
     precision_ensemble = str(
         checkpoint.get("model_config", {}).get("model_type", "")
     ).strip().lower() == "precision_ensemble"
-    dataset = MangoYOLOCropDataset.from_data_spec(
-        data_spec=data_spec,
-        split=resolved_split,
-        transform=build_runtime_transform(checkpoint, image_size=image_size, temporal_frames=temporal_frames),
-        crop_margin_ratio=float(
-            checkpoint.get("augmentation_config", {}).get("crop_margin_ratio", 0.05)
-        ),
-        crop_to_primary_object=resolve_crop_to_primary_object(checkpoint),
-        classification_target=precision_ensemble,
-        classification_object_crops=True,
-        classification_bbox_metadata=precision_ensemble,
+    runtime_transform = build_runtime_transform(
+        checkpoint,
+        image_size=image_size,
+        temporal_frames=temporal_frames,
     )
+    if data_spec.data_format == "classification_folder":
+        if precision_ensemble:
+            raise ValueError(
+                "precision_ensemble requires bbox metadata and cannot be evaluated from "
+                "canonical classification_folder data without an explicit paired source."
+            )
+        dataset = ClassificationFolderDataset.from_data_spec(
+            data_spec=data_spec,
+            split=resolved_split,
+            transform=runtime_transform,
+            class_aware_augmentation=False,
+        )
+    else:
+        dataset = MangoYOLOCropDataset.from_data_spec(
+            data_spec=data_spec,
+            split=resolved_split,
+            transform=runtime_transform,
+            crop_margin_ratio=float(
+                checkpoint.get("augmentation_config", {}).get("crop_margin_ratio", 0.05)
+            ),
+            crop_to_primary_object=resolve_crop_to_primary_object(checkpoint),
+            classification_target=True,
+            classification_object_crops=True,
+            classification_bbox_metadata=precision_ensemble,
+        )
     dataloader_kwargs, dataloader_summary = build_safe_dataloader_kwargs(
         requested_num_workers=num_workers,
         requested_pin_memory=False,
@@ -330,17 +402,110 @@ def build_eval_loader(
         },
         flush=True,
     )
+    sampling_summary: Dict[str, object] = {
+        "mode": "full_sequential",
+        "source_samples": int(len(dataset)),
+        "selected_samples": int(len(dataset)),
+        "per_class": {
+            str(class_index): int(count)
+            for class_index, count in enumerate(
+                dataset.class_counts(data_spec.num_classes)
+            )
+        },
+        "seed": None,
+    }
+    loader_dataset = dataset
+    if int(stratified_max_samples) > 0:
+        labels = dataset.labels()
+        selected_indices, selected_counts = deterministic_stratified_indices(
+            labels,
+            max_samples=int(stratified_max_samples),
+            seed=int(sampling_seed),
+        )
+        loader_dataset = Subset(dataset, selected_indices)
+        sampling_summary = {
+            "mode": "deterministic_equal_class_stratified",
+            "source_samples": int(len(dataset)),
+            "selected_samples": int(len(selected_indices)),
+            "per_class": {
+                str(class_index): int(selected_counts.get(class_index, 0))
+                for class_index in range(data_spec.num_classes)
+            },
+            "seed": int(sampling_seed),
+        }
     loader = DataLoader(
-        dataset,
+        loader_dataset,
         batch_size=batch_size,
         shuffle=False,
         collate_fn=build_train_collate_fn(
-            num_classes=max(1, int(dataset.num_classes or 1)),
+            num_classes=max(1, int(data_spec.num_classes)),
             batch_mix_probability=0.0,
         ),
         **dataloader_kwargs,
     )
+    loader.trkh_sampling_summary = sampling_summary
     return loader, class_names
+
+
+def deterministic_stratified_indices(
+    labels: Sequence[int],
+    *,
+    max_samples: int,
+    seed: int,
+) -> tuple[List[int], Dict[int, int]]:
+    """Select a deterministic, class-interleaved calibration subset.
+
+    Equal class coverage is intentional for PTQ: it prevents a folder-sorted
+    classification dataset from calibrating on only its first class and gives
+    the minority class a meaningful share of activation-range observations.
+    """
+
+    target = min(max(1, int(max_samples)), len(labels))
+    if target <= 0:
+        return [], {}
+    by_class: Dict[int, List[int]] = {}
+    for index, label in enumerate(labels):
+        class_index = int(label)
+        by_class.setdefault(class_index, []).append(int(index))
+    if not by_class:
+        return [], {}
+
+    class_indices = sorted(by_class)
+    quotas = {class_index: 0 for class_index in class_indices}
+    remaining = target
+    while remaining > 0:
+        progressed = False
+        for class_index in class_indices:
+            if remaining <= 0:
+                break
+            if quotas[class_index] >= len(by_class[class_index]):
+                continue
+            quotas[class_index] += 1
+            remaining -= 1
+            progressed = True
+        if not progressed:
+            break
+
+    selected_by_class: Dict[int, List[int]] = {}
+    for offset, class_index in enumerate(class_indices):
+        candidates = by_class[class_index]
+        generator = torch.Generator().manual_seed(
+            int(seed) + 1_000_003 * int(offset + 1)
+        )
+        permutation = torch.randperm(len(candidates), generator=generator).tolist()
+        selected_by_class[class_index] = [
+            candidates[position]
+            for position in permutation[: quotas[class_index]]
+        ]
+
+    selected: List[int] = []
+    max_quota = max(quotas.values(), default=0)
+    for position in range(max_quota):
+        for class_index in class_indices:
+            class_selected = selected_by_class[class_index]
+            if position < len(class_selected):
+                selected.append(class_selected[position])
+    return selected, quotas
 
 
 def evaluate_accuracy(
@@ -443,6 +608,274 @@ def benchmark_onnx_model(
     }
 
 
+def _classification_targets_for_mobile_proxy(value: object) -> torch.Tensor:
+    if not torch.is_tensor(value):
+        raise TypeError("Mobile ONNX accuracy requires tensor classification targets.")
+    targets = value.detach().cpu()
+    if targets.ndim == 1:
+        return targets.to(dtype=torch.long)
+    if targets.ndim == 2 and int(targets.size(1)) > 1:
+        return targets.argmax(dim=1).to(dtype=torch.long)
+    raise ValueError(
+        f"Mobile ONNX targets must have shape [B] or [B,C], got {tuple(targets.shape)}."
+    )
+
+
+def _onnx_classification_logits(
+    session: "ort.InferenceSession",
+    images: np.ndarray,
+) -> torch.Tensor:
+    inputs = session.get_inputs()
+    if len(inputs) != 1 or str(inputs[0].name) != "images":
+        raise ValueError(
+            "Mobile ONNX proxy currently requires one input named 'images'; "
+            f"observed={[entry.name for entry in inputs]}."
+        )
+    outputs = session.run(None, {"images": np.ascontiguousarray(images)})
+    if not outputs:
+        raise RuntimeError("ONNX classifier returned no outputs.")
+    logits = torch.from_numpy(np.asarray(outputs[0])).to(dtype=torch.float32)
+    if logits.ndim != 2:
+        raise ValueError(
+            f"ONNX classification logits must have shape [B,C], got {tuple(logits.shape)}."
+        )
+    return logits
+
+
+def evaluate_mobile_onnx_pair(
+    *,
+    reference_model: nn.Module,
+    fp32_onnx_path: Path,
+    int8_onnx_path: Path,
+    loader: DataLoader,
+    class_names: Sequence[str],
+) -> Dict[str, object]:
+    """Evaluate PyTorch/FP32-ONNX/INT8-ONNX on one aligned validation stream."""
+
+    if ort is None:
+        raise ImportError("onnxruntime is required for mobile ONNX accuracy gates.")
+    reference_model = reference_model.cpu().eval()
+    fp32_session = ort.InferenceSession(
+        str(Path(fp32_onnx_path).resolve()),
+        providers=["CPUExecutionProvider"],
+    )
+    int8_session = ort.InferenceSession(
+        str(Path(int8_onnx_path).resolve()),
+        providers=["CPUExecutionProvider"],
+    )
+
+    target_chunks: List[torch.Tensor] = []
+    reference_prediction_chunks: List[torch.Tensor] = []
+    fp32_prediction_chunks: List[torch.Tensor] = []
+    int8_prediction_chunks: List[torch.Tensor] = []
+    reference_to_fp32_argmax_mismatches = 0
+    fp32_to_int8_argmax_mismatches = 0
+    reference_to_fp32_max_logit_error = 0.0
+    reference_to_fp32_max_probability_error = 0.0
+    fp32_to_int8_max_logit_error = 0.0
+    fp32_to_int8_max_probability_error = 0.0
+    batch_count = 0
+    started = time.perf_counter()
+
+    with torch.inference_mode():
+        for batch in loader:
+            if not isinstance(batch, (tuple, list)) or len(batch) < 2:
+                raise TypeError("Mobile ONNX loader must yield (images, targets, ...).")
+            images = batch[0].detach().cpu().to(dtype=torch.float32).contiguous()
+            targets = _classification_targets_for_mobile_proxy(batch[1])
+            reference_output = reference_model(images)
+            reference_logits, _ = extract_bbox_from_model_output(reference_output)
+            if not torch.is_tensor(reference_logits) or reference_logits.ndim != 2:
+                raise ValueError("Reference classifier must return logits [B,C].")
+            reference_logits = reference_logits.detach().cpu().to(dtype=torch.float32)
+            numpy_images = images.numpy()
+            fp32_logits = _onnx_classification_logits(fp32_session, numpy_images)
+            int8_logits = _onnx_classification_logits(int8_session, numpy_images)
+            if (
+                tuple(reference_logits.shape) != tuple(fp32_logits.shape)
+                or tuple(fp32_logits.shape) != tuple(int8_logits.shape)
+                or int(targets.numel()) != int(reference_logits.size(0))
+            ):
+                raise ValueError(
+                    "Aligned mobile proxy shapes differ: "
+                    f"targets={tuple(targets.shape)}, torch={tuple(reference_logits.shape)}, "
+                    f"fp32={tuple(fp32_logits.shape)}, int8={tuple(int8_logits.shape)}."
+                )
+
+            reference_predictions = reference_logits.argmax(dim=1)
+            fp32_predictions = fp32_logits.argmax(dim=1)
+            int8_predictions = int8_logits.argmax(dim=1)
+            reference_to_fp32_argmax_mismatches += int(
+                (reference_predictions != fp32_predictions).sum().item()
+            )
+            fp32_to_int8_argmax_mismatches += int(
+                (fp32_predictions != int8_predictions).sum().item()
+            )
+            reference_to_fp32_max_logit_error = max(
+                reference_to_fp32_max_logit_error,
+                float((reference_logits - fp32_logits).abs().max().item()),
+            )
+            fp32_to_int8_max_logit_error = max(
+                fp32_to_int8_max_logit_error,
+                float((fp32_logits - int8_logits).abs().max().item()),
+            )
+            reference_probabilities = torch.softmax(reference_logits, dim=1)
+            fp32_probabilities = torch.softmax(fp32_logits, dim=1)
+            int8_probabilities = torch.softmax(int8_logits, dim=1)
+            reference_to_fp32_max_probability_error = max(
+                reference_to_fp32_max_probability_error,
+                float((reference_probabilities - fp32_probabilities).abs().max().item()),
+            )
+            fp32_to_int8_max_probability_error = max(
+                fp32_to_int8_max_probability_error,
+                float((fp32_probabilities - int8_probabilities).abs().max().item()),
+            )
+            target_chunks.append(targets)
+            reference_prediction_chunks.append(reference_predictions)
+            fp32_prediction_chunks.append(fp32_predictions)
+            int8_prediction_chunks.append(int8_predictions)
+            batch_count += 1
+
+    if not target_chunks:
+        raise ValueError("Mobile ONNX validation loader produced no samples.")
+    targets = torch.cat(target_chunks)
+    reference_predictions = torch.cat(reference_prediction_chunks)
+    fp32_predictions = torch.cat(fp32_prediction_chunks)
+    int8_predictions = torch.cat(int8_prediction_chunks)
+    total = int(targets.numel())
+    return {
+        "artifact_role": "desktop_mobile_proxy_not_target_device_certification",
+        "samples": total,
+        "batches": int(batch_count),
+        "seconds": float(time.perf_counter() - started),
+        "torch_reference": build_metrics(targets, reference_predictions, class_names),
+        "onnx_fp32": build_metrics(targets, fp32_predictions, class_names),
+        "onnx_int8_qdq": build_metrics(targets, int8_predictions, class_names),
+        "torch_to_onnx_fp32": {
+            "argmax_mismatches": int(reference_to_fp32_argmax_mismatches),
+            "argmax_mismatch_rate": float(reference_to_fp32_argmax_mismatches / total),
+            "max_abs_logit_error": float(reference_to_fp32_max_logit_error),
+            "max_abs_probability_error": float(reference_to_fp32_max_probability_error),
+        },
+        "onnx_fp32_to_int8_qdq": {
+            "argmax_mismatches": int(fp32_to_int8_argmax_mismatches),
+            "argmax_mismatch_rate": float(fp32_to_int8_argmax_mismatches / total),
+            "max_abs_logit_error": float(fp32_to_int8_max_logit_error),
+            "max_abs_probability_error": float(fp32_to_int8_max_probability_error),
+        },
+    }
+
+
+def build_mobile_proxy_gate(
+    *,
+    evaluation: Mapping[str, object],
+    quantization: Mapping[str, object],
+    parameter_count: int,
+    max_fp32_probability_error: float,
+    max_macro_f1_drop: float,
+    max_class1_f1_drop: float,
+    max_int8_mib: float,
+    max_parameters: int,
+    min_int8_macro_f1: float = 0.0,
+    min_int8_class1_f1: float = 0.0,
+    min_int8_class1_precision: float = 0.0,
+    min_int8_class1_recall: float = 0.0,
+    min_qdq_target_op_coverage: float = 0.0,
+) -> Dict[str, object]:
+    fp32_metrics = evaluation.get("onnx_fp32", {})
+    int8_metrics = evaluation.get("onnx_int8_qdq", {})
+    torch_parity = evaluation.get("torch_to_onnx_fp32", {})
+    if not isinstance(fp32_metrics, Mapping) or not isinstance(int8_metrics, Mapping):
+        raise ValueError("Mobile gate requires FP32 and INT8 ONNX metrics.")
+    fp32_per_class = fp32_metrics.get("per_class", [])
+    int8_per_class = int8_metrics.get("per_class", [])
+    if not isinstance(fp32_per_class, Sequence) or len(fp32_per_class) <= 1:
+        raise ValueError("Mobile gate requires class-1 FP32 metrics.")
+    if not isinstance(int8_per_class, Sequence) or len(int8_per_class) <= 1:
+        raise ValueError("Mobile gate requires class-1 INT8 metrics.")
+    fp32_macro = float(fp32_metrics.get("macro_f1", 0.0) or 0.0)
+    int8_macro = float(int8_metrics.get("macro_f1", 0.0) or 0.0)
+    fp32_class1 = float(fp32_per_class[1].get("f1", 0.0) or 0.0)
+    int8_class1 = float(int8_per_class[1].get("f1", 0.0) or 0.0)
+    int8_class1_precision = float(
+        int8_per_class[1].get("precision", 0.0) or 0.0
+    )
+    int8_class1_recall = float(int8_per_class[1].get("recall", 0.0) or 0.0)
+    int8_summary = quantization.get("int8", {})
+    if not isinstance(int8_summary, Mapping):
+        raise ValueError("Mobile gate requires INT8 artifact summary.")
+    int8_size_mib = float(int8_summary.get("size_bytes", 0) or 0) / float(2**20)
+    fully_quantized_target_op_coverage = float(
+        int8_summary.get("fully_quantized_target_op_coverage", 0.0) or 0.0
+    )
+    checks = {
+        "torch_to_fp32_onnx_argmax_mismatches_zero": int(
+            torch_parity.get("argmax_mismatches", -1) or 0
+        )
+        == 0,
+        "torch_to_fp32_onnx_probability_error": float(
+            torch_parity.get("max_abs_probability_error", float("inf"))
+        )
+        <= float(max_fp32_probability_error),
+        "int8_macro_f1_drop": (fp32_macro - int8_macro) <= float(max_macro_f1_drop),
+        "int8_class1_f1_drop": (fp32_class1 - int8_class1)
+        <= float(max_class1_f1_drop),
+        "int8_absolute_macro_f1": int8_macro >= float(min_int8_macro_f1),
+        "int8_absolute_class1_f1": int8_class1 >= float(min_int8_class1_f1),
+        "int8_absolute_class1_precision": int8_class1_precision
+        >= float(min_int8_class1_precision),
+        "int8_absolute_class1_recall": int8_class1_recall
+        >= float(min_int8_class1_recall),
+        "fully_quantized_qdq_target_op_coverage": fully_quantized_target_op_coverage
+        >= float(min_qdq_target_op_coverage),
+        "int8_package_size": int8_size_mib <= float(max_int8_mib),
+        "parameter_count": int(parameter_count) <= int(max_parameters),
+    }
+    return {
+        "status": "passed" if all(checks.values()) else "failed",
+        "scope": "desktop_mobile_proxy_only",
+        "target_device_certified": False,
+        "checks": checks,
+        "observed": {
+            "parameter_count": int(parameter_count),
+            "int8_size_mib": int8_size_mib,
+            "fp32_macro_f1": fp32_macro,
+            "int8_macro_f1": int8_macro,
+            "macro_f1_drop": float(fp32_macro - int8_macro),
+            "fp32_class1_f1": fp32_class1,
+            "int8_class1_f1": int8_class1,
+            "int8_class1_precision": int8_class1_precision,
+            "int8_class1_recall": int8_class1_recall,
+            "class1_f1_drop": float(fp32_class1 - int8_class1),
+            "fully_quantized_qdq_target_op_coverage": (
+                fully_quantized_target_op_coverage
+            ),
+            "torch_to_fp32_argmax_mismatches": int(
+                torch_parity.get("argmax_mismatches", -1)
+            ),
+            "torch_to_fp32_max_probability_error": float(
+                torch_parity.get("max_abs_probability_error", float("inf"))
+            ),
+        },
+        "thresholds": {
+            "max_parameters": int(max_parameters),
+            "max_int8_mib": float(max_int8_mib),
+            "max_fp32_probability_error": float(max_fp32_probability_error),
+            "max_macro_f1_drop": float(max_macro_f1_drop),
+            "max_class1_f1_drop": float(max_class1_f1_drop),
+            "min_int8_macro_f1": float(min_int8_macro_f1),
+            "min_int8_class1_f1": float(min_int8_class1_f1),
+            "min_int8_class1_precision": float(min_int8_class1_precision),
+            "min_int8_class1_recall": float(min_int8_class1_recall),
+            "min_qdq_target_op_coverage": float(min_qdq_target_op_coverage),
+        },
+        "remaining_certification": (
+            "Measure warm/cold p95 latency, FPS, peak RAM, package install size, "
+            "energy and thermal behavior on the named physical mobile device/runtime."
+        ),
+    }
+
+
 def resolve_trtexec_path(explicit_path: Optional[Path] = None) -> Optional[str]:
     candidates = []
     if explicit_path is not None:
@@ -498,8 +931,9 @@ if trt is not None:  # pragma: no branch
             return [int(self.device_input.data_ptr())]
 
         def read_calibration_cache(self):  # pragma: no cover
-            if self.cache_path is not None and self.cache_path.is_file():
-                return self.cache_path.read_bytes()
+            # Never reuse an opaque cache: it cannot prove which ONNX graph,
+            # checkpoint, dataset inventory or stratified indices produced it.
+            # The configured path is write-only evidence for this invocation.
             return None
 
         def write_calibration_cache(self, cache):  # pragma: no cover
@@ -612,6 +1046,34 @@ def build_trt_engine_int8(
 
 def main() -> None:
     args = parse_args()
+    if args.onnx_static_int8 and args.skip_onnx:
+        raise ValueError("--onnx-static-int8 cannot be combined with --skip-onnx.")
+    if int(args.onnx_static_int8_calibration_samples) <= 0:
+        raise ValueError("--onnx-static-int8-calibration-samples must be positive.")
+    if args.require_mobile_proxy_gates and not args.onnx_static_int8:
+        raise ValueError("--require-mobile-proxy-gates requires --onnx-static-int8.")
+    if args.require_mobile_proxy_gates and args.skip_accuracy:
+        raise ValueError("Mobile proxy gates require full validation accuracy.")
+    if int(args.mobile_proxy_max_parameters) <= 0:
+        raise ValueError("--mobile-proxy-max-parameters must be positive.")
+    for name in (
+        "mobile_proxy_max_fp32_probability_error",
+        "mobile_proxy_max_macro_f1_drop",
+        "mobile_proxy_max_class1_f1_drop",
+        "mobile_proxy_max_int8_mib",
+    ):
+        if float(getattr(args, name)) < 0.0:
+            raise ValueError(f"--{name.replace('_', '-')} must be non-negative.")
+    for name in (
+        "mobile_proxy_min_int8_macro_f1",
+        "mobile_proxy_min_int8_class1_f1",
+        "mobile_proxy_min_int8_class1_precision",
+        "mobile_proxy_min_int8_class1_recall",
+        "mobile_proxy_min_qdq_target_op_coverage",
+    ):
+        value = float(getattr(args, name))
+        if not 0.0 <= value <= 1.0:
+            raise ValueError(f"--{name.replace('_', '-')} must be in [0, 1].")
     set_seed(args.seed, deterministic=False)
     checkpoint = load_checkpoint(args.checkpoint, map_location="cpu")
     validate_tensorrt_export_policy(
@@ -635,6 +1097,7 @@ def main() -> None:
         device=export_device,
         override_image_size=args.override_image_size,
     )
+    parameter_count = sum(int(parameter.numel()) for parameter in fp32_model.parameters())
 
     export_input_shape = resolve_input_shape(
         image_size=image_size,
@@ -700,9 +1163,88 @@ def main() -> None:
             output_path=output_dir / "model_fp32.onnx",
         )
 
+    onnx_static_int8_path = None
+    onnx_static_int8_summary: Optional[Dict[str, object]] = None
+    onnx_static_int8_calibration_samples_used = 0
+    onnx_static_int8_calibration_sampling: Dict[str, object] = {}
+    if args.onnx_static_int8:
+        if requires_spatial_metadata or temporal_frames > 1:
+            raise NotImplementedError(
+                "Static mobile QDQ currently supports one-input image classifiers only."
+            )
+        if onnx_path is None:
+            raise RuntimeError("FP32 ONNX export is required before static INT8 quantization.")
+        from trkh.inference.mobile_onnx_quantization import (
+            CalibrationDataReader,
+            quantize_mobile_onnx_qdq,
+        )
+
+        static_calibration_loader, _ = build_eval_loader(
+            checkpoint=checkpoint,
+            data_yaml=args.data,
+            batch_size=max(1, int(args.batch_size)),
+            num_workers=args.num_workers,
+            split="train",
+            override_image_size=args.override_image_size,
+            class_name_mode=args.class_name_mode,
+            expected_num_classes=args.expected_num_classes or None,
+            allow_test_split=False,
+            stratified_max_samples=int(
+                args.onnx_static_int8_calibration_samples
+            ),
+            sampling_seed=int(args.seed),
+        )
+        onnx_static_int8_calibration_sampling = dict(
+            getattr(
+                static_calibration_loader,
+                "trkh_sampling_summary",
+                {},
+            )
+        )
+        static_calibration_batches, onnx_static_int8_calibration_samples_used = (
+            collect_calibration_batches(
+                static_calibration_loader,
+                max_samples=args.onnx_static_int8_calibration_samples,
+            )
+        )
+        static_reader = CalibrationDataReader(
+            [
+                {"images": batch.numpy()}
+                for batch in static_calibration_batches
+            ],
+            calibration_split="train",
+            provenance={
+                "dataset": str(Path(args.data).resolve()),
+                "dataset_split": "train",
+                "test_used": False,
+                "samples_requested": int(args.onnx_static_int8_calibration_samples),
+                "samples_used": int(onnx_static_int8_calibration_samples_used),
+                "sampling": onnx_static_int8_calibration_sampling,
+                "checkpoint": str(Path(args.checkpoint).resolve()),
+            },
+        )
+        onnx_static_int8_path = output_dir / "model_int8_qdq.onnx"
+        onnx_static_int8_summary = quantize_mobile_onnx_qdq(
+            onnx_path,
+            onnx_static_int8_path,
+            static_reader,
+            provenance={
+                "purpose": "trkh_mobile_deployment_proxy",
+                "calibration_split": "train",
+                "test_used": False,
+                "calibration_sampling": onnx_static_int8_calibration_sampling,
+            },
+            overwrite=True,
+            require_size_reduction=True,
+            min_target_op_coverage=(
+                args.mobile_proxy_min_qdq_target_op_coverage
+            ),
+        )
+
     trt_engine_path = None
     trt_int8_engine_path = None
-    calibration_samples_used = 0
+    trt_calibration_samples_used = 0
+    trt_calibration_sampling: Dict[str, object] = {}
     calibration_cache_path = None
     if onnx_path is not None and not args.skip_trt_engine:
         trt_engine_path = build_trt_engine_fp16(
@@ -716,15 +1258,20 @@ def main() -> None:
                 raise NotImplementedError(
                     "INT8 calibration for multi-input spatial metadata is not implemented."
                 )
-            calibration_loader, _ = build_eval_loader(
+            calibration_loader, trt_calibration_sampling = build_eval_loader(
                 checkpoint=checkpoint,
                 data_yaml=args.data,
                 batch_size=export_input_shape[0],
                 num_workers=args.num_workers,
                 split=args.trt_calibration_split,
                 override_image_size=args.override_image_size,
+                class_name_mode=args.class_name_mode,
+                expected_num_classes=args.expected_num_classes or None,
+                allow_test_split=False,
+                stratified_max_samples=int(args.trt_calibration_samples),
+                sampling_seed=int(args.seed),
             )
-            calibration_batches, calibration_samples_used = collect_calibration_batches(
+            calibration_batches, trt_calibration_samples_used = collect_calibration_batches(
                 calibration_loader,
                 max_samples=args.trt_calibration_samples,
             )
@@ -743,6 +1290,7 @@ def main() -> None:
 
     payload: Dict[str, object] = {
         "checkpoint": str(args.checkpoint.resolve()),
+        "parameter_count": int(parameter_count),
         "image_size": image_size,
         "temporal_frames": temporal_frames,
         "input_shape": list(export_input_shape),
@@ -767,6 +1315,11 @@ def main() -> None:
                 else None
             ),
             "onnx_fp32": str(onnx_path.resolve()) if onnx_path is not None else None,
+            "onnx_int8_qdq": (
+                str(onnx_static_int8_path.resolve())
+                if onnx_static_int8_path is not None
+                else None
+            ),
             "tensorrt_fp16": str(trt_engine_path.resolve()) if trt_engine_path is not None else None,
             "tensorrt_int8_ptq": (
                 str(trt_int8_engine_path.resolve()) if trt_int8_engine_path is not None else None
@@ -778,13 +1331,30 @@ def main() -> None:
             "enabled": True,
             "calibration_split": args.trt_calibration_split,
             "calibration_samples_requested": int(args.trt_calibration_samples),
-            "calibration_samples_used": int(calibration_samples_used),
+            "calibration_samples_used": int(trt_calibration_samples_used),
+            "calibration_sampling": trt_calibration_sampling,
             "calibration_cache": (
                 str(calibration_cache_path.resolve()) if calibration_cache_path is not None else None
             ),
         }
     else:
         payload["trt_int8"] = {"enabled": False}
+    payload["onnx_static_int8"] = (
+        {
+            "enabled": True,
+            "calibration_split": "train",
+            "calibration_samples_requested": int(
+                args.onnx_static_int8_calibration_samples
+            ),
+            "calibration_samples_used": int(
+                onnx_static_int8_calibration_samples_used
+            ),
+            "calibration_sampling": onnx_static_int8_calibration_sampling,
+            "quantization": onnx_static_int8_summary,
+        }
+        if onnx_static_int8_summary is not None
+        else {"enabled": False}
+    )
 
     loader = None
     class_names = None
@@ -798,6 +1368,7 @@ def main() -> None:
             override_image_size=args.override_image_size,
             class_name_mode=args.class_name_mode,
             expected_num_classes=args.expected_num_classes or None,
+            allow_test_split=bool(args.allow_test_split),
         )
         fp32_cpu = build_runtime_model_from_checkpoint(
             checkpoint=checkpoint,
@@ -812,6 +1383,40 @@ def main() -> None:
         if int8_model is not None:
             payload["accuracy"]["int8_dynamic_cpu"] = to_serializable(
                 evaluate_accuracy(int8_model, loader, class_names, torch.device("cpu"))
+            )
+        if onnx_static_int8_path is not None and onnx_path is not None:
+            mobile_evaluation = evaluate_mobile_onnx_pair(
+                reference_model=fp32_cpu,
+                fp32_onnx_path=onnx_path,
+                int8_onnx_path=onnx_static_int8_path,
+                loader=loader,
+                class_names=class_names,
+            )
+            payload["accuracy"]["mobile_onnx_aligned"] = to_serializable(
+                mobile_evaluation
+            )
+            payload["mobile_proxy_gate"] = build_mobile_proxy_gate(
+                evaluation=mobile_evaluation,
+                quantization=onnx_static_int8_summary or {},
+                parameter_count=parameter_count,
+                max_fp32_probability_error=(
+                    args.mobile_proxy_max_fp32_probability_error
+                ),
+                max_macro_f1_drop=args.mobile_proxy_max_macro_f1_drop,
+                max_class1_f1_drop=args.mobile_proxy_max_class1_f1_drop,
+                max_int8_mib=args.mobile_proxy_max_int8_mib,
+                max_parameters=args.mobile_proxy_max_parameters,
+                min_int8_macro_f1=args.mobile_proxy_min_int8_macro_f1,
+                min_int8_class1_f1=args.mobile_proxy_min_int8_class1_f1,
+                min_int8_class1_precision=(
+                    args.mobile_proxy_min_int8_class1_precision
+                ),
+                min_int8_class1_recall=(
+                    args.mobile_proxy_min_int8_class1_recall
+                ),
+                min_qdq_target_op_coverage=(
+                    args.mobile_proxy_min_qdq_target_op_coverage
+                ),
             )
 
     if not args.skip_benchmark:
@@ -855,9 +1460,23 @@ def main() -> None:
                 warmup=args.benchmark_warmup,
                 runs=args.benchmark_runs,
             )
+        if onnx_static_int8_path is not None:
+            payload["benchmark"]["onnx_int8_qdq_cpu"] = benchmark_onnx_model(
+                onnx_path=onnx_static_int8_path,
+                input_shapes=benchmark_input_shapes,
+                warmup=args.benchmark_warmup,
+                runs=args.benchmark_runs,
+            )
 
     json_dump(output_dir / "deploy_summary.json", to_serializable(payload))
     print(json.dumps(to_serializable(payload), ensure_ascii=False))
+    if args.require_mobile_proxy_gates:
+        gate = payload.get("mobile_proxy_gate", {})
+        if not isinstance(gate, Mapping) or gate.get("status") != "passed":
+            raise RuntimeError(
+                "Mobile desktop-proxy gate failed; inspect deploy_summary.json. "
+                "No target-device certification was claimed."
+            )
 
 
 if __name__ == "__main__":

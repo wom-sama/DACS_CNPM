@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 import torch
 import torch.nn.functional as F
@@ -11,6 +11,7 @@ from torch import nn
 
 from trkh.core.config import IMAGENET_MEAN, IMAGENET_STD, to_serializable
 from trkh.data.dataset import bbox_xywh_to_xyxy, build_eval_transform
+from trkh.evaluation.input_normalization import checkpoint_input_normalization
 from trkh.training.debug_and_optimization import TestTimeAugmentation
 from trkh.models.model import build_model_from_checkpoint, extract_bbox_from_model_output, extract_detection_from_model_output
 from trkh.core.utils import autocast_context, ensure_dir, json_dump, load_checkpoint
@@ -201,6 +202,8 @@ def predict_tensor_outputs(
     amp: bool = True,
     tta: bool = False,
     tta_brightness_delta: float = 0.08,
+    input_mean: Sequence[float] = IMAGENET_MEAN,
+    input_std: Sequence[float] = IMAGENET_STD,
 ) -> Dict[str, torch.Tensor]:
     device = next(model.parameters()).device
     temporal_frames = int(getattr(model, "temporal_frames", 1))
@@ -237,6 +240,8 @@ def predict_tensor_outputs(
                     contrast_delta=tta_brightness_delta,
                     saturation_delta=tta_brightness_delta,
                     num_aug=4,
+                    mean=input_mean,
+                    std=input_std,
                 )
                 if requires_spatial_metadata:
                     def _metadata_tta_forward(augmented_images: torch.Tensor):
@@ -309,6 +314,8 @@ def predict_tensor_probabilities(
     amp: bool = True,
     tta: bool = False,
     tta_brightness_delta: float = 0.08,
+    input_mean: Sequence[float] = IMAGENET_MEAN,
+    input_std: Sequence[float] = IMAGENET_STD,
 ) -> torch.Tensor:
     outputs = predict_tensor_outputs(
         model=model,
@@ -318,6 +325,8 @@ def predict_tensor_probabilities(
         amp=amp,
         tta=tta,
         tta_brightness_delta=tta_brightness_delta,
+        input_mean=input_mean,
+        input_std=input_std,
     )
     return F.softmax(outputs["logits"], dim=-1)
 
@@ -538,11 +547,30 @@ def predict(
     augmentation_config = checkpoint.get("augmentation_config", {})
     if not isinstance(augmentation_config, dict):
         augmentation_config = {}
+    input_mean, input_std = checkpoint_input_normalization(checkpoint)
     transform = build_eval_transform(
         image_size=image_size,
         resize_mode=augmentation_config.get("resize_mode", "pad"),
         illumination_normalization=bool(augmentation_config.get("illumination_normalization", False)),
         illumination_normalization_strength=float(augmentation_config.get("illumination_normalization_strength", 0.0) or 0.0),
+        foreground_crop_mode=str(
+            augmentation_config.get("foreground_crop_mode", "none") or "none"
+        ),
+        foreground_crop_margin_ratio=float(
+            augmentation_config.get("foreground_crop_margin_ratio", 0.08) or 0.08
+        ),
+        foreground_crop_min_mask_area_ratio=float(
+            augmentation_config.get("foreground_crop_min_mask_area_ratio", 0.03)
+            or 0.03
+        ),
+        foreground_crop_max_mask_area_ratio=float(
+            augmentation_config.get("foreground_crop_max_mask_area_ratio", 0.92)
+            or 0.92
+        ),
+        foreground_crop_max_crop_area_ratio=float(
+            augmentation_config.get("foreground_crop_max_crop_area_ratio", 0.98)
+            or 0.98
+        ),
         background_suppression_mode=str(augmentation_config.get("background_suppression_mode", "none") or "none"),
         background_suppression_margin=float(augmentation_config.get("background_suppression_margin", 0.08) or 0.08),
         background_suppression_blur_radius=float(augmentation_config.get("background_suppression_blur_radius", 7.0) or 7.0),
@@ -561,6 +589,8 @@ def predict(
         eval_surface_detail_amplification=bool(
             augmentation_config.get("eval_surface_detail_amplification", False)
         ),
+        mean=input_mean,
+        std=input_std,
     )
 
     with Image.open(image_path) as handle:
@@ -576,6 +606,8 @@ def predict(
         amp=amp,
         tta=tta,
         tta_brightness_delta=tta_brightness_delta,
+        input_mean=input_mean,
+        input_std=input_std,
     )
     if "boxes" not in prediction_outputs:
         class_top_k = int(top_k) if int(top_k) > 0 else len(checkpoint["class_names"])

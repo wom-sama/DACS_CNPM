@@ -25,7 +25,10 @@ def project_dir() -> Path:
 
 
 def default_data_yaml() -> Path:
-    return project_dir().parent / "dataset" / "data.yaml"
+    # The reviewed five-class classification export is the only canonical
+    # dataset for new TRKH work. Historical YOLO views remain addressable only
+    # through an explicit --data path for reproducibility.
+    return project_dir().parent / "newdataset" / "class_f" / "data.yaml"
 
 
 @dataclass
@@ -125,8 +128,21 @@ class DataSpec:
 @dataclass
 class ModelConfig:
     model_type: str = "vit_registers_hybrid"
+    research_track: str = "no_pretrain"
     pretrained: bool = False
     timm_model_name: str = "mobilenetv3_large_100.ra_in1k"
+    pretrained_checkpoint_path: str = ""
+    pretrained_checkpoint_sha256: str = ""
+    pretrained_source_url: str = ""
+    pretrained_source_revision: str = ""
+    pretrained_source_license: str = ""
+    pretrained_semantic_expected_prefix_tokens: int = 5
+    pretrained_semantic_expected_embed_dim: int = 384
+    pretrained_semantic_expected_patch_count: int = 256
+    pretrained_semantic_dropout: float = 0.05
+    pretrained_semantic_initial_scale: float = 0.0
+    pretrained_semantic_max_scale: float = 0.25
+    pretrained_backbone_gradient_checkpointing: bool = False
     input_mean: Sequence[float] = IMAGENET_MEAN
     input_std: Sequence[float] = IMAGENET_STD
     head_pooling: str = "cls_register_mean"
@@ -446,6 +462,11 @@ class ModelConfig:
 
 @dataclass
 class TrainConfig:
+    experiment_protocol_id: str = ""
+    source_commit: str = ""
+    source_tree_sha256: str = ""
+    dataset_image_tree_sha256: str = ""
+    recipe_train_contract_sha256: str = ""
     batch_size: int = 8
     grad_accum_steps: int = 8
     epochs: int = 80

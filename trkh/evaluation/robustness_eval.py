@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 from typing import Callable, Dict, List, Mapping, Optional, Tuple
@@ -12,9 +13,15 @@ from PIL import Image, ImageEnhance
 from torch.utils.data import DataLoader, Dataset
 
 from trkh.evaluation.attention_viz import analyze_tensor, resolve_layer_index
-from trkh.core.config import IMAGENET_MEAN, default_data_yaml, load_data_spec, to_serializable
-from trkh.data.dataset import MangoYOLOCropDataset, PseudoVideoAugmenter, build_eval_transform
+from trkh.core.config import default_data_yaml, load_data_spec, to_serializable
+from trkh.data.dataset import (
+    ClassificationFolderDataset,
+    MangoYOLOCropDataset,
+    PseudoVideoAugmenter,
+    build_eval_transform,
+)
 from trkh.evaluation.evaluate import resolve_crop_to_primary_object
+from trkh.evaluation.input_normalization import checkpoint_input_normalization
 from trkh.models.feature_hooks import count_attention_layers
 from trkh.inference.inference import load_model
 from trkh.models.model import (
@@ -29,6 +36,14 @@ from trkh.core.utils import (
     set_seed,
     summarize_token_norms,
 )
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def parse_args() -> argparse.Namespace:
@@ -100,17 +115,18 @@ class IdentityCorruption:
 
 
 def _unpack_classification_sample(sample: object) -> Tuple[Image.Image, int, Mapping[str, object], torch.Tensor]:
-    if not isinstance(sample, (tuple, list)) or len(sample) != 3:
+    if not isinstance(sample, (tuple, list)) or len(sample) not in {2, 3}:
         raise ValueError(
             "Robustness evaluation requires classification samples as "
-            "(PIL image, label, metadata)."
+            "(PIL image, label[, metadata])."
         )
-    image, label, metadata = sample
+    image, label = sample[0], sample[1]
+    metadata = sample[2] if len(sample) == 3 else {}
     if not isinstance(image, Image.Image) or not isinstance(metadata, Mapping):
         raise ValueError("Invalid robustness classification sample types.")
     bbox = metadata.get("bbox")
     if not torch.is_tensor(bbox) or bbox.numel() != 4:
-        raise ValueError("Robustness classification sample requires a four-value bbox tensor.")
+        bbox = torch.tensor((0.5, 0.5, 1.0, 1.0), dtype=torch.float32)
     return image, int(label), metadata, bbox.reshape(4).to(dtype=torch.float32)
 
 
@@ -139,9 +155,11 @@ def _transform_classification_image(
     if not torch.is_tensor(transformed_boxes) or transformed_boxes.ndim != 2 or transformed_boxes.size(0) < 1:
         raise ValueError("Robustness transform removed the classification bbox.")
     output_metadata = {
-        "bbox": bbox.to(dtype=torch.float32),
         "crop_bbox": transformed_boxes[0].to(dtype=torch.float32),
     }
+    observed_bbox = metadata.get("bbox")
+    if torch.is_tensor(observed_bbox) and observed_bbox.numel() == 4:
+        output_metadata["bbox"] = bbox.to(dtype=torch.float32)
     image_mask = transformed_target.get("image_mask")
     if torch.is_tensor(image_mask):
         output_metadata["image_mask"] = image_mask.to(dtype=torch.bool)
@@ -194,7 +212,7 @@ def _forward_classification_with_metadata(
 class CorruptedDataset(Dataset):
     def __init__(
         self,
-        base_dataset: MangoYOLOCropDataset,
+        base_dataset: Dataset,
         corruption: Callable[[Image.Image], Image.Image],
         transform,
     ) -> None:
@@ -320,10 +338,22 @@ def evaluate_condition(
     accuracy = tp.sum() / confusion_f.sum().clamp(min=1.0)
 
     return {
+        "evaluated_samples": int(targets.numel()),
         "accuracy": float(accuracy.item()),
         "macro_f1": float(f1.mean().item()),
         "weighted_f1": float((f1 * support / support.sum().clamp(min=1.0)).sum().item()),
         "confusion_matrix": confusion.tolist(),
+        "per_class": [
+            {
+                "class_index": int(class_index),
+                "class_name": str(class_names[class_index]),
+                "support": int(support[class_index].item()),
+                "precision": float(precision[class_index].item()),
+                "recall": float(recall[class_index].item()),
+                "f1": float(f1[class_index].item()),
+            }
+            for class_index in range(num_classes)
+        ],
         "artifact_stats": {
             key: value / max(1, artifact_batches) for key, value in artifact_totals.items()
         },
@@ -333,7 +363,7 @@ def evaluate_condition(
 def collect_fail_cases(
     model,
     checkpoint,
-    base_dataset: MangoYOLOCropDataset,
+    base_dataset: Dataset,
     corruption: Callable[[Image.Image], Image.Image],
     transform,
     class_names: List[str],
@@ -434,19 +464,33 @@ def main() -> None:
         class_name_mode=args.class_name_mode,
         expected_num_classes=args.expected_num_classes or None,
     )
-    base_dataset = MangoYOLOCropDataset.from_data_spec(
-        data_spec=data_spec,
-        split="val",
-        transform=None,
-        crop_margin_ratio=crop_margin_ratio,
-        crop_to_primary_object=resolve_crop_to_primary_object(checkpoint),
-        classification_target=True,
-        classification_object_crops=True,
-        classification_bbox_metadata=True,
-    )
+    if list(data_spec.class_names) != [str(name) for name in class_names]:
+        raise ValueError(
+            "Checkpoint/data class order mismatch for robustness evaluation: "
+            f"checkpoint={list(class_names)!r}, data={list(data_spec.class_names)!r}."
+        )
+    if data_spec.data_format == "classification_folder":
+        base_dataset = ClassificationFolderDataset.from_data_spec(
+            data_spec=data_spec,
+            split="val",
+            transform=None,
+            class_aware_augmentation=False,
+        )
+    else:
+        base_dataset = MangoYOLOCropDataset.from_data_spec(
+            data_spec=data_spec,
+            split="val",
+            transform=None,
+            crop_margin_ratio=crop_margin_ratio,
+            crop_to_primary_object=resolve_crop_to_primary_object(checkpoint),
+            classification_target=True,
+            classification_object_crops=True,
+            classification_bbox_metadata=True,
+        )
     augmentation_config = checkpoint.get("augmentation_config", {})
     if not isinstance(augmentation_config, dict):
         augmentation_config = {}
+    input_mean, input_std = checkpoint_input_normalization(checkpoint)
     base_transform = build_eval_transform(
         image_size=image_size,
         resize_mode=resize_mode,
@@ -481,6 +525,8 @@ def main() -> None:
         eval_surface_detail_amplification=bool(
             augmentation_config.get("eval_surface_detail_amplification", False)
         ),
+        mean=input_mean,
+        std=input_std,
     )
     if temporal_frames > 1:
         transform = PseudoVideoAugmenter(
@@ -497,7 +543,7 @@ def main() -> None:
         "clean": IdentityCorruption(),
         "occlusion_center": CenterOcclusion(
             ratio=args.occlusion_ratio,
-            fill=imagenet_fill(IMAGENET_MEAN),
+            fill=imagenet_fill(input_mean),
         ),
         "lighting_dim": LightingShift(brightness=0.7, contrast=0.9),
         "lighting_bright": LightingShift(brightness=1.25, contrast=1.1),
@@ -506,12 +552,25 @@ def main() -> None:
 
     payload = {
         "checkpoint": str(args.checkpoint.resolve()),
+        "data_yaml": str(Path(args.data).resolve()),
+        "data_yaml_sha256": _sha256_file(Path(args.data).resolve()),
+        "data_format": data_spec.data_format,
+        "split": "val",
+        "samples": len(base_dataset),
+        "dataset_samples": len(base_dataset),
+        "max_batches": int(args.max_batches),
+        "class_names": list(class_names),
+        "input_normalization": {
+            "mean": list(input_mean),
+            "std": list(input_std),
+        },
         "image_size": image_size,
         "temporal_frames": temporal_frames,
         "attention_depth": attention_depth,
         "conditions": {},
     }
 
+    clean_metrics: Optional[Dict[str, object]] = None
     for condition_name, corruption in corruptions.items():
         condition_dir = ensure_dir(output_dir / condition_name)
         condition_dataset = CorruptedDataset(
@@ -528,6 +587,31 @@ def main() -> None:
             num_workers=args.num_workers,
             max_batches=args.max_batches,
         )
+        if clean_metrics is None:
+            clean_metrics = metrics
+        clean_per_class = (
+            clean_metrics.get("per_class", [])
+            if isinstance(clean_metrics, Mapping)
+            else []
+        )
+        condition_per_class = metrics.get("per_class", [])
+        clean_class1_f1 = (
+            float(clean_per_class[1].get("f1", 0.0))
+            if isinstance(clean_per_class, list) and len(clean_per_class) > 1
+            else 0.0
+        )
+        condition_class1_f1 = (
+            float(condition_per_class[1].get("f1", 0.0))
+            if isinstance(condition_per_class, list) and len(condition_per_class) > 1
+            else 0.0
+        )
+        metrics["delta_vs_clean"] = {
+            "accuracy": float(metrics["accuracy"]) - float(clean_metrics["accuracy"]),
+            "macro_f1": float(metrics["macro_f1"]) - float(clean_metrics["macro_f1"]),
+            "weighted_f1": float(metrics["weighted_f1"])
+            - float(clean_metrics["weighted_f1"]),
+            "class1_f1": condition_class1_f1 - clean_class1_f1,
+        }
         fail_cases = collect_fail_cases(
             model=model,
             checkpoint=checkpoint,
