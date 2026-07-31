@@ -35,6 +35,7 @@ from trkh.tools.precheck_dinov3_prefix_residual_train_oof import (
     _cache_manifest_expected,
     _cache_paths,
     _load_existing_cache,
+    _load_materialized_labels,
     _parse_args,
     _sha256,
     _train_readout,
@@ -249,6 +250,28 @@ def test_cache_loader_rejects_actual_dtype_even_with_matching_file_hash(
             source_groups=groups,
             expected_labels=labels,
         )
+
+
+def test_label_validation_does_not_retain_file_mapping_during_promotion(
+    tmp_path: Path,
+) -> None:
+    partial = tmp_path / "labels_i64.npy.partial"
+    promoted = tmp_path / "labels_i64.npy"
+    expected = np.asarray([0, 1, 2, 4], dtype=np.int64)
+    with partial.open("wb") as handle:
+        np.save(handle, expected, allow_pickle=False)
+
+    loaded = _load_materialized_labels(partial)
+
+    assert type(loaded) is np.ndarray
+    assert not isinstance(loaded, np.memmap)
+    assert loaded.flags.owndata
+    assert np.array_equal(loaded, expected)
+    # Keep ``loaded`` alive: this replacement is the operation that failed on
+    # Windows when validation used np.load(..., mmap_mode="r").
+    partial.replace(promoted)
+    assert promoted.is_file()
+    assert np.array_equal(loaded, expected)
 
 
 def _passing_readiness_inputs():

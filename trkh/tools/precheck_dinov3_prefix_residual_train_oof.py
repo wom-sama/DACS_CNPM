@@ -932,6 +932,16 @@ def _cache_paths(output_dir: Path) -> Dict[str, Path]:
     }
 
 
+def _load_materialized_labels(path: Path) -> np.ndarray:
+    """Load the small label cache without retaining a Windows file mapping."""
+
+    return np.array(
+        np.load(Path(path), allow_pickle=False),
+        dtype=np.int64,
+        copy=True,
+    )
+
+
 def _array_all_finite(array: np.ndarray, *, row_chunk: int = 256) -> bool:
     values = np.asarray(array)
     for start in range(0, int(values.shape[0]), max(1, int(row_chunk))):
@@ -1235,7 +1245,10 @@ def _extract_train_cache(
     for array in (prefix_cache, patch_mean_cache, logit_cache, label_cache):
         array.flush()
     del prefix_cache, patch_mean_cache, logit_cache, label_cache
-    extracted_labels = np.load(partial["labels"], mmap_mode="r", allow_pickle=False)
+    # Labels are tiny, so materialize them before atomic promotion.  Keeping a
+    # read-only memmap alive here prevents Path.replace() on Windows even after
+    # ``del`` because NumPy may still own the underlying file mapping.
+    extracted_labels = _load_materialized_labels(partial["labels"])
     if not np.array_equal(
         np.asarray(extracted_labels, dtype=np.int64),
         np.asarray(expected_labels, dtype=np.int64),
