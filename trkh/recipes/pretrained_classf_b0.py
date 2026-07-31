@@ -110,7 +110,9 @@ def source_tree_sha256(repo_root: Path) -> str:
     for path in files:
         digest.update(path.relative_to(repo_root).as_posix().encode("utf-8"))
         digest.update(b"\0")
-        digest.update(path.read_bytes())
+        # Git may materialize CRLF on Windows and LF in a Kaggle archive.
+        # Normalize text line endings so one commit has one portable digest.
+        digest.update(path.read_bytes().replace(b"\r\n", b"\n"))
     return digest.hexdigest()
 
 

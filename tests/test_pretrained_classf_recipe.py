@@ -210,6 +210,24 @@ def test_classf_b0_source_tree_digest_is_stable_shape() -> None:
     int(digest, 16)
 
 
+def test_classf_b0_source_tree_digest_is_line_ending_portable(
+    tmp_path: Path,
+) -> None:
+    lf_root = tmp_path / "lf"
+    crlf_root = tmp_path / "crlf"
+    for root, newline in ((lf_root, b"\n"), (crlf_root, b"\r\n")):
+        (root / "trkh").mkdir(parents=True)
+        (root / "configs").mkdir()
+        (root / "trkh" / "module.py").write_bytes(
+            newline.join((b"x = 1", b"y = 2", b""))
+        )
+        (root / "configs" / "data.yaml").write_bytes(
+            newline.join((b"nc: 5", b"train: train", b""))
+        )
+
+    assert source_tree_sha256(lf_root) == source_tree_sha256(crlf_root)
+
+
 def test_classf_b0_reuses_only_exact_canonical_attestation(
     tmp_path: Path,
     monkeypatch,
