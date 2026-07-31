@@ -57,6 +57,7 @@ from trkh.data.dataset import (
     TargetedMarginDataset,
     TeacherFeatureDataset,
     TeacherProbabilityDataset,
+    TemperedClassBatchSampler,
     build_rare_class_repeat_factors,
     build_eval_transform,
     build_train_collate_fn,
@@ -1433,6 +1434,15 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     )
     parser.add_argument("--balanced-epoch-multiplier", type=float, default=1.0)
     parser.add_argument("--balanced-epoch-tolerance", type=float, default=0.10)
+    parser.add_argument(
+        "--tempered-class-sampling-power",
+        type=float,
+        default=None,
+        help=(
+            "Bat sampler train-only q_c proportional n_c**power; power=0 la class-uniform, "
+            "power=1 la natural prior. Xung dot voi weighted/natural/auto-tune sampler."
+        ),
+    )
     parser.add_argument("--imbalance-auto-tune", action="store_true", default=False)
     parser.add_argument("--disable-imbalance-auto-tune", action="store_true", default=False)
     parser.add_argument("--imbalance-sampler-disable-threshold", type=float, default=0.18)
@@ -4981,6 +4991,29 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         raise ValueError("--balanced-epoch-multiplier phai > 0.")
     if not 0.0 <= args.balanced_epoch_tolerance <= 1.0:
         raise ValueError("--balanced-epoch-tolerance phai nam trong [0, 1].")
+    if args.tempered_class_sampling_power is not None:
+        tempered_power = float(args.tempered_class_sampling_power)
+        if not math.isfinite(tempered_power) or not 0.0 <= tempered_power <= 1.0:
+            raise ValueError(
+                "--tempered-class-sampling-power phai huu han va nam trong [0, 1]."
+            )
+        if args.weighted_sampler:
+            raise ValueError(
+                "--tempered-class-sampling-power xung dot voi --weighted-sampler."
+            )
+        if args.disable_balanced_epoch_sampling:
+            raise ValueError(
+                "--tempered-class-sampling-power da thay the strict balanced sampler; "
+                "khong dung cung --disable-balanced-epoch-sampling."
+            )
+        if args.imbalance_auto_tune and not args.disable_imbalance_auto_tune:
+            raise ValueError(
+                "--tempered-class-sampling-power xung dot voi --imbalance-auto-tune."
+            )
+        if args.model_type in DETECTION_MODEL_TYPES:
+            raise ValueError(
+                "--tempered-class-sampling-power chi ho tro classification-only."
+            )
     if args.sam_rho < 0.0:
         raise ValueError("--sam-rho phai >= 0.")
     if args.ldam_max_margin < 0.0:
@@ -6144,6 +6177,11 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         raise ValueError("CAR/BiCAR khong ho tro SAM hai-pass vi EMA chi duoc cap nhat mot lan moi batch.")
     if args.confusion_spectral_loss_weight > 0.0 and args.disable_balanced_epoch_sampling:
         raise ValueError("CAR/BiCAR readiness yeu cau strict balanced epoch sampling.")
+    if (
+        args.confusion_spectral_loss_weight > 0.0
+        and args.tempered_class_sampling_power is not None
+    ):
+        raise ValueError("CAR/BiCAR readiness yeu cau strict balanced epoch sampling.")
     if args.mutual_channel_loss_weight < 0.0:
         raise ValueError("--mutual-channel-loss-weight phai >= 0.")
     if args.mutual_channel_top_k <= 0:
@@ -7247,9 +7285,13 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         use_weighted_sampler=args.weighted_sampler,
         weighted_sampler_power=args.weighted_sampler_power,
         weighted_sampler_epoch_multiplier=args.weighted_sampler_epoch_multiplier,
-        balanced_epoch_sampling=not args.disable_balanced_epoch_sampling,
+        balanced_epoch_sampling=bool(
+            not args.disable_balanced_epoch_sampling
+            and args.tempered_class_sampling_power is None
+        ),
         balanced_epoch_multiplier=args.balanced_epoch_multiplier,
         balanced_epoch_tolerance=args.balanced_epoch_tolerance,
+        tempered_class_sampling_power=args.tempered_class_sampling_power,
         auto_tune_imbalance=bool(args.imbalance_auto_tune and not args.disable_imbalance_auto_tune),
         imbalance_sampler_disable_threshold=args.imbalance_sampler_disable_threshold,
         max_train_batches=args.max_train_batches,
@@ -8549,6 +8591,22 @@ def build_weighted_sampler(
     )
 
 
+def build_tempered_class_sampler(
+    dataset: MangoYOLOCropDataset,
+    batch_size: int,
+    num_classes: int,
+    power: float,
+    epoch_multiplier: float = 1.0,
+) -> TemperedClassBatchSampler:
+    return TemperedClassBatchSampler(
+        labels=dataset.labels(),
+        batch_size=batch_size,
+        num_classes=num_classes,
+        power=power,
+        epoch_multiplier=epoch_multiplier,
+    )
+
+
 def resolve_imbalance_strategy(
     train_config: TrainConfig,
     class_counts: Sequence[int],
@@ -8561,13 +8619,16 @@ def resolve_imbalance_strategy(
     use_weighted_sampler = bool(
         train_config.use_weighted_sampler or train_config.balanced_epoch_sampling
     )
+    use_tempered_sampler = train_config.tempered_class_sampling_power is not None
     if (
         train_config.auto_tune_imbalance
         and not train_config.use_weighted_sampler
         and not train_config.balanced_epoch_sampling
+        and not use_tempered_sampler
         and strength < float(train_config.imbalance_sampler_disable_threshold)
     ):
         use_weighted_sampler = False
+    uses_class_sampler = bool(use_weighted_sampler or use_tempered_sampler)
 
     focal_loss_gamma = float(train_config.focal_loss_gamma) * strength
     focal_loss_mix = float(train_config.focal_loss_mix) * strength
@@ -8578,7 +8639,7 @@ def resolve_imbalance_strategy(
 
     class_weight_blend = (
         0.0
-        if train_config.balanced_epoch_sampling
+        if train_config.balanced_epoch_sampling or use_tempered_sampler
         else strength if train_config.use_class_weights else 0.0
     )
     class_weight_mode = train_config.class_weight_mode if class_weight_blend > 0.05 else "uniform"
@@ -8596,7 +8657,7 @@ def resolve_imbalance_strategy(
     )
 
     sampler_power = 1.0 + max(0.0, float(train_config.weighted_sampler_power) - 1.0) * strength
-    if train_config.balanced_epoch_sampling:
+    if train_config.balanced_epoch_sampling or use_tempered_sampler:
         sampler_epoch_multiplier = float(train_config.balanced_epoch_multiplier)
     else:
         sampler_epoch_multiplier = 1.0 + max(
@@ -8611,11 +8672,25 @@ def resolve_imbalance_strategy(
         "skew_metrics": skew_metrics,
         "intervention_strength": strength,
         "use_weighted_sampler": use_weighted_sampler,
-        "sampler_type": "strict_balanced" if use_weighted_sampler else "random",
+        "use_tempered_sampler": bool(use_tempered_sampler),
+        "uses_class_sampler": uses_class_sampler,
+        "sampler_type": (
+            "tempered_class_prior"
+            if use_tempered_sampler
+            else "strict_balanced"
+            if use_weighted_sampler
+            else "random"
+        ),
         "balanced_epoch_sampling": bool(train_config.balanced_epoch_sampling),
         "balanced_epoch_tolerance": float(train_config.balanced_epoch_tolerance),
+        "tempered_class_sampling_power": (
+            float(train_config.tempered_class_sampling_power)
+            if use_tempered_sampler
+            else None
+        ),
         "weighted_sampler_power": sampler_power,
         "weighted_sampler_epoch_multiplier": sampler_epoch_multiplier,
+        "sampler_epoch_multiplier": sampler_epoch_multiplier,
         "use_class_weights": use_class_weights,
         "class_weight_mode": class_weight_mode,
         "class_weight_blend": class_weight_blend,
@@ -30320,7 +30395,7 @@ def main() -> None:
     if (
         augmentation_config.class_aware_augmentation
         and augmentation_config.rare_class_repeat
-        and not imbalance_summary["use_weighted_sampler"]
+        and not imbalance_summary["uses_class_sampler"]
         and max(rare_class_repeat_factors, default=1.0) > 1.0
     ):
         train_dataset = RareClassRepeatDataset(
@@ -30343,18 +30418,26 @@ def main() -> None:
             },
             flush=True,
         )
-    elif augmentation_config.rare_class_repeat and imbalance_summary["use_weighted_sampler"]:
+    elif augmentation_config.rare_class_repeat and imbalance_summary["uses_class_sampler"]:
+        sampler_type = str(imbalance_summary["sampler_type"])
+        skipped_reason = (
+            "tempered_class_sampler_enabled"
+            if sampler_type == "tempered_class_prior"
+            else "strict_balanced_sampler_enabled"
+        )
         print(
             {
                 "rare_class_repeat": "skipped",
-                "reason": "strict balanced sampler da duoc bat, tranh oversample hai lan",
+                "reason": (
+                    f"{sampler_type} sampler da duoc bat, tranh oversample hai lan"
+                ),
                 "class_repeat_factors": rare_class_repeat_factors,
             },
             flush=True,
         )
         rare_class_repeat_summary = {
             "enabled": False,
-            "skipped_reason": "strict_balanced_sampler_enabled",
+            "skipped_reason": skipped_reason,
             "class_repeat_factors": rare_class_repeat_factors,
             "source": "canbang.yaml" if balance_auto_summary.get("enabled") else "train_class_counts",
         }
@@ -30549,18 +30632,57 @@ def main() -> None:
         }
     print({"targeted_copy_paste": targeted_copy_paste_summary}, flush=True)
 
-    train_sampler = (
-        build_weighted_sampler(
+    if imbalance_summary["use_tempered_sampler"]:
+        train_sampler = build_tempered_class_sampler(
             train_dataset,
             batch_size=train_config.batch_size,
             num_classes=data_spec.num_classes,
-            epoch_multiplier=float(imbalance_summary["weighted_sampler_epoch_multiplier"]),
+            power=float(imbalance_summary["tempered_class_sampling_power"]),
+            epoch_multiplier=float(imbalance_summary["sampler_epoch_multiplier"]),
         )
-        if imbalance_summary["use_weighted_sampler"]
-        else None
-    )
+    elif imbalance_summary["use_weighted_sampler"]:
+        train_sampler = build_weighted_sampler(
+            train_dataset,
+            batch_size=train_config.batch_size,
+            num_classes=data_spec.num_classes,
+            epoch_multiplier=float(imbalance_summary["sampler_epoch_multiplier"]),
+        )
+    else:
+        train_sampler = None
     balanced_exposure_summary: Dict[str, object] = {"enabled": False}
-    if isinstance(train_sampler, StrictBalancedBatchSampler):
+    tempered_exposure_summary: Dict[str, object] = {"enabled": False}
+    if isinstance(train_sampler, TemperedClassBatchSampler):
+        executed_num_batches = min(
+            len(train_sampler),
+            (
+                int(train_config.max_train_batches)
+                if int(train_config.max_train_batches) > 0
+                else len(train_sampler)
+            ),
+        )
+        tempered_exposure_summary = {
+            "enabled": True,
+            "source": "train_split_labels_only",
+            "scope": "executed_epoch_prefix",
+            **train_sampler.exposure_summary(num_batches=executed_num_batches),
+        }
+        if (
+            float(
+                tempered_exposure_summary[
+                    "max_prefix_absolute_quota_error"
+                ]
+            )
+            >= 1.0 + 1e-9
+        ):
+            raise ValueError(
+                "Tempered sampler vuot cumulative quota error < 1: "
+                f"{tempered_exposure_summary['max_prefix_absolute_quota_error']:.12f}"
+            )
+        print(
+            {"tempered_epoch_exposure": tempered_exposure_summary},
+            flush=True,
+        )
+    elif isinstance(train_sampler, StrictBalancedBatchSampler):
         balanced_exposure_summary = {
             "enabled": True,
             "source": "train_split_labels_only",
@@ -31685,6 +31807,7 @@ def main() -> None:
         },
         "dataset_balance_auto_config": balance_auto_summary,
         "balanced_epoch_exposure": balanced_exposure_summary,
+        "tempered_epoch_exposure": tempered_exposure_summary,
         "train_class_counts": train_class_counts,
         "val_class_counts": val_class_counts,
         "test_class_counts": test_class_counts,

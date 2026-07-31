@@ -499,6 +499,7 @@ class TrainConfig:
     balanced_epoch_sampling: bool = False
     balanced_epoch_multiplier: float = 1.0
     balanced_epoch_tolerance: float = 0.10
+    tempered_class_sampling_power: Optional[float] = None
     auto_tune_imbalance: bool = False
     imbalance_sampler_disable_threshold: float = 0.18
     save_last_checkpoint: bool = True

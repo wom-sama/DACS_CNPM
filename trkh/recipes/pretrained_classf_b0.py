@@ -31,6 +31,7 @@ from trkh.training.train import build_configs, parse_args as parse_train_args
 PROTOCOL_ID = "TRKH_PRETRAINED_CLASSF_B0_20260731"
 B1_NATURAL_PROTOCOL_ID = "TRKH_PRETRAINED_CLASSF_B1_NATURAL_20260731"
 B1_MARGIN0_PROTOCOL_ID = "TRKH_PRETRAINED_CLASSF_B1_MARGIN0_20260731"
+B2_TEMPERED_P05_PROTOCOL_ID = "TRKH_PRETRAINED_CLASSF_B2_TEMPERED_P05_20260731"
 DINO_MODEL_NAME = "vit_small_patch16_dinov3.lvd1689m"
 DINO_SHA256 = "2a1ec16ae28ffa07bc0ead0241ee7df9fc26451fe6f9f839b7b3afa0a906b040"
 DINO_SOURCE_URL = "https://huggingface.co/timm/vit_small_patch16_dinov3.lvd1689m"
@@ -66,6 +67,7 @@ class Experiment:
     protocol_id: str
     run_prefix: str
     balanced_epoch_sampling: bool
+    tempered_class_sampling_power: float | None
     ldam_max_margin: float
     single_semantic_delta_from_b0: str | None
 
@@ -76,6 +78,7 @@ EXPERIMENTS: Mapping[str, Experiment] = {
         protocol_id=PROTOCOL_ID,
         run_prefix="pretrained_dinov3_classf_direct",
         balanced_epoch_sampling=True,
+        tempered_class_sampling_power=None,
         ldam_max_margin=0.3,
         single_semantic_delta_from_b0=None,
     ),
@@ -84,6 +87,7 @@ EXPERIMENTS: Mapping[str, Experiment] = {
         protocol_id=B1_NATURAL_PROTOCOL_ID,
         run_prefix="pretrained_dinov3_classf_natural",
         balanced_epoch_sampling=False,
+        tempered_class_sampling_power=None,
         ldam_max_margin=0.3,
         single_semantic_delta_from_b0="disable_balanced_epoch_sampling",
     ),
@@ -92,8 +96,18 @@ EXPERIMENTS: Mapping[str, Experiment] = {
         protocol_id=B1_MARGIN0_PROTOCOL_ID,
         run_prefix="pretrained_dinov3_classf_margin0",
         balanced_epoch_sampling=True,
+        tempered_class_sampling_power=None,
         ldam_max_margin=0.0,
         single_semantic_delta_from_b0="ldam_max_margin:0.3->0.0",
+    ),
+    "b2-tempered-p05": Experiment(
+        key="b2-tempered-p05",
+        protocol_id=B2_TEMPERED_P05_PROTOCOL_ID,
+        run_prefix="pretrained_dinov3_classf_tempered_p05",
+        balanced_epoch_sampling=False,
+        tempered_class_sampling_power=0.5,
+        ldam_max_margin=0.3,
+        single_semantic_delta_from_b0="class_sampling_prior:uniform->n_c**0.5",
     ),
 }
 
@@ -568,7 +582,14 @@ def build_train_args(
             str(dataset_image_tree_sha256).strip().lower(),
         ]
     )
-    if not experiment_config.balanced_epoch_sampling:
+    if experiment_config.tempered_class_sampling_power is not None:
+        args.extend(
+            [
+                "--tempered-class-sampling-power",
+                str(experiment_config.tempered_class_sampling_power),
+            ]
+        )
+    elif not experiment_config.balanced_epoch_sampling:
         args.append("--disable-balanced-epoch-sampling")
     train_contract_sha256 = hashlib.sha256(
         json.dumps(
@@ -742,7 +763,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         default="b0",
         help=(
             "b0 preserves strict balanced sampling; b1-natural changes only "
-            "the train sampler; b1-margin0 changes only LDAM max margin."
+            "the train sampler; b1-margin0 changes only LDAM max margin; "
+            "b2-tempered-p05 uses q_c proportional n_c**0.5."
         ),
     )
     parser.add_argument("--python", type=Path, default=Path(sys.executable))
@@ -930,6 +952,9 @@ def main(argv: Sequence[str] | None = None) -> None:
             "key": experiment_config.key,
             "balanced_epoch_sampling": (
                 experiment_config.balanced_epoch_sampling
+            ),
+            "tempered_class_sampling_power": (
+                experiment_config.tempered_class_sampling_power
             ),
             "single_semantic_delta_from_b0": (
                 experiment_config.single_semantic_delta_from_b0

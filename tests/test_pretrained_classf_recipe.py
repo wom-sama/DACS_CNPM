@@ -6,9 +6,11 @@ import pytest
 import torch
 
 import trkh.recipes.pretrained_classf_b0 as recipe
+from trkh.data.dataset import TemperedClassBatchSampler
 from trkh.recipes.pretrained_classf_b0 import (
     B1_MARGIN0_PROTOCOL_ID,
     B1_NATURAL_PROTOCOL_ID,
+    B2_TEMPERED_P05_PROTOCOL_ID,
     DINO_MODEL_NAME,
     DINO_SHA256,
     EXPECTED_CLASS_NAMES,
@@ -19,7 +21,7 @@ from trkh.recipes.pretrained_classf_b0 import (
     validate_auto_resume_checkpoint,
     validate_development_data_yaml,
 )
-from trkh.training.train import parse_args
+from trkh.training.train import build_configs, parse_args
 
 
 def _args(tmp_path: Path, *, stage: str = "full") -> list[str]:
@@ -172,6 +174,70 @@ def test_classf_b1_margin0_changes_only_ldam_margin_and_lineage(
         run_name("probe", "unit", experiment="b1-margin0")
         == "pretrained_dinov3_classf_margin0_probe_unit"
     )
+
+
+def test_classf_b2_tempered_changes_only_train_sampling_prior_and_lineage(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "model.safetensors").write_bytes(b"unit-test-placeholder")
+    b0_args = _args(tmp_path, stage="probe")
+    tempered_args = build_train_args(
+        data_yaml=tmp_path / "class_f" / "data.yaml",
+        dino_checkpoint=tmp_path / "model.safetensors",
+        output_dir=tmp_path / "runs",
+        stage="probe",
+        run_tag="unit",
+        batch_size=16,
+        num_workers=2,
+        eval_num_workers=1,
+        experiment="b2-tempered-p05",
+    )
+    b0 = parse_args(b0_args)
+    tempered = parse_args(tempered_args)
+    _, tempered_train_config, _ = build_configs(tempered)
+
+    assert tempered.disable_balanced_epoch_sampling is False
+    assert tempered.tempered_class_sampling_power == pytest.approx(0.5)
+    assert tempered_train_config.balanced_epoch_sampling is False
+    assert tempered_train_config.tempered_class_sampling_power == pytest.approx(0.5)
+    assert tempered.experiment_protocol_id == B2_TEMPERED_P05_PROTOCOL_ID
+    assert tempered.classification_loss == b0.classification_loss == "ldam_focal"
+    assert tempered.focal_loss_gamma == b0.focal_loss_gamma == 1.0
+    assert tempered.focal_loss_mix == b0.focal_loss_mix == 0.1
+    assert tempered.ldam_max_margin == b0.ldam_max_margin == 0.3
+    assert tempered.ldam_scale == b0.ldam_scale == 18.0
+    assert tempered.disable_class_weights is b0.disable_class_weights is True
+    assert tempered.max_train_batches == b0.max_train_batches == 120
+    assert (
+        _strip_lineage_only_args(tempered_args)
+        == _strip_lineage_only_args(b0_args)
+        + ["--tempered-class-sampling-power", "0.5"]
+    )
+    assert (
+        run_name("probe", "unit", experiment="b2-tempered-p05")
+        == "pretrained_dinov3_classf_tempered_p05_probe_unit"
+    )
+
+
+def test_classf_b2_tempered_probe_exposure_is_locked() -> None:
+    counts = [1987, 497, 1326, 2080, 2388]
+    labels = [
+        class_index
+        for class_index, class_count in enumerate(counts)
+        for _ in range(class_count)
+    ]
+    sampler = TemperedClassBatchSampler(
+        labels=labels,
+        batch_size=24,
+        num_classes=5,
+        power=0.5,
+        seed=42,
+    )
+    summary = sampler.exposure_summary(num_batches=120)
+
+    assert summary["class_exposure_counts"] == [649, 325, 530, 664, 712]
+    assert summary["total_samples"] == 2880
+    assert summary["max_prefix_absolute_quota_error"] < 1.0
 
 
 def test_classf_b0_development_yaml_is_test_locked_and_canonical(

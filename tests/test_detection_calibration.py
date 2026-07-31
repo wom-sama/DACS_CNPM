@@ -54,6 +54,7 @@ from trkh.data.dataset import (
     SampleWeightDataset,
     StrictBalancedBatchSampler,
     TargetedMarginDataset,
+    TemperedClassBatchSampler,
     _apply_copypaste_detection_batch,
     _apply_foreground_background_mix_batch,
     _grabcut_foreground_mask_array,
@@ -3283,6 +3284,77 @@ dataset_balance:
                 batch_counts[labels[sample_index]] += 1
             self.assertTrue(all(count > 0 for count in batch_counts))
             self.assertLessEqual(max(batch_counts) - min(batch_counts), 1)
+
+    def test_tempered_sampler_matches_sqrt_prior_deterministically(self):
+        class_counts = [1987, 497, 1326, 2080, 2388]
+        labels = [
+            class_index
+            for class_index, class_count in enumerate(class_counts)
+            for _ in range(class_count)
+        ]
+        sampler = TemperedClassBatchSampler(
+            labels=labels,
+            batch_size=24,
+            num_classes=5,
+            power=0.5,
+            epoch_multiplier=1.0,
+            seed=42,
+        )
+        summary = sampler.exposure_summary(num_batches=120)
+
+        self.assertEqual(
+            summary["class_exposure_counts"],
+            [649, 325, 530, 664, 712],
+        )
+        self.assertEqual(summary["total_samples"], 2880)
+        self.assertEqual(summary["num_batches"], 120)
+        self.assertEqual(summary["configured_num_batches"], 345)
+        self.assertLess(summary["max_prefix_absolute_quota_error"], 1.0)
+        self.assertEqual(
+            [round(value, 12) for value in summary["class_probabilities"]],
+            [
+                0.225405982956,
+                0.112731347999,
+                0.184135814770,
+                0.230620640135,
+                0.247106214140,
+            ],
+        )
+
+        epoch_zero = list(iter(sampler))
+        repeated_epoch_zero = list(iter(sampler))
+        self.assertEqual(epoch_zero, repeated_epoch_zero)
+        self.assertTrue(all(len(batch) == 24 for batch in epoch_zero))
+        for batch_indices in epoch_zero[:120]:
+            batch_counts = Counter(labels[index] for index in batch_indices)
+            self.assertEqual(set(batch_counts), set(range(5)))
+
+        sampler.set_epoch(1)
+        epoch_one = list(iter(sampler))
+        self.assertNotEqual(epoch_zero, epoch_one)
+        self.assertEqual(
+            [
+                sum(labels[index] == class_index for batch in epoch_one[:120] for index in batch)
+                for class_index in range(5)
+            ],
+            [649, 325, 530, 664, 712],
+        )
+
+    def test_tempered_sampler_rejects_invalid_power(self):
+        with self.assertRaises(ValueError):
+            TemperedClassBatchSampler(
+                labels=[0, 1],
+                batch_size=2,
+                num_classes=2,
+                power=1.01,
+            )
+        with self.assertRaises(ValueError):
+            TemperedClassBatchSampler(
+                labels=[0, 1, 2],
+                batch_size=2,
+                num_classes=3,
+                power=0.5,
+            )
 
     def test_class_aware_scale_does_not_amplify_photometric_by_default(self):
         transform = build_train_transform(

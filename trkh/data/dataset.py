@@ -3953,15 +3953,25 @@ class StrictBalancedBatchSampler(Sampler[List[int]]):
                         break
         return [(class_index, count) for class_index, count in allocations if count > 0]
 
-    def exposure_counts(self) -> List[int]:
+    def exposure_counts(self, num_batches: Optional[int] = None) -> List[int]:
+        effective_num_batches = (
+            self.num_batches
+            if num_batches is None
+            else min(self.num_batches, max(0, int(num_batches)))
+        )
         counts = [0 for _ in range(self.num_classes)]
-        for batch_index in range(self.num_batches):
+        for batch_index in range(effective_num_batches):
             for class_index, sample_count in self._allocation_for_batch(batch_index):
                 counts[int(class_index)] += int(sample_count)
         return counts
 
-    def exposure_summary(self) -> Dict[str, object]:
-        counts = self.exposure_counts()
+    def exposure_summary(self, num_batches: Optional[int] = None) -> Dict[str, object]:
+        effective_num_batches = (
+            self.num_batches
+            if num_batches is None
+            else min(self.num_batches, max(0, int(num_batches)))
+        )
+        counts = self.exposure_counts(num_batches=effective_num_batches)
         positive = [count for count in counts if count > 0]
         minimum = min(positive) if positive else 0
         maximum = max(positive) if positive else 0
@@ -3976,7 +3986,8 @@ class StrictBalancedBatchSampler(Sampler[List[int]]):
             "max_class_exposure": int(maximum),
             "relative_gap": float(relative_gap),
             "total_samples": int(sum(counts)),
-            "num_batches": int(self.num_batches),
+            "num_batches": int(effective_num_batches),
+            "configured_num_batches": int(self.num_batches),
         }
 
     def __iter__(self) -> Iterator[List[int]]:
@@ -4011,6 +4022,141 @@ class StrictBalancedBatchSampler(Sampler[List[int]]):
                     batch_indices.append(draw_index(class_index))
             shuffle_order = torch.randperm(len(batch_indices), generator=generator).tolist()
             yield [batch_indices[index] for index in shuffle_order]
+
+
+class TemperedClassBatchSampler(StrictBalancedBatchSampler):
+    """Deterministic class-prior sampler with q_c proportional to n_c ** power."""
+
+    def __init__(
+        self,
+        labels: Sequence[int],
+        batch_size: int,
+        num_classes: int,
+        power: float,
+        epoch_multiplier: float = 1.0,
+        seed: int = 42,
+        drop_last: bool = False,
+    ) -> None:
+        power = float(power)
+        if not math.isfinite(power) or not 0.0 <= power <= 1.0:
+            raise ValueError("TemperedClassBatchSampler power phai huu han va nam trong [0, 1].")
+        self.power = power
+        super().__init__(
+            labels=labels,
+            batch_size=batch_size,
+            num_classes=num_classes,
+            epoch_multiplier=epoch_multiplier,
+            seed=seed,
+            drop_last=drop_last,
+        )
+        if self.batch_size < len(self.active_classes):
+            raise ValueError(
+                "TemperedClassBatchSampler yeu cau batch_size >= so active classes "
+                "de bao dam quota deterministic va moi class co mat trong moi batch."
+            )
+
+        raw_weights = [
+            (
+                float(len(self.class_to_indices[class_index])) ** self.power
+                if class_index in self.active_classes
+                else 0.0
+            )
+            for class_index in range(self.num_classes)
+        ]
+        weight_sum = float(sum(raw_weights))
+        if weight_sum <= 0.0:
+            raise ValueError("TemperedClassBatchSampler khong the tao class prior rong.")
+        self.class_probabilities = [
+            float(weight / weight_sum) for weight in raw_weights
+        ]
+        self._batch_allocations = self._build_batch_allocations()
+
+    def _build_batch_allocations(self) -> List[List[Tuple[int, int]]]:
+        residual = [0.0 for _ in range(self.num_classes)]
+        allocations_by_batch: List[List[Tuple[int, int]]] = []
+        for _batch_index in range(self.num_batches):
+            raw = [
+                float(self.batch_size) * self.class_probabilities[class_index]
+                + residual[class_index]
+                for class_index in range(self.num_classes)
+            ]
+            allocated = [
+                int(math.floor(value + 1e-12)) if value > 0.0 else 0
+                for value in raw
+            ]
+            remaining = int(self.batch_size - sum(allocated))
+            if remaining < 0:
+                raise RuntimeError("TemperedClassBatchSampler allocation vuot batch_size.")
+            ranked_classes = sorted(
+                self.active_classes,
+                key=lambda class_index: (
+                    -(raw[class_index] - math.floor(raw[class_index])),
+                    class_index,
+                ),
+            )
+            if remaining > len(ranked_classes):
+                raise RuntimeError("TemperedClassBatchSampler allocation residual khong hop le.")
+            for class_index in ranked_classes[:remaining]:
+                allocated[class_index] += 1
+            residual = [
+                raw[class_index] - float(allocated[class_index])
+                for class_index in range(self.num_classes)
+            ]
+            allocations_by_batch.append(
+                [
+                    (class_index, allocated[class_index])
+                    for class_index in self.active_classes
+                    if allocated[class_index] > 0
+                ]
+            )
+        return allocations_by_batch
+
+    def _allocation_for_batch(self, batch_index: int) -> List[Tuple[int, int]]:
+        return list(self._batch_allocations[int(batch_index)])
+
+    def exposure_summary(self, num_batches: Optional[int] = None) -> Dict[str, object]:
+        summary = super().exposure_summary(num_batches=num_batches)
+        effective_num_batches = int(summary["num_batches"])
+        ideal_counts = [
+            float(effective_num_batches * self.batch_size) * probability
+            for probability in self.class_probabilities
+        ]
+        observed_counts = [
+            int(value) for value in summary["class_exposure_counts"]
+        ]
+        max_prefix_error = 0.0
+        cumulative = [0 for _ in range(self.num_classes)]
+        for batch_index in range(effective_num_batches):
+            for class_index, sample_count in self._allocation_for_batch(batch_index):
+                cumulative[class_index] += int(sample_count)
+            max_prefix_error = max(
+                max_prefix_error,
+                max(
+                    abs(
+                        float(cumulative[class_index])
+                        - float((batch_index + 1) * self.batch_size)
+                        * self.class_probabilities[class_index]
+                    )
+                    for class_index in range(self.num_classes)
+                ),
+            )
+        summary.update(
+            {
+                "power": float(self.power),
+                "source_class_counts": [
+                    int(len(self.class_to_indices[class_index]))
+                    for class_index in range(self.num_classes)
+                ],
+                "class_probabilities": list(self.class_probabilities),
+                "ideal_class_exposure_counts": ideal_counts,
+                "class_quota_errors": [
+                    float(observed - ideal)
+                    for observed, ideal in zip(observed_counts, ideal_counts)
+                ],
+                "max_prefix_absolute_quota_error": float(max_prefix_error),
+            }
+        )
+        return summary
 
 
 def build_rare_class_repeat_factors(
