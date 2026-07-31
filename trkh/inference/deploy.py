@@ -291,12 +291,23 @@ def build_runtime_model_from_checkpoint(
         num_classes=len(checkpoint["class_names"]),
         override_image_size=override_image_size,
     )
-    model.to(device)
     model.eval()
+    from trkh.models.timm_qv_lora import materialize_timm_qv_lora_
+
+    materialize_timm_qv_lora_(model)
+    model.to(device)
     return model
 
 
 def export_torchscript(model: nn.Module, input_shape: Sequence[int], output_path: Path) -> Path:
+    from trkh.models.timm_qv_lora import (
+        iter_timm_qv_lora_modules,
+        materialize_timm_qv_lora_,
+    )
+
+    if any(True for _ in iter_timm_qv_lora_modules(model)):
+        model = copy.deepcopy(model).eval()
+        materialize_timm_qv_lora_(model)
     inputs = build_runtime_inputs(
         model,
         input_shape,
@@ -310,6 +321,9 @@ def export_torchscript(model: nn.Module, input_shape: Sequence[int], output_path
 
 def export_dynamic_int8(model: nn.Module, input_shape: Sequence[int], output_path: Path) -> tuple[nn.Module, Path]:
     cpu_model = copy.deepcopy(model).cpu().eval()
+    from trkh.models.timm_qv_lora import materialize_timm_qv_lora_
+
+    materialize_timm_qv_lora_(cpu_model)
     quantized_model = quantize_dynamic(cpu_model, {nn.Linear}, dtype=torch.qint8)
     inputs = build_runtime_inputs(quantized_model, input_shape, torch.device("cpu"))
     quantized_script = torch.jit.trace(quantized_model, inputs, strict=False)

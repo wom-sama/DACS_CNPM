@@ -13982,6 +13982,11 @@ def create_model(
     pretrained_backbone_gradient_checkpointing = bool(
         config.pop("pretrained_backbone_gradient_checkpointing", False)
     )
+    timm_qv_lora = bool(config.pop("timm_qv_lora", False))
+    timm_qv_lora_layers = config.pop("timm_qv_lora_layers", "8,9,10,11")
+    timm_qv_lora_rank = int(config.pop("timm_qv_lora_rank", 4))
+    timm_qv_lora_alpha = float(config.pop("timm_qv_lora_alpha", 8.0))
+    timm_qv_lora_dropout = float(config.pop("timm_qv_lora_dropout", 0.05))
     architecture_only_checkpoint_rebuild = bool(
         config.pop("_architecture_only_checkpoint_rebuild", False)
     )
@@ -14016,6 +14021,25 @@ def create_model(
         )
     if pretrained_checkpoint_path and not pretrained:
         raise ValueError("A local pretrained checkpoint requires pretrained=True.")
+    if timm_qv_lora and model_type != "timm_classifier":
+        raise ValueError("TIMM Q/V LoRA is supported only by model_type=timm_classifier.")
+    if timm_qv_lora:
+        from trkh.models.timm_qv_lora import SUPPORTED_TIMM_QV_LORA_MODELS
+
+        if timm_model_name not in SUPPORTED_TIMM_QV_LORA_MODELS:
+            raise ValueError(
+                "TIMM Q/V LoRA is fail-closed to verified model contracts. "
+                f"model={timm_model_name!r}, supported="
+                f"{sorted(SUPPORTED_TIMM_QV_LORA_MODELS)!r}"
+            )
+    if timm_qv_lora and (
+        timm_qv_lora_rank <= 0
+        or timm_qv_lora_alpha <= 0.0
+        or not 0.0 <= timm_qv_lora_dropout < 1.0
+    ):
+        raise ValueError(
+            "TIMM Q/V LoRA requires rank>0, alpha>0, and dropout in [0,1)."
+        )
     if model_type == "vit_registers_pretrained_hybrid":
         if research_track != "pretrained":
             raise ValueError(
@@ -14115,6 +14139,16 @@ def create_model(
                 architecture_only_checkpoint_rebuild
             ),
         )
+        if timm_qv_lora:
+            from trkh.models.timm_qv_lora import inject_timm_qv_lora
+
+            inject_timm_qv_lora(
+                model,
+                layers=timm_qv_lora_layers,
+                rank=timm_qv_lora_rank,
+                alpha=timm_qv_lora_alpha,
+                dropout=timm_qv_lora_dropout,
+            )
     elif model_type == "mambavision_nano":
         if temporal_frames != 1:
             raise ValueError("mambavision_nano is locked to temporal_frames=1.")

@@ -437,6 +437,19 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         default=False,
         help="Enable the timm backbone gradient-checkpointing hook when supported.",
     )
+    parser.add_argument(
+        "--timm-qv-lora",
+        action="store_true",
+        default=False,
+        help=(
+            "Add mergeable low-rank Q/V updates to selected TIMM transformer "
+            "blocks. Default off; valid only for model_type=timm_classifier."
+        ),
+    )
+    parser.add_argument("--timm-qv-lora-layers", type=str, default="8,9,10,11")
+    parser.add_argument("--timm-qv-lora-rank", type=int, default=4)
+    parser.add_argument("--timm-qv-lora-alpha", type=float, default=8.0)
+    parser.add_argument("--timm-qv-lora-dropout", type=float, default=0.05)
     parser.add_argument("--image-size", type=int, default=224)
     parser.add_argument("--patch-size", type=int, default=16)
     parser.add_argument("--disable-cnn-stem", action="store_true", default=False)
@@ -6799,6 +6812,13 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         raise ValueError(
             "abs(--pretrained-semantic-initial-scale) must be below the maximum scale."
         )
+    if bool(args.timm_qv_lora):
+        if args.model_type != "timm_classifier":
+            raise ValueError("--timm-qv-lora requires --model-type timm_classifier.")
+        if args.timm_qv_lora_rank <= 0 or args.timm_qv_lora_alpha <= 0.0:
+            raise ValueError("--timm-qv-lora-rank/alpha must be positive.")
+        if not 0.0 <= args.timm_qv_lora_dropout < 1.0:
+            raise ValueError("--timm-qv-lora-dropout must be in [0, 1).")
     if args.model_type == "vit_registers_pretrained_hybrid":
         if research_track != "pretrained" or not bool(args.pretrained):
             raise ValueError(
@@ -6823,6 +6843,16 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
                 "Pretrained hybrid provenance is incomplete: " + ", ".join(missing_provenance)
             )
 
+    effective_trainable_module_prefixes = str(
+        args.trainable_module_prefixes or ""
+    ).strip()
+    if bool(args.timm_qv_lora) and not effective_trainable_module_prefixes:
+        from trkh.models.timm_qv_lora import timm_qv_lora_parameter_prefixes
+
+        effective_trainable_module_prefixes = ",".join(
+            timm_qv_lora_parameter_prefixes(args.timm_qv_lora_layers)
+        )
+
     model_config = ModelConfig(
         model_type=args.model_type,
         research_track=research_track,
@@ -6846,6 +6876,11 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         pretrained_backbone_gradient_checkpointing=bool(
             args.pretrained_backbone_gradient_checkpointing
         ),
+        timm_qv_lora=bool(args.timm_qv_lora),
+        timm_qv_lora_layers=args.timm_qv_lora_layers,
+        timm_qv_lora_rank=args.timm_qv_lora_rank,
+        timm_qv_lora_alpha=args.timm_qv_lora_alpha,
+        timm_qv_lora_dropout=args.timm_qv_lora_dropout,
         head_pooling=args.head_pooling,
         classification_mlp_head=bool(args.classification_mlp_head),
         classification_mlp_hidden_dim=args.classification_mlp_hidden_dim,
@@ -7257,7 +7292,7 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         learning_rate=args.learning_rate,
         backbone_lr_scale=args.backbone_lr_scale,
         min_learning_rate=args.min_learning_rate,
-        trainable_module_prefixes=args.trainable_module_prefixes,
+        trainable_module_prefixes=effective_trainable_module_prefixes,
         weight_decay=args.weight_decay,
         warmup_epochs=args.warmup_epochs,
         warmup_start_factor=args.warmup_start_factor,
@@ -9218,6 +9253,8 @@ def _is_allowed_resume_extension_key(key: str) -> bool:
         return True
     return (
         ".local_patch_mixer." in text
+        or ".attn.qkv.q_lora." in text
+        or ".attn.qkv.v_lora." in text
         or ".attn.relative_position_attention." in text
         or ".cross_covariance_attention." in text
         or ".dynamic_graph_mixer." in text
@@ -9277,6 +9314,22 @@ def _load_model_state_allowing_extensions(
                 str(key)
                 for key in missing_keys
                 if str(key).startswith("pretrained_semantic_branch.")
+            )
+            disallowed_missing = list(dict.fromkeys(disallowed_missing))
+        source_has_timm_qv_lora = any(
+            ".attn.qkv.q_lora." in str(key)
+            or ".attn.qkv.v_lora." in str(key)
+            for key in state_dict
+        )
+        if source_has_timm_qv_lora:
+            # A base checkpoint may initialize every adapter from scratch.
+            # Once any adapter tensor exists, however, the complete adapter
+            # state is required so corruption cannot silently zero branches.
+            disallowed_missing.extend(
+                str(key)
+                for key in missing_keys
+                if ".attn.qkv.q_lora." in str(key)
+                or ".attn.qkv.v_lora." in str(key)
             )
             disallowed_missing = list(dict.fromkeys(disallowed_missing))
         if disallowed_missing or unexpected_keys:
@@ -30864,6 +30917,25 @@ def main() -> None:
             },
             flush=True,
         )
+    if bool(model_config.timm_qv_lora) and not str(
+        train_config.trainable_module_prefixes or ""
+    ).strip():
+        from trkh.models.timm_qv_lora import timm_qv_lora_parameter_prefixes
+
+        train_config.trainable_module_prefixes = ",".join(
+            timm_qv_lora_parameter_prefixes(model_config.timm_qv_lora_layers)
+        )
+        print(
+            {
+                "timm_qv_lora_fail_closed": {
+                    "auto_trainable_module_prefixes": (
+                        train_config.trainable_module_prefixes
+                    ),
+                    "reason": "freeze_every_non_adapter_parameter_by_default",
+                }
+            },
+            flush=True,
+        )
     model = create_model(
         num_classes=data_spec.num_classes,
         model_config=to_serializable(model_config),
@@ -31001,6 +31073,17 @@ def main() -> None:
                 "status": "enabled",
             },
             flush=True,
+        )
+    trainable_prefix_summary = _apply_trainable_module_prefixes(
+        model,
+        _parse_trainable_module_prefixes(train_config.trainable_module_prefixes),
+    )
+    model_ema_update_state_names: Optional[set[str]] = None
+    if trainable_prefix_summary.get("enabled"):
+        print({"trainable_module_prefixes": trainable_prefix_summary}, flush=True)
+        model_ema_update_state_names = _state_names_matching_trainable_prefixes(
+            model,
+            trainable_prefix_summary.get("prefixes", []),
         )
     optimizer_param_groups = build_optimizer_param_groups(
         model,
@@ -31641,59 +31724,6 @@ def main() -> None:
                     ),
                     "validation_weights": "ema",
                     "best_checkpoint_weights": "ema",
-                }
-            },
-            flush=True,
-        )
-    trainable_prefix_summary = _apply_trainable_module_prefixes(
-        model,
-        _parse_trainable_module_prefixes(train_config.trainable_module_prefixes),
-    )
-    model_ema_update_state_names: Optional[set[str]] = None
-    if trainable_prefix_summary.get("enabled"):
-        print({"trainable_module_prefixes": trainable_prefix_summary}, flush=True)
-        model_ema_update_state_names = _state_names_matching_trainable_prefixes(
-            model,
-            trainable_prefix_summary.get("prefixes", []),
-        )
-        optimizer_param_groups = build_optimizer_param_groups(
-            model,
-            train_config.weight_decay,
-            learning_rate=train_config.learning_rate,
-            backbone_lr_scale=train_config.backbone_lr_scale,
-        )
-        if not optimizer_param_groups:
-            raise ValueError("--trainable-module-prefixes produced no optimizer parameters.")
-        if train_config.use_sam:
-            optimizer = SAM(
-                optimizer_param_groups,
-                base_optimizer=optim.AdamW,
-                lr=train_config.learning_rate,
-                betas=(0.9, 0.999),
-                rho=train_config.sam_rho,
-                adaptive=train_config.sam_adaptive,
-            )
-        else:
-            optimizer = optim.AdamW(
-                optimizer_param_groups,
-                lr=train_config.learning_rate,
-                betas=(0.9, 0.999),
-            )
-        scheduler = build_warmup_decay_scheduler(
-            optimizer=optimizer,
-            warmup_epochs=train_config.warmup_epochs,
-            warmup_start_factor=train_config.warmup_start_factor,
-            total_epochs=scheduler_total_epochs,
-            min_learning_rate=train_config.min_learning_rate,
-            decay_style=train_config.lr_scheduler,
-        )
-        print(
-            {
-                "trainable_module_optimizer_rebuilt": {
-                    "param_groups": len(optimizer_param_groups),
-                    "trainable_state_names_for_ema": len(model_ema_update_state_names),
-                    "optimizer_state_restored": False,
-                    "reason": "optimizer was originally built before prefix freeze",
                 }
             },
             flush=True,

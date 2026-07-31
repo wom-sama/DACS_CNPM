@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
@@ -786,6 +787,14 @@ def export_onnx(
     output_path: Path,
     opset: int = 17,
 ) -> Path:
+    from trkh.models.timm_qv_lora import (
+        iter_timm_qv_lora_modules,
+        materialize_timm_qv_lora_,
+    )
+
+    if any(True for _ in iter_timm_qv_lora_modules(model)):
+        model = copy.deepcopy(model).eval()
+        materialize_timm_qv_lora_(model)
     image_size = int(checkpoint["model_config"]["image_size"])
     temporal_frames = max(1, int(checkpoint["model_config"].get("temporal_frames", 1)))
     if temporal_frames > 1:

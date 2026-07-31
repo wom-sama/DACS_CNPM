@@ -143,6 +143,11 @@ class ModelConfig:
     pretrained_semantic_initial_scale: float = 0.0
     pretrained_semantic_max_scale: float = 0.25
     pretrained_backbone_gradient_checkpointing: bool = False
+    timm_qv_lora: bool = False
+    timm_qv_lora_layers: str = "8,9,10,11"
+    timm_qv_lora_rank: int = 4
+    timm_qv_lora_alpha: float = 8.0
+    timm_qv_lora_dropout: float = 0.05
     input_mean: Sequence[float] = IMAGENET_MEAN
     input_std: Sequence[float] = IMAGENET_STD
     head_pooling: str = "cls_register_mean"

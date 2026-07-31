@@ -279,7 +279,11 @@ def build_optimizer_param_groups(
                 raise ValueError(
                     "Pretrained timm classifier is missing classifier parameter prefixes."
                 )
-            is_head = name.startswith(classifier_prefixes)
+            is_timm_qv_lora = (
+                ".attn.qkv.q_lora." in name
+                or ".attn.qkv.v_lora." in name
+            )
+            is_head = is_timm_qv_lora or name.startswith(classifier_prefixes)
         else:
             is_head = name.startswith(DETECTION_HEAD_PREFIXES) if use_split_lr else True
         group_name = "head" if is_head else "backbone"
