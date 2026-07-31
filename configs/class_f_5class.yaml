@@ -3,4 +3,11 @@ path: D:/DataAI/AIEx/newdataset/class_f
 train: train
 val: val
 test: test
+nc: 5
 class_name_mode: raw
+names:
+  0: Xoai_Song_Chua_KhoDap
+  1: Xoai_Song_ChuaNhe_CoNguyCo
+  2: Xoai_Chin_NgotThanh_DeDap
+  3: Xoai_ChinGia_NgotGat_KhongVanChuyen
+  4: Xoai_Hu_KhongAnDuoc
