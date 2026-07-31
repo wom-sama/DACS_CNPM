@@ -133,6 +133,15 @@ from trkh.core.utils import (
 )
 
 
+OPTIMIZER_TELEMETRY_HISTORY_FIELDS = (
+    "train_optimizer_step_attempts",
+    "train_optimizer_updates_successful",
+    "train_optimizer_steps_skipped_nonfinite",
+    "train_nonfinite_loss_batches",
+    "train_amp_optimizer_steps_skipped",
+)
+
+
 DEPRECATED_PLATEAU_FLAGS = (
     "--plateau-factor",
     "--plateau-patience",
@@ -34904,6 +34913,7 @@ def main() -> None:
                         "learning_rate",
                         "train_stage",
                         "train_loss",
+                        *OPTIMIZER_TELEMETRY_HISTORY_FIELDS,
                         "train_cls_loss",
                         "train_metric_learning_loss",
                         "train_teacher_guided_contrastive_loss",

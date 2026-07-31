@@ -23,7 +23,12 @@ from trkh.recipes.pretrained_classf_b0 import (
     validate_auto_resume_checkpoint,
     validate_development_data_yaml,
 )
-from trkh.training.train import build_configs, parse_args, train_one_epoch
+from trkh.training.train import (
+    OPTIMIZER_TELEMETRY_HISTORY_FIELDS,
+    build_configs,
+    parse_args,
+    train_one_epoch,
+)
 
 
 def _args(tmp_path: Path, *, stage: str = "full") -> list[str]:
@@ -172,6 +177,13 @@ def test_amp_init_scale_rejects_non_positive_or_nonfinite_values(
 
 
 def test_train_epoch_reports_successful_optimizer_updates() -> None:
+    assert OPTIMIZER_TELEMETRY_HISTORY_FIELDS == (
+        "train_optimizer_step_attempts",
+        "train_optimizer_updates_successful",
+        "train_optimizer_steps_skipped_nonfinite",
+        "train_nonfinite_loss_batches",
+        "train_amp_optimizer_steps_skipped",
+    )
     torch.manual_seed(1)
     model = torch.nn.Linear(2, 2)
     optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
