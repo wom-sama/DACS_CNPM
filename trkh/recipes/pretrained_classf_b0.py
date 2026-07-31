@@ -30,6 +30,7 @@ from trkh.training.train import build_configs, parse_args as parse_train_args
 
 PROTOCOL_ID = "TRKH_PRETRAINED_CLASSF_B0_20260731"
 B1_NATURAL_PROTOCOL_ID = "TRKH_PRETRAINED_CLASSF_B1_NATURAL_20260731"
+B1_MARGIN0_PROTOCOL_ID = "TRKH_PRETRAINED_CLASSF_B1_MARGIN0_20260731"
 DINO_MODEL_NAME = "vit_small_patch16_dinov3.lvd1689m"
 DINO_SHA256 = "2a1ec16ae28ffa07bc0ead0241ee7df9fc26451fe6f9f839b7b3afa0a906b040"
 DINO_SOURCE_URL = "https://huggingface.co/timm/vit_small_patch16_dinov3.lvd1689m"
@@ -65,6 +66,8 @@ class Experiment:
     protocol_id: str
     run_prefix: str
     balanced_epoch_sampling: bool
+    ldam_max_margin: float
+    single_semantic_delta_from_b0: str | None
 
 
 EXPERIMENTS: Mapping[str, Experiment] = {
@@ -73,12 +76,24 @@ EXPERIMENTS: Mapping[str, Experiment] = {
         protocol_id=PROTOCOL_ID,
         run_prefix="pretrained_dinov3_classf_direct",
         balanced_epoch_sampling=True,
+        ldam_max_margin=0.3,
+        single_semantic_delta_from_b0=None,
     ),
     "b1-natural": Experiment(
         key="b1-natural",
         protocol_id=B1_NATURAL_PROTOCOL_ID,
         run_prefix="pretrained_dinov3_classf_natural",
         balanced_epoch_sampling=False,
+        ldam_max_margin=0.3,
+        single_semantic_delta_from_b0="disable_balanced_epoch_sampling",
+    ),
+    "b1-margin0": Experiment(
+        key="b1-margin0",
+        protocol_id=B1_MARGIN0_PROTOCOL_ID,
+        run_prefix="pretrained_dinov3_classf_margin0",
+        balanced_epoch_sampling=True,
+        ldam_max_margin=0.0,
+        single_semantic_delta_from_b0="ldam_max_margin:0.3->0.0",
     ),
 }
 
@@ -463,7 +478,7 @@ def build_train_args(
         "--label-smoothing",
         "0.02",
         "--ldam-max-margin",
-        "0.3",
+        str(experiment_config.ldam_max_margin),
         "--ldam-scale",
         "18",
         "--best-metric",
@@ -727,7 +742,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         default="b0",
         help=(
             "b0 preserves strict balanced sampling; b1-natural changes only "
-            "the train sampler to shuffled natural-frequency exposure."
+            "the train sampler; b1-margin0 changes only LDAM max margin."
         ),
     )
     parser.add_argument("--python", type=Path, default=Path(sys.executable))
@@ -917,9 +932,7 @@ def main(argv: Sequence[str] | None = None) -> None:
                 experiment_config.balanced_epoch_sampling
             ),
             "single_semantic_delta_from_b0": (
-                None
-                if experiment_config.key == "b0"
-                else "disable_balanced_epoch_sampling"
+                experiment_config.single_semantic_delta_from_b0
             ),
         },
         "created_utc": datetime.now(timezone.utc).isoformat(),

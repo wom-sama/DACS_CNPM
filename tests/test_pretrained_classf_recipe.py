@@ -7,6 +7,7 @@ import torch
 
 import trkh.recipes.pretrained_classf_b0 as recipe
 from trkh.recipes.pretrained_classf_b0 import (
+    B1_MARGIN0_PROTOCOL_ID,
     B1_NATURAL_PROTOCOL_ID,
     DINO_MODEL_NAME,
     DINO_SHA256,
@@ -133,6 +134,43 @@ def test_classf_b1_natural_changes_only_sampler_and_lineage(
     assert (
         run_name("probe", "unit", experiment="b1-natural")
         == "pretrained_dinov3_classf_natural_probe_unit"
+    )
+
+
+def test_classf_b1_margin0_changes_only_ldam_margin_and_lineage(
+    tmp_path: Path,
+) -> None:
+    b0_args = _args(tmp_path, stage="probe")
+    margin_args = build_train_args(
+        data_yaml=tmp_path / "class_f" / "data.yaml",
+        dino_checkpoint=tmp_path / "model.safetensors",
+        output_dir=tmp_path / "runs",
+        stage="probe",
+        run_tag="unit",
+        batch_size=16,
+        num_workers=2,
+        eval_num_workers=1,
+        experiment="b1-margin0",
+    )
+    b0 = parse_args(b0_args)
+    margin = parse_args(margin_args)
+
+    assert margin.disable_balanced_epoch_sampling is False
+    assert margin.experiment_protocol_id == B1_MARGIN0_PROTOCOL_ID
+    assert margin.classification_loss == b0.classification_loss == "ldam_focal"
+    assert margin.focal_loss_gamma == b0.focal_loss_gamma == 1.0
+    assert margin.focal_loss_mix == b0.focal_loss_mix == 0.1
+    assert margin.ldam_max_margin == 0.0
+    assert b0.ldam_max_margin == 0.3
+    assert margin.ldam_scale == b0.ldam_scale == 18.0
+    assert margin.disable_ldam is b0.disable_ldam is False
+    expected_args = _strip_lineage_only_args(b0_args)
+    margin_index = expected_args.index("--ldam-max-margin") + 1
+    expected_args[margin_index] = "0.0"
+    assert _strip_lineage_only_args(margin_args) == expected_args
+    assert (
+        run_name("probe", "unit", experiment="b1-margin0")
+        == "pretrained_dinov3_classf_margin0_probe_unit"
     )
 
 
