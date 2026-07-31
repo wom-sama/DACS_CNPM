@@ -1426,6 +1426,15 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--deterministic", action="store_true", default=False)
     parser.add_argument("--disable-amp", action="store_true", default=False)
+    parser.add_argument(
+        "--amp-init-scale",
+        type=float,
+        default=65536.0,
+        help=(
+            "Initial loss scale for CUDA fp16 GradScaler. Lower values such as "
+            "1024 can reduce early overflow on constrained Kaggle GPUs."
+        ),
+    )
     parser.add_argument("--disable-class-weights", action="store_true", default=False)
     parser.add_argument(
         "--class-weight-mode",
@@ -4591,6 +4600,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
 def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, AugmentationConfig]:
     if args.grad_accum_steps < 1:
         raise ValueError("--grad-accum-steps phai >= 1.")
+    if not math.isfinite(float(args.amp_init_scale)) or float(args.amp_init_scale) <= 0.0:
+        raise ValueError("--amp-init-scale phai la so huu han > 0.")
     if args.weighted_sampler_epoch_multiplier < 1.0:
         raise ValueError("--weighted-sampler-epoch-multiplier phai >= 1.0.")
     if args.resume_reset_epoch and not args.resume_reset_scheduler:
@@ -7313,6 +7324,7 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         early_stopping_patience=args.patience,
         seed=args.seed,
         amp=not args.disable_amp,
+        amp_init_scale=float(args.amp_init_scale),
         deterministic=args.deterministic,
         use_class_weights=not args.disable_class_weights,
         class_weight_mode=args.class_weight_mode,
@@ -24711,6 +24723,11 @@ def train_one_epoch(
     nonfinite_batch_streak = 0
     max_nonfinite_batch_streak = 3
     nonfinite_grad_step_streak = 0
+    optimizer_step_attempts = 0
+    optimizer_updates_successful = 0
+    optimizer_steps_skipped_nonfinite = 0
+    nonfinite_loss_batches = 0
+    amp_optimizer_steps_skipped = 0
     with tqdm(batch_iterator, desc="Train", leave=False, total=total_batches, dynamic_ncols=True) as pbar:
         for batch_index, batch in enumerate(pbar):
             if len(batch) not in (2, 3):
@@ -25645,6 +25662,7 @@ def train_one_epoch(
                     labels=labels,
                 )
             if not torch.isfinite(loss.detach()):
+                nonfinite_loss_batches += 1
                 nonfinite_batch_streak += 1
                 logger.warning(
                     "Skipping non-finite training loss: epoch=%s batch=%s details=%s",
@@ -25674,12 +25692,14 @@ def train_one_epoch(
 
             should_step = ((batch_index + 1) % grad_accum_steps == 0) or ((batch_index + 1) == total_batches)
             if should_step:
+                optimizer_step_attempts += 1
                 if use_sam:
                     gradients_finite, grad_norm = _clip_gradients_and_check(
                         model,
                         max_norm=grad_clip_norm,
                     )
                     if not gradients_finite:
+                        optimizer_steps_skipped_nonfinite += 1
                         nonfinite_grad_step_streak += 1
                         gradient_context = _nonfinite_gradient_context(model)
                         logger.warning(
@@ -26757,6 +26777,7 @@ def train_one_epoch(
                         max_norm=grad_clip_norm,
                     )
                     if not gradients_finite:
+                        optimizer_steps_skipped_nonfinite += 1
                         nonfinite_grad_step_streak += 1
                         gradient_context = _nonfinite_gradient_context(model)
                         logger.warning(
@@ -26780,6 +26801,7 @@ def train_one_epoch(
                         del loss, scaled_loss, features, images, targets, labels
                         continue
                     optimizer.second_step(zero_grad=True)
+                    optimizer_updates_successful += 1
                     nonfinite_grad_step_streak = 0
                     _raise_if_model_parameters_nonfinite(
                         model,
@@ -26792,6 +26814,7 @@ def train_one_epoch(
                             max_norm=grad_clip_norm,
                         )
                         if not gradients_finite:
+                            optimizer_steps_skipped_nonfinite += 1
                             nonfinite_grad_step_streak += 1
                             gradient_context = _nonfinite_gradient_context(model)
                             logger.warning(
@@ -26815,6 +26838,7 @@ def train_one_epoch(
                             del loss, scaled_loss, features, images, targets, labels
                             continue
                         optimizer.step()
+                        optimizer_updates_successful += 1
                         nonfinite_grad_step_streak = 0
                         optimizer.zero_grad(set_to_none=True)
                         _raise_if_model_parameters_nonfinite(
@@ -26828,6 +26852,9 @@ def train_one_epoch(
                             max_norm=grad_clip_norm,
                         )
                         if not gradients_finite:
+                            optimizer_steps_skipped_nonfinite += 1
+                            if scaler.is_enabled():
+                                amp_optimizer_steps_skipped += 1
                             nonfinite_grad_step_streak += 1
                             gradient_context = _nonfinite_gradient_context(model)
                             logger.warning(
@@ -26851,8 +26878,42 @@ def train_one_epoch(
                             )
                             del loss, scaled_loss, features, images, targets, labels
                             continue
+                        amp_scale_before = float(scaler.get_scale())
                         scaler.step(optimizer)
                         scaler.update()
+                        amp_scale_after = float(scaler.get_scale())
+                        if amp_scale_after < amp_scale_before:
+                            # GradScaler found an overflow that was not visible to
+                            # the explicit norm check and therefore suppressed the
+                            # optimizer update. Do not advance EMA/LR scheduling.
+                            optimizer_steps_skipped_nonfinite += 1
+                            amp_optimizer_steps_skipped += 1
+                            nonfinite_grad_step_streak += 1
+                            logger.warning(
+                                "GradScaler skipped optimizer step after overflow: epoch=%s batch=%s scale_before=%s scale_after=%s streak=%s",
+                                epoch_index,
+                                batch_index,
+                                amp_scale_before,
+                                amp_scale_after,
+                                nonfinite_grad_step_streak,
+                            )
+                            optimizer.zero_grad(set_to_none=True)
+                            replay_batches.clear()
+                            _raise_if_nonfinite_gradient_streak_exceeded(
+                                streak=nonfinite_grad_step_streak,
+                                limit=max_nonfinite_grad_steps,
+                                epoch_index=epoch_index,
+                                batch_index=batch_index,
+                                grad_norm=grad_norm,
+                                gradient_context={
+                                    "source": "grad_scaler",
+                                    "scale_before": amp_scale_before,
+                                    "scale_after": amp_scale_after,
+                                },
+                            )
+                            del loss, scaled_loss, features, images, targets, labels
+                            continue
+                        optimizer_updates_successful += 1
                         nonfinite_grad_step_streak = 0
                         optimizer.zero_grad(set_to_none=True)
                         _raise_if_model_parameters_nonfinite(
@@ -26892,6 +26953,17 @@ def train_one_epoch(
         train_artifact_stats["confusion_spectral_updates"] = float(
             confusion_spectral_state.updates
         )
+    train_artifact_stats.update(
+        {
+            "optimizer_step_attempts": float(optimizer_step_attempts),
+            "optimizer_updates_successful": float(optimizer_updates_successful),
+            "optimizer_steps_skipped_nonfinite": float(
+                optimizer_steps_skipped_nonfinite
+            ),
+            "nonfinite_loss_batches": float(nonfinite_loss_batches),
+            "amp_optimizer_steps_skipped": float(amp_optimizer_steps_skipped),
+        }
+    )
     final_lr = optimizer.param_groups[0]["lr"] if optimizer.param_groups else 0.0
     return loss_sum / max(1, batch_count), train_artifact_stats, float(final_lr)
 
@@ -31554,6 +31626,7 @@ def main() -> None:
     scaler = (
         GradScaler(
             "cuda",
+            init_scale=float(train_config.amp_init_scale),
             enabled=device.type == "cuda" and train_amp and effective_amp_dtype != torch.bfloat16,
         )
         if not train_config.use_sam
@@ -33109,6 +33182,26 @@ def main() -> None:
                     "learning_rate": current_lr,
                     "train_stage": stage_config["stage_name"],
                     "train_loss": train_loss,
+                    "train_optimizer_step_attempts": train_artifact_stats.get(
+                        "optimizer_step_attempts",
+                        0.0,
+                    ),
+                    "train_optimizer_updates_successful": train_artifact_stats.get(
+                        "optimizer_updates_successful",
+                        0.0,
+                    ),
+                    "train_optimizer_steps_skipped_nonfinite": train_artifact_stats.get(
+                        "optimizer_steps_skipped_nonfinite",
+                        0.0,
+                    ),
+                    "train_nonfinite_loss_batches": train_artifact_stats.get(
+                        "nonfinite_loss_batches",
+                        0.0,
+                    ),
+                    "train_amp_optimizer_steps_skipped": train_artifact_stats.get(
+                        "amp_optimizer_steps_skipped",
+                        0.0,
+                    ),
                     "train_cls_loss": train_artifact_stats.get("cls_loss", 0.0),
                     "train_metric_learning_loss": train_artifact_stats.get("metric_learning_loss", 0.0),
                     "train_teacher_guided_contrastive_loss": train_artifact_stats.get(

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from pathlib import Path
 
 import pytest
@@ -21,7 +23,7 @@ from trkh.recipes.pretrained_classf_b0 import (
     validate_auto_resume_checkpoint,
     validate_development_data_yaml,
 )
-from trkh.training.train import build_configs, parse_args
+from trkh.training.train import build_configs, parse_args, train_one_epoch
 
 
 def _args(tmp_path: Path, *, stage: str = "full") -> list[str]:
@@ -91,6 +93,149 @@ def test_classf_b0_smoke_is_bounded_but_keeps_test_locked(
     assert parsed.max_train_batches == 4
     assert parsed.max_val_batches == 2
     assert parsed.skip_final_test is True
+
+
+def test_amp_init_scale_default_preserves_recipe_contract(tmp_path: Path) -> None:
+    (tmp_path / "model.safetensors").write_bytes(b"unit-test-placeholder")
+    implicit_args = _args(tmp_path)
+    explicit_none_args = build_train_args(
+        data_yaml=tmp_path / "class_f" / "data.yaml",
+        dino_checkpoint=tmp_path / "model.safetensors",
+        output_dir=tmp_path / "runs",
+        stage="full",
+        run_tag="unit",
+        batch_size=16,
+        num_workers=2,
+        eval_num_workers=1,
+        amp_init_scale=None,
+    )
+    parsed = parse_args(implicit_args)
+    _, train_config, _ = build_configs(parsed)
+
+    assert implicit_args == explicit_none_args
+    assert "--amp-init-scale" not in implicit_args
+    assert parsed.amp_init_scale == pytest.approx(65536.0)
+    assert train_config.amp_init_scale == pytest.approx(65536.0)
+
+
+def test_amp_init_scale_is_hashed_before_recipe_contract(tmp_path: Path) -> None:
+    (tmp_path / "model.safetensors").write_bytes(b"unit-test-placeholder")
+    default_args = _args(tmp_path)
+    custom_args = build_train_args(
+        data_yaml=tmp_path / "class_f" / "data.yaml",
+        dino_checkpoint=tmp_path / "model.safetensors",
+        output_dir=tmp_path / "runs",
+        stage="full",
+        run_tag="unit",
+        batch_size=16,
+        num_workers=2,
+        eval_num_workers=1,
+        amp_init_scale=1024,
+    )
+    scale_index = custom_args.index("--amp-init-scale")
+    contract_index = custom_args.index("--recipe-train-contract-sha256")
+    observed_contract = custom_args[contract_index + 1]
+    expected_contract = hashlib.sha256(
+        json.dumps(
+            custom_args[:contract_index],
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+    parsed = parse_args(custom_args)
+    _, train_config, _ = build_configs(parsed)
+
+    assert scale_index < contract_index
+    assert custom_args[scale_index + 1] == "1024.0"
+    assert observed_contract == expected_contract
+    assert observed_contract != default_args[
+        default_args.index("--recipe-train-contract-sha256") + 1
+    ]
+    assert parsed.amp_init_scale == pytest.approx(1024.0)
+    assert train_config.amp_init_scale == pytest.approx(1024.0)
+
+
+@pytest.mark.parametrize("value", [0.0, -1.0, float("inf"), float("nan")])
+def test_amp_init_scale_rejects_non_positive_or_nonfinite_values(
+    tmp_path: Path,
+    value: float,
+) -> None:
+    with pytest.raises(ValueError, match="amp_init_scale must be finite and > 0"):
+        build_train_args(
+            data_yaml=tmp_path / "class_f" / "data.yaml",
+            dino_checkpoint=tmp_path / "model.safetensors",
+            output_dir=tmp_path / "runs",
+            stage="full",
+            run_tag="unit",
+            amp_init_scale=value,
+        )
+
+
+def test_train_epoch_reports_successful_optimizer_updates() -> None:
+    torch.manual_seed(1)
+    model = torch.nn.Linear(2, 2)
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
+    dataloader = [
+        (torch.tensor([[1.0, 0.0]]), torch.tensor([0])),
+        (torch.tensor([[0.0, 1.0]]), torch.tensor([1])),
+    ]
+
+    _, stats, _ = train_one_epoch(
+        model=model,
+        dataloader=dataloader,
+        criterion=torch.nn.CrossEntropyLoss(),
+        optimizer=optimizer,
+        scheduler=None,
+        scaler=None,
+        device=torch.device("cpu"),
+        amp=False,
+        grad_clip_norm=1.0,
+        epoch_index=1,
+        grad_accum_steps=2,
+    )
+
+    assert stats["optimizer_step_attempts"] == 1.0
+    assert stats["optimizer_updates_successful"] == 1.0
+    assert stats["optimizer_steps_skipped_nonfinite"] == 0.0
+    assert stats["nonfinite_loss_batches"] == 0.0
+
+
+def test_train_epoch_reports_nonfinite_gradient_skip() -> None:
+    class InfGradient(torch.autograd.Function):
+        @staticmethod
+        def forward(ctx, value):
+            ctx.shape = tuple(value.shape)
+            return value.sum() * 0.0 + 1.0
+
+        @staticmethod
+        def backward(ctx, grad_output):
+            return torch.full(ctx.shape, float("inf"))
+
+    class InfGradCriterion(torch.nn.Module):
+        def forward(self, logits, labels):
+            return InfGradient.apply(logits)
+
+    model = torch.nn.Linear(2, 2)
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
+
+    _, stats, _ = train_one_epoch(
+        model=model,
+        dataloader=[(torch.ones(1, 2), torch.tensor([0]))],
+        criterion=InfGradCriterion(),
+        optimizer=optimizer,
+        scheduler=None,
+        scaler=None,
+        device=torch.device("cpu"),
+        amp=False,
+        grad_clip_norm=1.0,
+        epoch_index=1,
+        max_nonfinite_grad_steps=0,
+    )
+
+    assert stats["optimizer_step_attempts"] == 1.0
+    assert stats["optimizer_updates_successful"] == 0.0
+    assert stats["optimizer_steps_skipped_nonfinite"] == 1.0
+    assert stats["nonfinite_loss_batches"] == 0.0
 
 
 def test_classf_b0_run_name_is_versioned() -> None:

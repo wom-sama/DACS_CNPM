@@ -494,6 +494,7 @@ class TrainConfig:
     early_stopping_patience: int = 15
     seed: int = 42
     amp: bool = True
+    amp_init_scale: float = 65536.0
     deterministic: bool = False
     use_class_weights: bool = True
     class_weight_mode: str = "sqrt_inverse"

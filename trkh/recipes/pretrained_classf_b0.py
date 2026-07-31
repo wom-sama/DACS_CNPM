@@ -12,7 +12,7 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Mapping, Sequence
+from typing import Dict, Mapping, Optional, Sequence
 
 import torch
 
@@ -388,6 +388,7 @@ def build_train_args(
     num_workers: int = 4,
     eval_num_workers: int = 2,
     seed: int = 42,
+    amp_init_scale: Optional[float] = None,
     auto_resume: bool = False,
     source_commit: str = "",
     source_tree_sha256: str = "",
@@ -406,6 +407,10 @@ def build_train_args(
         raise AssertionError("B0 effective batch contract drifted from 48.")
     if not str(run_tag).replace("_", "").replace("-", "").isalnum():
         raise ValueError("run_tag may contain only letters, numbers, '_' and '-'.")
+    if amp_init_scale is not None and (
+        not math.isfinite(float(amp_init_scale)) or float(amp_init_scale) <= 0.0
+    ):
+        raise ValueError("amp_init_scale must be finite and > 0.")
     stage_spec = STAGES[stage_name]
     experiment_config = experiment_spec(experiment)
 
@@ -591,6 +596,8 @@ def build_train_args(
         )
     elif not experiment_config.balanced_epoch_sampling:
         args.append("--disable-balanced-epoch-sampling")
+    if amp_init_scale is not None:
+        args.extend(["--amp-init-scale", str(float(amp_init_scale))])
     train_contract_sha256 = hashlib.sha256(
         json.dumps(
             args,
@@ -795,6 +802,15 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--eval-num-workers", type=int, default=2)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument(
+        "--amp-init-scale",
+        type=float,
+        default=None,
+        help=(
+            "Optional fp16 GradScaler initial scale. Omit to preserve the "
+            "historical recipe contract and training default (65536)."
+        ),
+    )
+    parser.add_argument(
         "--amp-dtype",
         choices=("auto", "bf16", "fp16"),
         default="auto",
@@ -901,6 +917,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         num_workers=args.num_workers,
         eval_num_workers=args.eval_num_workers,
         seed=args.seed,
+        amp_init_scale=args.amp_init_scale,
         auto_resume=bool(args.auto_resume),
         source_commit=(
             str(git.get("commit", "")).strip().lower()
