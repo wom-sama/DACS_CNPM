@@ -25,7 +25,7 @@ def project_dir() -> Path:
 
 
 def default_data_yaml() -> Path:
-    return project_dir().parent / "dataset" / "data.yaml"
+    return project_dir().parent / "newdataset" / "class_f" / "data.yaml"
 
 
 @dataclass
