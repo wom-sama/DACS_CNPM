@@ -71,6 +71,8 @@ CACHE_FILENAME = "raw_patch_tokens_f16.npy"
 GLOBAL_LOGITS_FILENAME = "global_logits_f32.npy"
 LABELS_FILENAME = "labels_i64.npy"
 CACHE_MANIFEST_FILENAME = "cache_manifest.json"
+CACHE_MANIFEST_SCHEMA_VERSION = 2
+SOURCE_GROUP_NORMALIZATION = r"filename_stem_strip_casefold_remove_regex:_box\d+$"
 
 
 def _parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
@@ -632,6 +634,27 @@ def _labels_sha256(labels: np.ndarray) -> str:
     return hashlib.sha256(values.tobytes(order="C")).hexdigest()
 
 
+def _source_groups_sha256(source_groups: Sequence[object]) -> str:
+    digest = hashlib.sha256()
+    for source_group in source_groups:
+        encoded = str(source_group).encode("utf-8")
+        digest.update(len(encoded).to_bytes(8, byteorder="little", signed=False))
+        digest.update(encoded)
+    return digest.hexdigest()
+
+
+def _source_group_manifest_fields(
+    source_groups: Sequence[object],
+) -> Dict[str, object]:
+    values = np.asarray(source_groups, dtype=object).reshape(-1)
+    return {
+        "source_group_rows": int(values.size),
+        "source_group_count": int(np.unique(values).size),
+        "source_groups_sha256": _source_groups_sha256(values.tolist()),
+        "source_group_normalization": SOURCE_GROUP_NORMALIZATION,
+    }
+
+
 def _atomic_json(path: Path, payload: Mapping[str, object]) -> None:
     target = Path(path)
     temporary = target.with_suffix(target.suffix + ".partial")
@@ -665,7 +688,36 @@ def _validate_cache_manifest(
     manifest: Mapping[str, object],
     cache_paths: Mapping[str, Path],
     expected_paths_sha256: str,
-) -> None:
+    expected_source_groups: Sequence[object],
+    expected_labels: np.ndarray,
+    allow_legacy_source_metadata: bool = False,
+    verify_cache_hashes: bool = True,
+) -> bool:
+    source_group_values = np.asarray(
+        expected_source_groups,
+        dtype=object,
+    ).reshape(-1)
+    canonical_labels = np.asarray(expected_labels, dtype=np.int64).reshape(-1)
+    if source_group_values.size != EXPECTED_TRAIN_SAMPLES:
+        raise ValueError(
+            "B6 expected source-group rows do not match locked train support"
+        )
+    if canonical_labels.size != EXPECTED_TRAIN_SAMPLES:
+        raise ValueError(
+            "B6 expected labels do not match locked train support"
+        )
+    schema_version = manifest.get("schema_version")
+    legacy_source_metadata = schema_version == 1
+    if legacy_source_metadata and not bool(allow_legacy_source_metadata):
+        raise ValueError(
+            "B6 cache manifest schema 1 requires an explicit metadata-only "
+            "upgrade before strict reuse"
+        )
+    if not legacy_source_metadata and schema_version != CACHE_MANIFEST_SCHEMA_VERSION:
+        raise ValueError(
+            "Unsupported B6 cache manifest schema: "
+            f"{schema_version!r}"
+        )
     expected = {
         "protocol_id": PROTOCOL_ID,
         "data_sha256": EXPECTED_DATA_SHA256,
@@ -677,10 +729,16 @@ def _validate_cache_manifest(
         "global_logits_dtype": "float32",
         "labels_shape": [EXPECTED_TRAIN_SAMPLES],
         "labels_dtype": "int64",
+        "labels_content_sha256": _labels_sha256(canonical_labels),
         "train_split_used": True,
         "validation_split_used": False,
         "test_split_used": False,
+        "validation_dataset_constructed": False,
+        "test_dataset_constructed": False,
     }
+    if not legacy_source_metadata:
+        expected["schema_version"] = CACHE_MANIFEST_SCHEMA_VERSION
+        expected.update(_source_group_manifest_fields(source_group_values))
     mismatches = {
         key: {"expected": value, "observed": manifest.get(key)}
         for key, value in expected.items()
@@ -688,19 +746,41 @@ def _validate_cache_manifest(
     }
     if mismatches:
         raise ValueError(f"B6 cache manifest mismatch: {mismatches}")
-    for key in ("tokens", "logits", "labels"):
-        path = Path(cache_paths[key])
-        if not path.is_file():
-            raise FileNotFoundError(f"B6 cache file is missing: {path}")
-        expected_hash = str(manifest.get(f"{key}_sha256", ""))
-        if not expected_hash or _sha256(path) != expected_hash:
-            raise ValueError(f"B6 cache hash mismatch: {path}")
+    if bool(verify_cache_hashes):
+        for key in ("tokens", "logits", "labels"):
+            path = Path(cache_paths[key])
+            if not path.is_file():
+                raise FileNotFoundError(f"B6 cache file is missing: {path}")
+            expected_hash = str(manifest.get(f"{key}_sha256", ""))
+            if not expected_hash or _sha256(path) != expected_hash:
+                raise ValueError(f"B6 cache hash mismatch: {path}")
+    return bool(legacy_source_metadata)
+
+
+def _upgrade_legacy_cache_manifest(
+    *,
+    manifest_path: Path,
+    manifest: Mapping[str, object],
+    source_groups: Sequence[object],
+) -> Dict[str, object]:
+    upgraded = dict(manifest)
+    upgraded.update(_source_group_manifest_fields(source_groups))
+    upgraded["schema_version"] = CACHE_MANIFEST_SCHEMA_VERSION
+    upgraded["legacy_schema_upgraded_from"] = 1
+    upgraded["legacy_upgrade_scope"] = "source_group_metadata_only"
+    _atomic_json(manifest_path, upgraded)
+    reloaded = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
+    if not isinstance(reloaded, Mapping) or dict(reloaded) != upgraded:
+        raise RuntimeError("Atomic B6 cache-manifest upgrade did not replay exactly")
+    return dict(reloaded)
 
 
 def _load_existing_cache(
     *,
     output_dir: Path,
     paths: Sequence[str],
+    source_groups: Sequence[object],
+    expected_labels: np.ndarray,
 ) -> Optional[Dict[str, object]]:
     cache_paths = _cache_paths(output_dir)
     present = {key: path.is_file() for key, path in cache_paths.items()}
@@ -714,10 +794,13 @@ def _load_existing_cache(
     manifest = json.loads(cache_paths["manifest"].read_text(encoding="utf-8"))
     if not isinstance(manifest, Mapping):
         raise TypeError("B6 cache manifest must be a JSON object")
-    _validate_cache_manifest(
+    legacy_source_metadata = _validate_cache_manifest(
         manifest=manifest,
         cache_paths=cache_paths,
         expected_paths_sha256=_path_rows_sha256(paths),
+        expected_source_groups=source_groups,
+        expected_labels=expected_labels,
+        allow_legacy_source_metadata=True,
     )
     tokens = np.load(cache_paths["tokens"], mmap_mode="r", allow_pickle=False)
     logits = np.load(cache_paths["logits"], mmap_mode="r", allow_pickle=False)
@@ -743,6 +826,24 @@ def _load_existing_cache(
         manifest.get("labels_content_sha256", "")
     ):
         raise ValueError("B6 cached label content hash mismatch")
+    canonical_labels = np.asarray(expected_labels, dtype=np.int64).reshape(-1)
+    if not np.array_equal(labels_array, canonical_labels):
+        raise ValueError("B6 cached labels do not match canonical dataset labels")
+    if legacy_source_metadata:
+        manifest = _upgrade_legacy_cache_manifest(
+            manifest_path=cache_paths["manifest"],
+            manifest=manifest,
+            source_groups=source_groups,
+        )
+        _validate_cache_manifest(
+            manifest=manifest,
+            cache_paths=cache_paths,
+            expected_paths_sha256=_path_rows_sha256(paths),
+            expected_source_groups=source_groups,
+            expected_labels=canonical_labels,
+            allow_legacy_source_metadata=False,
+            verify_cache_hashes=False,
+        )
     return {
         "tokens": tokens,
         "global_logits": logits,
@@ -756,6 +857,8 @@ def _extract_train_cache(
     model: nn.Module,
     dataset: Dataset,
     paths: Sequence[str],
+    source_groups: Sequence[object],
+    expected_labels: np.ndarray,
     output_dir: Path,
     device: torch.device,
     batch_size: int,
@@ -867,12 +970,23 @@ def _extract_train_cache(
     logit_cache.flush()
     label_cache.flush()
     del token_cache, logit_cache, label_cache
+    extracted_labels = np.load(
+        partial_labels,
+        mmap_mode="r",
+        allow_pickle=False,
+    )
+    canonical_labels = np.asarray(expected_labels, dtype=np.int64).reshape(-1)
+    if not np.array_equal(extracted_labels, canonical_labels):
+        raise ValueError(
+            "B6 extracted labels do not match canonical dataset labels"
+        )
+    del extracted_labels
     partial_tokens.replace(cache_paths["tokens"])
     partial_logits.replace(cache_paths["logits"])
     partial_labels.replace(cache_paths["labels"])
     labels_array = np.load(cache_paths["labels"], mmap_mode="r", allow_pickle=False)
     manifest: Dict[str, object] = {
-        "schema_version": 1,
+        "schema_version": CACHE_MANIFEST_SCHEMA_VERSION,
         "protocol_id": PROTOCOL_ID,
         "data_sha256": EXPECTED_DATA_SHA256,
         "checkpoint_sha256": EXPECTED_CHECKPOINT_SHA256,
@@ -895,6 +1009,7 @@ def _extract_train_cache(
         "validation_dataset_constructed": False,
         "test_dataset_constructed": False,
     }
+    manifest.update(_source_group_manifest_fields(source_groups))
     _atomic_json(cache_paths["manifest"], manifest)
     return {
         "tokens": np.load(
@@ -913,6 +1028,8 @@ def _load_or_extract_cache(
     model: nn.Module,
     dataset: Dataset,
     paths: Sequence[str],
+    source_groups: Sequence[object],
+    expected_labels: np.ndarray,
     output_dir: Path,
     device: torch.device,
     batch_size: int,
@@ -921,6 +1038,8 @@ def _load_or_extract_cache(
     existing = _load_existing_cache(
         output_dir=output_dir,
         paths=paths,
+        source_groups=source_groups,
+        expected_labels=expected_labels,
     )
     if existing is not None:
         return existing
@@ -928,6 +1047,8 @@ def _load_or_extract_cache(
         model=model,
         dataset=dataset,
         paths=paths,
+        source_groups=source_groups,
+        expected_labels=expected_labels,
         output_dir=output_dir,
         device=device,
         batch_size=batch_size,
@@ -944,6 +1065,124 @@ def _prefixed_metrics(
         row[f"{prefix}_{key}"] = float(value)
 
 
+def _validate_fold_assignment_contract(
+    source_groups: np.ndarray,
+    fold_assignments: np.ndarray,
+) -> Dict[str, object]:
+    groups = np.asarray(source_groups, dtype=object).reshape(-1)
+    assignments = np.asarray(fold_assignments, dtype=np.int64).reshape(-1)
+    if groups.size == 0 or groups.size != assignments.size:
+        raise ValueError("B6 source groups/fold assignments must align")
+    observed_folds = set(int(value) for value in assignments.tolist())
+    expected_folds = set(range(FOLDS))
+    if observed_folds != expected_folds:
+        raise ValueError(
+            "B6 fold assignments must contain exactly the locked folds: "
+            f"observed={sorted(observed_folds)}, expected={sorted(expected_folds)}"
+        )
+    group_to_fold: Dict[str, int] = {}
+    for source_group, fold_index in zip(groups.tolist(), assignments.tolist()):
+        key = str(source_group)
+        observed = int(fold_index)
+        previous = group_to_fold.setdefault(key, observed)
+        if previous != observed:
+            raise RuntimeError(
+                "B6 source group spans multiple holdout folds: "
+                f"{key!r} -> {previous}/{observed}"
+            )
+    return {
+        "assignment_rows": int(assignments.size),
+        "assignment_source_groups": int(len(group_to_fold)),
+        "assignment_folds": sorted(observed_folds),
+        "each_source_group_has_one_fold": True,
+    }
+
+
+def _validate_oof_prediction_coverage(
+    *,
+    prediction_rows: Sequence[Mapping[str, object]],
+    labels: np.ndarray,
+    source_groups: np.ndarray,
+    fold_assignments: np.ndarray,
+    paths: Sequence[str],
+) -> Dict[str, object]:
+    values = [dict(row) for row in prediction_rows]
+    targets = np.asarray(labels, dtype=np.int64).reshape(-1)
+    groups = np.asarray(source_groups, dtype=object).reshape(-1)
+    assignments = np.asarray(fold_assignments, dtype=np.int64).reshape(-1)
+    if not (
+        targets.size == groups.size == assignments.size == len(paths)
+    ):
+        raise ValueError("B6 OOF coverage inputs are not aligned")
+    expected_keys = set()
+    for sample_index, target_index in enumerate(targets.tolist()):
+        if int(target_index) == int(FOCUS_CLASS):
+            rivals = PAIR_RIVALS
+        elif int(target_index) in PAIR_RIVALS:
+            rivals = (int(target_index),)
+        else:
+            rivals = ()
+        expected_keys.update(
+            (int(sample_index), f"{int(rival)}-1") for rival in rivals
+        )
+    observed_keys = set()
+    probability_fields = (
+        "control_probability_class1",
+        "candidate_probability_class1",
+        "placebo_probability_class1",
+    )
+    for row in values:
+        sample_index = int(row["sample_index"])
+        if sample_index < 0 or sample_index >= targets.size:
+            raise IndexError(f"B6 OOF sample index is out of range: {sample_index}")
+        key = (sample_index, str(row["pair"]))
+        if key in observed_keys:
+            raise RuntimeError(f"B6 OOF prediction key is duplicated: {key}")
+        observed_keys.add(key)
+        if key not in expected_keys:
+            raise RuntimeError(f"B6 OOF prediction key is unexpected: {key}")
+        target_index = int(targets[sample_index])
+        expected_binary = int(target_index == int(FOCUS_CLASS))
+        expected_metadata = {
+            "image_path": str(paths[sample_index]),
+            "source_group": str(groups[sample_index]),
+            "fold": int(assignments[sample_index]),
+            "target_index": target_index,
+            "binary_target_class1": expected_binary,
+        }
+        mismatches = {
+            field: {"expected": expected, "observed": row.get(field)}
+            for field, expected in expected_metadata.items()
+            if row.get(field) != expected
+        }
+        if mismatches:
+            raise RuntimeError(
+                f"B6 OOF prediction metadata mismatch for {key}: {mismatches}"
+            )
+        for field in probability_fields:
+            probability = float(row[field])
+            if not math.isfinite(probability) or not 0.0 <= probability <= 1.0:
+                raise ValueError(
+                    f"B6 OOF probability is invalid for {key}/{field}: "
+                    f"{probability}"
+                )
+    if observed_keys != expected_keys or len(values) != len(expected_keys):
+        raise RuntimeError(
+            "B6 OOF prediction coverage is incomplete: "
+            f"rows={len(values)}, unique={len(observed_keys)}, "
+            f"expected={len(expected_keys)}, "
+            f"missing={len(expected_keys - observed_keys)}, "
+            f"unexpected={len(observed_keys - expected_keys)}"
+        )
+    return {
+        "expected_prediction_rows": int(len(expected_keys)),
+        "observed_prediction_rows": int(len(values)),
+        "unique_prediction_keys": int(len(observed_keys)),
+        "prediction_metadata_exact": True,
+        "probabilities_finite_and_bounded": True,
+    }
+
+
 def run_deepsets_oof(
     *,
     token_cache: np.ndarray,
@@ -954,7 +1193,12 @@ def run_deepsets_oof(
     paths: Sequence[str],
     output_dir: Path,
     device: torch.device,
-) -> Tuple[List[Dict[str, object]], List[Dict[str, object]], List[Dict[str, object]]]:
+) -> Tuple[
+    List[Dict[str, object]],
+    List[Dict[str, object]],
+    List[Dict[str, object]],
+    Dict[str, object],
+]:
     labels = np.asarray(labels, dtype=np.int64).reshape(-1)
     groups = np.asarray(source_groups, dtype=object).reshape(-1)
     assignments = np.asarray(fold_assignments, dtype=np.int64).reshape(-1)
@@ -967,6 +1211,10 @@ def run_deepsets_oof(
         == len(paths)
     ):
         raise ValueError("B6 cached arrays/folds/paths are not aligned")
+    fold_assignment_integrity = _validate_fold_assignment_contract(
+        groups,
+        assignments,
+    )
     fold_metric_rows: List[Dict[str, object]] = []
     prediction_rows: List[Dict[str, object]] = []
     model_dir = Path(output_dir) / "fold_readouts"
@@ -1132,6 +1380,13 @@ def run_deepsets_oof(
                         ),
                     }
                 )
+    prediction_integrity = _validate_oof_prediction_coverage(
+        prediction_rows=prediction_rows,
+        labels=labels,
+        source_groups=groups,
+        fold_assignments=assignments,
+        paths=paths,
+    )
     pair_rows: List[Dict[str, object]] = []
     for rival in PAIR_RIVALS:
         selected = [row for row in prediction_rows if row["pair"] == f"{rival}-1"]
@@ -1180,7 +1435,12 @@ def run_deepsets_oof(
             / max(1.0, control_metrics["fp"])
         )
         pair_rows.append(pair_row)
-    return pair_rows, fold_metric_rows, prediction_rows
+    return (
+        pair_rows,
+        fold_metric_rows,
+        prediction_rows,
+        {**fold_assignment_integrity, **prediction_integrity},
+    )
 
 
 def assess_deepsets_readiness(
@@ -1228,6 +1488,17 @@ def assess_deepsets_readiness(
     }
     if len(pairs) != PAIR_COUNT:
         raise ValueError(f"B6 requires {PAIR_COUNT} pair rows, got {len(pairs)}")
+    expected_pair_rivals = set(int(rival) for rival in PAIR_RIVALS)
+    observed_pair_rivals = [int(row["rival_class"]) for row in pairs]
+    complete_pair_coverage = (
+        len(observed_pair_rivals) == PAIR_COUNT
+        and set(observed_pair_rivals) == expected_pair_rivals
+        and len(set(observed_pair_rivals)) == PAIR_COUNT
+    )
+    pair_labels_consistent = all(
+        str(row.get("pair", "")) == f"{int(row['rival_class'])}-1"
+        for row in pairs
+    )
     critical = next(
         (row for row in pairs if int(row["rival_class"]) == 2),
         None,
@@ -1242,6 +1513,10 @@ def assess_deepsets_readiness(
     observed_pair_fold_keys = {
         (int(row["rival_class"]), int(row["fold"])) for row in folds
     }
+    pair_fold_labels_consistent = all(
+        str(row.get("pair", "")) == f"{int(row['rival_class'])}-1"
+        for row in folds
+    )
     observed_global_folds = {int(row["fold"]) for row in global_folds}
     required_fold_fields = {
         "control_auroc",
@@ -1339,6 +1614,9 @@ def assess_deepsets_readiness(
         "initial_state_max_abs_error": initial_state_error,
         "metrics_finite": metrics_finite,
         "metric_fields_complete": metric_fields_complete,
+        "complete_pair_coverage": complete_pair_coverage,
+        "pair_labels_consistent": pair_labels_consistent,
+        "pair_fold_labels_consistent": pair_fold_labels_consistent,
         "critical_2_1_auroc_gain": float(critical["delta_auroc"]),
         "critical_2_1_fp_reduction": critical_fp_reduction,
         "critical_2_1_recall_delta": float(critical["delta_recall_class1"]),
@@ -1348,9 +1626,12 @@ def assess_deepsets_readiness(
         "source_group_support": int(source_groups) >= MIN_SOURCE_GROUPS,
         "complete_global_folds": len(global_folds) == FOLDS
         and observed_global_folds == set(range(FOLDS)),
+        "complete_pair_coverage": complete_pair_coverage,
+        "pair_labels_consistent": pair_labels_consistent,
         "complete_pair_fold_coverage": len(folds) == FOLDS * PAIR_COUNT
         and observed_pair_fold_keys == expected_pair_fold_keys
-        and metric_fields_complete,
+        and metric_fields_complete
+        and pair_fold_labels_consistent,
         "source_group_folds_disjoint": maximum_overlap
         <= int(thresholds["max_source_overlap"]),
         "cache_finite": bool(cache_finite),
@@ -1494,6 +1775,16 @@ def run_precheck(args: argparse.Namespace) -> Dict[str, object]:
     paths = [str(path) for path in sample_paths_fn()]
     if len(paths) != len(dataset):
         raise RuntimeError("B6 train paths and dataset length differ")
+    dataset_labels_fn = getattr(dataset, "labels", None)
+    if not callable(dataset_labels_fn):
+        raise TypeError("B6 train dataset must expose labels()")
+    canonical_labels = np.asarray(dataset_labels_fn(), dtype=np.int64).reshape(-1)
+    if canonical_labels.size != len(dataset):
+        raise RuntimeError("B6 canonical labels and dataset length differ")
+    if set(np.unique(canonical_labels).tolist()) != set(
+        range(GLOBAL_LOGIT_WIDTH)
+    ):
+        raise ValueError("B6 canonical labels must contain classes 0..4")
     source_groups = np.asarray(
         [normalized_source_group(path) for path in paths],
         dtype=object,
@@ -1520,6 +1811,11 @@ def run_precheck(args: argparse.Namespace) -> Dict[str, object]:
         "class_names": [str(name) for name in class_names],
         "train_samples": int(len(dataset)),
         "source_groups": source_group_count,
+        "source_groups_sha256": _source_groups_sha256(
+            source_groups.tolist()
+        ),
+        "source_group_normalization": SOURCE_GROUP_NORMALIZATION,
+        "canonical_labels_sha256": _labels_sha256(canonical_labels),
         "model_name": MODEL_NAME,
         "model_contract": model_contract,
         "checkpoint_contract": checkpoint_contract,
@@ -1554,6 +1850,8 @@ def run_precheck(args: argparse.Namespace) -> Dict[str, object]:
         model=model,
         dataset=dataset,
         paths=paths,
+        source_groups=source_groups,
+        expected_labels=canonical_labels,
         output_dir=output_dir,
         device=device,
         batch_size=int(args.batch_size),
@@ -1571,13 +1869,20 @@ def run_precheck(args: argparse.Namespace) -> Dict[str, object]:
         raise ValueError(
             "B6 cached labels must contain exactly canonical classes 0..4"
         )
+    if not np.array_equal(labels, canonical_labels):
+        raise ValueError("B6 cached labels differ from canonical dataset labels")
     assignments, global_fold_rows = assign_global_source_folds(
         labels,
         source_groups,
         folds=FOLDS,
         seed=SEED,
     )
-    pair_rows, fold_metric_rows, prediction_rows = run_deepsets_oof(
+    (
+        pair_rows,
+        fold_metric_rows,
+        prediction_rows,
+        oof_integrity,
+    ) = run_deepsets_oof(
         token_cache=np.asarray(cache["tokens"]),
         global_logits=np.asarray(cache["global_logits"]),
         labels=labels,
@@ -1624,6 +1929,7 @@ def run_precheck(args: argparse.Namespace) -> Dict[str, object]:
         "cache_manifest": dict(cache["manifest"]),
         "global_folds": global_fold_rows,
         "pair_results": pair_rows,
+        "oof_integrity": oof_integrity,
         "readiness": readiness,
         "artifacts": {
             "preflight": str(output_dir / "preflight.json"),

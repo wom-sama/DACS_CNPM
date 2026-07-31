@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from pathlib import Path
 
 import numpy as np
 import pytest
 import torch
 
+import trkh.tools.precheck_dinov3_classconditional_deepsets_train_oof as b6
+
 from trkh.tools.precheck_dinov3_classconditional_deepsets_train_oof import (
+    CACHE_MANIFEST_SCHEMA_VERSION,
     EXPECTED_CHECKPOINT_SHA256,
     EXPECTED_DATA_SHA256,
     EXPECTED_HEAD_PARAMETERS,
@@ -21,10 +25,16 @@ from trkh.tools.precheck_dinov3_classconditional_deepsets_train_oof import (
     PROTOCOL_ID,
     TOKEN_WIDTH,
     _PairTokenDataset,
+    _cache_paths,
+    _load_or_extract_cache,
     _parse_args,
+    _path_rows_sha256,
     _sha256,
+    _source_group_manifest_fields,
     _train_readout,
     _validate_cache_manifest,
+    _validate_fold_assignment_contract,
+    _validate_oof_prediction_coverage,
     architecture_self_check,
     assess_deepsets_readiness,
     expand_pair_rows,
@@ -194,7 +204,11 @@ def test_readout_training_is_deterministic_for_identical_seed_and_order() -> Non
         assert torch.equal(value, second.state_dict()[name])
 
 
-def test_cache_manifest_uses_distinct_file_and_label_content_hashes(tmp_path: Path) -> None:
+def test_cache_manifest_uses_distinct_file_and_label_content_hashes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(b6, "EXPECTED_TRAIN_SAMPLES", 5)
     cache_paths = {
         "tokens": tmp_path / "tokens.npy",
         "logits": tmp_path / "logits.npy",
@@ -202,17 +216,23 @@ def test_cache_manifest_uses_distinct_file_and_label_content_hashes(tmp_path: Pa
     }
     for index, path in enumerate(cache_paths.values()):
         path.write_bytes(f"cache-{index}".encode("ascii"))
-    labels_content = np.asarray([0, 1, 2, 3, 4], dtype="<i8").tobytes()
+    expected_labels = np.asarray([0, 1, 2, 3, 4], dtype=np.int64)
+    source_groups = np.asarray(
+        [f"source-{index}" for index in range(expected_labels.size)],
+        dtype=object,
+    )
+    labels_content = np.asarray(expected_labels, dtype="<i8").tobytes()
     manifest = {
+        "schema_version": CACHE_MANIFEST_SCHEMA_VERSION,
         "protocol_id": PROTOCOL_ID,
         "data_sha256": EXPECTED_DATA_SHA256,
         "checkpoint_sha256": EXPECTED_CHECKPOINT_SHA256,
         "paths_sha256": "locked-paths",
-        "token_shape": [EXPECTED_TRAIN_SAMPLES, PATCH_TOKENS, TOKEN_WIDTH],
+        "token_shape": [5, PATCH_TOKENS, TOKEN_WIDTH],
         "token_dtype": "float16",
-        "global_logits_shape": [EXPECTED_TRAIN_SAMPLES, GLOBAL_LOGIT_WIDTH],
+        "global_logits_shape": [5, GLOBAL_LOGIT_WIDTH],
         "global_logits_dtype": "float32",
-        "labels_shape": [EXPECTED_TRAIN_SAMPLES],
+        "labels_shape": [5],
         "labels_dtype": "int64",
         "tokens_sha256": _sha256(cache_paths["tokens"]),
         "logits_sha256": _sha256(cache_paths["logits"]),
@@ -221,11 +241,16 @@ def test_cache_manifest_uses_distinct_file_and_label_content_hashes(tmp_path: Pa
         "train_split_used": True,
         "validation_split_used": False,
         "test_split_used": False,
+        "validation_dataset_constructed": False,
+        "test_dataset_constructed": False,
     }
+    manifest.update(_source_group_manifest_fields(source_groups))
     _validate_cache_manifest(
         manifest=manifest,
         cache_paths=cache_paths,
         expected_paths_sha256="locked-paths",
+        expected_source_groups=source_groups,
+        expected_labels=expected_labels,
     )
     cache_paths["labels"].write_bytes(b"tampered")
     with pytest.raises(ValueError, match="cache hash mismatch"):
@@ -233,7 +258,178 @@ def test_cache_manifest_uses_distinct_file_and_label_content_hashes(tmp_path: Pa
             manifest=manifest,
             cache_paths=cache_paths,
             expected_paths_sha256="locked-paths",
+            expected_source_groups=source_groups,
+            expected_labels=expected_labels,
         )
+
+
+def test_legacy_cache_manifest_upgrades_without_reextracting_or_touching_arrays(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(b6, "EXPECTED_TRAIN_SAMPLES", 2)
+    monkeypatch.setattr(b6, "PATCH_TOKENS", 2)
+    monkeypatch.setattr(b6, "TOKEN_WIDTH", 3)
+    paths = [str(tmp_path / "image_0.jpg"), str(tmp_path / "image_1.jpg")]
+    source_groups = np.asarray(["image_0", "image_1"], dtype=object)
+    expected_labels = np.asarray([0, 1], dtype=np.int64)
+    cache_paths = _cache_paths(tmp_path)
+    np.save(
+        cache_paths["tokens"],
+        np.arange(12, dtype=np.float16).reshape(2, 2, 3),
+        allow_pickle=False,
+    )
+    np.save(
+        cache_paths["logits"],
+        np.arange(10, dtype=np.float32).reshape(2, GLOBAL_LOGIT_WIDTH),
+        allow_pickle=False,
+    )
+    np.save(cache_paths["labels"], expected_labels, allow_pickle=False)
+    legacy_manifest = {
+        "schema_version": 1,
+        "protocol_id": PROTOCOL_ID,
+        "data_sha256": EXPECTED_DATA_SHA256,
+        "checkpoint_sha256": EXPECTED_CHECKPOINT_SHA256,
+        "paths_sha256": _path_rows_sha256(paths),
+        "labels_content_sha256": hashlib.sha256(
+            np.asarray(expected_labels, dtype="<i8").tobytes()
+        ).hexdigest(),
+        "token_shape": [2, 2, 3],
+        "token_dtype": "float16",
+        "global_logits_shape": [2, GLOBAL_LOGIT_WIDTH],
+        "global_logits_dtype": "float32",
+        "labels_shape": [2],
+        "labels_dtype": "int64",
+        "tokens_sha256": _sha256(cache_paths["tokens"]),
+        "logits_sha256": _sha256(cache_paths["logits"]),
+        "labels_sha256": _sha256(cache_paths["labels"]),
+        "train_split_used": True,
+        "validation_split_used": False,
+        "test_split_used": False,
+        "validation_dataset_constructed": False,
+        "test_dataset_constructed": False,
+    }
+    cache_paths["manifest"].write_text(
+        json.dumps(legacy_manifest, indent=2),
+        encoding="utf-8",
+    )
+    cache_hashes = {
+        key: _sha256(cache_paths[key]) for key in ("tokens", "logits", "labels")
+    }
+    cache_mtimes = {
+        key: cache_paths[key].stat().st_mtime_ns
+        for key in ("tokens", "logits", "labels")
+    }
+
+    def _unexpected_extraction(**_kwargs):
+        raise AssertionError("legacy cache reuse must not invoke extraction")
+
+    monkeypatch.setattr(b6, "_extract_train_cache", _unexpected_extraction)
+    loaded = _load_or_extract_cache(
+        model=object(),
+        dataset=object(),
+        paths=paths,
+        source_groups=source_groups,
+        expected_labels=expected_labels,
+        output_dir=tmp_path,
+        device=torch.device("cpu"),
+        batch_size=1,
+        workers=0,
+    )
+    upgraded = loaded["manifest"]
+    assert upgraded["schema_version"] == CACHE_MANIFEST_SCHEMA_VERSION
+    assert upgraded["legacy_schema_upgraded_from"] == 1
+    assert upgraded["source_group_count"] == 2
+    assert upgraded["source_group_rows"] == 2
+    assert {
+        key: _sha256(cache_paths[key]) for key in cache_hashes
+    } == cache_hashes
+    assert {
+        key: cache_paths[key].stat().st_mtime_ns for key in cache_mtimes
+    } == cache_mtimes
+    del loaded
+
+    with pytest.raises(ValueError, match="cache manifest mismatch"):
+        _load_or_extract_cache(
+            model=object(),
+            dataset=object(),
+            paths=paths,
+            source_groups=source_groups,
+            expected_labels=expected_labels[::-1],
+            output_dir=tmp_path,
+            device=torch.device("cpu"),
+            batch_size=1,
+            workers=0,
+        )
+
+
+def test_fold_and_oof_contracts_reject_split_or_prediction_gaps() -> None:
+    labels = np.asarray([0, 1, 2, 3, 4, 1], dtype=np.int64)
+    source_groups = np.asarray(
+        [f"source-{index}" for index in range(labels.size)],
+        dtype=object,
+    )
+    assignments = np.asarray([0, 1, 2, 3, 4, 0], dtype=np.int64)
+    paths = [f"image-{index}.jpg" for index in range(labels.size)]
+    fold_report = _validate_fold_assignment_contract(
+        source_groups,
+        assignments,
+    )
+    assert fold_report["assignment_rows"] == labels.size
+    assert fold_report["assignment_folds"] == list(range(FOLDS))
+
+    rows = []
+    for sample_index, target_index in enumerate(labels.tolist()):
+        rivals = (
+            PAIR_RIVALS
+            if target_index == 1
+            else (target_index,)
+            if target_index in PAIR_RIVALS
+            else ()
+        )
+        for rival in rivals:
+            rows.append(
+                {
+                    "sample_index": sample_index,
+                    "image_path": paths[sample_index],
+                    "source_group": str(source_groups[sample_index]),
+                    "fold": int(assignments[sample_index]),
+                    "target_index": target_index,
+                    "pair": f"{rival}-1",
+                    "binary_target_class1": int(target_index == 1),
+                    "control_probability_class1": 0.5,
+                    "candidate_probability_class1": 0.5,
+                    "placebo_probability_class1": 0.5,
+                }
+            )
+    coverage = _validate_oof_prediction_coverage(
+        prediction_rows=rows,
+        labels=labels,
+        source_groups=source_groups,
+        fold_assignments=assignments,
+        paths=paths,
+    )
+    assert coverage["expected_prediction_rows"] == 9
+    assert coverage["unique_prediction_keys"] == 9
+
+    with pytest.raises(RuntimeError, match="duplicated"):
+        _validate_oof_prediction_coverage(
+            prediction_rows=[*rows, dict(rows[0])],
+            labels=labels,
+            source_groups=source_groups,
+            fold_assignments=assignments,
+            paths=paths,
+        )
+
+    split_group_values = source_groups.copy()
+    split_group_values[1] = split_group_values[0]
+    with pytest.raises(RuntimeError, match="multiple holdout folds"):
+        _validate_fold_assignment_contract(split_group_values, assignments)
+
+    invalid_assignments = assignments.copy()
+    invalid_assignments[-1] = FOLDS
+    with pytest.raises(ValueError, match="exactly the locked folds"):
+        _validate_fold_assignment_contract(source_groups, invalid_assignments)
 
 
 def test_readiness_passes_all_locked_gates_and_rejects_duplicate_coverage(
@@ -267,6 +463,38 @@ def test_readiness_passes_all_locked_gates_and_rejects_duplicate_coverage(
         cache_finite=True,
     )
     assert not rejected["deepsets_patch_distribution_ready"]
+    assert "complete_pair_fold_coverage" in rejected["failed_checks"]
+
+    pairs, folds, global_folds = _passing_rows()
+    duplicate_pairs = [dict(pairs[0]), dict(pairs[1]), dict(pairs[0])]
+    rejected = assess_deepsets_readiness(
+        pair_rows=duplicate_pairs,
+        fold_metric_rows=folds,
+        global_fold_rows=global_folds,
+        train_samples=EXPECTED_TRAIN_SAMPLES,
+        source_groups=7751,
+        architecture=locked_architecture,
+        maximum_pool_parity_error=0.0,
+        cache_finite=True,
+    )
+    assert not rejected["deepsets_patch_distribution_ready"]
+    assert "complete_pair_coverage" in rejected["failed_checks"]
+
+    pairs, folds, global_folds = _passing_rows()
+    pairs[0]["pair"] = "wrong"
+    folds[0]["pair"] = "wrong"
+    rejected = assess_deepsets_readiness(
+        pair_rows=pairs,
+        fold_metric_rows=folds,
+        global_fold_rows=global_folds,
+        train_samples=EXPECTED_TRAIN_SAMPLES,
+        source_groups=7751,
+        architecture=locked_architecture,
+        maximum_pool_parity_error=0.0,
+        cache_finite=True,
+    )
+    assert not rejected["deepsets_patch_distribution_ready"]
+    assert "pair_labels_consistent" in rejected["failed_checks"]
     assert "complete_pair_fold_coverage" in rejected["failed_checks"]
 
 
