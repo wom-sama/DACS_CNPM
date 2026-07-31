@@ -1,38 +1,46 @@
-TRKH Kaggle two-ZIP upload set - 2026-07-31
+TRKH Kaggle B2/T4 offline upload set - 2026-07-31
 
-Run this notebook:
+STATUS
+  PASSED complete local clean-room on Windows/RTX 4060.
+  PENDING the unmodified acceptance run on Kaggle v170 NvidiaTeslaT4.
+
+Run this notebook
   TRKH_CLASSF_BEST_KAGGLE.ipynb
-  Bytes  57807
-  SHA256 E154A00394CDBBFFE19F98D542CD8D94A01DF3D3AC25FFEC81B7CB16055186BA
+  Bytes  89524
+  SHA256 95BA222C19445AF6D271B876A0D6B97C8E9F15188916420707FF43A384D5F7CF
 
-Attach these two ZIP files unchanged:
+Attach exactly these two ZIP files unchanged
 
-1. TRKH_KAGGLE_B2_UPLOAD_BUNDLE_20260731.zip
-   Bytes  107482966
-   SHA256 99CA131E33435ACFB1027A8B482577D07968F78E5ACDAE1441E548964DA0AD4E
-   Contains the exact B2 source snapshot at commit
-   f1d79def090e347c0586efae4003b2579d368a28, SOURCE_COMMIT marker,
-   DINOv3-S/16 weight, notebook, README and a complete per-file SHA256
-   manifest. The official recipe is called with experiment=b2-tempered-p05.
+1. TRKH_KAGGLE_B2_T4_UPLOAD_BUNDLE_20260731.zip
+   Bytes  86493012
+   SHA256 2063DA3B2C730E3CB2227E48FD66E794F236AC2E958D8A7B06BE2A46EFD9E874
+   Source commit 7F7F0883CBB71B6A5620FEE86C15B996C400A813
+   Source tree   7C8752EFE6ACB728ED913ABE5DB165B218C94177E3EF13F5B37CE1C62B19D965
+   timm 1.0.27 vendored tree
+                 C3F21C6F3EF4AC466D46E33494C726E4D80CE3329E73B537F68A47FE066DC856
+   DINOv3-S/16 checkpoint
+                 2A1EC16AE28FFA07BC0EAD0241EE7DF9FC26451FE6F9F839B7B3AFA0A906B040
 
 2. TRKH_CLASSF_DEV_DATASET_20260731.zip
    Bytes  891390651
    SHA256 C3695CF9DD44B559CE158B1FFEE96533D4549C5724188F9DF2F864B3D37DFADB
-   Contains portable data.yaml plus train=8278 and val=2479 images.
-   Test is intentionally absent.
+   Contains train=8278 and val=2479. Test is intentionally absent.
 
-The notebook safely extracts and verifies both ZIP files automatically. Keep
-Internet enabled for locked Python dependency installation and enable a Kaggle
-GPU. Run all cells. After the five-epoch probe stops, review its metrics, set
-CONFIRM_FULL=True in the first cell, then rerun the first and training cells.
+Kaggle settings
+  Accelerator  NVIDIA T4 (normally displayed as T4 x2); do not select P100.
+  Internet     OFF.
+  Do not run pip and do not replace Kaggle Torch/torchvision.
 
-For another dataset similar to class_f, replace only ZIP 2. Keep the filename
-prefix TRKH_CLASSF_DEV_DATASET_, exactly five ordered class names, one data.yaml,
-and train/val folders. Paths, image counts and image hashes may differ. Do not
-put a test folder or test key into the training ZIP.
+Execution
+  1. Attach the two canonical ZIP files and open the notebook above.
+  2. Leave CONFIRM_FULL=False and Run All. This performs integrity/runtime
+     gates, a 4-train/2-val FP16 smoke, independent checkpoint reload and the
+     locked five-epoch B2 probe; full-only cells then skip cleanly.
+  3. Review PROBE_READINESS.json. If its gates pass, set CONFIRM_FULL=True and
+     rerun from cell 0 to start the locked 30-epoch full train and all audits.
 
-This upload set uses B2 tempered-p0.5, the current local winner. Its local
-probe reached accuracy 0.889875, macro-F1 0.851462 and class-1 F1 0.653409.
-These numbers are provenance, not promised metrics for another uploaded
-dataset. Replace the asset ZIP and notebook together only after a newer
-configuration passes the same locked validation/audit gates.
+The canonical asset contains no pip mutation and imports its manifest-covered
+vendored timm in both the notebook process and training subprocess. Its local
+clean-room recorded two successful optimizer updates, zero non-finite/skipped
+updates and 164 optimizer-state entries. These are engineering acceptance
+facts, not promised metrics for a different Kaggle dataset or GPU runtime.

@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "release_date": "2026-07-31",
+  "final_status": "accepted_local_cleanroom_pending_kaggle_t4",
+  "attempts": [
+    {
+      "sequence": 1,
+      "size_bytes": 86441354,
+      "sha256": "7aedda60110531409e87fee51cb702365c4d61166fbb9619395fb09d02593cb4",
+      "status": "rejected_before_release",
+      "reason": "A first validation pass could create Python or pytest cache files that changed the second-pass manifest view."
+    },
+    {
+      "sequence": 2,
+      "size_bytes": 86441425,
+      "sha256": "13225db56860d5f57b4f4f5e8b5794ecfabe42b86df814ba885592ca823861aa",
+      "status": "rejected_cleanroom",
+      "reason": "The child process imported site-packages timm and the FP16 smoke completed with zero successful optimizer updates after scaler backoff."
+    },
+    {
+      "sequence": 3,
+      "artifacts": [
+        "TRKH_KAGGLE_B2_T4_UPLOAD_BUNDLE_20260731_candidate.zip",
+        "TRKH_KAGGLE_B2_T4_UPLOAD_BUNDLE_20260731_repro.zip"
+      ],
+      "size_bytes": 86478482,
+      "sha256": "36bc658fd91711b9b48e6b136375c772848382d0571ab1c6835f24f1c658be90",
+      "status": "rejected_static_audit",
+      "reason": "The notebook omitted the math import and attempted to verify optimizer state from best.pt, whose release checkpoint intentionally strips optimizer state."
+    },
+    {
+      "sequence": 4,
+      "artifacts": [
+        "TRKH_KAGGLE_B2_T4_UPLOAD_BUNDLE_20260731_candidate2.zip",
+        "TRKH_KAGGLE_B2_T4_UPLOAD_BUNDLE_20260731_candidate3.zip"
+      ],
+      "size_bytes": 86478531,
+      "sha256": "f0c5519d93874e288649062d864043d3e1923cdce8bf6eb26cdd10e0d8bdd2a2",
+      "status": "superseded_before_cleanroom",
+      "reason": "The generator and source-tree ordering were hardened before a complete clean-room run."
+    },
+    {
+      "sequence": 5,
+      "artifacts": [
+        "TRKH_KAGGLE_B2_T4_UPLOAD_BUNDLE_20260731_candidate4.zip",
+        "TRKH_KAGGLE_B2_T4_UPLOAD_BUNDLE_20260731_repro4.zip"
+      ],
+      "size_bytes": 86478553,
+      "sha256": "8648acd273c820882326660bba37ceff558713a451f0330db38396735e076a9d",
+      "status": "rejected_cleanroom",
+      "reason": "A combined POSIX sort mixed configs and trkh paths, so the notebook-derived source tree did not match the locked builder tree."
+    },
+    {
+      "sequence": 6,
+      "artifacts": [
+        "TRKH_KAGGLE_B2_T4_UPLOAD_BUNDLE_20260731_candidate5.zip",
+        "TRKH_KAGGLE_B2_T4_UPLOAD_BUNDLE_20260731_repro5.zip"
+      ],
+      "size_bytes": 86478555,
+      "sha256": "996b0360f4a409e65d8cb0a5446b4e3223399abb9571c66068a9781433db02a4",
+      "status": "rejected_cleanroom",
+      "reason": "Optimizer telemetry existed in memory and last.pt, but was absent from the explicit history.csv field list."
+    },
+    {
+      "sequence": 7,
+      "artifacts": [
+        "TRKH_KAGGLE_B2_T4_UPLOAD_BUNDLE_20260731.zip",
+        "TRKH_KAGGLE_B2_T4_UPLOAD_BUNDLE_20260731_candidate6.zip",
+        "TRKH_KAGGLE_B2_T4_UPLOAD_BUNDLE_20260731_repro6.zip"
+      ],
+      "size_bytes": 86493012,
+      "sha256": "2063da3b2c730e3cb2227e48fd66e794f236ac2e958d8a7b06be2a46efd9e874",
+      "status": "accepted_local_cleanroom_pending_kaggle_t4",
+      "reason": "Deterministic rebuilds are byte-identical and the complete Windows/RTX 4060 clean-room passed. The remaining acceptance gate is the unmodified notebook on Kaggle v170 NvidiaTeslaT4."
+    }
+  ]
+}

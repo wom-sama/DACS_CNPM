@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "cleanup_date": "2026-07-31",
+  "policy": "No release evidence was deleted. Superseded and rejected ZIP files were moved out of the upload root after their size and SHA-256 were recorded.",
+  "upload_root_kept": [
+    {
+      "name": "TRKH_KAGGLE_B2_T4_UPLOAD_BUNDLE_20260731.zip",
+      "size_bytes": 86493012,
+      "sha256": "2063da3b2c730e3cb2227e48fd66e794f236ac2e958d8a7b06be2a46efd9e874",
+      "action": "kept_as_only_canonical_asset"
+    },
+    {
+      "name": "TRKH_CLASSF_DEV_DATASET_20260731.zip",
+      "size_bytes": 891390651,
+      "sha256": "c3695cf9dd44b559ce158b1ffee96533d4549c5724188f9df2f864b3d37dfadb",
+      "action": "kept_as_only_dataset_zip"
+    }
+  ],
+  "archive_directory": "kagle/archive/rejected_20260731",
+  "moved_to_archive": [
+    {
+      "name": "TRKH_KAGGLE_B0_UPLOAD_BUNDLE_20260731.zip",
+      "size_bytes": 107523689,
+      "sha256": "cae25f5549a17d38d9661303be5ee4e5802f67721d71ec08c61269fb23204c0e",
+      "reason": "superseded_pretrained_recipe"
+    },
+    {
+      "name": "TRKH_KAGGLE_B2_UPLOAD_BUNDLE_20260731.zip",
+      "size_bytes": 107482966,
+      "sha256": "99ca131e33435acfb1027a8b482577d07968f78e5acdae1441e548964da0ad4e",
+      "reason": "superseded_online_dependency_release"
+    },
+    {
+      "name": "TRKH_KAGGLE_B2_T4_UPLOAD_BUNDLE_20260731_candidate.zip",
+      "size_bytes": 86478482,
+      "sha256": "36bc658fd91711b9b48e6b136375c772848382d0571ab1c6835f24f1c658be90",
+      "reason": "rejected_static_audit"
+    },
+    {
+      "name": "TRKH_KAGGLE_B2_T4_UPLOAD_BUNDLE_20260731_repro.zip",
+      "size_bytes": 86478482,
+      "sha256": "36bc658fd91711b9b48e6b136375c772848382d0571ab1c6835f24f1c658be90",
+      "reason": "reproducibility_copy_of_rejected_static_audit"
+    },
+    {
+      "name": "TRKH_KAGGLE_B2_T4_UPLOAD_BUNDLE_20260731_candidate2.zip",
+      "size_bytes": 86478531,
+      "sha256": "f0c5519d93874e288649062d864043d3e1923cdce8bf6eb26cdd10e0d8bdd2a2",
+      "reason": "superseded_before_cleanroom"
+    },
+    {
+      "name": "TRKH_KAGGLE_B2_T4_UPLOAD_BUNDLE_20260731_candidate3.zip",
+      "size_bytes": 86478531,
+      "sha256": "f0c5519d93874e288649062d864043d3e1923cdce8bf6eb26cdd10e0d8bdd2a2",
+      "reason": "duplicate_reproducibility_copy"
+    },
+    {
+      "name": "TRKH_KAGGLE_B2_T4_UPLOAD_BUNDLE_20260731_candidate4.zip",
+      "size_bytes": 86478553,
+      "sha256": "8648acd273c820882326660bba37ceff558713a451f0330db38396735e076a9d",
+      "reason": "rejected_source_tree_order"
+    },
+    {
+      "name": "TRKH_KAGGLE_B2_T4_UPLOAD_BUNDLE_20260731_repro4.zip",
+      "size_bytes": 86478553,
+      "sha256": "8648acd273c820882326660bba37ceff558713a451f0330db38396735e076a9d",
+      "reason": "reproducibility_copy_of_rejected_source_tree_order"
+    },
+    {
+      "name": "TRKH_KAGGLE_B2_T4_UPLOAD_BUNDLE_20260731_candidate5.zip",
+      "size_bytes": 86478555,
+      "sha256": "996b0360f4a409e65d8cb0a5446b4e3223399abb9571c66068a9781433db02a4",
+      "reason": "rejected_history_csv_telemetry_contract"
+    },
+    {
+      "name": "TRKH_KAGGLE_B2_T4_UPLOAD_BUNDLE_20260731_repro5.zip",
+      "size_bytes": 86478555,
+      "sha256": "996b0360f4a409e65d8cb0a5446b4e3223399abb9571c66068a9781433db02a4",
+      "reason": "reproducibility_copy_of_rejected_telemetry_contract"
+    },
+    {
+      "name": "TRKH_KAGGLE_B2_T4_UPLOAD_BUNDLE_20260731_candidate6.zip",
+      "size_bytes": 86493012,
+      "sha256": "2063da3b2c730e3cb2227e48fd66e794f236ac2e958d8a7b06be2a46efd9e874",
+      "reason": "byte_identical_source_copy_after_canonical_promotion"
+    },
+    {
+      "name": "TRKH_KAGGLE_B2_T4_UPLOAD_BUNDLE_20260731_repro6.zip",
+      "size_bytes": 86493012,
+      "sha256": "2063da3b2c730e3cb2227e48fd66e794f236ac2e958d8a7b06be2a46efd9e874",
+      "reason": "byte_identical_reproducibility_copy_after_canonical_promotion"
+    }
+  ],
+  "upload_root_zip_count_after_cleanup": 2
+}
