@@ -24,6 +24,7 @@ if ([string]::IsNullOrWhiteSpace($Checkpoint)) {
 if ([string]::IsNullOrWhiteSpace($OutputDir)) {
     $OutputDir = Join-Path $RepoRoot "runs\precheck_classf_b6_dinov3_classconditional_deepsets_20260731"
 }
+$OutputDir = [System.IO.Path]::GetFullPath($OutputDir)
 
 foreach ($RequiredFile in @($Python, $DataYaml, $Checkpoint)) {
     if (-not (Test-Path -LiteralPath $RequiredFile -PathType Leaf)) {

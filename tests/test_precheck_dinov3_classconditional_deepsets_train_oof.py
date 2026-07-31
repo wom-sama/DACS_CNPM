@@ -114,6 +114,36 @@ def test_pair_expansion_balancing_and_pairwise_placebo() -> None:
         assert int(placebo[mask].sum()) == int(rows["targets"][mask].sum())
 
 
+def test_six_stratum_balance_guard_scales_for_locked_float32_support() -> None:
+    # Fold-0 fit support from the locked class_f source-group assignment.  The
+    # old absolute 1e-5 guard rejected these correctly balanced float32
+    # weights solely because their total is about 954.5 per stratum.
+    counts = [1582, 388, 1067, 388, 1914, 388]
+    pair_ids = []
+    targets = []
+    for stratum, count in enumerate(counts):
+        pair_ids.extend([stratum // 2] * count)
+        targets.extend([stratum % 2] * count)
+    pairs = np.asarray(pair_ids, dtype=np.int64)
+    values = np.asarray(targets, dtype=np.int64)
+
+    weights = six_stratum_weights(pairs, values)
+    expected_total = float(values.size) / float(2 * PAIR_COUNT)
+    totals = [
+        float(
+            weights[np.logical_and(pairs == pair, values == target)].sum(
+                dtype=np.float64
+            )
+        )
+        for pair in range(PAIR_COUNT)
+        for target in (0, 1)
+    ]
+
+    assert max(abs(total - expected_total) for total in totals) <= (
+        2.0 * np.finfo(np.float32).eps * expected_total
+    )
+
+
 def test_pooled_control_repeats_the_deployed_pool_256_times() -> None:
     labels = np.asarray([0, 1, 2, 4], dtype=np.int64)
     rows = expand_pair_rows(labels)

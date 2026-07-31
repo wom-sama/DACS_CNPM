@@ -406,7 +406,23 @@ def six_stratum_weights(pair_ids: np.ndarray, targets: np.ndarray) -> np.ndarray
         for pair_index in range(PAIR_COUNT)
         for target in (0, 1)
     ]
-    if max(stratum_totals) - min(stratum_totals) > 1e-5:
+    expected_total = float(values.size) / float(2 * PAIR_COUNT)
+    # Each example weight is consumed as float32 by the training loss.  At the
+    # locked support (thousands of rows per stratum), quantizing one weight and
+    # then summing it can legitimately accumulate several 1e-5 of absolute
+    # error even though the relative imbalance is below one float32 epsilon.
+    # Scale the guard to the expected total instead of using a size-dependent
+    # absolute threshold that rejects the canonical dataset.
+    rounding_tolerance = max(
+        1e-5,
+        2.0
+        * float(np.finfo(np.float32).eps)
+        * max(1.0, abs(expected_total)),
+    )
+    maximum_deviation = max(
+        abs(total - expected_total) for total in stratum_totals
+    )
+    if maximum_deviation > rounding_tolerance:
         raise RuntimeError("Six-stratum weights are not balanced")
     return weights
 
