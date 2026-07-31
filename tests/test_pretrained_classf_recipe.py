@@ -7,6 +7,7 @@ import torch
 
 import trkh.recipes.pretrained_classf_b0 as recipe
 from trkh.recipes.pretrained_classf_b0 import (
+    B1_NATURAL_PROTOCOL_ID,
     DINO_MODEL_NAME,
     DINO_SHA256,
     EXPECTED_CLASS_NAMES,
@@ -31,6 +32,24 @@ def _args(tmp_path: Path, *, stage: str = "full") -> list[str]:
         num_workers=2,
         eval_num_workers=1,
     )
+
+
+def _strip_lineage_only_args(args: list[str]) -> list[str]:
+    normalized: list[str] = []
+    skip_value_for = {
+        "--experiment-protocol-id",
+        "--recipe-train-contract-sha256",
+        "--run-name",
+    }
+    index = 0
+    while index < len(args):
+        argument = args[index]
+        if argument in skip_value_for:
+            index += 2
+            continue
+        normalized.append(argument)
+        index += 1
+    return normalized
 
 
 def test_classf_b0_recipe_is_direct_pretrained_hard_label_only(
@@ -75,6 +94,45 @@ def test_classf_b0_run_name_is_versioned() -> None:
     assert (
         run_name("full", "20260731")
         == "pretrained_dinov3_classf_direct_full_20260731"
+    )
+
+
+def test_classf_b1_natural_changes_only_sampler_and_lineage(
+    tmp_path: Path,
+) -> None:
+    b0_args = _args(tmp_path, stage="probe")
+    b1_args = build_train_args(
+        data_yaml=tmp_path / "class_f" / "data.yaml",
+        dino_checkpoint=tmp_path / "model.safetensors",
+        output_dir=tmp_path / "runs",
+        stage="probe",
+        run_tag="unit",
+        batch_size=16,
+        num_workers=2,
+        eval_num_workers=1,
+        experiment="b1-natural",
+    )
+    b0 = parse_args(b0_args)
+    b1 = parse_args(b1_args)
+
+    assert b0.disable_balanced_epoch_sampling is False
+    assert b1.disable_balanced_epoch_sampling is True
+    assert b1.experiment_protocol_id == B1_NATURAL_PROTOCOL_ID
+    assert b1.classification_loss == b0.classification_loss == "ldam_focal"
+    assert b1.focal_loss_gamma == b0.focal_loss_gamma == 1.0
+    assert b1.focal_loss_mix == b0.focal_loss_mix == 0.1
+    assert b1.ldam_max_margin == b0.ldam_max_margin == 0.3
+    assert b1.ldam_scale == b0.ldam_scale == 18.0
+    assert b1.disable_class_weights is b0.disable_class_weights is True
+    assert b1.max_train_batches == b0.max_train_batches == 120
+    assert (
+        _strip_lineage_only_args(b1_args)
+        == _strip_lineage_only_args(b0_args)
+        + ["--disable-balanced-epoch-sampling"]
+    )
+    assert (
+        run_name("probe", "unit", experiment="b1-natural")
+        == "pretrained_dinov3_classf_natural_probe_unit"
     )
 
 

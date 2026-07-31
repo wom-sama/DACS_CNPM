@@ -29,6 +29,7 @@ from trkh.training.train import build_configs, parse_args as parse_train_args
 
 
 PROTOCOL_ID = "TRKH_PRETRAINED_CLASSF_B0_20260731"
+B1_NATURAL_PROTOCOL_ID = "TRKH_PRETRAINED_CLASSF_B1_NATURAL_20260731"
 DINO_MODEL_NAME = "vit_small_patch16_dinov3.lvd1689m"
 DINO_SHA256 = "2a1ec16ae28ffa07bc0ead0241ee7df9fc26451fe6f9f839b7b3afa0a906b040"
 DINO_SOURCE_URL = "https://huggingface.co/timm/vit_small_patch16_dinov3.lvd1689m"
@@ -56,6 +57,30 @@ class Stage:
     patience: int
     max_train_batches: int
     max_val_batches: int
+
+
+@dataclass(frozen=True)
+class Experiment:
+    key: str
+    protocol_id: str
+    run_prefix: str
+    balanced_epoch_sampling: bool
+
+
+EXPERIMENTS: Mapping[str, Experiment] = {
+    "b0": Experiment(
+        key="b0",
+        protocol_id=PROTOCOL_ID,
+        run_prefix="pretrained_dinov3_classf_direct",
+        balanced_epoch_sampling=True,
+    ),
+    "b1-natural": Experiment(
+        key="b1-natural",
+        protocol_id=B1_NATURAL_PROTOCOL_ID,
+        run_prefix="pretrained_dinov3_classf_natural",
+        balanced_epoch_sampling=False,
+    ),
+}
 
 
 STAGES: Mapping[str, Stage] = {
@@ -308,8 +333,19 @@ def validate_auto_resume_checkpoint(
     }
 
 
-def run_name(stage: str, run_tag: str) -> str:
-    return f"pretrained_dinov3_classf_direct_{stage}_{run_tag}"
+def experiment_spec(experiment: str = "b0") -> Experiment:
+    key = str(experiment).strip().lower()
+    try:
+        return EXPERIMENTS[key]
+    except KeyError as error:
+        raise ValueError(
+            f"Unsupported experiment {experiment!r}; choose from {sorted(EXPERIMENTS)}."
+        ) from error
+
+
+def run_name(stage: str, run_tag: str, *, experiment: str = "b0") -> str:
+    spec = experiment_spec(experiment)
+    return f"{spec.run_prefix}_{stage}_{run_tag}"
 
 
 def build_train_args(
@@ -327,6 +363,7 @@ def build_train_args(
     source_commit: str = "",
     source_tree_sha256: str = "",
     dataset_image_tree_sha256: str = "",
+    experiment: str = "b0",
 ) -> list[str]:
     stage_name = str(stage).strip().lower()
     if stage_name not in STAGES:
@@ -340,7 +377,8 @@ def build_train_args(
         raise AssertionError("B0 effective batch contract drifted from 48.")
     if not str(run_tag).replace("_", "").replace("-", "").isalnum():
         raise ValueError("run_tag may contain only letters, numbers, '_' and '-'.")
-    spec = STAGES[stage_name]
+    stage_spec = STAGES[stage_name]
+    experiment_config = experiment_spec(experiment)
 
     args = [
         "--data",
@@ -352,7 +390,7 @@ def build_train_args(
         "--output-dir",
         str(Path(output_dir).resolve()),
         "--run-name",
-        run_name(stage_name, run_tag),
+        run_name(stage_name, run_tag, experiment=experiment_config.key),
         "--model-type",
         "timm_classifier",
         "--research-track",
@@ -377,11 +415,11 @@ def build_train_args(
         "--grad-accum-steps",
         str(int(grad_accum_steps)),
         "--epochs",
-        str(spec.epochs),
+        str(stage_spec.epochs),
         "--scheduler-total-epochs",
-        str(spec.scheduler_total_epochs),
+        str(stage_spec.scheduler_total_epochs),
         "--patience",
-        str(spec.patience),
+        str(stage_spec.patience),
         "--learning-rate",
         "1.5e-4",
         "--backbone-lr-scale",
@@ -389,7 +427,7 @@ def build_train_args(
         "--min-learning-rate",
         "1e-6",
         "--warmup-epochs",
-        str(spec.warmup_epochs),
+        str(stage_spec.warmup_epochs),
         "--warmup-start-factor",
         "0.1",
         "--weight-decay",
@@ -498,15 +536,15 @@ def build_train_args(
         "--teacher-pairwise-margin-loss-weight",
         "0",
         "--max-train-batches",
-        str(spec.max_train_batches),
+        str(stage_spec.max_train_batches),
         "--max-val-batches",
-        str(spec.max_val_batches),
+        str(stage_spec.max_val_batches),
         "--skip-final-test",
     ]
     args.extend(
         [
             "--experiment-protocol-id",
-            PROTOCOL_ID,
+            experiment_config.protocol_id,
             "--source-commit",
             str(source_commit).strip().lower(),
             "--source-tree-sha256",
@@ -515,6 +553,8 @@ def build_train_args(
             str(dataset_image_tree_sha256).strip().lower(),
         ]
     )
+    if not experiment_config.balanced_epoch_sampling:
+        args.append("--disable-balanced-epoch-sampling")
     train_contract_sha256 = hashlib.sha256(
         json.dumps(
             args,
@@ -681,6 +721,15 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         choices=("preflight", "smoke", "probe", "full"),
         default="preflight",
     )
+    parser.add_argument(
+        "--experiment",
+        choices=tuple(EXPERIMENTS),
+        default="b0",
+        help=(
+            "b0 preserves strict balanced sampling; b1-natural changes only "
+            "the train sampler to shuffled natural-frequency exposure."
+        ),
+    )
     parser.add_argument("--python", type=Path, default=Path(sys.executable))
     parser.add_argument("--data", type=Path, required=True)
     parser.add_argument(
@@ -736,6 +785,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
 def main(argv: Sequence[str] | None = None) -> None:
     args = parse_args(argv)
+    experiment_config = experiment_spec(args.experiment)
+    experiment_slug = experiment_config.key.replace("-", "_")
     repo_root = Path(__file__).resolve().parents[2]
     data_yaml = args.data.resolve()
     training_data_yaml = (
@@ -823,6 +874,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         dataset_image_tree_sha256=str(
             dataset_contract["image_tree_sha256"]
         ).lower(),
+        experiment=experiment_config.key,
     )
 
     focused_tests = [
@@ -847,14 +899,29 @@ def main(argv: Sequence[str] | None = None) -> None:
         )
         test_result["returncode"] = int(completed.returncode)
         if completed.returncode != 0:
-            raise RuntimeError("Focused B0 tests failed.")
+            raise RuntimeError(
+                f"Focused {experiment_config.key} tests failed."
+            )
 
     model_preflight = _preflight_model(train_args)
-    preflight_dir = output_dir / f"preflight_classf_b0_{args.run_tag}"
+    preflight_dir = output_dir / (
+        f"preflight_classf_{experiment_slug}_{args.run_tag}"
+    )
     preflight_dir.mkdir(parents=True, exist_ok=True)
     manifest = {
         "schema_version": 1,
-        "protocol": PROTOCOL_ID,
+        "protocol": experiment_config.protocol_id,
+        "experiment": {
+            "key": experiment_config.key,
+            "balanced_epoch_sampling": (
+                experiment_config.balanced_epoch_sampling
+            ),
+            "single_semantic_delta_from_b0": (
+                None
+                if experiment_config.key == "b0"
+                else "disable_balanced_epoch_sampling"
+            ),
+        },
         "created_utc": datetime.now(timezone.utc).isoformat(),
         "mode": args.mode,
         "test_locked": True,
@@ -891,7 +958,10 @@ def main(argv: Sequence[str] | None = None) -> None:
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
-    print(f"B0 preflight passed: {manifest_path}", flush=True)
+    print(
+        f"{experiment_config.key} preflight passed: {manifest_path}",
+        flush=True,
+    )
     if args.mode == "preflight":
         return
     if not torch.cuda.is_available():
@@ -902,7 +972,11 @@ def main(argv: Sequence[str] | None = None) -> None:
     environment["TRKH_AMP_DTYPE"] = str(args.amp_dtype)
     environment.setdefault("OMP_NUM_THREADS", "4")
     command = [str(args.python.resolve()), "-m", "trkh.training.train", *train_args]
-    run_dir = output_dir / run_name(stage, args.run_tag)
+    run_dir = output_dir / run_name(
+        stage,
+        args.run_tag,
+        experiment=experiment_config.key,
+    )
     if run_dir.exists() and any(run_dir.iterdir()) and not bool(args.auto_resume):
         raise RuntimeError(
             f"Run directory already exists: {run_dir}. "
@@ -932,7 +1006,8 @@ def main(argv: Sequence[str] | None = None) -> None:
     )
     marker = {
         "schema_version": 1,
-        "protocol": PROTOCOL_ID,
+        "protocol": experiment_config.protocol_id,
+        "experiment": experiment_config.key,
         "stage": stage,
         "completed_utc": datetime.now(timezone.utc).isoformat(),
         "returncode": int(completed.returncode),
@@ -942,16 +1017,20 @@ def main(argv: Sequence[str] | None = None) -> None:
         "metrics": _best_history_row(run_dir),
     }
     run_dir.mkdir(parents=True, exist_ok=True)
-    marker_path = run_dir / "b0_stage_complete.json"
+    marker_path = run_dir / f"{experiment_slug}_stage_complete.json"
     marker_path.write_text(
         json.dumps(marker, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
     if completed.returncode != 0:
         raise RuntimeError(
-            f"B0 {stage} failed with code {completed.returncode}; evidence: {run_dir}."
+            f"{experiment_config.key} {stage} failed with code "
+            f"{completed.returncode}; evidence: {run_dir}."
         )
-    print(f"B0 {stage} completed: {marker_path}", flush=True)
+    print(
+        f"{experiment_config.key} {stage} completed: {marker_path}",
+        flush=True,
+    )
 
 
 if __name__ == "__main__":
