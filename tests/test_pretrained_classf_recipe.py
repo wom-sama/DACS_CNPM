@@ -17,6 +17,8 @@ from trkh.recipes.pretrained_classf_b0 import (
     DINO_MODEL_NAME,
     DINO_SHA256,
     EXPECTED_CLASS_NAMES,
+    PRMR_R1_CONTROL_PROTOCOL_ID,
+    PRMR_R1_PROTOCOL_ID,
     build_train_args,
     load_canonical_attestation,
     run_name,
@@ -473,6 +475,105 @@ def test_b9_reference_completion_provenance_is_explicitly_non_promotable() -> No
     )
 
 
+def test_prmr_r1_probe_pair_is_matched_and_train_only(tmp_path: Path) -> None:
+    (tmp_path / "model.safetensors").write_bytes(b"unit-test-placeholder")
+    common = dict(
+        data_yaml=tmp_path / "class_f" / "data.yaml",
+        dino_checkpoint=tmp_path / "model.safetensors",
+        output_dir=tmp_path / "runs",
+        stage="probe",
+        run_tag="unit",
+        batch_size=16,
+        num_workers=2,
+        eval_num_workers=1,
+    )
+    control_args = build_train_args(**common, experiment="prmr-r1-control")
+    candidate_args = build_train_args(**common, experiment="prmr-r1")
+    control = parse_args(control_args)
+    candidate = parse_args(candidate_args)
+    _, candidate_config, _ = build_configs(candidate)
+
+    assert control.experiment_protocol_id == PRMR_R1_CONTROL_PROTOCOL_ID
+    assert candidate.experiment_protocol_id == PRMR_R1_PROTOCOL_ID
+    assert control.tempered_class_sampling_power == pytest.approx(0.5)
+    assert candidate.tempered_class_sampling_power == pytest.approx(0.5)
+    assert control.illumination_consistency_loss_weight == 0.0
+    assert control.illumination_consistency_mode == "symmetric_kl"
+    assert candidate.illumination_consistency_loss_weight == pytest.approx(0.15)
+    assert candidate.illumination_consistency_probability == pytest.approx(0.5)
+    assert candidate.illumination_consistency_brightness == pytest.approx(0.25)
+    assert candidate.illumination_consistency_contrast == pytest.approx(0.10)
+    assert candidate.illumination_consistency_gamma == 0.0
+    assert candidate.illumination_consistency_mode == "pairwise_margin_retention"
+    assert candidate.illumination_consistency_focus_class == 1
+    assert candidate.illumination_consistency_negative_classes == "0,2,4"
+    assert candidate.illumination_consistency_margin_retention == pytest.approx(0.8)
+    assert candidate.illumination_consistency_start_epoch == 3
+    assert candidate_config.illumination_consistency_mode == "pairwise_margin_retention"
+    assert candidate_config.illumination_consistency_start_epoch == 3
+    assert candidate.skip_final_test is control.skip_final_test is True
+    assert _strip_lineage_only_args(candidate_args) == (
+        _strip_lineage_only_args(control_args)
+        + list(recipe.experiment_spec("prmr-r1").extra_train_args)
+    )
+    assert recipe.experiment_spec("prmr-r1").full_train_authorized is False
+    assert recipe.experiment_spec("prmr-r1-control").full_train_authorized is False
+
+    smoke_args = build_train_args(
+        **{**common, "stage": "smoke"},
+        experiment="prmr-r1",
+    )
+    smoke = parse_args(smoke_args)
+    assert smoke.illumination_consistency_start_epoch == 1
+
+
+def test_prmr_config_canonicalizes_rivals_and_rejects_ignored_transform_args(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "model.safetensors").write_bytes(b"unit-test-placeholder")
+    candidate_args = build_train_args(
+        data_yaml=tmp_path / "class_f" / "data.yaml",
+        dino_checkpoint=tmp_path / "model.safetensors",
+        output_dir=tmp_path / "runs",
+        stage="probe",
+        run_tag="unit",
+        batch_size=16,
+        num_workers=2,
+        eval_num_workers=1,
+        experiment="prmr-r1",
+    )
+
+    semicolon_args = list(candidate_args)
+    rival_index = semicolon_args.index(
+        "--illumination-consistency-negative-classes"
+    ) + 1
+    semicolon_args[rival_index] = "0;2;4"
+    _, normalized, _ = build_configs(parse_args(semicolon_args))
+    assert normalized.illumination_consistency_negative_classes == "0,2,4"
+
+    gamma_args = list(candidate_args)
+    gamma_index = gamma_args.index("--illumination-consistency-gamma") + 1
+    gamma_args[gamma_index] = "0.1"
+    with pytest.raises(ValueError, match="khong dung gamma"):
+        build_configs(parse_args(gamma_args))
+
+    brightness_args = list(candidate_args)
+    brightness_index = brightness_args.index(
+        "--illumination-consistency-brightness"
+    ) + 1
+    brightness_args[brightness_index] = "0.96"
+    with pytest.raises(ValueError, match="brightness"):
+        build_configs(parse_args(brightness_args))
+
+    nonfinite_args = list(candidate_args)
+    probability_index = nonfinite_args.index(
+        "--illumination-consistency-probability"
+    ) + 1
+    nonfinite_args[probability_index] = "nan"
+    with pytest.raises(ValueError, match="must be finite"):
+        build_configs(parse_args(nonfinite_args))
+
+
 def test_full_train_authorization_is_fail_closed() -> None:
     b0 = recipe.experiment_spec("b0")
     b1_natural = recipe.experiment_spec("b1-natural")
@@ -580,7 +681,7 @@ def test_classf_b0_development_yaml_is_test_locked_and_canonical(
     assert contract["split_totals"] == {"train": 8278, "val": 2479}
 
 
-def test_classf_b0_resume_checkpoint_is_bound_to_data_and_pretrain(
+def test_classf_prmr_r1_resume_checkpoint_is_bound_to_full_semantic_contract(
     tmp_path: Path,
 ) -> None:
     data_yaml = tmp_path / "class_f_dev.yaml"
@@ -589,11 +690,12 @@ def test_classf_b0_resume_checkpoint_is_bound_to_data_and_pretrain(
         data_yaml=data_yaml,
         dino_checkpoint=tmp_path / "model.safetensors",
         output_dir=tmp_path / "runs",
-        stage="full",
+        stage="probe",
         run_tag="resume_unit",
         source_commit="a" * 40,
         source_tree_sha256="b" * 64,
         dataset_image_tree_sha256="c" * 64,
+        experiment="prmr-r1",
     )
     expected = parse_args(expected_args)
     checkpoint_path = tmp_path / "last.pt"
@@ -615,6 +717,39 @@ def test_classf_b0_resume_checkpoint_is_bound_to_data_and_pretrain(
                 "recipe_train_contract_sha256": (
                     expected.recipe_train_contract_sha256
                 ),
+                "illumination_consistency_loss_weight": (
+                    expected.illumination_consistency_loss_weight
+                ),
+                "illumination_consistency_probability": (
+                    expected.illumination_consistency_probability
+                ),
+                "illumination_consistency_brightness": (
+                    expected.illumination_consistency_brightness
+                ),
+                "illumination_consistency_contrast": (
+                    expected.illumination_consistency_contrast
+                ),
+                "illumination_consistency_gamma": (
+                    expected.illumination_consistency_gamma
+                ),
+                "illumination_consistency_temperature": (
+                    expected.illumination_consistency_temperature
+                ),
+                "illumination_consistency_mode": (
+                    expected.illumination_consistency_mode
+                ),
+                "illumination_consistency_focus_class": (
+                    expected.illumination_consistency_focus_class
+                ),
+                "illumination_consistency_negative_classes": (
+                    expected.illumination_consistency_negative_classes
+                ),
+                "illumination_consistency_margin_retention": (
+                    expected.illumination_consistency_margin_retention
+                ),
+                "illumination_consistency_start_epoch": (
+                    expected.illumination_consistency_start_epoch
+                ),
             },
             "epoch": 3,
         },
@@ -630,22 +765,37 @@ def test_classf_b0_resume_checkpoint_is_bound_to_data_and_pretrain(
     assert summary["epoch"] == 3
     assert summary["pretrained_checkpoint_sha256"] == DINO_SHA256
     assert summary["lineage"]["source_commit"] == "a" * 40
+    assert summary["illumination_contract"]["illumination_consistency_mode"] == (
+        "pairwise_margin_retention"
+    )
 
     mismatched_args = build_train_args(
         data_yaml=data_yaml,
         dino_checkpoint=tmp_path / "model.safetensors",
         output_dir=tmp_path / "runs",
-        stage="full",
+        stage="probe",
         run_tag="resume_unit",
         source_commit="d" * 40,
         source_tree_sha256="b" * 64,
         dataset_image_tree_sha256="c" * 64,
+        experiment="prmr-r1",
     )
     with pytest.raises(ValueError, match="lineage mismatch"):
         validate_auto_resume_checkpoint(
             checkpoint_path,
             training_data_yaml=data_yaml,
             expected_train_args=mismatched_args,
+        )
+
+    checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+    checkpoint["train_config"]["illumination_consistency_margin_retention"] = 0.7
+    tampered_checkpoint_path = tmp_path / "tampered_last.pt"
+    torch.save(checkpoint, tampered_checkpoint_path)
+    with pytest.raises(ValueError, match="semantic mismatch"):
+        validate_auto_resume_checkpoint(
+            tampered_checkpoint_path,
+            training_data_yaml=data_yaml,
+            expected_train_args=expected_args,
         )
 
 

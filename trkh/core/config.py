@@ -877,6 +877,11 @@ class TrainConfig:
     illumination_consistency_contrast: float = 0.08
     illumination_consistency_gamma: float = 0.12
     illumination_consistency_temperature: float = 1.0
+    illumination_consistency_mode: str = "symmetric_kl"
+    illumination_consistency_focus_class: int = 1
+    illumination_consistency_negative_classes: str = "0,2,4"
+    illumination_consistency_margin_retention: float = 0.80
+    illumination_consistency_start_epoch: int = 1
     foreground_chroma_consistency_loss_weight: float = 0.0
     foreground_chroma_consistency_probability: float = 0.0
     foreground_chroma_consistency_saturation_delta: float = 0.10

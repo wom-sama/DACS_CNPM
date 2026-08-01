@@ -3676,6 +3676,39 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         help="Nhiet do softmax cho illumination consistency KL.",
     )
     parser.add_argument(
+        "--illumination-consistency-mode",
+        choices=("symmetric_kl", "pairwise_margin_retention"),
+        default="symmetric_kl",
+        help=(
+            "symmetric_kl giu phan bo du doan cu; pairwise_margin_retention "
+            "chi giu clean signed margins dang dung duoi relighting."
+        ),
+    )
+    parser.add_argument(
+        "--illumination-consistency-focus-class",
+        type=int,
+        default=1,
+        help="Focus class cho pairwise_margin_retention.",
+    )
+    parser.add_argument(
+        "--illumination-consistency-negative-classes",
+        type=str,
+        default="0,2,4",
+        help="Danh sach rival class cho pairwise_margin_retention.",
+    )
+    parser.add_argument(
+        "--illumination-consistency-margin-retention",
+        type=float,
+        default=0.80,
+        help="Ti le clean positive margin toi thieu can giu tren relit view; trong (0, 1].",
+    )
+    parser.add_argument(
+        "--illumination-consistency-start-epoch",
+        type=int,
+        default=1,
+        help="Epoch bat dau illumination/PRMR; PRMR voi head moi nen bat dau sau warmup.",
+    )
+    parser.add_argument(
         "--foreground-chroma-consistency-loss-weight",
         type=float,
         default=0.0,
@@ -4604,6 +4637,138 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     if remaining_unknown:
         parser.error(f"Unrecognized arguments: {' '.join(remaining_unknown)}")
     return args
+
+
+def _validate_and_normalize_illumination_consistency_config(
+    config: object,
+    *,
+    expected_num_classes: int = 0,
+) -> None:
+    """Fail closed on illumination/PRMR semantics for CLI and resume configs."""
+    mode = str(getattr(config, "illumination_consistency_mode", "")).strip().lower()
+    if mode not in {"symmetric_kl", "pairwise_margin_retention"}:
+        raise ValueError(
+            "illumination_consistency_mode phai la symmetric_kl hoac "
+            "pairwise_margin_retention."
+        )
+    setattr(config, "illumination_consistency_mode", mode)
+
+    loss_weight = float(getattr(config, "illumination_consistency_loss_weight"))
+    probability = float(getattr(config, "illumination_consistency_probability"))
+    brightness = float(getattr(config, "illumination_consistency_brightness"))
+    contrast = float(getattr(config, "illumination_consistency_contrast"))
+    gamma = float(getattr(config, "illumination_consistency_gamma"))
+    temperature = float(getattr(config, "illumination_consistency_temperature"))
+    retention = float(getattr(config, "illumination_consistency_margin_retention"))
+    finite_values = {
+        "loss_weight": loss_weight,
+        "probability": probability,
+        "brightness": brightness,
+        "contrast": contrast,
+        "gamma": gamma,
+        "temperature": temperature,
+        "margin_retention": retention,
+    }
+    nonfinite = {
+        name: value for name, value in finite_values.items() if not math.isfinite(value)
+    }
+    if nonfinite:
+        raise ValueError(
+            f"illumination consistency parameters must be finite: {nonfinite}."
+        )
+
+    raw_focus_class = float(
+        getattr(config, "illumination_consistency_focus_class")
+    )
+    raw_start_epoch = float(
+        getattr(config, "illumination_consistency_start_epoch")
+    )
+    if not math.isfinite(raw_focus_class) or not raw_focus_class.is_integer():
+        raise ValueError("--illumination-consistency-focus-class phai la so nguyen.")
+    if not math.isfinite(raw_start_epoch) or not raw_start_epoch.is_integer():
+        raise ValueError("--illumination-consistency-start-epoch phai la so nguyen.")
+    focus_class = int(raw_focus_class)
+    start_epoch = int(raw_start_epoch)
+    setattr(config, "illumination_consistency_focus_class", focus_class)
+    setattr(config, "illumination_consistency_start_epoch", start_epoch)
+
+    if loss_weight < 0.0:
+        raise ValueError("--illumination-consistency-loss-weight phai >= 0.")
+    if not 0.0 <= probability <= 1.0:
+        raise ValueError(
+            "--illumination-consistency-probability phai nam trong [0, 1]."
+        )
+    if brightness < 0.0:
+        raise ValueError("--illumination-consistency-brightness phai >= 0.")
+    if contrast < 0.0:
+        raise ValueError("--illumination-consistency-contrast phai >= 0.")
+    if gamma < 0.0:
+        raise ValueError("--illumination-consistency-gamma phai >= 0.")
+    if temperature <= 0.0:
+        raise ValueError("--illumination-consistency-temperature phai > 0.")
+    if focus_class < 0:
+        raise ValueError("--illumination-consistency-focus-class phai >= 0.")
+    if not 0.0 < retention <= 1.0:
+        raise ValueError(
+            "--illumination-consistency-margin-retention phai nam trong (0, 1]."
+        )
+    if start_epoch < 1:
+        raise ValueError("--illumination-consistency-start-epoch phai >= 1.")
+    if mode != "pairwise_margin_retention":
+        return
+
+    # PRMR uses fixed linear relighting, not the random gamma path. Refuse
+    # silently ignored or internally clamped values so a saved contract exactly
+    # matches the transform that was executed.
+    if brightness > 0.95:
+        raise ValueError(
+            "PRMR --illumination-consistency-brightness phai nam trong [0, 0.95]."
+        )
+    if contrast > 0.95:
+        raise ValueError(
+            "PRMR --illumination-consistency-contrast phai nam trong [0, 0.95]."
+        )
+    if gamma != 0.0:
+        raise ValueError(
+            "PRMR khong dung gamma; --illumination-consistency-gamma phai bang 0."
+        )
+
+    raw_rivals = [
+        item.strip()
+        for item in str(
+            getattr(config, "illumination_consistency_negative_classes")
+        ).replace(";", ",").split(",")
+        if item.strip()
+    ]
+    try:
+        rivals = [int(item) for item in raw_rivals]
+    except ValueError as error:
+        raise ValueError(
+            "--illumination-consistency-negative-classes phai la danh sach so nguyen."
+        ) from error
+    if not rivals or any(class_index < 0 for class_index in rivals):
+        raise ValueError(
+            "--illumination-consistency-negative-classes phai chua it nhat mot class >= 0."
+        )
+    if len(set(rivals)) != len(rivals):
+        raise ValueError(
+            "--illumination-consistency-negative-classes khong duoc lap class."
+        )
+    if focus_class in rivals:
+        raise ValueError(
+            "--illumination-consistency-negative-classes khong duoc chua focus class."
+        )
+    num_classes = int(expected_num_classes or 0)
+    if num_classes > 0 and (
+        focus_class >= num_classes
+        or any(class_index >= num_classes for class_index in rivals)
+    ):
+        raise ValueError("PRMR focus/rival class vuot expected num classes.")
+    setattr(
+        config,
+        "illumination_consistency_negative_classes",
+        ",".join(str(class_index) for class_index in rivals),
+    )
 
 
 def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, AugmentationConfig]:
@@ -6362,18 +6527,10 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         raise ValueError("--augmix-consistency-alpha phai > 0.")
     if args.augmix_consistency_temperature <= 0.0:
         raise ValueError("--augmix-consistency-temperature phai > 0.")
-    if args.illumination_consistency_loss_weight < 0.0:
-        raise ValueError("--illumination-consistency-loss-weight phai >= 0.")
-    if not 0.0 <= args.illumination_consistency_probability <= 1.0:
-        raise ValueError("--illumination-consistency-probability phai nam trong [0, 1].")
-    if args.illumination_consistency_brightness < 0.0:
-        raise ValueError("--illumination-consistency-brightness phai >= 0.")
-    if args.illumination_consistency_contrast < 0.0:
-        raise ValueError("--illumination-consistency-contrast phai >= 0.")
-    if args.illumination_consistency_gamma < 0.0:
-        raise ValueError("--illumination-consistency-gamma phai >= 0.")
-    if args.illumination_consistency_temperature <= 0.0:
-        raise ValueError("--illumination-consistency-temperature phai > 0.")
+    _validate_and_normalize_illumination_consistency_config(
+        args,
+        expected_num_classes=int(args.expected_num_classes or 0),
+    )
     if args.foreground_chroma_consistency_loss_weight < 0.0:
         raise ValueError("--foreground-chroma-consistency-loss-weight phai >= 0.")
     if not 0.0 <= args.foreground_chroma_consistency_probability <= 1.0:
@@ -7931,6 +8088,19 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         illumination_consistency_temperature=(
             args.illumination_consistency_temperature
         ),
+        illumination_consistency_mode=args.illumination_consistency_mode,
+        illumination_consistency_focus_class=(
+            args.illumination_consistency_focus_class
+        ),
+        illumination_consistency_negative_classes=(
+            args.illumination_consistency_negative_classes
+        ),
+        illumination_consistency_margin_retention=(
+            args.illumination_consistency_margin_retention
+        ),
+        illumination_consistency_start_epoch=(
+            args.illumination_consistency_start_epoch
+        ),
         foreground_chroma_consistency_loss_weight=(
             args.foreground_chroma_consistency_loss_weight
         ),
@@ -8242,6 +8412,17 @@ def _load_resume_configs_from_checkpoint(
     train_config = _dataclass_from_checkpoint(
         TrainConfig,
         resume_checkpoint.get("train_config", {}),
+    )
+    checkpoint_class_names = resume_checkpoint.get("class_names")
+    checkpoint_num_classes = (
+        len(checkpoint_class_names)
+        if isinstance(checkpoint_class_names, (list, tuple))
+        and checkpoint_class_names
+        else 0
+    )
+    _validate_and_normalize_illumination_consistency_config(
+        train_config,
+        expected_num_classes=int(checkpoint_num_classes),
     )
     augmentation_config = _dataclass_from_checkpoint(
         AugmentationConfig,
@@ -15011,7 +15192,11 @@ def _parse_angular_margin_classes(
         value = classes.strip().lower()
         if value in {"", "all", "*"}:
             return list(range(max(0, int(num_classes))))
-        raw_values = [part.strip() for part in value.split(",") if part.strip()]
+        raw_values = [
+            part.strip()
+            for part in value.replace(";", ",").split(",")
+            if part.strip()
+        ]
     else:
         raw_values = [str(value).strip() for value in classes]
 
@@ -17786,6 +17971,65 @@ def _sample_illumination_consistency_images(
     return _normalize_classification_images(rgb.clamp(0.0, 1.0)).to(dtype=images.dtype)
 
 
+def _sample_pairwise_relighting_images(
+    images: Tensor,
+    *,
+    brightness: float = 0.25,
+    contrast: float = 0.10,
+) -> Tensor:
+    """Create balanced fixed-strength dim/bright views while preserving chroma.
+
+    The transform changes luminance and reconstructs RGB with the same luma
+    delta, rather than jittering channels independently. For batches larger
+    than one, dim and bright polarities are balanced before a random shuffle.
+    """
+    if images.ndim != 4 or images.size(1) != 3:
+        raise ValueError("pairwise relighting expects normalized RGB tensor (B, 3, H, W).")
+    rgb = _denormalize_classification_images(images)
+    batch_size = int(rgb.size(0))
+    if batch_size == 0:
+        return images.clone()
+    device = rgb.device
+    dtype = rgb.dtype
+    brightness_delta = float(brightness)
+    contrast_delta = float(contrast)
+    if not 0.0 <= brightness_delta <= 0.95:
+        raise ValueError("pairwise relighting brightness must be in [0, 0.95].")
+    if not 0.0 <= contrast_delta <= 0.95:
+        raise ValueError("pairwise relighting contrast must be in [0, 0.95].")
+
+    pair_count = batch_size // 2
+    polarity = torch.cat(
+        [
+            -torch.ones(pair_count, device=device, dtype=dtype),
+            torch.ones(pair_count, device=device, dtype=dtype),
+        ],
+        dim=0,
+    )
+    if batch_size % 2:
+        # Randomize the unmatched polarity. Always assigning it to bright would
+        # bias PRMR because probability sampling frequently selects odd counts.
+        extra_polarity = torch.where(
+            torch.rand((), device=device) < 0.5,
+            rgb.new_tensor(-1.0),
+            rgb.new_tensor(1.0),
+        ).reshape(1)
+        polarity = torch.cat([polarity, extra_polarity], dim=0)
+    if batch_size > 1:
+        polarity = polarity.index_select(0, torch.randperm(batch_size, device=device))
+    polarity = polarity.view(batch_size, 1, 1, 1)
+
+    luma = 0.299 * rgb[:, 0:1] + 0.587 * rgb[:, 1:2] + 0.114 * rgb[:, 2:3]
+    luma_mean = luma.mean(dim=(2, 3), keepdim=True)
+    contrast_factor = 1.0 + polarity * contrast_delta
+    brightness_factor = 1.0 + polarity * brightness_delta
+    relit_luma = ((luma - luma_mean) * contrast_factor + luma_mean) * brightness_factor
+    relit_rgb = rgb + (relit_luma - luma)
+    return _normalize_classification_images(relit_rgb.clamp(0.0, 1.0)).to(
+        dtype=images.dtype
+    )
+
+
 def _illumination_consistency_loss(
     logits_a: Tensor,
     logits_b: Tensor,
@@ -17793,6 +18037,129 @@ def _illumination_consistency_loss(
     temperature: float = 1.0,
 ) -> Tensor:
     return _rdrop_symmetric_kl_loss(logits_a, logits_b, temperature=temperature)
+
+
+def _pairwise_relighting_margin_retention_loss(
+    clean_logits: Tensor,
+    relit_logits: Tensor,
+    target_indices: Tensor,
+    *,
+    focus_class: int = 1,
+    negative_classes: Union[str, Sequence[int]] = "0,2,4",
+    retention: float = 0.80,
+    return_stats: bool = False,
+) -> Union[Tensor, Tuple[Tensor, Dict[str, Tensor]]]:
+    """Retain already-correct focus/rival margins under a relit view.
+
+    The clean margin is a stop-gradient anchor. Pairs whose clean signed margin
+    is not positive are excluded so the auxiliary objective cannot reinforce a
+    clean-view error. Only the relit branch receives gradients from this loss.
+    """
+    zero = relit_logits.sum() * 0.0
+    zero_stats = {
+        "protect_active_samples": zero.detach(),
+        "suppress_active_samples": zero.detach(),
+        "protect_active_pairs": zero.detach(),
+        "protect_violation_count": zero.detach(),
+        "suppress_violation_count": zero.detach(),
+        "protect_violation_fraction": zero.detach(),
+        "suppress_violation_fraction": zero.detach(),
+        "active_directions": zero.detach(),
+    }
+    if (
+        clean_logits.ndim != 2
+        or relit_logits.shape != clean_logits.shape
+        or clean_logits.numel() == 0
+    ):
+        return (zero, zero_stats) if return_stats else zero
+    num_classes = int(clean_logits.size(1))
+    focus = int(focus_class)
+    if not 0 <= focus < num_classes:
+        return (zero, zero_stats) if return_stats else zero
+    targets = target_indices.to(device=relit_logits.device, dtype=torch.long).view(-1)
+    if targets.numel() != int(clean_logits.size(0)):
+        return (zero, zero_stats) if return_stats else zero
+    rivals = [
+        int(class_index)
+        for class_index in _parse_angular_margin_classes(
+            negative_classes,
+            num_classes=num_classes,
+        )
+        if int(class_index) != focus
+    ]
+    if not rivals:
+        return (zero, zero_stats) if return_stats else zero
+
+    clean = clean_logits.detach().float()
+    relit = relit_logits.float()
+    ratio = min(max(float(retention), 0.0), 1.0)
+    rival_indices = torch.tensor(rivals, device=relit.device, dtype=torch.long)
+
+    clean_focus_margins = clean[:, focus : focus + 1] - clean.index_select(
+        1,
+        rival_indices,
+    )
+    relit_focus_margins = relit[:, focus : focus + 1] - relit.index_select(
+        1,
+        rival_indices,
+    )
+    eligible_focus = (targets == focus).unsqueeze(1) & (clean_focus_margins > 0.0)
+    protect_deficits = F.relu(
+        ratio * clean_focus_margins - relit_focus_margins
+    ) * eligible_focus.to(dtype=relit.dtype)
+    active_rivals_per_focus = eligible_focus.sum(dim=1)
+    protect_active_samples = active_rivals_per_focus > 0
+    protect_per_sample = protect_deficits.sum(dim=1) / active_rivals_per_focus.clamp(
+        min=1
+    ).to(dtype=relit.dtype)
+    protect_loss = (
+        protect_per_sample * protect_active_samples.to(dtype=relit.dtype)
+    ).sum() / protect_active_samples.sum().clamp(min=1).to(dtype=relit.dtype)
+
+    safe_targets = targets.clamp(min=0, max=max(0, num_classes - 1))
+    clean_true_margin = clean.gather(1, safe_targets.unsqueeze(1)).squeeze(1) - clean[
+        :, focus
+    ]
+    relit_true_margin = relit.gather(1, safe_targets.unsqueeze(1)).squeeze(1) - relit[
+        :, focus
+    ]
+    rival_targets = (targets.unsqueeze(1) == rival_indices.unsqueeze(0)).any(dim=1)
+    eligible_suppress = rival_targets & (clean_true_margin > 0.0)
+    suppress_deficits = F.relu(
+        ratio * clean_true_margin - relit_true_margin
+    ) * eligible_suppress.to(dtype=relit.dtype)
+    suppress_loss = suppress_deficits.sum() / eligible_suppress.sum().clamp(min=1).to(
+        dtype=relit.dtype
+    )
+
+    protect_present = protect_active_samples.any().to(dtype=relit.dtype)
+    suppress_present = eligible_suppress.any().to(dtype=relit.dtype)
+    active_directions = protect_present + suppress_present
+    loss = (protect_present * protect_loss + suppress_present * suppress_loss) / (
+        active_directions.clamp(min=1.0)
+    )
+    protect_violation_count = ((protect_deficits > 0.0) & eligible_focus).sum()
+    suppress_violation_count = (
+        (suppress_deficits > 0.0) & eligible_suppress
+    ).sum()
+    stats = {
+        "protect_active_samples": protect_active_samples.sum().detach().float(),
+        "suppress_active_samples": eligible_suppress.sum().detach().float(),
+        "protect_active_pairs": eligible_focus.sum().detach().float(),
+        "protect_violation_count": protect_violation_count.detach().float(),
+        "suppress_violation_count": suppress_violation_count.detach().float(),
+        "protect_violation_fraction": (
+            protect_violation_count.float()
+            / eligible_focus.sum().clamp(min=1).float()
+        ).detach(),
+        "suppress_violation_fraction": (
+            suppress_violation_count.float()
+            / eligible_suppress.sum().clamp(min=1).float()
+        ).detach(),
+        "active_directions": active_directions.detach().float(),
+    }
+    typed_loss = loss.to(dtype=relit_logits.dtype)
+    return (typed_loss, stats) if return_stats else typed_loss
 
 
 def _apply_augmix_consistency_op(rgb: Tensor, op_index: int, *, severity: float) -> Tensor:
@@ -19920,6 +20287,11 @@ def _forward_train_loss(
     illumination_consistency_contrast: float = 0.08,
     illumination_consistency_gamma: float = 0.12,
     illumination_consistency_temperature: float = 1.0,
+    illumination_consistency_mode: str = "symmetric_kl",
+    illumination_consistency_focus_class: int = 1,
+    illumination_consistency_negative_classes: Union[str, Sequence[int]] = "0,2,4",
+    illumination_consistency_margin_retention: float = 0.80,
+    illumination_consistency_start_epoch: int = 1,
     foreground_chroma_consistency_loss_weight: float = 0.0,
     foreground_chroma_consistency_probability: float = 0.0,
     foreground_chroma_consistency_saturation_delta: float = 0.10,
@@ -20418,6 +20790,16 @@ def _forward_train_loss(
             augmix_consistency_fraction = 0.0
             illumination_consistency_loss = logits.sum() * 0.0
             illumination_consistency_fraction = 0.0
+            illumination_consistency_stats = {
+                "protect_active_samples": 0.0,
+                "suppress_active_samples": 0.0,
+                "protect_active_pairs": 0.0,
+                "protect_violation_count": 0.0,
+                "suppress_violation_count": 0.0,
+                "protect_violation_fraction": 0.0,
+                "suppress_violation_fraction": 0.0,
+                "active_directions": 0.0,
+            }
             foreground_chroma_consistency_loss = logits.sum() * 0.0
             foreground_chroma_consistency_fraction = 0.0
             foreground_chroma_consistency_mask_fraction = 0.0
@@ -20744,6 +21126,7 @@ def _forward_train_loss(
             if (
                 float(illumination_consistency_loss_weight) > 0.0
                 and float(illumination_consistency_probability) > 0.0
+                and int(epoch_index) >= int(illumination_consistency_start_epoch)
                 and torch.is_tensor(targets)
                 and float(source_context_fusion_fraction) <= 0.0
                 and float(paired_view_fusion_fraction) <= 0.0
@@ -20753,15 +21136,77 @@ def _forward_train_loss(
                     min(1.0, float(illumination_consistency_probability)),
                 )
                 selected = torch.rand(images.size(0), device=images.device) < probability
+                illumination_mode = str(illumination_consistency_mode).strip().lower()
+                illumination_target_indices = (
+                    targets.to(device=logits.device, dtype=torch.long)
+                    if illumination_mode == "pairwise_margin_retention"
+                    and torch.is_tensor(targets)
+                    and targets.ndim == 1
+                    else _classification_target_indices(targets, logits)
+                    if illumination_mode != "pairwise_margin_retention"
+                    else None
+                )
+                if illumination_mode == "pairwise_margin_retention":
+                    if (
+                        illumination_target_indices is None
+                        or illumination_target_indices.numel() != images.size(0)
+                    ):
+                        selected = torch.zeros_like(selected)
+                    else:
+                        eligible_classes = _parse_angular_margin_classes(
+                            illumination_consistency_negative_classes,
+                            num_classes=int(logits.size(1)),
+                        )
+                        eligible_classes = sorted(
+                            set(eligible_classes)
+                            | {int(illumination_consistency_focus_class)}
+                        )
+                        class_mask = torch.zeros(
+                            int(logits.size(1)),
+                            device=images.device,
+                            dtype=torch.bool,
+                        )
+                        valid_classes = [
+                            class_index
+                            for class_index in eligible_classes
+                            if 0 <= int(class_index) < int(logits.size(1))
+                        ]
+                        if valid_classes:
+                            class_mask[
+                                torch.tensor(
+                                    valid_classes,
+                                    device=images.device,
+                                    dtype=torch.long,
+                                )
+                            ] = True
+                            selected = selected & class_mask.index_select(
+                                0,
+                                illumination_target_indices.to(
+                                    device=images.device,
+                                    dtype=torch.long,
+                                ).clamp(
+                                    min=0,
+                                    max=max(0, int(logits.size(1)) - 1),
+                                ),
+                            )
+                        else:
+                            selected = torch.zeros_like(selected)
                 if bool(selected.any().item()):
                     selected_indices = selected.nonzero(as_tuple=False).flatten()
                     selected_images = images.index_select(0, selected_indices)
-                    illumination_images = _sample_illumination_consistency_images(
-                        selected_images,
-                        brightness=illumination_consistency_brightness,
-                        contrast=illumination_consistency_contrast,
-                        gamma=illumination_consistency_gamma,
-                    )
+                    if illumination_mode == "pairwise_margin_retention":
+                        illumination_images = _sample_pairwise_relighting_images(
+                            selected_images,
+                            brightness=illumination_consistency_brightness,
+                            contrast=illumination_consistency_contrast,
+                        )
+                    else:
+                        illumination_images = _sample_illumination_consistency_images(
+                            selected_images,
+                            brightness=illumination_consistency_brightness,
+                            contrast=illumination_consistency_contrast,
+                            gamma=illumination_consistency_gamma,
+                        )
                     illumination_bbox_metadata = None
                     if torch.is_tensor(bbox_metadata) and bbox_metadata.size(0) == images.size(0):
                         illumination_bbox_metadata = bbox_metadata.index_select(
@@ -20795,11 +21240,35 @@ def _forward_train_loss(
                     )
                     if torch.is_tensor(illumination_logits):
                         source_logits = logits.index_select(0, selected_indices)
-                        illumination_consistency_loss = _illumination_consistency_loss(
-                            source_logits,
-                            illumination_logits,
-                            temperature=illumination_consistency_temperature,
-                        )
+                        if illumination_mode == "pairwise_margin_retention":
+                            selected_targets = illumination_target_indices.index_select(
+                                0,
+                                selected_indices.to(
+                                    device=illumination_target_indices.device
+                                ),
+                            )
+                            (
+                                illumination_consistency_loss,
+                                illumination_consistency_stats,
+                            ) = _pairwise_relighting_margin_retention_loss(
+                                source_logits,
+                                illumination_logits,
+                                selected_targets,
+                                focus_class=illumination_consistency_focus_class,
+                                negative_classes=(
+                                    illumination_consistency_negative_classes
+                                ),
+                                retention=(
+                                    illumination_consistency_margin_retention
+                                ),
+                                return_stats=True,
+                            )
+                        else:
+                            illumination_consistency_loss = _illumination_consistency_loss(
+                                source_logits,
+                                illumination_logits,
+                                temperature=illumination_consistency_temperature,
+                            )
                         illumination_consistency_fraction = (
                             float(selected_indices.numel()) / float(images.size(0))
                         )
@@ -23705,6 +24174,14 @@ def _forward_train_loss(
                 "illumination_consistency_fraction": float(
                     illumination_consistency_fraction
                 ),
+                **{
+                    f"illumination_consistency_{key}": (
+                        float(value.detach().cpu().item())
+                        if torch.is_tensor(value)
+                        else float(value)
+                    )
+                    for key, value in illumination_consistency_stats.items()
+                },
                 "foreground_chroma_consistency_loss": float(
                     foreground_chroma_consistency_loss.detach().cpu().item()
                 ),
@@ -24289,6 +24766,11 @@ def train_one_epoch(
     illumination_consistency_contrast: float = 0.08,
     illumination_consistency_gamma: float = 0.12,
     illumination_consistency_temperature: float = 1.0,
+    illumination_consistency_mode: str = "symmetric_kl",
+    illumination_consistency_focus_class: int = 1,
+    illumination_consistency_negative_classes: Union[str, Sequence[int]] = "0,2,4",
+    illumination_consistency_margin_retention: float = 0.80,
+    illumination_consistency_start_epoch: int = 1,
     foreground_chroma_consistency_loss_weight: float = 0.0,
     foreground_chroma_consistency_probability: float = 0.0,
     foreground_chroma_consistency_saturation_delta: float = 0.10,
@@ -24672,6 +25154,14 @@ def train_one_epoch(
         "augmix_consistency_fraction": 0.0,
         "illumination_consistency_loss": 0.0,
         "illumination_consistency_fraction": 0.0,
+        "illumination_consistency_protect_active_samples": 0.0,
+        "illumination_consistency_suppress_active_samples": 0.0,
+        "illumination_consistency_protect_active_pairs": 0.0,
+        "illumination_consistency_protect_violation_count": 0.0,
+        "illumination_consistency_suppress_violation_count": 0.0,
+        "illumination_consistency_protect_violation_fraction": 0.0,
+        "illumination_consistency_suppress_violation_fraction": 0.0,
+        "illumination_consistency_active_directions": 0.0,
         "foreground_chroma_consistency_loss": 0.0,
         "foreground_chroma_consistency_fraction": 0.0,
         "foreground_chroma_consistency_mask_fraction": 0.0,
@@ -25550,6 +26040,19 @@ def train_one_epoch(
                 illumination_consistency_gamma=illumination_consistency_gamma,
                 illumination_consistency_temperature=(
                     illumination_consistency_temperature
+                ),
+                illumination_consistency_mode=illumination_consistency_mode,
+                illumination_consistency_focus_class=(
+                    illumination_consistency_focus_class
+                ),
+                illumination_consistency_negative_classes=(
+                    illumination_consistency_negative_classes
+                ),
+                illumination_consistency_margin_retention=(
+                    illumination_consistency_margin_retention
+                ),
+                illumination_consistency_start_epoch=(
+                    illumination_consistency_start_epoch
                 ),
                 foreground_chroma_consistency_loss_weight=(
                     foreground_chroma_consistency_loss_weight
@@ -26634,6 +27137,21 @@ def train_one_epoch(
                             illumination_consistency_temperature=(
                                 illumination_consistency_temperature
                             ),
+                            illumination_consistency_mode=(
+                                illumination_consistency_mode
+                            ),
+                            illumination_consistency_focus_class=(
+                                illumination_consistency_focus_class
+                            ),
+                            illumination_consistency_negative_classes=(
+                                illumination_consistency_negative_classes
+                            ),
+                            illumination_consistency_margin_retention=(
+                                illumination_consistency_margin_retention
+                            ),
+                            illumination_consistency_start_epoch=(
+                                illumination_consistency_start_epoch
+                            ),
                             foreground_chroma_consistency_loss_weight=(
                                 foreground_chroma_consistency_loss_weight
                             ),
@@ -26958,6 +27476,31 @@ def train_one_epoch(
     }
     for key, value in train_loss_components.items():
         train_artifact_stats[key] = value / max(1, batch_count)
+    # Fractions must be computed from epoch-wide numerators/denominators. A
+    # mean of per-batch fractions would overweight tiny eligible batches and
+    # include zero-eligible batches in the denominator.
+    protect_pairs = train_loss_components.get(
+        "illumination_consistency_protect_active_pairs",
+        0.0,
+    )
+    suppress_samples = train_loss_components.get(
+        "illumination_consistency_suppress_active_samples",
+        0.0,
+    )
+    protect_violations = train_loss_components.get(
+        "illumination_consistency_protect_violation_count",
+        0.0,
+    )
+    suppress_violations = train_loss_components.get(
+        "illumination_consistency_suppress_violation_count",
+        0.0,
+    )
+    train_artifact_stats[
+        "illumination_consistency_protect_violation_fraction"
+    ] = protect_violations / max(1.0, protect_pairs)
+    train_artifact_stats[
+        "illumination_consistency_suppress_violation_fraction"
+    ] = suppress_violations / max(1.0, suppress_samples)
     if confusion_spectral_state is not None:
         train_artifact_stats["confusion_spectral_updates"] = float(
             confusion_spectral_state.updates
@@ -29487,6 +30030,10 @@ def main() -> None:
                 },
                 flush=True,
             )
+    _validate_and_normalize_illumination_consistency_config(
+        train_config,
+        expected_num_classes=int(args.expected_num_classes or 0),
+    )
     _validate_final_distillation_config(train_config)
     detection_mode = model_config.model_type in DETECTION_MODEL_TYPES
     if detection_mode:
@@ -29555,6 +30102,10 @@ def main() -> None:
         args.data,
         class_name_mode=args.class_name_mode,
         expected_num_classes=args.expected_num_classes or None,
+    )
+    _validate_and_normalize_illumination_consistency_config(
+        train_config,
+        expected_num_classes=int(data_spec.num_classes),
     )
     _validate_canonical_classf_teacher_lock(data_spec, train_config)
     if float(train_config.confusion_spectral_loss_weight) > 0.0:
@@ -32925,6 +33476,21 @@ def main() -> None:
                     illumination_consistency_temperature=(
                         train_config.illumination_consistency_temperature
                     ),
+                    illumination_consistency_mode=(
+                        train_config.illumination_consistency_mode
+                    ),
+                    illumination_consistency_focus_class=(
+                        train_config.illumination_consistency_focus_class
+                    ),
+                    illumination_consistency_negative_classes=(
+                        train_config.illumination_consistency_negative_classes
+                    ),
+                    illumination_consistency_margin_retention=(
+                        train_config.illumination_consistency_margin_retention
+                    ),
+                    illumination_consistency_start_epoch=(
+                        train_config.illumination_consistency_start_epoch
+                    ),
                     foreground_chroma_consistency_loss_weight=(
                         train_config.foreground_chroma_consistency_loss_weight
                     ),
@@ -34343,6 +34909,30 @@ def main() -> None:
                         "illumination_consistency_fraction",
                         0.0,
                     ),
+                    "train_illumination_consistency_protect_active_samples": train_artifact_stats.get(
+                        "illumination_consistency_protect_active_samples",
+                        0.0,
+                    ),
+                    "train_illumination_consistency_suppress_active_samples": train_artifact_stats.get(
+                        "illumination_consistency_suppress_active_samples",
+                        0.0,
+                    ),
+                    "train_illumination_consistency_protect_active_pairs": train_artifact_stats.get(
+                        "illumination_consistency_protect_active_pairs",
+                        0.0,
+                    ),
+                    "train_illumination_consistency_protect_violation_fraction": train_artifact_stats.get(
+                        "illumination_consistency_protect_violation_fraction",
+                        0.0,
+                    ),
+                    "train_illumination_consistency_suppress_violation_fraction": train_artifact_stats.get(
+                        "illumination_consistency_suppress_violation_fraction",
+                        0.0,
+                    ),
+                    "train_illumination_consistency_active_directions": train_artifact_stats.get(
+                        "illumination_consistency_active_directions",
+                        0.0,
+                    ),
                     "train_foreground_chroma_consistency_loss": train_artifact_stats.get(
                         "foreground_chroma_consistency_loss",
                         0.0,
@@ -35201,6 +35791,12 @@ def main() -> None:
                         "train_augmix_consistency_fraction",
                         "train_illumination_consistency_loss",
                         "train_illumination_consistency_fraction",
+                        "train_illumination_consistency_protect_active_samples",
+                        "train_illumination_consistency_suppress_active_samples",
+                        "train_illumination_consistency_protect_active_pairs",
+                        "train_illumination_consistency_protect_violation_fraction",
+                        "train_illumination_consistency_suppress_violation_fraction",
+                        "train_illumination_consistency_active_directions",
                         "train_foreground_chroma_consistency_loss",
                         "train_foreground_chroma_consistency_fraction",
                         "train_foreground_chroma_consistency_mask_fraction",

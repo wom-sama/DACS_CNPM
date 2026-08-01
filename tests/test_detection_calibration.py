@@ -4069,6 +4069,19 @@ dataset_balance:
         self.assertEqual(augmentation_config.color_jitter_brightness, 0.05)
         self.assertEqual(str(data_yaml).replace("\\", "/"), "D:/data/data.yaml")
 
+    def test_resume_rejects_prmr_class_outside_checkpoint_contract(self):
+        checkpoint = {
+            "class_names": [f"class_{index}" for index in range(5)],
+            "train_config": {
+                "illumination_consistency_mode": "pairwise_margin_retention",
+                "illumination_consistency_gamma": 0.0,
+                "illumination_consistency_negative_classes": "0,2,5",
+            },
+        }
+
+        with self.assertRaisesRegex(ValueError, "vuot expected num classes"):
+            _load_resume_configs_from_checkpoint(checkpoint)
+
     def test_keyboard_interrupt_checkpoint_is_resumeable(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)

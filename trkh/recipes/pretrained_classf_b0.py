@@ -35,6 +35,8 @@ B2_TEMPERED_P05_PROTOCOL_ID = "TRKH_PRETRAINED_CLASSF_B2_TEMPERED_P05_20260731"
 B9_B2_REFERENCE_COMPLETION_PROTOCOL_ID = (
     "TRKH_PRETRAINED_CLASSF_B9_B2_REFERENCE_COMPLETION_20260801"
 )
+PRMR_R1_CONTROL_PROTOCOL_ID = "TRKH_PRETRAINED_CLASSF_PRMR_R1_CONTROL_20260801"
+PRMR_R1_PROTOCOL_ID = "TRKH_PRETRAINED_CLASSF_PRMR_R1_20260801"
 DINO_MODEL_NAME = "vit_small_patch16_dinov3.lvd1689m"
 DINO_SHA256 = "2a1ec16ae28ffa07bc0ead0241ee7df9fc26451fe6f9f839b7b3afa0a906b040"
 DINO_SOURCE_URL = "https://huggingface.co/timm/vit_small_patch16_dinov3.lvd1689m"
@@ -79,6 +81,7 @@ class Experiment:
     known_probe_class1_f1: float | None = None
     required_probe_class1_f1: float | None = None
     full_train_authorized: bool = False
+    extra_train_args: tuple[str, ...] = ()
 
 
 EXPERIMENTS: Mapping[str, Experiment] = {
@@ -143,6 +146,55 @@ EXPERIMENTS: Mapping[str, Experiment] = {
         known_probe_class1_f1=0.653409,
         required_probe_class1_f1=0.66,
         full_train_authorized=True,
+    ),
+    "prmr-r1-control": Experiment(
+        key="prmr-r1-control",
+        protocol_id=PRMR_R1_CONTROL_PROTOCOL_ID,
+        run_prefix="pretrained_dinov3_classf_prmr_r1_control",
+        balanced_epoch_sampling=False,
+        tempered_class_sampling_power=0.5,
+        ldam_max_margin=0.3,
+        single_semantic_delta_from_b0="class_sampling_prior:uniform->n_c**0.5",
+        research_role="matched_prmr_probe_control",
+        promotion_eligible=False,
+        reference_experiment="b9-b2-reference-completion",
+    ),
+    "prmr-r1": Experiment(
+        key="prmr-r1",
+        protocol_id=PRMR_R1_PROTOCOL_ID,
+        run_prefix="pretrained_dinov3_classf_prmr_r1",
+        balanced_epoch_sampling=False,
+        tempered_class_sampling_power=0.5,
+        ldam_max_margin=0.3,
+        single_semantic_delta_from_b0=(
+            "class_sampling_prior:uniform->n_c**0.5;"
+            "train_only_pairwise_margin_retention_under_relighting"
+        ),
+        research_role="project_novel_matched_probe",
+        promotion_eligible=False,
+        reference_experiment="prmr-r1-control",
+        extra_train_args=(
+            "--illumination-consistency-loss-weight",
+            "0.15",
+            "--illumination-consistency-probability",
+            "0.50",
+            "--illumination-consistency-brightness",
+            "0.25",
+            "--illumination-consistency-contrast",
+            "0.10",
+            "--illumination-consistency-gamma",
+            "0",
+            "--illumination-consistency-mode",
+            "pairwise_margin_retention",
+            "--illumination-consistency-focus-class",
+            "1",
+            "--illumination-consistency-negative-classes",
+            "0,2,4",
+            "--illumination-consistency-margin-retention",
+            "0.80",
+            "--illumination-consistency-start-epoch",
+            "3",
+        ),
     ),
 }
 
@@ -351,6 +403,7 @@ def validate_auto_resume_checkpoint(
     if not isinstance(train_config, Mapping):
         raise ValueError("Auto-resume checkpoint train_config is invalid.")
     resume_lineage: Dict[str, object] = {}
+    resume_illumination_contract: Dict[str, object] = {}
     if expected_train_args is not None:
         expected_parsed = parse_train_args(expected_train_args)
         expected_lineage = {
@@ -382,6 +435,59 @@ def validate_auto_resume_checkpoint(
                 f"{lineage_mismatches}."
             )
         resume_lineage = expected_lineage
+        illumination_fields = (
+            "illumination_consistency_loss_weight",
+            "illumination_consistency_probability",
+            "illumination_consistency_brightness",
+            "illumination_consistency_contrast",
+            "illumination_consistency_gamma",
+            "illumination_consistency_temperature",
+            "illumination_consistency_mode",
+            "illumination_consistency_focus_class",
+            "illumination_consistency_negative_classes",
+            "illumination_consistency_margin_retention",
+            "illumination_consistency_start_epoch",
+        )
+
+        def _normalize_illumination_value(field: str, value: object) -> object:
+            if field == "illumination_consistency_negative_classes":
+                return ",".join(
+                    item.strip()
+                    for item in str(value).replace(";", ",").split(",")
+                    if item.strip()
+                )
+            if field == "illumination_consistency_mode":
+                return str(value).strip().lower()
+            return value
+
+        expected_illumination = {
+            field: _normalize_illumination_value(
+                field,
+                getattr(expected_parsed, field),
+            )
+            for field in illumination_fields
+        }
+        illumination_mismatches = {
+            field: {
+                "observed": _normalize_illumination_value(
+                    field,
+                    train_config.get(field),
+                ),
+                "expected": expected,
+            }
+            for field, expected in expected_illumination.items()
+            if _normalize_illumination_value(
+                field,
+                train_config.get(field),
+            )
+            != expected
+        }
+        if illumination_mismatches:
+            raise ValueError(
+                "Auto-resume PRMR/illumination semantic mismatch: "
+                f"{illumination_mismatches}."
+            )
+        resume_illumination_contract = expected_illumination
     return {
         "checkpoint": str(checkpoint_path),
         "data_yaml": str(observed_data),
@@ -394,6 +500,7 @@ def validate_auto_resume_checkpoint(
             "pretrained_checkpoint_sha256"
         ][0],
         "lineage": resume_lineage,
+        "illumination_contract": resume_illumination_contract,
     }
 
 
@@ -631,6 +738,14 @@ def build_train_args(
         )
     elif not experiment_config.balanced_epoch_sampling:
         args.append("--disable-balanced-epoch-sampling")
+    args.extend(experiment_config.extra_train_args)
+    if (
+        experiment_config.key == "prmr-r1"
+        and stage_name == "smoke"
+        and "--illumination-consistency-start-epoch" in args
+    ):
+        start_index = args.index("--illumination-consistency-start-epoch") + 1
+        args[start_index] = "1"
     if amp_init_scale is not None:
         args.extend(["--amp-init-scale", str(float(amp_init_scale))])
     train_contract_sha256 = hashlib.sha256(
@@ -808,7 +923,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
             "the train sampler; b1-margin0 changes only LDAM max margin; "
             "b2-tempered-p05 uses q_c proportional n_c**0.5; "
             "b9-b2-reference-completion repeats B2 semantics only as an "
-            "exploratory canonical reference, never a promoted winner."
+            "exploratory canonical reference; prmr-r1-control/prmr-r1 are a "
+            "matched probe pair and never authorize full training by themselves."
         ),
     )
     parser.add_argument("--python", type=Path, default=Path(sys.executable))
@@ -987,6 +1103,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         repo_root / "tests" / "test_canonical_classf_defaults.py",
         repo_root / "tests" / "test_deploy_classification_folder.py",
         repo_root / "tests" / "test_pretrained_classf_recipe.py",
+        repo_root / "tests" / "test_illumination_consistency_loss.py",
         repo_root / "tests" / "test_resume_weight_and_distillation_source.py",
         repo_root / "tests" / "test_attention_viz_headless.py",
         repo_root / "tests" / "test_mobile_onnx_quantization.py",
