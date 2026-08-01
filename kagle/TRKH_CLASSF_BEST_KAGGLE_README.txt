@@ -1,16 +1,19 @@
-TRKH Kaggle B2/T4 offline release V3 - 2026-08-01
+TRKH Kaggle B2/T4 offline release V4 - 2026-08-01
 ================================================
 
 Notebook
   TRKH_CLASSF_BEST_KAGGLE.ipynb
 
 Create/attach exactly two separate private Kaggle Datasets
-  1. TRKH_KAGGLE_B2_T4_UPLOAD_BUNDLE_20260801.zip
+  1. TRKH_KAGGLE_B2_T4_UPLOAD_BUNDLE_20260801_V4.zip
   2. TRKH_CLASSF_DEV_DATASET_20260731.zip
 
-Kaggle may expose either the ZIP itself or its already-expanded contents.  V3
+Kaggle may expose either the ZIP itself or its already-expanded contents.  V4
 accepts both representations and applies the same manifest/hash gates.  Do not
 put both ZIPs into one Kaggle Dataset (for example one combined DATA03 input).
+V4 also recognizes Kaggle's current namespaced path
+`/kaggle/input/datasets/<owner>/<slug>`; CODE01 and DATA05 therefore remain two
+separate resources even when they share the `/kaggle/input/datasets` prefix.
 
 Required Kaggle configuration
   - Accelerator: NVIDIA T4 (the Kaggle UI normally shows T4 x2).

@@ -1,4 +1,4 @@
-TRKH Kaggle B2/T4 offline upload set V3 - 2026-08-01
+TRKH Kaggle B2/T4 offline upload set V4 - 2026-08-01
 
 STATUS
   PASSED local archive-mode and Kaggle-expanded-mount clean rooms.
@@ -6,17 +6,17 @@ STATUS
 
 Run this notebook
   TRKH_CLASSF_BEST_KAGGLE.ipynb
-  Bytes   97116
-  SHA256  A03188DB743ED67B275CF016592D565D0F517A9CFDEDE67AD8E8AC108534A278
-  Contract TRKH_KAGGLE_B2_T4_OFFLINE_V3_20260801
+  Bytes   98678
+  SHA256  9294286CCF928235C1E8204D1F2C2ABCE228AD7C54BDC724ED59F446BFF77BE5
+  Contract TRKH_KAGGLE_B2_T4_OFFLINE_V4_20260801
 
 Create and attach exactly two SEPARATE private Kaggle Datasets
 
-1. TRKH_KAGGLE_B2_T4_UPLOAD_BUNDLE_20260801.zip
-   Bytes   86494944
-   SHA256  D502EFDEFA03E76BCAE5CAFF0567F372671A172D6CE350289D993A5E8F8BDB10
+1. TRKH_KAGGLE_B2_T4_UPLOAD_BUNDLE_20260801_V4.zip
+   Bytes   86495422
+   SHA256  A6625C3F202C2461119EE12F0476F4106393BF296B1A1F8936922247A12AFC19
    Manifest SHA256
-           8A3947C70ADFDFC90D0FD397D1C0E0ED19AE6B6927F266666D4F13800BF6690B
+           08E3F1137BE1D2F21A6CF89C040E05FE9E9D4628CA9F7AD8B66EFA116B1A582F
    Source commit 7F7F0883CBB71B6A5620FEE86C15B996C400A813
    Source tree   7C8752EFE6ACB728ED913ABE5DB165B218C94177E3EF13F5B37CE1C62B19D965
 
@@ -26,9 +26,11 @@ Create and attach exactly two SEPARATE private Kaggle Datasets
    Contains train=8278 and val=2479. Test is intentionally absent.
 
 IMPORTANT INPUT LAYOUT
-  Kaggle may keep each ZIP or expose its already-expanded contents. V3 accepts
+  Kaggle may keep each ZIP or expose its already-expanded contents. V4 accepts
   both forms. Upload the two files as two different Kaggle Datasets; do not
   combine them into one DATA03/RAR/input mount.
+  Current namespaced paths /kaggle/input/datasets/<owner>/<slug> are resolved
+  by owner+slug, so CODE01 and DATA05 are correctly treated as separate inputs.
 
 Kaggle settings
   Accelerator  NVIDIA T4 (normally displayed as T4 x2); do not select P100.
@@ -44,7 +46,6 @@ Execution
   4. Only if the locked probe gates pass, set CONFIRM_FULL=True and rerun from
      cell 0 for the 30-epoch full train and complete audits.
 
-This release preserves the same B2 model/source/checkpoint contract as V2.
-V3 changes only input resolution, provenance telemetry and notebook progress
-rendering. Local clean rooms are engineering evidence, not real Kaggle T4
-acceptance.
+This release preserves the same B2 model/source/checkpoint contract as V2/V3.
+V4 only fixes Kaggle namespaced input identity; V3 input/progress fixes remain.
+Local clean rooms are engineering evidence, not real Kaggle T4 acceptance.

@@ -22,9 +22,9 @@ DINOV3_LICENSE_SHA256 = "25d122eb8f5b880fd23c736fb6ea8018ee45c12237e00b8a86d14c6
 TIMM_VERSION = "1.0.27"
 PROTOCOL_ID = "TRKH_PRETRAINED_CLASSF_B2_TEMPERED_P05_20260731"
 EXPERIMENT_KEY = "b2-tempered-p05"
-NOTEBOOK_CONTRACT = "TRKH_KAGGLE_B2_T4_OFFLINE_V3_20260801"
+NOTEBOOK_CONTRACT = "TRKH_KAGGLE_B2_T4_OFFLINE_V4_20260801"
 V1_NOTEBOOK_SHA256 = "e154a00394cdbbffe19f98d542cd8d94a01df3d3ac25ffec81b7cb16055186ba"
-RELEASE_BASENAME = "TRKH_KAGGLE_B2_T4_UPLOAD_BUNDLE_20260801.zip"
+RELEASE_BASENAME = "TRKH_KAGGLE_B2_T4_UPLOAD_BUNDLE_20260801_V4.zip"
 FIXED_ZIP_TIMESTAMP = (2026, 8, 1, 0, 0, 0)
 
 FOCUSED_TESTS = (
@@ -246,6 +246,8 @@ def runtime_target_document(timm_tree_sha256: str) -> bytes:
             "asset_modes": ["archive_file", "kaggle_mounted_expanded"],
             "dataset_modes": ["archive_file", "kaggle_mounted_expanded"],
             "separate_kaggle_dataset_mounts_required": True,
+            "dataset_resource_identity": "/kaggle/input/datasets/<owner>/<slug>",
+            "legacy_resource_identity": "/kaggle/input/<slug>",
         },
         "sources": {
             "docker_release": (
@@ -367,6 +369,10 @@ def build_release(
         '"optimizer_update_contract": SMOKE_OPTIMIZER_CONTRACT',
         "discover_expanded_asset_root",
         '"input_mode": "kaggle_mounted_expanded"',
+        "KAGGLE_DATASET_RESOURCE_DEPTH = 3",
+        "namespaced_dataset_owner_slug",
+        "ASSET_INPUT_IDENTITY = kaggle_input_identity(ASSET_INPUT_ANCHOR)",
+        "DATASET_INPUT_IDENTITY = kaggle_input_identity(DATASET_INPUT_ANCHOR)",
         "Asset va dataset phai la hai Kaggle Dataset inputs rieng",
         'os.environ["TQDM_DISABLE"] = "1"',
         "TQDM_DISABLE=1 was not honored",
@@ -452,7 +458,7 @@ def build_release(
         "vendored_timm_version": TIMM_VERSION,
         "vendored_timm_tree_sha256": timm_tree_hash,
         "offline_dependency_bootstrap": True,
-        "input_layout_contract": "separate_archive_or_kaggle_mounted_expanded_v1",
+        "input_layout_contract": "separate_archive_or_kaggle_mounted_expanded_v2_owner_slug",
         "compact_progress_default": True,
         "kaggle_runtime_target": "v170 GPU / Python 3.12 / Torch 2.10 cu128 / T4",
         "files": file_inventory(payload),
