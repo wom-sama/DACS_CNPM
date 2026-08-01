@@ -17,3 +17,15 @@ scripts/build_trkh_pair_surface_ddf*.py text eol=lf
 trkh/tools/audit_pair_surface_ddf*.py text eol=lf
 trkh/tools/pair_surface_ddf*.py text eol=lf
 tests/test_*pair_surface_ddf*.py text eol=lf
+
+# Kaggle release files are byte-hashed inside the upload manifest.
+kagle/TRKH_CLASSF_BEST_KAGGLE.ipynb text eol=lf
+kagle/TRKH_CLASSF_BEST_KAGGLE_README.txt text eol=lf
+kagle/TRKH_KAGGLE_UPLOAD_INDEX_*.txt text eol=lf
+kagle/TRKH_KAGGLE_RELEASE_ATTEMPTS_*.json text eol=lf
+kagle/TRKH_KAGGLE_CLEANROOM_*.md text eol=lf
+kagle/TRKH_KAGGLE_CLEANUP_*.json text eol=lf
+kagle/scripts/*.py text eol=lf
+kagle/vendor/*.md text eol=lf
+kagle/vendor/*.txt text eol=lf
+scripts/build_trkh_kaggle_b2_t4_bundle.py text eol=lf
