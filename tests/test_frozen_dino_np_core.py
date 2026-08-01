@@ -16,7 +16,10 @@ from trkh.tools.frozen_dino_np_core import (
     selective_2to1_predictions,
     source_balanced_diagonal_gaussian,
 )
-from trkh.tools.precheck_dinov3_frozen_np_2to1_train_oof import run_oof_audit
+from trkh.tools.precheck_dinov3_frozen_np_2to1_train_oof import (
+    _derangement_map,
+    run_oof_audit,
+)
 
 
 def test_frozen_prefix_descriptor_contract_and_register_permutation() -> None:
@@ -176,3 +179,34 @@ def test_small_oof_audit_has_complete_rows_and_frozen_parameters(tmp_path) -> No
     assert all((tmp_path / "fold_parameters").glob("*.npy"))
     # This tiny fixture deliberately cannot satisfy the locked 373-group gate.
     assert readiness["frozen_dino_np_2to1_ready"] is False
+
+
+def test_derangement_does_not_reintroduce_cross_label_excluded_donors() -> None:
+    labels = np.asarray(
+        [label for fold in range(5) for label in range(5) for _ in range(2)],
+        dtype=np.int64,
+    )
+    assignments = np.asarray(
+        [fold for fold in range(5) for _label in range(5) for _ in range(2)],
+        dtype=np.int64,
+    )
+    groups = np.asarray([f"source_{index}" for index in range(labels.size)], dtype=object)
+    class1_fit = np.flatnonzero(np.logical_and(assignments != 0, labels == 1))[:2]
+    class2_fit = np.flatnonzero(np.logical_and(assignments != 0, labels == 2))[:2]
+    groups[class1_fit] = np.asarray(["overlap_a", "overlap_b"], dtype=object)
+    groups[class2_fit] = np.asarray(["overlap_a", "overlap_b"], dtype=object)
+    excluded = np.zeros(labels.size, dtype=bool)
+    excluded[class2_fit] = True
+    donors, report = _derangement_map(
+        labels=labels,
+        groups=groups,
+        assignments=assignments,
+        fold=0,
+        class2_excluded=excluded,
+    )
+    valid_class2_fit = np.logical_and.reduce(
+        (assignments != 0, labels == 2, ~excluded)
+    )
+    assert not bool(excluded[donors[valid_class2_fit]].any())
+    assert bool(excluded[donors[excluded]].all())
+    assert report["class2_exclusion_role_crossings"] == 0

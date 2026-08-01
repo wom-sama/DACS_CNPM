@@ -461,20 +461,63 @@ def _derangement_map(
     groups: np.ndarray,
     assignments: np.ndarray,
     fold: int,
+    class2_excluded: np.ndarray,
 ) -> Tuple[np.ndarray, Dict[str, object]]:
     donors = np.full(labels.size, -1, dtype=np.int64)
+    excluded = np.asarray(class2_excluded, dtype=bool).reshape(-1)
+    if excluded.size != labels.size or bool(
+        np.any(np.logical_and(excluded, labels != RIVAL_CLASS))
+    ):
+        raise ValueError("B8 class2 exclusion mask is invalid")
     contracts = 0
-    for partition_index, holdout in enumerate((False, True)):
-        partition = assignments == int(fold) if holdout else assignments != int(fold)
-        for label in range(5):
-            indices = np.flatnonzero(np.logical_and(partition, labels == label))
-            mapped = source_disjoint_block_derangement(
-                indices,
-                groups,
-                seed=SEED + 1_000_003 * int(fold) + 10_007 * partition_index + label,
+    fit = assignments != int(fold)
+    hold = assignments == int(fold)
+    # The deranged control must not move a descriptor across any scientific
+    # role.  In particular, class-2 rows excluded for sharing a source with
+    # class-1 calibration cannot donate back into the valid class-2 fit.
+    cohorts: List[Tuple[str, np.ndarray]] = []
+    for label in range(5):
+        cohorts.append(
+            (f"hold_label_{label}", np.logical_and(hold, labels == label))
+        )
+    for label in (0, 1, 3, 4):
+        cohorts.append(
+            (f"fit_label_{label}", np.logical_and(fit, labels == label))
+        )
+    cohorts.extend(
+        (
+            (
+                "fit_label_2_valid",
+                np.logical_and.reduce((fit, labels == RIVAL_CLASS, ~excluded)),
+            ),
+            (
+                "fit_label_2_cross_label_excluded",
+                np.logical_and.reduce((fit, labels == RIVAL_CLASS, excluded)),
+            ),
+        )
+    )
+    cohort_rows: List[Dict[str, object]] = []
+    for cohort_index, (name, cohort_mask) in enumerate(cohorts):
+        indices = np.flatnonzero(cohort_mask)
+        if indices.size == 0:
+            cohort_rows.append(
+                {"role": name, "rows": 0, "source_groups": 0}
             )
-            donors[indices] = mapped
-            contracts += 1
+            continue
+        mapped = source_disjoint_block_derangement(
+            indices,
+            groups,
+            seed=SEED + 1_000_003 * int(fold) + 10_007 * cohort_index,
+        )
+        donors[indices] = mapped
+        contracts += 1
+        cohort_rows.append(
+            {
+                "role": name,
+                "rows": int(indices.size),
+                "source_groups": int(np.unique(groups[indices]).size),
+            }
+        )
     if bool((donors < 0).any()) or set(donors.tolist()) != set(range(labels.size)):
         raise RuntimeError("B8 derangement is incomplete or non-bijective")
     fixed = int(np.sum(donors == np.arange(labels.size)))
@@ -485,7 +528,8 @@ def _derangement_map(
     fold_crossing = int(
         np.sum((assignments[donors] == int(fold)) != (assignments == int(fold)))
     )
-    if fixed or same_source or label_mismatch or fold_crossing:
+    exclusion_role_crossing = int(np.sum(excluded[donors] != excluded))
+    if fixed or same_source or label_mismatch or fold_crossing or exclusion_role_crossing:
         raise RuntimeError("B8 derangement integrity failed")
     return donors, {
         "fold": int(fold),
@@ -494,9 +538,11 @@ def _derangement_map(
         "same_source_assignments": same_source,
         "label_mismatches": label_mismatch,
         "fold_boundary_crossings": fold_crossing,
+        "class2_exclusion_role_crossings": exclusion_role_crossing,
         "mapping_sha256": _array_sha256(donors, dtype="<i8"),
         "whole_descriptor_block": True,
         "score_and_b2_correctness_blind": True,
+        "cohorts": cohort_rows,
     }
 
 
@@ -627,8 +673,13 @@ def run_oof_audit(
             str(value) for value in groups[np.logical_and(class2_fit_before, overlap)].tolist()
         )
         overlap_excluded_groups.update(excluded_groups)
+        class2_excluded = np.logical_and(class2_fit_before, overlap)
         donor_map, derangement_report = _derangement_map(
-            labels=labels, groups=groups, assignments=assignments, fold=fold
+            labels=labels,
+            groups=groups,
+            assignments=assignments,
+            fold=fold,
+            class2_excluded=class2_excluded,
         )
         derangement_reports.append(derangement_report)
         fold_mode_metrics: Dict[str, Dict[str, object]] = {}
@@ -784,9 +835,16 @@ def run_oof_audit(
             and report["same_source_assignments"] == 0
             and report["label_mismatches"] == 0
             and report["fold_boundary_crossings"] == 0
+            and report["class2_exclusion_role_crossings"] == 0
             for report in derangement_reports
         ),
-        "fit_threshold_artifacts_frozen": len(parameter_artifacts) == 3 * FOLDS,
+        "fit_threshold_artifacts_frozen": len(parameter_artifacts) == 3 * FOLDS
+        and all(
+            Path(str(artifact[key])).is_file()
+            and _sha256(Path(str(artifact[key]))) == artifact[f"{key}_sha256"]
+            for artifact in parameter_artifacts
+            for key in ("mean", "variance", "threshold")
+        ),
         "validation_test_not_used": True,
     }
     readiness = readiness_from_metrics(
