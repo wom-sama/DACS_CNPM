@@ -34,6 +34,7 @@ from trkh.tools.precheck_dinov3_prefix_residual_train_oof import (
     _PairPrefixDataset,
     _cache_manifest_expected,
     _cache_paths,
+    _flush_and_close_memmaps,
     _load_existing_cache,
     _load_materialized_labels,
     _parse_args,
@@ -252,23 +253,30 @@ def test_cache_loader_rejects_actual_dtype_even_with_matching_file_hash(
         )
 
 
-def test_label_validation_does_not_retain_file_mapping_during_promotion(
+def test_cache_writer_and_label_validation_release_mapping_before_promotion(
     tmp_path: Path,
 ) -> None:
     partial = tmp_path / "labels_i64.npy.partial"
     promoted = tmp_path / "labels_i64.npy"
     expected = np.asarray([0, 1, 2, 4], dtype=np.int64)
-    with partial.open("wb") as handle:
-        np.save(handle, expected, allow_pickle=False)
+    writer = np.lib.format.open_memmap(
+        partial,
+        mode="w+",
+        dtype=np.int64,
+        shape=expected.shape,
+    )
+    writer[:] = expected
+    _flush_and_close_memmaps(writer)
 
     loaded = _load_materialized_labels(partial)
 
+    assert writer._mmap.closed
     assert type(loaded) is np.ndarray
     assert not isinstance(loaded, np.memmap)
     assert loaded.flags.owndata
     assert np.array_equal(loaded, expected)
-    # Keep ``loaded`` alive: this replacement is the operation that failed on
-    # Windows when validation used np.load(..., mmap_mode="r").
+    # Keep both objects alive: this replacement failed on Windows when either
+    # the writer or the validation reader retained its underlying mapping.
     partial.replace(promoted)
     assert promoted.is_file()
     assert np.array_equal(loaded, expected)

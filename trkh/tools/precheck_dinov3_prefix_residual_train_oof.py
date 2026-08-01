@@ -942,6 +942,18 @@ def _load_materialized_labels(path: Path) -> np.ndarray:
     )
 
 
+def _flush_and_close_memmaps(*arrays: np.memmap) -> None:
+    """Durably flush and release NumPy mappings before atomic promotion."""
+
+    for array in arrays:
+        array.flush()
+        mapping = getattr(array, "_mmap", None)
+        if mapping is None:
+            raise TypeError("B7 cache writer must be backed by numpy.memmap")
+        if not mapping.closed:
+            mapping.close()
+
+
 def _array_all_finite(array: np.ndarray, *, row_chunk: int = 256) -> bool:
     values = np.asarray(array)
     for start in range(0, int(values.shape[0]), max(1, int(row_chunk))):
@@ -1242,8 +1254,12 @@ def _extract_train_cache(
         raise RuntimeError(
             f"B7 cache coverage mismatch: cached={cursor}, dataset={len(dataset)}"
         )
-    for array in (prefix_cache, patch_mean_cache, logit_cache, label_cache):
-        array.flush()
+    _flush_and_close_memmaps(
+        prefix_cache,
+        patch_mean_cache,
+        logit_cache,
+        label_cache,
+    )
     del prefix_cache, patch_mean_cache, logit_cache, label_cache
     # Labels are tiny, so materialize them before atomic promotion.  Keeping a
     # read-only memmap alive here prevents Path.replace() on Windows even after
