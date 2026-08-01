@@ -32,6 +32,9 @@ PROTOCOL_ID = "TRKH_PRETRAINED_CLASSF_B0_20260731"
 B1_NATURAL_PROTOCOL_ID = "TRKH_PRETRAINED_CLASSF_B1_NATURAL_20260731"
 B1_MARGIN0_PROTOCOL_ID = "TRKH_PRETRAINED_CLASSF_B1_MARGIN0_20260731"
 B2_TEMPERED_P05_PROTOCOL_ID = "TRKH_PRETRAINED_CLASSF_B2_TEMPERED_P05_20260731"
+B9_B2_REFERENCE_COMPLETION_PROTOCOL_ID = (
+    "TRKH_PRETRAINED_CLASSF_B9_B2_REFERENCE_COMPLETION_20260801"
+)
 DINO_MODEL_NAME = "vit_small_patch16_dinov3.lvd1689m"
 DINO_SHA256 = "2a1ec16ae28ffa07bc0ead0241ee7df9fc26451fe6f9f839b7b3afa0a906b040"
 DINO_SOURCE_URL = "https://huggingface.co/timm/vit_small_patch16_dinov3.lvd1689m"
@@ -70,6 +73,12 @@ class Experiment:
     tempered_class_sampling_power: float | None
     ldam_max_margin: float
     single_semantic_delta_from_b0: str | None
+    research_role: str = "unclassified"
+    promotion_eligible: bool = False
+    reference_experiment: str | None = None
+    known_probe_class1_f1: float | None = None
+    required_probe_class1_f1: float | None = None
+    full_train_authorized: bool = False
 
 
 EXPERIMENTS: Mapping[str, Experiment] = {
@@ -81,6 +90,9 @@ EXPERIMENTS: Mapping[str, Experiment] = {
         tempered_class_sampling_power=None,
         ldam_max_margin=0.3,
         single_semantic_delta_from_b0=None,
+        research_role="matched_pretrained_backbone_control",
+        promotion_eligible=False,
+        full_train_authorized=True,
     ),
     "b1-natural": Experiment(
         key="b1-natural",
@@ -90,6 +102,8 @@ EXPERIMENTS: Mapping[str, Experiment] = {
         tempered_class_sampling_power=None,
         ldam_max_margin=0.3,
         single_semantic_delta_from_b0="disable_balanced_epoch_sampling",
+        research_role="closed_probe_ablation",
+        promotion_eligible=False,
     ),
     "b1-margin0": Experiment(
         key="b1-margin0",
@@ -99,6 +113,8 @@ EXPERIMENTS: Mapping[str, Experiment] = {
         tempered_class_sampling_power=None,
         ldam_max_margin=0.0,
         single_semantic_delta_from_b0="ldam_max_margin:0.3->0.0",
+        research_role="closed_probe_ablation",
+        promotion_eligible=False,
     ),
     "b2-tempered-p05": Experiment(
         key="b2-tempered-p05",
@@ -108,6 +124,25 @@ EXPERIMENTS: Mapping[str, Experiment] = {
         tempered_class_sampling_power=0.5,
         ldam_max_margin=0.3,
         single_semantic_delta_from_b0="class_sampling_prior:uniform->n_c**0.5",
+        research_role="closed_probe_hypothesis",
+        promotion_eligible=False,
+        known_probe_class1_f1=0.653409,
+        required_probe_class1_f1=0.66,
+    ),
+    "b9-b2-reference-completion": Experiment(
+        key="b9-b2-reference-completion",
+        protocol_id=B9_B2_REFERENCE_COMPLETION_PROTOCOL_ID,
+        run_prefix="pretrained_dinov3_classf_b9_b2_reference_completion",
+        balanced_epoch_sampling=False,
+        tempered_class_sampling_power=0.5,
+        ldam_max_margin=0.3,
+        single_semantic_delta_from_b0="class_sampling_prior:uniform->n_c**0.5",
+        research_role="exploratory_canonical_reference_completion",
+        promotion_eligible=False,
+        reference_experiment="b2-tempered-p05",
+        known_probe_class1_f1=0.653409,
+        required_probe_class1_f1=0.66,
+        full_train_authorized=True,
     ),
 }
 
@@ -771,7 +806,9 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help=(
             "b0 preserves strict balanced sampling; b1-natural changes only "
             "the train sampler; b1-margin0 changes only LDAM max margin; "
-            "b2-tempered-p05 uses q_c proportional n_c**0.5."
+            "b2-tempered-p05 uses q_c proportional n_c**0.5; "
+            "b9-b2-reference-completion repeats B2 semantics only as an "
+            "exploratory canonical reference, never a promoted winner."
         ),
     )
     parser.add_argument("--python", type=Path, default=Path(sys.executable))
@@ -839,6 +876,19 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 def main(argv: Sequence[str] | None = None) -> None:
     args = parse_args(argv)
     experiment_config = experiment_spec(args.experiment)
+    if args.mode == "full" and not experiment_config.full_train_authorized:
+        raise RuntimeError(
+            f"{experiment_config.key} full training is closed by its protocol; "
+            "use only an explicitly authorized control/reference experiment."
+        )
+    if (
+        experiment_config.key == "b9-b2-reference-completion"
+        and args.mode in {"smoke", "probe"}
+    ):
+        raise RuntimeError(
+            "B9 is a one-run 30-epoch-cap reference completion; only "
+            "preflight or full mode is allowed."
+        )
     experiment_slug = experiment_config.key.replace("-", "_")
     repo_root = Path(__file__).resolve().parents[2]
     data_yaml = args.data.resolve()
@@ -976,6 +1026,16 @@ def main(argv: Sequence[str] | None = None) -> None:
             "single_semantic_delta_from_b0": (
                 experiment_config.single_semantic_delta_from_b0
             ),
+            "research_role": experiment_config.research_role,
+            "promotion_eligible": experiment_config.promotion_eligible,
+            "reference_experiment": experiment_config.reference_experiment,
+            "known_probe_class1_f1": experiment_config.known_probe_class1_f1,
+            "required_probe_class1_f1": (
+                experiment_config.required_probe_class1_f1
+            ),
+            "full_train_authorized": (
+                experiment_config.full_train_authorized
+            ),
         },
         "created_utc": datetime.now(timezone.utc).isoformat(),
         "mode": args.mode,
@@ -1063,6 +1123,10 @@ def main(argv: Sequence[str] | None = None) -> None:
         "schema_version": 1,
         "protocol": experiment_config.protocol_id,
         "experiment": experiment_config.key,
+        "research_role": experiment_config.research_role,
+        "promotion_eligible": experiment_config.promotion_eligible,
+        "reference_experiment": experiment_config.reference_experiment,
+        "full_train_authorized": experiment_config.full_train_authorized,
         "stage": stage,
         "completed_utc": datetime.now(timezone.utc).isoformat(),
         "returncode": int(completed.returncode),

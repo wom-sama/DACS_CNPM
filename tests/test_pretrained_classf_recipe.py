@@ -13,6 +13,7 @@ from trkh.recipes.pretrained_classf_b0 import (
     B1_MARGIN0_PROTOCOL_ID,
     B1_NATURAL_PROTOCOL_ID,
     B2_TEMPERED_P05_PROTOCOL_ID,
+    B9_B2_REFERENCE_COMPLETION_PROTOCOL_ID,
     DINO_MODEL_NAME,
     DINO_SHA256,
     EXPECTED_CLASS_NAMES,
@@ -395,6 +396,132 @@ def test_classf_b2_tempered_probe_exposure_is_locked() -> None:
     assert summary["class_exposure_counts"] == [649, 325, 530, 664, 712]
     assert summary["total_samples"] == 2880
     assert summary["max_prefix_absolute_quota_error"] < 1.0
+
+
+def test_b9_reference_completion_is_b2_training_semantic_clone(
+    tmp_path: Path,
+) -> None:
+    common = {
+        "data_yaml": tmp_path / "class_f" / "data.yaml",
+        "dino_checkpoint": tmp_path / "model.safetensors",
+        "output_dir": tmp_path / "runs",
+        "stage": "full",
+        "run_tag": "unit",
+        "batch_size": 16,
+        "num_workers": 2,
+        "eval_num_workers": 1,
+        "seed": 42,
+        "source_commit": "a" * 40,
+        "source_tree_sha256": "b" * 64,
+        "dataset_image_tree_sha256": "c" * 64,
+    }
+    b2_args = build_train_args(**common, experiment="b2-tempered-p05")
+    b9_args = build_train_args(
+        **common, experiment="b9-b2-reference-completion"
+    )
+    b2 = parse_args(b2_args)
+    b9 = parse_args(b9_args)
+
+    # The complete trainer command is byte-for-byte equivalent after removing
+    # only the deliberately distinct experiment identity/provenance fields.
+    assert _strip_lineage_only_args(b9_args) == _strip_lineage_only_args(
+        b2_args
+    )
+    assert (
+        b9.tempered_class_sampling_power
+        == b2.tempered_class_sampling_power
+        == 0.5
+    )
+    assert (
+        b9.disable_balanced_epoch_sampling
+        is b2.disable_balanced_epoch_sampling
+        is False
+    )
+    assert b9.classification_loss == b2.classification_loss == "ldam_focal"
+    assert b9.ldam_max_margin == b2.ldam_max_margin == 0.3
+    assert b9.epochs == b2.epochs == 30
+    assert b9.scheduler_total_epochs == b2.scheduler_total_epochs == 30
+    assert b9.skip_final_test is b2.skip_final_test is True
+    assert b9.experiment_protocol_id == B9_B2_REFERENCE_COMPLETION_PROTOCOL_ID
+    assert b9.experiment_protocol_id != B2_TEMPERED_P05_PROTOCOL_ID
+    assert run_name(
+        "full", "unit", experiment="b9-b2-reference-completion"
+    ) == "pretrained_dinov3_classf_b9_b2_reference_completion_full_unit"
+
+
+def test_b9_reference_completion_provenance_is_explicitly_non_promotable() -> None:
+    b2 = recipe.experiment_spec("b2-tempered-p05")
+    b9 = recipe.experiment_spec("b9-b2-reference-completion")
+
+    assert b9.reference_experiment == b2.key
+    assert b9.research_role == "exploratory_canonical_reference_completion"
+    assert b9.promotion_eligible is False
+    assert b9.full_train_authorized is True
+    assert b9.known_probe_class1_f1 == pytest.approx(0.653409)
+    assert b9.required_probe_class1_f1 == pytest.approx(0.66)
+    assert b9.known_probe_class1_f1 < b9.required_probe_class1_f1
+    assert (
+        b9.balanced_epoch_sampling,
+        b9.tempered_class_sampling_power,
+        b9.ldam_max_margin,
+        b9.single_semantic_delta_from_b0,
+    ) == (
+        b2.balanced_epoch_sampling,
+        b2.tempered_class_sampling_power,
+        b2.ldam_max_margin,
+        b2.single_semantic_delta_from_b0,
+    )
+
+
+def test_full_train_authorization_is_fail_closed() -> None:
+    b0 = recipe.experiment_spec("b0")
+    b1_natural = recipe.experiment_spec("b1-natural")
+    b1_margin0 = recipe.experiment_spec("b1-margin0")
+    b2 = recipe.experiment_spec("b2-tempered-p05")
+    b9 = recipe.experiment_spec("b9-b2-reference-completion")
+
+    assert b0.research_role == "matched_pretrained_backbone_control"
+    assert b0.full_train_authorized is True
+    assert b0.promotion_eligible is False
+    assert b9.full_train_authorized is True
+    for closed in (b1_natural, b1_margin0, b2):
+        assert closed.full_train_authorized is False
+        assert closed.promotion_eligible is False
+    assert b2.research_role == "closed_probe_hypothesis"
+    assert b2.known_probe_class1_f1 == pytest.approx(0.653409)
+    assert b2.required_probe_class1_f1 == pytest.approx(0.66)
+
+
+def test_closed_b2_full_and_b9_probe_are_rejected_before_io(
+    tmp_path: Path,
+) -> None:
+    common = [
+        "--data",
+        str(tmp_path / "data.yaml"),
+        "--dino-checkpoint",
+        str(tmp_path / "model.safetensors"),
+    ]
+    with pytest.raises(RuntimeError, match="full training is closed"):
+        recipe.main(
+            [
+                "--experiment",
+                "b2-tempered-p05",
+                "--mode",
+                "full",
+                "--confirm-full",
+                *common,
+            ]
+        )
+    with pytest.raises(RuntimeError, match="only preflight or full"):
+        recipe.main(
+            [
+                "--experiment",
+                "b9-b2-reference-completion",
+                "--mode",
+                "probe",
+                *common,
+            ]
+        )
 
 
 def test_classf_b0_development_yaml_is_test_locked_and_canonical(
