@@ -22,10 +22,10 @@ DINOV3_LICENSE_SHA256 = "25d122eb8f5b880fd23c736fb6ea8018ee45c12237e00b8a86d14c6
 TIMM_VERSION = "1.0.27"
 PROTOCOL_ID = "TRKH_PRETRAINED_CLASSF_B2_TEMPERED_P05_20260731"
 EXPERIMENT_KEY = "b2-tempered-p05"
-NOTEBOOK_CONTRACT = "TRKH_KAGGLE_B2_T4_OFFLINE_V2_20260731"
+NOTEBOOK_CONTRACT = "TRKH_KAGGLE_B2_T4_OFFLINE_V3_20260801"
 V1_NOTEBOOK_SHA256 = "e154a00394cdbbffe19f98d542cd8d94a01df3d3ac25ffec81b7cb16055186ba"
-RELEASE_BASENAME = "TRKH_KAGGLE_B2_T4_UPLOAD_BUNDLE_20260731.zip"
-FIXED_ZIP_TIMESTAMP = (2026, 7, 31, 0, 0, 0)
+RELEASE_BASENAME = "TRKH_KAGGLE_B2_T4_UPLOAD_BUNDLE_20260801.zip"
+FIXED_ZIP_TIMESTAMP = (2026, 8, 1, 0, 0, 0)
 
 FOCUSED_TESTS = (
     "tests/test_pretrained_semantic_branch.py",
@@ -240,6 +240,12 @@ def runtime_target_document(timm_tree_sha256: str) -> bytes:
             "vendored_timm": TIMM_VERSION,
             "vendored_timm_tree_sha256": timm_tree_sha256,
             "uses_kaggle_torch_torchvision_cuda_stack": True,
+            "uses_kaggle_tqdm_environment_override": True,
+        },
+        "input_layout": {
+            "asset_modes": ["archive_file", "kaggle_mounted_expanded"],
+            "dataset_modes": ["archive_file", "kaggle_mounted_expanded"],
+            "separate_kaggle_dataset_mounts_required": True,
         },
         "sources": {
             "docker_release": (
@@ -359,6 +365,14 @@ def build_release(
         'SMOKE_STATE_CHECKPOINT = SMOKE_DIR / "checkpoints" / "last.pt"',
         '"train_optimizer_updates_successful"',
         '"optimizer_update_contract": SMOKE_OPTIMIZER_CONTRACT',
+        "discover_expanded_asset_root",
+        '"input_mode": "kaggle_mounted_expanded"',
+        "Asset va dataset phai la hai Kaggle Dataset inputs rieng",
+        'os.environ["TQDM_DISABLE"] = "1"',
+        "TQDM_DISABLE=1 was not honored",
+        '"epoch_metric_logs_retained": True',
+        '"asset_input": ASSET_INPUT_CONTRACT',
+        '"dataset_input": DATASET_INPUT_CONTRACT',
     )
     missing_notebook_tokens = [
         token for token in required_notebook_tokens if token not in joined_source
@@ -368,7 +382,11 @@ def build_release(
             "Notebook does not satisfy the locked source/runtime/smoke contract: "
             f"missing={missing_notebook_tokens}"
         )
-    forbidden_notebook_tokens = ("ensure_locked_packages(", '"-m", "pip", "install"')
+    forbidden_notebook_tokens = (
+        "ensure_locked_packages(",
+        '"-m", "pip", "install"',
+        "Attach exactly one V2 asset ZIP",
+    )
     retained_forbidden = [
         token for token in forbidden_notebook_tokens if token in joined_source
     ]
@@ -422,7 +440,7 @@ def build_release(
         raise RuntimeError("Payload contains duplicate/case-colliding paths")
 
     manifest = {
-        "schema_version": 2,
+        "schema_version": 3,
         "notebook_contract": NOTEBOOK_CONTRACT,
         "protocol": PROTOCOL_ID,
         "experiment": EXPERIMENT_KEY,
@@ -434,6 +452,8 @@ def build_release(
         "vendored_timm_version": TIMM_VERSION,
         "vendored_timm_tree_sha256": timm_tree_hash,
         "offline_dependency_bootstrap": True,
+        "input_layout_contract": "separate_archive_or_kaggle_mounted_expanded_v1",
+        "compact_progress_default": True,
         "kaggle_runtime_target": "v170 GPU / Python 3.12 / Torch 2.10 cu128 / T4",
         "files": file_inventory(payload),
     }

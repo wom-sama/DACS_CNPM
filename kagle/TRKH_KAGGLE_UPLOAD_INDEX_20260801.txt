@@ -1,0 +1,50 @@
+TRKH Kaggle B2/T4 offline upload set V3 - 2026-08-01
+
+STATUS
+  PASSED local archive-mode and Kaggle-expanded-mount clean rooms.
+  PENDING one unmodified top-to-bottom acceptance run on Kaggle v170 T4.
+
+Run this notebook
+  TRKH_CLASSF_BEST_KAGGLE.ipynb
+  Bytes   97116
+  SHA256  A03188DB743ED67B275CF016592D565D0F517A9CFDEDE67AD8E8AC108534A278
+  Contract TRKH_KAGGLE_B2_T4_OFFLINE_V3_20260801
+
+Create and attach exactly two SEPARATE private Kaggle Datasets
+
+1. TRKH_KAGGLE_B2_T4_UPLOAD_BUNDLE_20260801.zip
+   Bytes   86494944
+   SHA256  D502EFDEFA03E76BCAE5CAFF0567F372671A172D6CE350289D993A5E8F8BDB10
+   Manifest SHA256
+           8A3947C70ADFDFC90D0FD397D1C0E0ED19AE6B6927F266666D4F13800BF6690B
+   Source commit 7F7F0883CBB71B6A5620FEE86C15B996C400A813
+   Source tree   7C8752EFE6ACB728ED913ABE5DB165B218C94177E3EF13F5B37CE1C62B19D965
+
+2. TRKH_CLASSF_DEV_DATASET_20260731.zip
+   Bytes   891390651
+   SHA256  C3695CF9DD44B559CE158B1FFEE96533D4549C5724188F9DF2F864B3D37DFADB
+   Contains train=8278 and val=2479. Test is intentionally absent.
+
+IMPORTANT INPUT LAYOUT
+  Kaggle may keep each ZIP or expose its already-expanded contents. V3 accepts
+  both forms. Upload the two files as two different Kaggle Datasets; do not
+  combine them into one DATA03/RAR/input mount.
+
+Kaggle settings
+  Accelerator  NVIDIA T4 (normally displayed as T4 x2); do not select P100.
+  Internet     OFF.
+  Do not run pip and do not replace Kaggle Torch/torchvision.
+
+Execution
+  1. Attach the two separate inputs and import the notebook above.
+  2. Leave KAGGLE_COMPACT_PROGRESS=True. This prevents Kaggle from expanding
+     every tqdm carriage-return update into a separate red/pink output line;
+     per-epoch metric logs and history.csv remain enabled.
+  3. Leave CONFIRM_FULL=False and Run All. Review PROBE_READINESS.json.
+  4. Only if the locked probe gates pass, set CONFIRM_FULL=True and rerun from
+     cell 0 for the 30-epoch full train and complete audits.
+
+This release preserves the same B2 model/source/checkpoint contract as V2.
+V3 changes only input resolution, provenance telemetry and notebook progress
+rendering. Local clean rooms are engineering evidence, not real Kaggle T4
+acceptance.

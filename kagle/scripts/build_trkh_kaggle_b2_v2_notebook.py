@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the fail-closed TRKH Kaggle B2 V2 notebook from the reviewed V1.
+"""Build the fail-closed TRKH Kaggle B2 V3 notebook from the reviewed V1.
 
 This generator intentionally uses only the Python standard library.  It does
 not build or mutate the upload bundle; the release packager must put the
@@ -16,6 +16,8 @@ import json
 import os
 from pathlib import Path
 from textwrap import indent
+
+from upgrade_trkh_kaggle_b2_v3_notebook import upgrade_notebook
 
 
 V1_CONTRACT = "TRKH_KAGGLE_TWO_ZIP_B2_V1_20260731"
@@ -969,7 +971,7 @@ else:
     missing = [token for token in required if token not in generated_source]
     if missing:
         raise AssertionError(f"Generated V2 is missing contract tokens: {missing}")
-    return notebook
+    return upgrade_notebook(notebook)
 
 
 def parse_args() -> argparse.Namespace:
@@ -986,7 +988,7 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=repo_root / "kagle" / V2_NOTEBOOK_NAME,
     )
-    parser.add_argument("--force", action="store_true", help="Replace an existing V2 notebook")
+    parser.add_argument("--force", action="store_true", help="Replace an existing V3 notebook")
     return parser.parse_args()
 
 

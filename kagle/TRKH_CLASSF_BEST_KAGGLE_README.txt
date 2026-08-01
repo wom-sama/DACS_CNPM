@@ -1,12 +1,16 @@
-TRKH Kaggle B2/T4 offline release - 2026-07-31
+TRKH Kaggle B2/T4 offline release V3 - 2026-08-01
 ================================================
 
 Notebook
   TRKH_CLASSF_BEST_KAGGLE.ipynb
 
-Attach exactly these two ZIP files unchanged
-  1. TRKH_KAGGLE_B2_T4_UPLOAD_BUNDLE_20260731.zip
+Create/attach exactly two separate private Kaggle Datasets
+  1. TRKH_KAGGLE_B2_T4_UPLOAD_BUNDLE_20260801.zip
   2. TRKH_CLASSF_DEV_DATASET_20260731.zip
+
+Kaggle may expose either the ZIP itself or its already-expanded contents.  V3
+accepts both representations and applies the same manifest/hash gates.  Do not
+put both ZIPs into one Kaggle Dataset (for example one combined DATA03 input).
 
 Required Kaggle configuration
   - Accelerator: NVIDIA T4 (the Kaggle UI normally shows T4 x2).
@@ -20,15 +24,21 @@ Required Kaggle configuration
     be visible but this release does not claim multi-GPU training.
 
 Recommended upload procedure
-  1. Upload the asset ZIP and dataset ZIP as private Kaggle Datasets, or attach
-     them directly as notebook inputs.  Keep each ZIP unchanged.
+  1. Upload the asset ZIP as one private Kaggle Dataset and the dataset ZIP as
+     a second private Kaggle Dataset.  Attach both inputs to the notebook.
   2. Import/open TRKH_CLASSF_BEST_KAGGLE.ipynb.
   3. In Settings, choose the T4 GPU accelerator.
   4. Leave Internet disabled and run all cells from top to bottom.
 
+Progress output
+  KAGGLE_COMPACT_PROGRESS=True is the default.  It suppresses terminal-style
+  tqdm bars that Kaggle otherwise renders as hundreds of repeated red/pink
+  lines.  Per-epoch metric dictionaries, history.csv and checkpoints remain
+  unchanged.  Set it False only when running in a real interactive terminal.
+
 What the first Run All proves before the long run
-  - safe extraction with traversal, symlink, duplicate, size, CRC and SHA-256
-    checks;
+  - exact manifest/path/size/SHA-256 checks for expanded mounts, plus safe ZIP
+    extraction with traversal, symlink, duplicate, size and CRC checks;
   - exact TRKH source commit/tree, DINOv3 weight and DINOv3 Agreement;
   - Python 3.12, Torch 2.10, torchvision 0.25 and CUDA 12.8 runtime family;
   - exact vendored pure-Python timm 1.0.27 without modifying site-packages;
