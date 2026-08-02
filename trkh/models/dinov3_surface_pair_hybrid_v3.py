@@ -211,52 +211,59 @@ class DinoV3SurfacePairHybridV3(DinoV3SurfacePatchHybridV2):
         batch_size = rgb.size(0)
         grid_height = rgb.size(-2) // CANONICAL_PATCH_SIZE[0]
         grid_width = rgb.size(-1) // CANONICAL_PATCH_SIZE[1]
-        patches = rgb.reshape(
-            batch_size,
-            3,
-            grid_height,
-            CANONICAL_PATCH_SIZE[0],
-            grid_width,
-            CANONICAL_PATCH_SIZE[1],
-        ).permute(0, 2, 4, 1, 3, 5)
-        patch_mean_rgb = patches.mean(dim=(-1, -2))
-
+        pool_kwargs = {
+            "kernel_size": CANONICAL_PATCH_SIZE,
+            "stride": CANONICAL_PATCH_SIZE,
+        }
+        patch_mean_rgb = F.avg_pool2d(rgb, **pool_kwargs)
         luma_weights = self.surface_luma_weights.to(
             device=images.device,
             dtype=torch.float32,
-        ).reshape(1, 1, 1, 3, 1, 1)
-        patch_luma = (patches * luma_weights).sum(dim=3)
-        patch_mean_luma = patch_luma.mean(dim=(-1, -2))
-        safe_patch_luma = patch_mean_luma.clamp_min(PATCH_LUMA_FLOOR)
-        relative_rgb = (
-            patches - patch_mean_rgb[..., None, None]
-        ) / safe_patch_luma[..., None, None, None]
-        relative_rgb_rms = self._zero_safe_rms(
-            relative_rgb.square().mean(dim=(-1, -2))
         )
-        patch_mean_chromaticity = (
-            patches
-            / patches.sum(dim=3, keepdim=True).clamp_min(PATCH_LUMA_FLOOR)
-        ).mean(dim=(-1, -2))
-        relative_luma = (
-            patch_luma - patch_mean_luma[..., None, None]
-        ) / safe_patch_luma[..., None, None]
+        patch_mean_luma = (patch_mean_rgb * luma_weights).sum(
+            dim=1,
+            keepdim=True,
+        )
+        safe_patch_luma = patch_mean_luma.clamp_min(PATCH_LUMA_FLOOR)
+        expanded_patch_mean_rgb = F.interpolate(
+            patch_mean_rgb,
+            size=rgb.shape[-2:],
+            mode="nearest",
+        )
+        patch_rgb_variance = F.avg_pool2d(
+            (rgb - expanded_patch_mean_rgb).square(),
+            **pool_kwargs,
+        )
+        relative_rgb_rms = self._zero_safe_rms(
+            patch_rgb_variance / safe_patch_luma.square()
+        )
+        pixel_chromaticity = rgb / rgb.sum(dim=1, keepdim=True).clamp_min(
+            PATCH_LUMA_FLOOR
+        )
+        patch_mean_chromaticity = F.avg_pool2d(
+            pixel_chromaticity,
+            **pool_kwargs,
+        )
+        luma = (rgb * luma_weights).sum(dim=1, keepdim=True)
+        expanded_patch_mean_luma = (
+            expanded_patch_mean_rgb * luma_weights
+        ).sum(dim=1, keepdim=True)
+        patch_luma_variance = F.avg_pool2d(
+            (luma - expanded_patch_mean_luma).square(),
+            **pool_kwargs,
+        )
         relative_luma_std = self._zero_safe_rms(
-            relative_luma.square().mean(dim=(-1, -2))
+            patch_luma_variance / safe_patch_luma.square()
         )
         descriptor_grid = torch.cat(
             (
                 relative_rgb_rms,
                 patch_mean_chromaticity,
-                relative_luma_std.unsqueeze(-1),
+                relative_luma_std,
             ),
-            dim=-1,
+            dim=1,
         )
-        descriptor_tokens = descriptor_grid.reshape(
-            batch_size,
-            grid_height * grid_width,
-            PAIR_DESCRIPTOR_DIM,
-        )
+        descriptor_tokens = descriptor_grid.flatten(2).transpose(1, 2)
         descriptor_tokens = self._smooth_unit_l2(descriptor_tokens)
         descriptor_map = None
         if return_map:
