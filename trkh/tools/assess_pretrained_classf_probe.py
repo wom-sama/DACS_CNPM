@@ -20,6 +20,31 @@ CANONICAL_CLASS_NAMES = (
 )
 CANONICAL_VAL_SUPPORTS = (558, 158, 380, 494, 889)
 CANONICAL_VAL_SAMPLES = sum(CANONICAL_VAL_SUPPORTS)
+CANONICAL_DATASET_IMAGE_TREE_SHA256 = (
+    "70a1b7d2b4c6f80e28fe3f0f714f1ba3e8ab654a90ce50b1e9cae8e4dac4a503"
+)
+CANONICAL_VAL_CONTENT_SHA256 = (
+    "948c4e6b3bcf5ae20d84663d9d43d53b903303ce6c6172810e6996c8a10a5f52"
+)
+B2_PROTOCOL_ID = "TRKH_PRETRAINED_CLASSF_B2_TEMPERED_P05_20260731"
+HYBRID_V3_PAIR_GENERIC_PROTOCOL_ID = (
+    "TRKH_PRETRAINED_CLASSF_HYBRID_V3_PAIR_GENERIC_B2_20260802"
+)
+HYBRID_V3_PAIR_RELATIVE_PROTOCOL_ID = (
+    "TRKH_PRETRAINED_CLASSF_HYBRID_V3_PAIR_RELATIVE_B2_20260802"
+)
+NO_TTA_CONTRACT = {
+    "horizontal_flip": False,
+    "brightness_deltas": [],
+    "contrast_scales": [],
+    "saturation_scales": [],
+    "gamma_values": [],
+    "sharpness_amounts": [],
+    "zoom_scales": [],
+    "spatial_crop_fractions": [],
+    "channel_stretch_percentiles": [],
+    "luma_stretch_percentiles": [],
+}
 
 
 def _sha256(path: Path) -> str:
@@ -50,6 +75,46 @@ def _finite_float(value: object, *, name: str) -> float:
     if not math.isfinite(resolved):
         raise ValueError(f"{name} must be finite; got {value!r}.")
     return resolved
+
+
+def _canonical_json_sha256(value: object) -> str:
+    encoded = json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _is_sha256(value: object) -> bool:
+    text = str(value or "").strip().lower()
+    return len(text) == 64 and all(character in "0123456789abcdef" for character in text)
+
+
+def _metrics_from_confusion(matrix: Sequence[Sequence[int]]) -> Dict[str, object]:
+    class_metrics = []
+    for class_index in range(len(matrix)):
+        true_positive = int(matrix[class_index][class_index])
+        support = sum(int(value) for value in matrix[class_index])
+        predicted = sum(int(row[class_index]) for row in matrix)
+        precision = float(true_positive) / float(predicted) if predicted else 0.0
+        recall = float(true_positive) / float(support) if support else 0.0
+        f1 = (
+            2.0 * precision * recall / (precision + recall)
+            if precision + recall > 0.0
+            else 0.0
+        )
+        class_metrics.append(
+            {"precision": precision, "recall": recall, "f1": f1}
+        )
+    return {
+        "macro_f1": sum(float(row["f1"]) for row in class_metrics)
+        / float(len(class_metrics)),
+        "class1_precision": float(class_metrics[1]["precision"]),
+        "class1_recall": float(class_metrics[1]["recall"]),
+        "class1_f1": float(class_metrics[1]["f1"]),
+    }
 
 
 def load_val_metrics(path: Path) -> Dict[str, object]:
@@ -99,6 +164,9 @@ def load_val_metrics(path: Path) -> Dict[str, object]:
                     residual.get("p95"),
                     name="surface_pair_residual_ratio_p95",
                 )
+    weight_selection = payload.get("weight_selection")
+    preprocessing = payload.get("preprocessing")
+    tta = payload.get("tta")
     return {
         "path": str(path),
         "sha256": _sha256(path),
@@ -114,6 +182,29 @@ def load_val_metrics(path: Path) -> Dict[str, object]:
         "sample_identity_sha256": str(
             payload.get("sample_identity_sha256", "")
         ).lower(),
+        "evaluated_split_content_sha256": str(
+            payload.get("evaluated_split_content_sha256", "")
+        ).lower(),
+        "dataset_image_tree_sha256": str(
+            payload.get("dataset_image_tree_sha256", "")
+        ).lower(),
+        "selected_state_dict_sha256": str(
+            payload.get("selected_state_dict_sha256", "")
+        ).lower(),
+        "experiment_protocol_id": str(
+            payload.get("experiment_protocol_id", "")
+        ).strip(),
+        "weight_selection": (
+            dict(weight_selection) if isinstance(weight_selection, Mapping) else None
+        ),
+        "amp_enabled": payload.get("amp_enabled"),
+        "preprocessing": (
+            dict(preprocessing) if isinstance(preprocessing, Mapping) else None
+        ),
+        "preprocessing_sha256": str(
+            payload.get("preprocessing_sha256", "")
+        ).lower(),
+        "tta": dict(tta) if isinstance(tta, Mapping) else None,
         "model_type": str(payload.get("model_type", "")).strip().lower(),
         "dinov3_surface_hybrid_mode": str(
             payload.get("dinov3_surface_hybrid_mode", "")
@@ -146,7 +237,11 @@ def _canonical_relative_val_path(raw_path: str) -> str:
     return "/".join(parts[indices[-1] :])
 
 
-def validate_canonical_v3_artifact(metrics: Dict[str, object]) -> Dict[str, object]:
+def validate_canonical_v3_artifact(
+    metrics: Dict[str, object],
+    *,
+    sample_content_cache: Dict[str, str] | None = None,
+) -> Dict[str, object]:
     path = Path(str(metrics["path"])).resolve()
     if metrics.get("split") != "val":
         raise ValueError(f"Hybrid V3 requires split=val: {path}")
@@ -169,18 +264,21 @@ def validate_canonical_v3_artifact(metrics: Dict[str, object]) -> Dict[str, obje
             f"Hybrid V3 metrics require the sibling predictions_val.csv: {path}"
         )
     identity_digest = hashlib.sha256()
+    content_digest = hashlib.sha256()
     observed_supports = [0] * len(CANONICAL_CLASS_NAMES)
     observed_confusion = [
         [0] * len(CANONICAL_CLASS_NAMES) for _ in CANONICAL_CLASS_NAMES
     ]
     seen_paths = set()
     row_count = 0
+    content_cache = sample_content_cache if sample_content_cache is not None else {}
     with prediction_path.open("r", newline="", encoding="utf-8") as handle:
         reader = csv.DictReader(handle)
         required = {"path", "y_true", "y_pred", "true_name", "pred_name"}
         if not required.issubset(set(reader.fieldnames or [])):
             raise ValueError(f"Prediction CSV is missing required columns: {prediction_path}")
         for row in reader:
+            raw_sample_path = Path(str(row["path"])).resolve()
             canonical_path = _canonical_relative_val_path(str(row["path"]))
             if canonical_path in seen_paths:
                 raise ValueError(f"Duplicate validation prediction path: {canonical_path}")
@@ -198,6 +296,19 @@ def validate_canonical_v3_artifact(metrics: Dict[str, object]) -> Dict[str, obje
             identity_digest.update(
                 f"{canonical_path}\t{target}\n".encode("utf-8")
             )
+            if not raw_sample_path.is_file():
+                raise FileNotFoundError(
+                    f"Validation sample referenced by prediction CSV is unavailable: "
+                    f"{raw_sample_path}"
+                )
+            cache_key = str(raw_sample_path)
+            file_sha256 = content_cache.get(cache_key)
+            if file_sha256 is None:
+                file_sha256 = _sha256(raw_sample_path)
+                content_cache[cache_key] = file_sha256
+            content_digest.update(
+                f"{canonical_path}\t{target}\t{file_sha256}\n".encode("utf-8")
+            )
             row_count += 1
     if row_count != CANONICAL_VAL_SAMPLES:
         raise ValueError(f"Prediction CSV is not the full canonical validation split: {prediction_path}")
@@ -206,28 +317,81 @@ def validate_canonical_v3_artifact(metrics: Dict[str, object]) -> Dict[str, obje
     if observed_confusion != matrix:
         raise ValueError(f"Prediction CSV and metrics confusion matrices differ: {path}")
 
+    recomputed_metrics = _metrics_from_confusion(observed_confusion)
+    for metric_name, recomputed_value in recomputed_metrics.items():
+        recorded_value = float(metrics[metric_name])
+        if not math.isclose(
+            recorded_value,
+            float(recomputed_value),
+            rel_tol=0.0,
+            abs_tol=1e-12,
+        ):
+            raise ValueError(
+                f"Recorded {metric_name} differs from prediction CSV: {path}"
+            )
+
     prediction_sha256 = _sha256(prediction_path)
     recorded_prediction_sha256 = str(metrics.get("prediction_file_sha256", ""))
-    if recorded_prediction_sha256 and recorded_prediction_sha256 != prediction_sha256:
+    if not _is_sha256(recorded_prediction_sha256):
+        raise ValueError(f"Hybrid V3 requires a recorded prediction hash: {path}")
+    if recorded_prediction_sha256 != prediction_sha256:
         raise ValueError(f"Recorded prediction hash differs from its CSV: {path}")
     sample_identity_sha256 = identity_digest.hexdigest()
     recorded_identity_sha256 = str(metrics.get("sample_identity_sha256", ""))
-    if recorded_identity_sha256 and recorded_identity_sha256 != sample_identity_sha256:
+    if not _is_sha256(recorded_identity_sha256):
+        raise ValueError(f"Hybrid V3 requires a recorded validation identity hash: {path}")
+    if recorded_identity_sha256 != sample_identity_sha256:
         raise ValueError(f"Recorded validation identity hash differs from its CSV: {path}")
+    evaluated_split_content_sha256 = content_digest.hexdigest()
+    recorded_content_sha256 = str(
+        metrics.get("evaluated_split_content_sha256", "")
+    )
+    if not _is_sha256(recorded_content_sha256):
+        raise ValueError(f"Hybrid V3 requires an evaluated-content hash: {path}")
+    if recorded_content_sha256 != evaluated_split_content_sha256:
+        raise ValueError(f"Recorded evaluated-content hash differs from files: {path}")
+    if evaluated_split_content_sha256 != CANONICAL_VAL_CONTENT_SHA256:
+        raise ValueError(f"Hybrid V3 evaluated a non-canonical validation tree: {path}")
+
+    selected_state_dict_sha256 = str(
+        metrics.get("selected_state_dict_sha256", "")
+    )
+    if not _is_sha256(selected_state_dict_sha256):
+        raise ValueError(f"Hybrid V3 requires the selected state-dict hash: {path}")
+    dataset_image_tree_sha256 = str(
+        metrics.get("dataset_image_tree_sha256", "")
+    )
+    if dataset_image_tree_sha256 != CANONICAL_DATASET_IMAGE_TREE_SHA256:
+        raise ValueError(f"Hybrid V3 artifact is not bound to canonical class_f: {path}")
+
+    preprocessing = metrics.get("preprocessing")
+    if not isinstance(preprocessing, Mapping):
+        raise ValueError(f"Hybrid V3 requires preprocessing metadata: {path}")
+    preprocessing_sha256 = _canonical_json_sha256(preprocessing)
+    recorded_preprocessing_sha256 = str(
+        metrics.get("preprocessing_sha256", "")
+    )
+    if recorded_preprocessing_sha256 != preprocessing_sha256:
+        raise ValueError(f"Recorded preprocessing hash differs from metadata: {path}")
 
     checkpoint = Path(str(metrics.get("checkpoint", ""))).resolve()
     if not checkpoint.is_file():
         raise FileNotFoundError(f"Metrics checkpoint is unavailable: {checkpoint}")
     checkpoint_sha256 = _sha256(checkpoint)
     recorded_checkpoint_sha256 = str(metrics.get("checkpoint_sha256", ""))
-    if recorded_checkpoint_sha256 and recorded_checkpoint_sha256 != checkpoint_sha256:
+    if not _is_sha256(recorded_checkpoint_sha256):
+        raise ValueError(f"Hybrid V3 requires a recorded checkpoint hash: {path}")
+    if recorded_checkpoint_sha256 != checkpoint_sha256:
         raise ValueError(f"Recorded checkpoint hash differs from its file: {path}")
     metrics.update(
         {
             "prediction_path": str(prediction_path),
             "prediction_file_sha256": prediction_sha256,
             "sample_identity_sha256": sample_identity_sha256,
+            "evaluated_split_content_sha256": evaluated_split_content_sha256,
             "checkpoint_sha256": checkpoint_sha256,
+            "preprocessing_sha256": preprocessing_sha256,
+            **recomputed_metrics,
         }
     )
     return metrics
@@ -416,29 +580,86 @@ def validate_hybrid_v3_comparison_contract(
             "Hybrid V3 comparison requires exactly b2, pair_generic and branch_off."
         )
     artifacts = {"candidate": candidate, **controls}
+    sample_content_cache: Dict[str, str] = {}
     for artifact in artifacts.values():
-        validate_canonical_v3_artifact(artifact)
+        validate_canonical_v3_artifact(
+            artifact,
+            sample_content_cache=sample_content_cache,
+        )
     identities = {
         str(artifact["sample_identity_sha256"]) for artifact in artifacts.values()
     }
     if len(identities) != 1:
         raise ValueError("Hybrid V3 artifacts do not cover the same ordered val samples.")
+    preprocessing_hashes = {
+        str(artifact["preprocessing_sha256"]) for artifact in artifacts.values()
+    }
+    if len(preprocessing_hashes) != 1:
+        raise ValueError("Hybrid V3 artifacts do not use identical preprocessing.")
 
     expected_roles = {
-        "candidate": ("relative_surface_pair", False),
-        "pair_generic": ("generic_token_pair", False),
-        "branch_off": ("relative_surface_pair", True),
+        "candidate": (
+            "dinov3_surface_pair_hybrid_v3",
+            "relative_surface_pair",
+            False,
+            HYBRID_V3_PAIR_RELATIVE_PROTOCOL_ID,
+        ),
+        "pair_generic": (
+            "dinov3_surface_pair_hybrid_v3",
+            "generic_token_pair",
+            False,
+            HYBRID_V3_PAIR_GENERIC_PROTOCOL_ID,
+        ),
+        "branch_off": (
+            "dinov3_surface_pair_hybrid_v3",
+            "relative_surface_pair",
+            True,
+            HYBRID_V3_PAIR_RELATIVE_PROTOCOL_ID,
+        ),
+        "b2": ("timm_classifier", "", False, B2_PROTOCOL_ID),
     }
-    for name, (expected_mode, expected_off) in expected_roles.items():
+    for name, (
+        expected_model_type,
+        expected_mode,
+        expected_off,
+        expected_protocol,
+    ) in expected_roles.items():
         artifact = artifacts[name]
-        if artifact.get("model_type") != "dinov3_surface_pair_hybrid_v3":
-            raise ValueError(f"{name} is not a Surface Pair Hybrid V3 artifact.")
+        if artifact.get("model_type") != expected_model_type:
+            raise ValueError(f"{name} has the wrong model role.")
         if artifact.get("dinov3_surface_hybrid_mode") != expected_mode:
-            raise ValueError(f"{name} has the wrong V3 evidence mode.")
+            raise ValueError(f"{name} has the wrong evidence mode.")
         if bool(artifact.get("surface_pair_branch_off")) is not expected_off:
             raise ValueError(f"{name} has the wrong branch-off state.")
+        if artifact.get("experiment_protocol_id") != expected_protocol:
+            raise ValueError(f"{name} has the wrong experiment protocol.")
+        if artifact.get("amp_enabled") is not False:
+            raise ValueError(f"{name} must be exported in exact FP32 mode.")
+        if artifact.get("tta") != NO_TTA_CONTRACT:
+            raise ValueError(f"{name} must be exported without TTA.")
+        weight_selection = artifact.get("weight_selection")
+        if not isinstance(weight_selection, Mapping):
+            raise ValueError(f"{name} is missing weight-selection evidence.")
+        if str(weight_selection.get("requested", "")) != "auto":
+            raise ValueError(f"{name} must use automatic checkpoint weight selection.")
+        if str(weight_selection.get("checkpoint_weight_source", "")) != "ema":
+            raise ValueError(f"{name} checkpoint is not the promoted EMA state.")
+        if str(weight_selection.get("validation_weight_source", "")) != "ema":
+            raise ValueError(f"{name} does not match EMA validation semantics.")
+        if str(weight_selection.get("resolved_state_key", "")) not in {
+            "model_state",
+            "ema_model_state",
+        }:
+            raise ValueError(f"{name} selected an unsupported weight state.")
     if candidate["checkpoint_sha256"] != controls["branch_off"]["checkpoint_sha256"]:
         raise ValueError("Candidate and branch_off must use the identical checkpoint.")
+    if (
+        candidate["selected_state_dict_sha256"]
+        != controls["branch_off"]["selected_state_dict_sha256"]
+    ):
+        raise ValueError(
+            "Candidate and branch_off must use the identical selected weights."
+        )
     if candidate.get("surface_pair_residual_ratio_p95") is None:
         raise ValueError("Candidate is missing the full-val surface-pair routing audit.")
 

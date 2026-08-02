@@ -628,24 +628,66 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _sample_identity_sha256(
+def _canonical_json_sha256(value: object) -> str:
+    encoded = json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _state_dict_sha256(state_dict: Mapping[str, torch.Tensor]) -> str:
+    """Hash the exact selected weights, independent of checkpoint packaging."""
+    digest = hashlib.sha256()
+    for name in sorted(state_dict):
+        value = state_dict[name]
+        if not torch.is_tensor(value):
+            raise TypeError(f"State-dict entry {name!r} is not a tensor.")
+        tensor = value.detach().cpu().contiguous()
+        header = json.dumps(
+            {
+                "name": str(name),
+                "dtype": str(tensor.dtype),
+                "shape": list(tensor.shape),
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        raw = tensor.reshape(-1).view(torch.uint8).numpy().tobytes()
+        digest.update(len(header).to_bytes(8, byteorder="little", signed=False))
+        digest.update(header)
+        digest.update(len(raw).to_bytes(8, byteorder="little", signed=False))
+        digest.update(raw)
+    return digest.hexdigest()
+
+
+def _sample_identity_hashes(
     samples: Sequence[Tuple[str, int]],
     targets: Sequence[int],
     *,
     data_root: Path,
-) -> str:
+) -> Dict[str, str]:
     if len(samples) != len(targets):
         raise ValueError("Prediction rows and dataset samples are misaligned.")
     root = Path(data_root).resolve()
-    digest = hashlib.sha256()
+    identity_digest = hashlib.sha256()
+    content_digest = hashlib.sha256()
     for (raw_path, _), target in zip(samples, targets):
         path = Path(raw_path).resolve()
         try:
             relative = path.relative_to(root).as_posix()
         except ValueError as error:
             raise ValueError(f"Sample escaped the declared data root: {path}") from error
-        digest.update(f"{relative}\t{int(target)}\n".encode("utf-8"))
-    return digest.hexdigest()
+        identity_digest.update(f"{relative}\t{int(target)}\n".encode("utf-8"))
+        content_digest.update(
+            f"{relative}\t{int(target)}\t{_sha256(path)}\n".encode("utf-8")
+        )
+    return {
+        "sample_identity_sha256": identity_digest.hexdigest(),
+        "evaluated_split_content_sha256": content_digest.hexdigest(),
+    }
 
 
 def _distribution_summary(values: Sequence[np.ndarray]) -> Dict[str, float]:
@@ -710,6 +752,8 @@ def main() -> None:
         checkpoint,
         model_name,
     )
+    preprocessing_sha256 = _canonical_json_sha256(preprocessing)
+    selected_state_dict_sha256 = _state_dict_sha256(state_dict)
     dataset = ImageFolder(str(args.data / args.split), transform=transform)
     align_imagefolder_class_order(dataset, classes)
     max_samples = max(0, int(args.max_samples))
@@ -903,6 +947,22 @@ def main() -> None:
             },
         }
 
+    train_config = checkpoint.get("train_config")
+    train_config = dict(train_config) if isinstance(train_config, Mapping) else {}
+    experiment_protocol_id = str(
+        train_config.get(
+            "experiment_protocol_id",
+            checkpoint.get(
+                "experiment_protocol_id",
+                model_config.get("experiment_protocol_id", ""),
+            ),
+        )
+    )
+    sample_identity_hashes = _sample_identity_hashes(
+        dataset.samples,
+        y_true,
+        data_root=args.data,
+    )
     metrics = {
         "model": model_name,
         "checkpoint": str(args.checkpoint),
@@ -912,26 +972,23 @@ def main() -> None:
         "inference_time_ms_per_image": float(elapsed * 1000.0 / max(1, len(y_true))),
         "model_rebuild_source": model_rebuild_source,
         "weight_selection": weight_selection,
+        "selected_state_dict_sha256": selected_state_dict_sha256,
         "checkpoint_sha256": _sha256(args.checkpoint),
         "prediction_file_sha256": _sha256(prediction_path),
-        "sample_identity_sha256": _sample_identity_sha256(
-            dataset.samples,
-            y_true,
-            data_root=args.data,
-        ),
-        "model_type": str(model_config.get("model_type", "")),
+        **sample_identity_hashes,
+        "dataset_image_tree_sha256": str(
+            train_config.get("dataset_image_tree_sha256", "")
+        ).lower(),
+        "model_type": str(model_config.get("model_type", "") or ""),
         "dinov3_surface_hybrid_mode": str(
-            model_config.get("dinov3_surface_hybrid_mode", "")
+            model_config.get("dinov3_surface_hybrid_mode", "") or ""
         ),
-        "experiment_protocol_id": str(
-            checkpoint.get(
-                "experiment_protocol_id",
-                model_config.get("experiment_protocol_id", ""),
-            )
-        ),
+        "experiment_protocol_id": experiment_protocol_id,
         "surface_pair_branch_off": bool(args.surface_pair_branch_off),
         "surface_pair_routing_audit": routing_audit,
+        "amp_enabled": bool(args.amp),
         "preprocessing": preprocessing,
+        "preprocessing_sha256": preprocessing_sha256,
         "tta": {
             "horizontal_flip": bool(args.tta_horizontal_flip),
             "brightness_deltas": [float(value) for value in brightness_deltas],

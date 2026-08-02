@@ -1,14 +1,21 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 from pathlib import Path
 
 import pytest
+from trkh.tools import assess_pretrained_classf_probe as probe_assessor
 
 from trkh.tools.assess_pretrained_classf_probe import (
+    B2_PROTOCOL_ID,
+    CANONICAL_DATASET_IMAGE_TREE_SHA256,
     CANONICAL_CLASS_NAMES,
     CANONICAL_VAL_SUPPORTS,
+    HYBRID_V3_PAIR_GENERIC_PROTOCOL_ID,
+    HYBRID_V3_PAIR_RELATIVE_PROTOCOL_ID,
+    NO_TTA_CONTRACT,
     assess_b10,
     assess_hybrid_v2,
     assess_hybrid_v3,
@@ -16,6 +23,19 @@ from trkh.tools.assess_pretrained_classf_probe import (
     main,
     validate_hybrid_v3_comparison_contract,
 )
+
+
+_FIXTURE_SAMPLE_SHA256: dict[str, str] = {}
+
+
+def _install_fast_sample_hash(monkeypatch: pytest.MonkeyPatch) -> None:
+    real_sha256 = probe_assessor._sha256
+
+    def resolved_sha256(path: Path) -> str:
+        key = str(Path(path).resolve())
+        return _FIXTURE_SAMPLE_SHA256.get(key) or real_sha256(Path(path))
+
+    monkeypatch.setattr(probe_assessor, "_sha256", resolved_sha256)
 
 
 def _metrics(
@@ -162,12 +182,25 @@ def _canonical_v3_artifact(
     for class_index, support in enumerate(CANONICAL_VAL_SUPPORTS):
         confusion[class_index][class_index] = int(support)
         for sample_index in range(int(support)):
+            sample_path = (
+                root
+                / "canonical"
+                / "val"
+                / CANONICAL_CLASS_NAMES[class_index]
+                / f"image_{sample_index:04d}.jpg"
+            )
+            if not sample_path.is_file():
+                sample_path.parent.mkdir(parents=True, exist_ok=True)
+                content = f"fixture:{class_index}:{sample_index}".encode("utf-8")
+                sample_path.write_bytes(content)
+            else:
+                content = f"fixture:{class_index}:{sample_index}".encode("utf-8")
+            _FIXTURE_SAMPLE_SHA256[str(sample_path.resolve())] = hashlib.sha256(
+                content
+            ).hexdigest()
             rows.append(
                 {
-                    "path": (
-                        f"D:\\canonical\\val\\{CANONICAL_CLASS_NAMES[class_index]}"
-                        f"\\image_{sample_index:04d}.jpg"
-                    ),
+                    "path": str(sample_path),
                     "y_true": class_index,
                     "y_pred": class_index,
                     "true_name": CANONICAL_CLASS_NAMES[class_index],
@@ -180,8 +213,53 @@ def _canonical_v3_artifact(
         writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
         writer.writeheader()
         writer.writerows(rows)
+    prediction_path = artifact_dir / "predictions_val.csv"
+    prediction_sha256 = hashlib.sha256(prediction_path.read_bytes()).hexdigest()
+    identity_digest = hashlib.sha256()
+    content_digest = hashlib.sha256()
+    for row in rows:
+        raw_path = str(row["path"]).replace("\\", "/")
+        canonical_path = "val/" + raw_path.rsplit("/val/", 1)[-1]
+        identity_digest.update(
+            f"{canonical_path}\t{int(row['y_true'])}\n".encode("utf-8")
+        )
+        file_sha256 = _FIXTURE_SAMPLE_SHA256[
+            str(Path(str(row["path"])).resolve())
+        ]
+        content_digest.update(
+            f"{canonical_path}\t{int(row['y_true'])}\t{file_sha256}\n".encode(
+                "utf-8"
+            )
+        )
+    preprocessing = {
+        "source": "trkh_checkpoint",
+        "image_size": 256,
+        "resize_mode": "pad",
+    }
+    preprocessing_sha256 = hashlib.sha256(
+        json.dumps(
+            preprocessing,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+    protocol_id = (
+        HYBRID_V3_PAIR_RELATIVE_PROTOCOL_ID
+        if mode == "relative_surface_pair"
+        else HYBRID_V3_PAIR_GENERIC_PROTOCOL_ID
+        if mode == "generic_token_pair"
+        else B2_PROTOCOL_ID
+    )
+    checkpoint_sha256 = hashlib.sha256(checkpoint.read_bytes()).hexdigest()
     payload = {
         "checkpoint": str(checkpoint),
+        "checkpoint_sha256": checkpoint_sha256,
+        "selected_state_dict_sha256": checkpoint_sha256,
+        "prediction_file_sha256": prediction_sha256,
+        "sample_identity_sha256": identity_digest.hexdigest(),
+        "evaluated_split_content_sha256": content_digest.hexdigest(),
+        "dataset_image_tree_sha256": CANONICAL_DATASET_IMAGE_TREE_SHA256,
         "split": "val",
         "samples": sum(CANONICAL_VAL_SUPPORTS),
         "classes": list(CANONICAL_CLASS_NAMES),
@@ -189,6 +267,17 @@ def _canonical_v3_artifact(
             "dinov3_surface_pair_hybrid_v3" if mode else "timm_classifier"
         ),
         "dinov3_surface_hybrid_mode": mode,
+        "experiment_protocol_id": protocol_id,
+        "weight_selection": {
+            "requested": "auto",
+            "resolved_state_key": "model_state",
+            "checkpoint_weight_source": "ema",
+            "validation_weight_source": "ema",
+        },
+        "amp_enabled": False,
+        "preprocessing": preprocessing,
+        "preprocessing_sha256": preprocessing_sha256,
+        "tta": dict(NO_TTA_CONTRACT),
         "surface_pair_branch_off": branch_off,
         "surface_pair_routing_audit": {
             "statistics": {"residual_to_token_ratio": {"p95": 0.039}}
@@ -212,6 +301,7 @@ def _canonical_v3_artifact(
 
 def test_hybrid_v3_comparison_contract_binds_full_val_identity_and_branch_off(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     candidate_checkpoint = tmp_path / "candidate.pt"
     generic_checkpoint = tmp_path / "generic.pt"
@@ -249,6 +339,11 @@ def test_hybrid_v3_comparison_contract_binds_full_val_identity_and_branch_off(
             branch_off=True,
         ),
     }
+    monkeypatch.setattr(
+        "trkh.tools.assess_pretrained_classf_probe.CANONICAL_VAL_CONTENT_SHA256",
+        candidate["evaluated_split_content_sha256"],
+    )
+    _install_fast_sample_hash(monkeypatch)
     validate_hybrid_v3_comparison_contract(candidate, controls)
     assert len({item["sample_identity_sha256"] for item in [candidate, *controls.values()]}) == 1
 
@@ -258,6 +353,114 @@ def test_hybrid_v3_comparison_contract_binds_full_val_identity_and_branch_off(
     lines = prediction_path.read_text(encoding="utf-8").splitlines()
     prediction_path.write_text("\n".join(lines[:-1]) + "\n", encoding="utf-8")
     with pytest.raises(ValueError, match="full canonical validation split"):
+        validate_hybrid_v3_comparison_contract(candidate, controls)
+
+
+def test_hybrid_v3_artifact_recomputes_metrics_from_predictions(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    checkpoint = tmp_path / "candidate.pt"
+    checkpoint.write_bytes(b"candidate")
+    artifact = _canonical_v3_artifact(
+        tmp_path,
+        name="candidate",
+        checkpoint=checkpoint,
+        mode="relative_surface_pair",
+        branch_off=False,
+    )
+    monkeypatch.setattr(
+        "trkh.tools.assess_pretrained_classf_probe.CANONICAL_VAL_CONTENT_SHA256",
+        artifact["evaluated_split_content_sha256"],
+    )
+    _install_fast_sample_hash(monkeypatch)
+    artifact["macro_f1"] = 0.5
+    with pytest.raises(ValueError, match="macro_f1 differs from prediction CSV"):
+        validate_hybrid_v3_comparison_contract(
+            artifact,
+            {
+                "b2": artifact,
+                "pair_generic": artifact,
+                "branch_off": artifact,
+            },
+        )
+
+
+def test_hybrid_v3_contract_binds_selected_weights_and_eval_recipe(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    candidate_checkpoint = tmp_path / "candidate.pt"
+    generic_checkpoint = tmp_path / "generic.pt"
+    b2_checkpoint = tmp_path / "b2.pt"
+    candidate_checkpoint.write_bytes(b"candidate")
+    generic_checkpoint.write_bytes(b"generic")
+    b2_checkpoint.write_bytes(b"b2")
+    candidate = _canonical_v3_artifact(
+        tmp_path,
+        name="candidate",
+        checkpoint=candidate_checkpoint,
+        mode="relative_surface_pair",
+        branch_off=False,
+    )
+    controls = {
+        "b2": _canonical_v3_artifact(
+            tmp_path,
+            name="b2",
+            checkpoint=b2_checkpoint,
+            mode="",
+            branch_off=False,
+        ),
+        "pair_generic": _canonical_v3_artifact(
+            tmp_path,
+            name="generic",
+            checkpoint=generic_checkpoint,
+            mode="generic_token_pair",
+            branch_off=False,
+        ),
+        "branch_off": _canonical_v3_artifact(
+            tmp_path,
+            name="branch_off",
+            checkpoint=candidate_checkpoint,
+            mode="relative_surface_pair",
+            branch_off=True,
+        ),
+    }
+    monkeypatch.setattr(
+        "trkh.tools.assess_pretrained_classf_probe.CANONICAL_VAL_CONTENT_SHA256",
+        candidate["evaluated_split_content_sha256"],
+    )
+    _install_fast_sample_hash(monkeypatch)
+    controls["branch_off"]["selected_state_dict_sha256"] = "f" * 64
+    with pytest.raises(ValueError, match="identical selected weights"):
+        validate_hybrid_v3_comparison_contract(candidate, controls)
+
+    controls["branch_off"]["selected_state_dict_sha256"] = candidate[
+        "selected_state_dict_sha256"
+    ]
+    controls["b2"]["amp_enabled"] = True
+    with pytest.raises(ValueError, match="exact FP32"):
+        validate_hybrid_v3_comparison_contract(candidate, controls)
+    controls["b2"]["amp_enabled"] = False
+
+    controls["b2"]["experiment_protocol_id"] = "wrong-b2"
+    with pytest.raises(ValueError, match="wrong experiment protocol"):
+        validate_hybrid_v3_comparison_contract(candidate, controls)
+    controls["b2"]["experiment_protocol_id"] = B2_PROTOCOL_ID
+
+    controls["pair_generic"]["tta"] = {
+        **NO_TTA_CONTRACT,
+        "horizontal_flip": True,
+    }
+    with pytest.raises(ValueError, match="without TTA"):
+        validate_hybrid_v3_comparison_contract(candidate, controls)
+    controls["pair_generic"]["tta"] = dict(NO_TTA_CONTRACT)
+
+    controls["b2"]["preprocessing"] = {
+        **controls["b2"]["preprocessing"],
+        "resize_mode": "stretch",
+    }
+    with pytest.raises(ValueError, match="preprocessing hash differs"):
         validate_hybrid_v3_comparison_contract(candidate, controls)
 
 

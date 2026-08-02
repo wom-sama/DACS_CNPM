@@ -4,9 +4,11 @@ import sys
 from types import SimpleNamespace
 
 import pytest
+import torch
 
 from trkh.tools.export_aidt_predictions import parse_args as parse_aidt_args
 from trkh.tools.export_timm_predictions import (
+    _state_dict_sha256,
     align_imagefolder_class_order,
     build_export_model,
     checkpoint_eval_transform,
@@ -14,6 +16,18 @@ from trkh.tools.export_timm_predictions import (
     metrics_from_predictions,
     parse_args as parse_timm_args,
 )
+
+
+def test_selected_state_dict_hash_is_deterministic_and_weight_sensitive() -> None:
+    first = {
+        "b": torch.tensor([1.0], dtype=torch.bfloat16),
+        "a": torch.tensor([[2, 3]], dtype=torch.int64),
+    }
+    reordered = {"a": first["a"].clone(), "b": first["b"].clone()}
+    changed = {"a": torch.tensor([[2, 4]], dtype=torch.int64), "b": first["b"]}
+
+    assert _state_dict_sha256(first) == _state_dict_sha256(reordered)
+    assert _state_dict_sha256(first) != _state_dict_sha256(changed)
 
 
 def test_timm_export_metrics_include_auditable_confusion_matrix() -> None:
