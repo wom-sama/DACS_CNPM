@@ -6,7 +6,7 @@
 - Close PRMR R1 as **diagnostic-positive but not promotable**.
 - Do not reuse the two-backbone A0 hybrid.
 - Close class-conditioned group exposure and PR-SPR-V3 after their matched failures.
-- Preserve B9 pure DINO as the current presentation/teacher reference. Screen the next spatial adapter only as a frozen-B9, train-only experiment before opening validation again; mobile promotion still requires a later locked distillation and device audit.
+- Preserve B9 pure DINO as the current presentation/teacher reference. Frozen-B9 Post-Norm XCNorm A0 is now closed; only one placement-controlled A1 screen may proceed on train groups before validation can be considered. Mobile promotion still requires a later locked distillation and device audit.
 
 ## Evidence, not assumptions
 
@@ -132,13 +132,39 @@ Do not tune V3 on validation. The next single hypothesis first strict-loads the 
 
 The first screen uses five immutable component-group folds derived only from train: same crop source, declared train group, adjacent source IDs and pHash distance at most 3 remain in one component. B9 has already seen all train rows, so this is a conditional adapter comparison, not an independent generalization estimate. No validation/test dataset is constructed. XCNorm must beat its equal-parameter convolution control by at least `0.020` mean pair AUROC, win at least four of five folds, retain at least `98%` class-1 TP, reduce restricted FP by at least `10%`, keep macro-F1 within `0.002`, and demonstrate a non-collapsed residual p95 in `[1e-3, 0.04)`. Failure closes A0; passing authorizes one frozen protocol evaluation on validation, not test access.
 
+## Closed experiment: frozen-B9 Post-Norm XCNorm A0
+
+The locked train-only run completed from clean commit `1dcc566`; it constructed neither validation nor test. B9 remains a frozen in-sample substrate here, so the absolute rows below are not end-to-end OOF generalization estimates. The scientific comparison is the paired XCNorm-versus-Conv delta under identical component folds, initialization, capacity, batches and update count.
+
+| Train component-fold arm | Macro-F1 | Class-1 F1 | Class-1 TP | Restricted `0/2/4 -> 1` FP |
+|---|---:|---:|---:|---:|
+| Frozen B9, branch off | `0.955234` | `0.902486` | `472` | `74` |
+| Capacity-matched Conv | `0.952637` | `0.894325` | `457` | `65` |
+| XCNorm A0 | `0.953084` | `0.896750` | `469` | `77` |
+
+XCNorm's mean pair-AUROC delta versus Conv is `-0.0000645`, with gains `-0.0000344/-0.0001548/-0.0000042` for `1` versus `0/2/4`, and only two of five fold wins. The original `+0.020` AUROC gate was incorrectly specified: Conv AUROCs are already `0.996387/0.996680/0.999938`, so the maximum possible mean gain is only `0.002335`. That impossible gate is withdrawn and is not evidence against A0. The paired AUROC interval still gives no superiority (`[-0.000224,+0.0000635]`, bootstrap probability of a positive delta `0.178`). All `980/980` paired updates completed, with zero skipped/non-finite update; branch-off error is exactly zero and residual/token p95 is active at `0.02164`.
+
+XCNorm recovers 12 class-1 true positives relative to Conv, but creates 12 new false positives into class 1 and removes none. A 1,000-draw component-cluster bootstrap puts XCNorm-minus-Conv class-1 F1 at `[-0.00435, +0.00957]`, while its restricted-FP increase is `[+6, +19]`. Against frozen B9, the class-1 F1 delta interval is entirely negative, `[-0.01130, -0.00033]`, and macro-F1 is also negative `[-0.00406,-0.00035]`. XCNorm's pairwise training loss exceeds Conv in all `25/25` fold-epochs (one-sided sign probability `2^-25`), with median gap `+0.00798`. These feasible endpoints close A0 despite the invalid original AUROC threshold. Do not retune A0 or run its photometric/validation audits.
+
+The paired failure isolates a technical cause that data quality alone cannot explain: both arms saw the same rows and schedule, yet Conv achieved a lower pairwise training loss in every final fold/epoch and XCNorm supplied no AUROC gain. Final post-norm DINO tokens have already been globally contextualized and normalized; a local operator applied there cannot recover missing pixel evidence, and immediate average pooling reduces it to a small decision-boundary shift. This also explains why the light pure ViT can outperform the Hybrid despite having no explicit CNN branch.
+
+Dataset quality remains a separate ceiling. Train support is `[1987,497,1326,2080,2388]`; class 1 is the minority, `330/497` class-1 rows carry a train-review flag, `264/497` were relabelled, and `233/497` lie in a mixed-label source component. Across train, `8278` rows collapse to only `3117` conservative source/pHash components, of which `145` mix labels and contain `1604` samples. These facts require source-safe evaluation and human review; they do not justify changing labels automatically or blaming A0's matched loss on the dataset.
+
+The only admissible A1 changes placement: feed the same capacity-matched Conv/XCNorm bottleneck from the normalized input of the final attention block, add its bounded patch residual in parallel with final MHSA, and let the frozen final MLP plus final norm integrate it. The backbone/head remain strict-loaded B9 and frozen. A1 uses 5,000 fixed-seed bootstrap draws that resample whole union groups within folds. XCNorm must have mean pair-AUROC delta versus Conv at least `+0.0002`, lower bootstrap bound above zero, at least four of five fold wins and no pair below `-0.0001`; class-1 F1 versus B9 must improve at least `+0.005` with lower bound above zero; macro-F1 non-inferiority lower bound must be at least `-0.002`; class-1 TP retention must be at least `98%`; every `0/2/3/4 -> 1` count must be no higher than both B9 and Conv; total non-class-1 FP into class 1 must fall at least `10%` versus B9 and its rate delta versus Conv must have bootstrap upper bound at most zero. Structural gates also lock exact branch-off, `3,672` parameters, matched initialization/response scale, residual caps and finite complete updates. Failure closes XCNorm rather than starting another width/cap/learning-rate/placement sweep.
+
+Authoritative artifacts:
+
+- Summary SHA256 `628712ae01f2d7edff02447cf1c42a7992114c0de90c00fe5adf697b75fca109`: `runs/pretrained_dinov3_classf_xcnorm_a0_trainfold_1dcc566_r1/summary.json`
+- OOF logits SHA256 `5f982bb8119bbbba0367288c4a5d6f9ac3a7f1c2e2b47ad51a8d49e02075cf49`: `runs/pretrained_dinov3_classf_xcnorm_a0_trainfold_1dcc566_r1/train_oof_logits.npz`
+- Fold assignment SHA256 `afde4fec6b344b867d31e0e01b89f16c5f4be7fd551fdc1fdfd0ea34219d725f`: `runs/pretrained_dinov3_classf_xcnorm_a0_trainfold_1dcc566_r1/train_fold_assignments.csv`
+
 ## Process corrections
 
 - Never compare scores across yolo_f and canonical class_f as if they were matched.
 - Resolve checkpoint preprocessing in independent exporters; an ImageFolder alphabetical transform/order is not a valid substitute for the trainer's data contract.
 - Record total/trainable/frozen parameters separately; trainable-only count is not deployment size.
 - Add new architecture code in a separate module. Do not expand the existing `model.py`/`train.py` monolith with another large implementation.
-- Reject any hybrid that injects after the last transformer block and immediately average-pools: spatial tensor shape alone does not imply spatial interaction.
+- Reject any promotable hybrid that injects after the last transformer block and immediately average-pools: A0 used this location only as an explicitly conditional operator screen and confirmed why it must not be a final architecture.
 - Matched arms must preserve post-construction RNG state; a shared numeric seed is insufficient if architectures consume different initialization RNG.
 - Probe/full recipes pin `--deterministic` and require an explicit AMP dtype; `auto` is rejected so BF16/FP16 cannot silently change across GPUs under one recipe hash.
 - Archive rejected one-shot tools only through a hashed manifest; do not mass-delete research evidence.
