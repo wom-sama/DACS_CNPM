@@ -5,7 +5,7 @@ import csv
 import json
 import time
 from pathlib import Path
-from typing import Dict, List, Sequence
+from typing import Any, Dict, List, Mapping, Sequence, Tuple
 
 import numpy as np
 import timm
@@ -17,6 +17,10 @@ from torch.utils.data import DataLoader
 from torchvision.datasets import ImageFolder
 from torchvision.transforms import v2 as transforms
 from tqdm import tqdm
+
+from trkh.data.dataset import build_eval_transform
+from trkh.evaluation.input_normalization import checkpoint_input_normalization
+from trkh.models.model import build_model_from_checkpoint
 
 
 def parse_args() -> argparse.Namespace:
@@ -39,6 +43,15 @@ def parse_args() -> argparse.Namespace:
         help="Optional cap for quick smoke/debug export. 0 means full split.",
     )
     parser.add_argument("--amp", action="store_true")
+    parser.add_argument(
+        "--weight-source",
+        choices=("auto", "model", "ema"),
+        default="auto",
+        help=(
+            "Select serialized model_state or EMA weights. auto reproduces the "
+            "checkpoint's recorded validation/deployment weight source."
+        ),
+    )
     parser.add_argument("--model", default="", help="Override model name if checkpoint args are missing.")
     parser.add_argument(
         "--tta-horizontal-flip",
@@ -383,24 +396,259 @@ def metrics_from_predictions(y_true: Sequence[int], y_pred: Sequence[int], class
     }
 
 
+def checkpoint_export_metadata(
+    checkpoint: object,
+    *,
+    weight_source: str = "auto",
+) -> Tuple[List[str], str, Mapping[str, torch.Tensor], Dict[str, str]]:
+    """Resolve both legacy TIMM exports and current TRKH trainer checkpoints."""
+    if not isinstance(checkpoint, Mapping):
+        raise ValueError("TIMM export checkpoint must be a mapping.")
+
+    raw_classes = checkpoint.get("classes") or checkpoint.get("class_names") or []
+    classes = [str(value) for value in raw_classes]
+
+    model_name = ""
+    for container_key in ("args", "model_config"):
+        container = checkpoint.get(container_key, {})
+        if not isinstance(container, Mapping):
+            continue
+        for name_key in ("model", "timm_model_name"):
+            candidate = str(container.get(name_key, "") or "").strip()
+            if candidate:
+                model_name = candidate
+                break
+        if model_name:
+            break
+
+    requested = str(weight_source).strip().lower()
+    if requested not in {"auto", "model", "ema"}:
+        raise ValueError(f"Unsupported weight_source: {weight_source!r}.")
+    legacy_state = checkpoint.get("model")
+    model_state = checkpoint.get("model_state")
+    ema_state = checkpoint.get("ema_model_state")
+    checkpoint_source = str(checkpoint.get("checkpoint_weight_source", "")).lower()
+    validation_source = str(checkpoint.get("validation_weight_source", "")).lower()
+
+    selected_key = ""
+    if isinstance(legacy_state, Mapping) and not isinstance(model_state, Mapping):
+        if requested == "ema":
+            raise ValueError("Legacy checkpoint has no EMA weights.")
+        selected_key = "model"
+        state_dict = legacy_state
+    elif requested == "model":
+        selected_key = "model_state"
+        state_dict = model_state
+    elif requested == "ema":
+        if checkpoint_source == "ema" and isinstance(model_state, Mapping):
+            selected_key = "model_state"
+            state_dict = model_state
+        else:
+            selected_key = "ema_model_state"
+            state_dict = ema_state
+    elif checkpoint_source == "ema" and isinstance(model_state, Mapping):
+        selected_key = "model_state"
+        state_dict = model_state
+    elif validation_source == "ema" and isinstance(ema_state, Mapping):
+        selected_key = "ema_model_state"
+        state_dict = ema_state
+    else:
+        selected_key = "model_state"
+        state_dict = model_state
+
+    if not isinstance(state_dict, Mapping):
+        raise ValueError("Checkpoint missing model/model_state weights.")
+    selection = {
+        "requested": requested,
+        "resolved_state_key": selected_key,
+        "checkpoint_weight_source": checkpoint_source,
+        "validation_weight_source": validation_source,
+    }
+    return classes, model_name, state_dict, selection
+
+
+def checkpoint_eval_transform(
+    checkpoint: object,
+    model_name: str,
+) -> tuple[object, tuple[float, ...], tuple[float, ...], Dict[str, Any]]:
+    """Rebuild the checkpoint's validation preprocessing when TRKH metadata exists."""
+    if not isinstance(checkpoint, Mapping):
+        raise ValueError("TIMM export checkpoint must be a mapping.")
+
+    if "model_config" not in checkpoint:
+        transform, mean, std = build_transform_config(model_name)
+        return transform, mean, std, {
+            "source": "timm_model_config",
+            "input_mean": [float(value) for value in mean],
+            "input_std": [float(value) for value in std],
+        }
+
+    model_config = checkpoint.get("model_config")
+    if not isinstance(model_config, Mapping):
+        raise ValueError("TRKH checkpoint model_config must be a mapping.")
+    augmentation_config = checkpoint.get("augmentation_config", {})
+    if not isinstance(augmentation_config, Mapping):
+        raise ValueError("TRKH checkpoint augmentation_config must be a mapping.")
+
+    image_size = int(model_config.get("image_size", 0) or 0)
+    if image_size <= 0:
+        raise ValueError("TRKH checkpoint model_config.image_size must be positive.")
+    temporal_frames = int(model_config.get("temporal_frames", 1) or 1)
+    if temporal_frames != 1:
+        raise ValueError(
+            "TIMM ImageFolder export currently requires model_config.temporal_frames=1; "
+            f"got {temporal_frames}."
+        )
+
+    mean, std = checkpoint_input_normalization(checkpoint)
+
+    def config_float(key: str, default: float) -> float:
+        value = augmentation_config.get(key, default)
+        return float(default if value is None else value)
+
+    transform_config: Dict[str, Any] = {
+        "image_size": image_size,
+        "resize_mode": str(augmentation_config.get("resize_mode", "pad") or "pad"),
+        "illumination_normalization": bool(
+            augmentation_config.get("illumination_normalization", False)
+        ),
+        "illumination_normalization_strength": config_float(
+            "illumination_normalization_strength", 0.0
+        ),
+        "foreground_crop_mode": str(
+            augmentation_config.get("foreground_crop_mode", "none") or "none"
+        ),
+        "foreground_crop_margin_ratio": config_float(
+            "foreground_crop_margin_ratio", 0.08
+        ),
+        "foreground_crop_min_mask_area_ratio": config_float(
+            "foreground_crop_min_mask_area_ratio", 0.03
+        ),
+        "foreground_crop_max_mask_area_ratio": config_float(
+            "foreground_crop_max_mask_area_ratio", 0.92
+        ),
+        "foreground_crop_max_crop_area_ratio": config_float(
+            "foreground_crop_max_crop_area_ratio", 0.98
+        ),
+        "background_suppression_mode": str(
+            augmentation_config.get("background_suppression_mode", "none") or "none"
+        ),
+        "background_suppression_margin": config_float(
+            "background_suppression_margin", 0.08
+        ),
+        "background_suppression_blur_radius": config_float(
+            "background_suppression_blur_radius", 7.0
+        ),
+        "surface_detail_amplification_mode": str(
+            augmentation_config.get("surface_detail_amplification_mode", "none") or "none"
+        ),
+        "surface_detail_amplification_strength": config_float(
+            "surface_detail_amplification_strength", 0.0
+        ),
+        "surface_detail_amplification_blur_radius": config_float(
+            "surface_detail_amplification_blur_radius", 1.25
+        ),
+        "surface_detail_amplification_foreground_weight": config_float(
+            "surface_detail_amplification_foreground_weight", 0.85
+        ),
+        "eval_surface_detail_amplification": bool(
+            augmentation_config.get("eval_surface_detail_amplification", False)
+        ),
+    }
+    transform = build_eval_transform(
+        **transform_config,
+        mean=mean,
+        std=std,
+    )
+    preprocessing = {
+        "source": "trkh_checkpoint",
+        **transform_config,
+        "input_mean": [float(value) for value in mean],
+        "input_std": [float(value) for value in std],
+    }
+    return transform, mean, std, preprocessing
+
+
+def align_imagefolder_class_order(
+    dataset: ImageFolder,
+    checkpoint_classes: Sequence[str],
+) -> None:
+    """Remap ImageFolder's alphabetical targets to the checkpoint label order."""
+    expected = [str(value) for value in checkpoint_classes]
+    observed = [str(value) for value in dataset.classes]
+    if observed == expected:
+        return
+    if len(observed) != len(expected) or set(observed) != set(expected):
+        raise ValueError(
+            "Class names differ between checkpoint and dataset: "
+            f"checkpoint={expected}, dataset={observed}"
+        )
+
+    old_to_new = {
+        int(old_index): int(expected.index(class_name))
+        for old_index, class_name in enumerate(observed)
+    }
+    dataset.samples = [
+        (path, old_to_new[int(target)]) for path, target in dataset.samples
+    ]
+    dataset.imgs = dataset.samples
+    dataset.targets = [int(target) for _, target in dataset.samples]
+    dataset.classes = expected
+    dataset.class_to_idx = {
+        class_name: class_index for class_index, class_name in enumerate(expected)
+    }
+
+
+def build_export_model(
+    checkpoint: Mapping[str, Any],
+    *,
+    model_name: str,
+    num_classes: int,
+    state_dict: Mapping[str, torch.Tensor],
+) -> tuple[nn.Module, str]:
+    """Rebuild current TRKH models exactly; retain the legacy TIMM path."""
+    model_config = checkpoint.get("model_config")
+    if isinstance(model_config, Mapping) and str(
+        model_config.get("model_type", "") or ""
+    ).strip():
+        resolved_checkpoint = dict(checkpoint)
+        resolved_checkpoint["model_state"] = state_dict
+        return (
+            build_model_from_checkpoint(
+                resolved_checkpoint,
+                num_classes=num_classes,
+            ),
+            "trkh_checkpoint_architecture",
+        )
+    model = timm.create_model(model_name, pretrained=False, num_classes=num_classes)
+    model.load_state_dict(state_dict)
+    return model, "legacy_timm_architecture"
+
+
 def main() -> None:
     args = parse_args()
     checkpoint = torch.load(args.checkpoint, map_location="cpu")
-    ckpt_args = checkpoint.get("args", {}) if isinstance(checkpoint, dict) else {}
-    classes = list(checkpoint.get("classes", [])) if isinstance(checkpoint, dict) else []
-    model_name = str(args.model or ckpt_args.get("model", "")).strip()
+    (
+        classes,
+        checkpoint_model_name,
+        state_dict,
+        weight_selection,
+    ) = checkpoint_export_metadata(
+        checkpoint,
+        weight_source=args.weight_source,
+    )
+    model_name = str(args.model or checkpoint_model_name).strip()
     if not model_name:
         raise ValueError("Cannot infer TIMM model name. Pass --model.")
     if not classes:
         raise ValueError(f"Checkpoint missing classes: {args.checkpoint}")
 
-    transform, model_mean, model_std = build_transform_config(model_name)
+    transform, model_mean, model_std, preprocessing = checkpoint_eval_transform(
+        checkpoint,
+        model_name,
+    )
     dataset = ImageFolder(str(args.data / args.split), transform=transform)
-    if list(dataset.classes) != classes:
-        raise ValueError(
-            "Class order mismatch between checkpoint and dataset: "
-            f"checkpoint={classes}, dataset={dataset.classes}"
-        )
+    align_imagefolder_class_order(dataset, classes)
     max_samples = max(0, int(args.max_samples))
     if max_samples > 0:
         dataset.samples = list(dataset.samples[:max_samples])
@@ -416,11 +664,12 @@ def main() -> None:
         persistent_workers=int(args.workers) > 0,
     )
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = timm.create_model(model_name, pretrained=False, num_classes=len(classes))
-    state_dict = checkpoint.get("model")
-    if not isinstance(state_dict, dict):
-        raise ValueError(f"Checkpoint missing model state: {args.checkpoint}")
-    model.load_state_dict(state_dict)
+    model, model_rebuild_source = build_export_model(
+        checkpoint,
+        model_name=model_name,
+        num_classes=len(classes),
+        state_dict=state_dict,
+    )
     model.to(device).eval()
 
     autocast_device = "cuda" if device.type == "cuda" else "cpu"
@@ -503,6 +752,9 @@ def main() -> None:
         "samples": len(y_true),
         "loss": float(np.mean(losses)) if losses else 0.0,
         "inference_time_ms_per_image": float(elapsed * 1000.0 / max(1, len(y_true))),
+        "model_rebuild_source": model_rebuild_source,
+        "weight_selection": weight_selection,
+        "preprocessing": preprocessing,
         "tta": {
             "horizontal_flip": bool(args.tta_horizontal_flip),
             "brightness_deltas": [float(value) for value in brightness_deltas],
