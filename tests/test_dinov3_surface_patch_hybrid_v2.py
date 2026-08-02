@@ -931,6 +931,24 @@ def test_pair_v3_residual_is_bounded_and_semantically_oriented() -> None:
     assert torch.all(aligned_change > 0.0)
 
 
+def test_pair_v3_score_space_bound_matches_full_residual_formula() -> None:
+    torch.manual_seed(108)
+    model = _build_pair_model(RELATIVE_SURFACE_PAIR_MODE).eval()
+    coefficients = torch.randn(2, 4, 3)
+    directions = model._semantic_pair_directions()
+    patch_tokens = torch.randn(2, 4, 384)
+    raw_delta = torch.matmul(coefficients, directions)
+
+    expected = model._normalize_delta(raw_delta, patch_tokens)
+    observed = model._normalize_pair_delta(
+        coefficients,
+        directions,
+        patch_tokens,
+    )
+
+    assert torch.allclose(observed, expected, atol=2e-6, rtol=2e-6)
+
+
 def test_pair_v3_strict_state_roundtrip_and_optimizer_contract() -> None:
     torch.manual_seed(109)
     source = _build_pair_model(RELATIVE_SURFACE_PAIR_MODE).eval()

@@ -203,67 +203,61 @@ class DinoV3SurfacePairHybridV3(DinoV3SurfacePatchHybridV2):
         self._validate_images(images)
         mean = self.input_mean.to(device=images.device, dtype=torch.float32)
         std = self.input_std.to(device=images.device, dtype=torch.float32)
-        rgb = (images.float() * std + mean).clamp(min=0.0, max=1.0)
-        rgb = torch.where(rgb < DESCRIPTOR_EPS, torch.zeros_like(rgb), rgb)
+        rgb = (images.float() * std + mean - DESCRIPTOR_EPS).clamp(
+            min=0.0,
+            max=1.0,
+        )
         # Keep the batch extent symbolic for the standard dynamic-batch ONNX
         # export contract.  Converting it to ``int`` here silently freezes a
         # batch-1 trace even though the exporter advertises a dynamic axis.
         batch_size = rgb.size(0)
         grid_height = rgb.size(-2) // CANONICAL_PATCH_SIZE[0]
         grid_width = rgb.size(-1) // CANONICAL_PATCH_SIZE[1]
-        pool_kwargs = {
-            "kernel_size": CANONICAL_PATCH_SIZE,
-            "stride": CANONICAL_PATCH_SIZE,
-        }
-        patch_mean_rgb = F.avg_pool2d(rgb, **pool_kwargs)
+        patches = rgb.reshape(
+            batch_size,
+            3,
+            grid_height,
+            CANONICAL_PATCH_SIZE[0],
+            grid_width,
+            CANONICAL_PATCH_SIZE[1],
+        ).permute(0, 2, 4, 1, 3, 5)
+        patch_mean_rgb = patches.mean(dim=(-1, -2))
         luma_weights = self.surface_luma_weights.to(
             device=images.device,
             dtype=torch.float32,
-        )
-        patch_mean_luma = (patch_mean_rgb * luma_weights).sum(
-            dim=1,
-            keepdim=True,
-        )
+        ).reshape(1, 1, 1, 3, 1, 1)
+        patch_luma = (patches * luma_weights).sum(dim=3)
+        patch_mean_luma = patch_luma.mean(dim=(-1, -2))
         safe_patch_luma = patch_mean_luma.clamp_min(PATCH_LUMA_FLOOR)
-        expanded_patch_mean_rgb = F.interpolate(
-            patch_mean_rgb,
-            size=rgb.shape[-2:],
-            mode="nearest",
-        )
-        patch_rgb_variance = F.avg_pool2d(
-            (rgb - expanded_patch_mean_rgb).square(),
-            **pool_kwargs,
-        )
+        relative_rgb = (
+            patches - patch_mean_rgb[..., None, None]
+        ) / safe_patch_luma[..., None, None, None]
         relative_rgb_rms = self._zero_safe_rms(
-            patch_rgb_variance / safe_patch_luma.square()
+            relative_rgb.square().mean(dim=(-1, -2))
         )
-        pixel_chromaticity = rgb / rgb.sum(dim=1, keepdim=True).clamp_min(
-            PATCH_LUMA_FLOOR
-        )
-        patch_mean_chromaticity = F.avg_pool2d(
-            pixel_chromaticity,
-            **pool_kwargs,
-        )
-        luma = (rgb * luma_weights).sum(dim=1, keepdim=True)
-        expanded_patch_mean_luma = (
-            expanded_patch_mean_rgb * luma_weights
-        ).sum(dim=1, keepdim=True)
-        patch_luma_variance = F.avg_pool2d(
-            (luma - expanded_patch_mean_luma).square(),
-            **pool_kwargs,
-        )
+        patch_mean_chromaticity = (
+            patches
+            / patches.sum(dim=3, keepdim=True).clamp_min(PATCH_LUMA_FLOOR)
+        ).mean(dim=(-1, -2))
+        relative_luma = (
+            patch_luma - patch_mean_luma[..., None, None]
+        ) / safe_patch_luma[..., None, None]
         relative_luma_std = self._zero_safe_rms(
-            patch_luma_variance / safe_patch_luma.square()
+            relative_luma.square().mean(dim=(-1, -2))
         )
         descriptor_grid = torch.cat(
             (
                 relative_rgb_rms,
                 patch_mean_chromaticity,
-                relative_luma_std,
+                relative_luma_std.unsqueeze(-1),
             ),
-            dim=1,
+            dim=-1,
         )
-        descriptor_tokens = descriptor_grid.flatten(2).transpose(1, 2)
+        descriptor_tokens = descriptor_grid.reshape(
+            batch_size,
+            grid_height * grid_width,
+            PAIR_DESCRIPTOR_DIM,
+        )
         descriptor_tokens = self._smooth_unit_l2(descriptor_tokens)
         descriptor_map = None
         if return_map:
@@ -304,11 +298,9 @@ class DinoV3SurfacePairHybridV3(DinoV3SurfacePatchHybridV2):
                 classifier.bias,
             ).float()
             preview_probabilities = torch.softmax(preview_logits, dim=-1)
-            competitor_probabilities = preview_probabilities[
-                :, list(PAIR_COMPETITOR_INDICES)
-            ]
-            competitor_weights = competitor_probabilities / (
-                competitor_probabilities.sum(dim=-1, keepdim=True).clamp_min(1e-12)
+            competitor_weights = torch.softmax(
+                preview_logits[:, list(PAIR_COMPETITOR_INDICES)],
+                dim=-1,
             )
             non_class3_mass = 1.0 - preview_probabilities[:, 3:4]
         return competitor_weights, non_class3_mass, preview_logits
@@ -318,6 +310,33 @@ class DinoV3SurfacePairHybridV3(DinoV3SurfacePatchHybridV2):
         focus_weight = classifier_weight[FOCUS_CLASS_INDEX : FOCUS_CLASS_INDEX + 1]
         competitor_weight = classifier_weight[list(PAIR_COMPETITOR_INDICES)]
         return F.normalize(focus_weight - competitor_weight, dim=-1, eps=1e-12)
+
+    @staticmethod
+    def _normalize_pair_delta(
+        signed_pair_coefficients: Tensor,
+        semantic_directions: Tensor,
+        detached_patch_tokens: Tensor,
+    ) -> Tensor:
+        """Apply the exact smooth residual bound in the three-score space."""
+
+        direction_gram = torch.matmul(
+            semantic_directions,
+            semantic_directions.transpose(0, 1),
+        )
+        raw_norm_square = (
+            torch.matmul(signed_pair_coefficients, direction_gram)
+            * signed_pair_coefficients
+        ).sum(dim=-1, keepdim=True).clamp_min(0.0)
+        primary_norm = detached_patch_tokens.float().norm(
+            dim=-1,
+            keepdim=True,
+        )
+        bounded_coefficients = (
+            signed_pair_coefficients
+            * primary_norm
+            / torch.sqrt(1.0 + raw_norm_square)
+        )
+        return torch.matmul(bounded_coefficients, semantic_directions)
 
     def _build_gated_patch_residual(
         self,
@@ -373,8 +392,11 @@ class DinoV3SurfacePairHybridV3(DinoV3SurfacePatchHybridV2):
             device=patch_tokens.device,
             dtype=signed_pair_coefficients.dtype,
         )
-        raw_delta = torch.matmul(signed_pair_coefficients, semantic_directions)
-        normalized_delta = self._normalize_delta(raw_delta, detached_patch_tokens)
+        normalized_delta = self._normalize_pair_delta(
+            signed_pair_coefficients,
+            semantic_directions,
+            detached_patch_tokens,
+        )
         typed_delta = normalized_delta.to(
             device=patch_tokens.device,
             dtype=patch_tokens.dtype,
@@ -388,6 +410,7 @@ class DinoV3SurfacePairHybridV3(DinoV3SurfacePatchHybridV2):
             signed_pair_coefficients.abs().sum(dim=-1, keepdim=True).clamp_max(1.0)
             * PAIR_RESIDUAL_RATIO_CAP
         ).to(device=patch_tokens.device, dtype=patch_tokens.dtype)
+        raw_delta = torch.matmul(signed_pair_coefficients, semantic_directions)
         return gated_residual, {
             "surface_descriptor_tensor": descriptor_tokens,
             "surface_feature_map": descriptor_map,
