@@ -134,6 +134,14 @@ class _ToyEva(nn.Module):
         pooled = value[:, self.num_prefix_tokens :].mean(dim=1)
         return pooled if pre_logits else self.head(pooled)
 
+    def forward(self, value: torch.Tensor) -> torch.Tensor:
+        value = self.patch_embed(value)
+        value, rope = self._pos_embed(value)
+        value = self.norm_pre(value)
+        for block in self.blocks:
+            value = block(value, rope=rope)
+        return self.forward_head(self.norm(value), pre_logits=False)
+
 
 def test_gamma1_and_gamma2_formulas_are_exact() -> None:
     torch.manual_seed(3)
@@ -234,6 +242,37 @@ def test_actual_smoke_proves_parity_and_adapter_only_gradient(monkeypatch) -> No
     assert result["residual_gradient_through_frozen_tail_norm"] > 0.0
     assert not result["frozen_model_gradients_present"]
     assert all(value > 0.0 for value in result["adapter_gradient_norms"].values())
+
+
+def test_actual_smoke_rejects_a_self_consistent_but_wrong_extractor(
+    monkeypatch,
+) -> None:
+    locked = {
+        "selected_full_state_sha256": "a" * 64,
+        "final_block_state_sha256": "b" * 64,
+        "gamma1_state_sha256": "c" * 64,
+        "gamma2_state_sha256": "d" * 64,
+        "final_norm_head_state_sha256": "e" * 64,
+    }
+    monkeypatch.setattr(precheck, "_state_subset_hashes", lambda _state: dict(locked))
+    monkeypatch.setattr(precheck, "_assert_locked_state_hashes", lambda _hashes: None)
+    native_extractor = precheck.eva_pre_final_tokens
+
+    def corrupted_extractor(model, images):
+        value, rope = native_extractor(model, images)
+        value = value.clone()
+        value[..., 0] += 0.125
+        return value, rope
+
+    monkeypatch.setattr(precheck, "eva_pre_final_tokens", corrupted_extractor)
+    model = _ToyEva().eval().requires_grad_(False)
+    with pytest.raises(RuntimeError, match="native_direct_logits"):
+        run_actual_b9_train_smoke(
+            model=model,
+            images=torch.randn(5, 261, 384),
+            labels=torch.arange(5, dtype=torch.long),
+            relative_paths=[f"train/c{index}/x.jpg" for index in range(5)],
+        )
 
 
 def test_batch_lock_and_preflight_only_fail_before_io() -> None:

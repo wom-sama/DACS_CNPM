@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import inspect
 import json
 import os
 from importlib.metadata import version as package_version
@@ -410,6 +411,7 @@ def run_actual_b9_train_smoke(
         raise ValueError("B9 prefix-token contract changed")
 
     with torch.inference_mode():
+        direct_b9_logits = model(images).float()
         x_pre, rope = eva_pre_final_tokens(model, images)
         if rope is None:
             raise ValueError("locked DINOv3 A1 requires native RoPE")
@@ -419,6 +421,9 @@ def run_actual_b9_train_smoke(
         )
         native_final = model.norm(native_tail)
         native_logits = model.forward_head(native_final, pre_logits=False).float()
+        native_direct_logit_error = _maximum_error(
+            native_logits, direct_b9_logits
+        )
         z_error = _maximum_error(z, native_z)
         u_error = _maximum_error(u, native_u)
         rope_error = _maximum_error(rope, native_rope)
@@ -434,12 +439,13 @@ def run_actual_b9_train_smoke(
         tail_token_error = _maximum_error(
             manual_final_patch, native_final[:, prefix:]
         )
-        tail_logit_error = _maximum_error(manual_logits, native_logits)
+        tail_logit_error = _maximum_error(manual_logits, direct_b9_logits)
 
     for name, value in {
         "norm1_capture": z_error,
         "post_mhsa_u": u_error,
         "rope_capture": rope_error,
+        "native_direct_logits": native_direct_logit_error,
     }.items():
         if value > STRUCTURAL_PARITY_ATOL:
             raise RuntimeError(f"actual B9 {name} parity failed: {value}")
@@ -469,7 +475,7 @@ def run_actual_b9_train_smoke(
             model.head,
             u_patch,
             zero_residual,
-            native_logits,
+            direct_b9_logits,
         )
         branch_off_logits, _ = tail_adjusted_logits(
             block,
@@ -477,12 +483,12 @@ def run_actual_b9_train_smoke(
             model.head,
             u_patch,
             branch_off_residual,
-            native_logits,
+            direct_b9_logits,
         )
     if torch.count_nonzero(zero_residual) or torch.count_nonzero(branch_off_residual):
         raise RuntimeError("A1 zero/branch-off residual is not exactly zero")
-    if not torch.equal(zero_logits, native_logits) or not torch.equal(
-        branch_off_logits, native_logits
+    if not torch.equal(zero_logits, direct_b9_logits) or not torch.equal(
+        branch_off_logits, direct_b9_logits
     ):
         raise RuntimeError("A1 branch-off final logits are not bit exact B9")
 
@@ -503,7 +509,7 @@ def run_actual_b9_train_smoke(
         model.head,
         u_patch,
         residual,
-        native_logits,
+        direct_b9_logits,
     )
     loss = _pairwise_bce(active_logits, labels)
     if not bool(torch.isfinite(loss).item()):
@@ -536,7 +542,7 @@ def run_actual_b9_train_smoke(
         "base_final_patch_tokens"
     ].float().norm(dim=-1).clamp_min(1e-12)
     injection_ratio = residual_trace["residual_norm_ratio"].detach().float()
-    logit_delta = (active_logits - native_logits).detach().float().norm(dim=-1)
+    logit_delta = (active_logits - direct_b9_logits).detach().float().norm(dim=-1)
     return {
         "smoke_paths": list(relative_paths),
         "smoke_paths_sha256": _json_sha256(list(relative_paths)),
@@ -557,6 +563,7 @@ def run_actual_b9_train_smoke(
             "norm1_capture_max_abs_error": z_error,
             "post_mhsa_u_max_abs_error": u_error,
             "rope_capture_max_abs_error": rope_error,
+            "native_direct_logit_max_abs_error": native_direct_logit_error,
             "tail_token_max_abs_error": tail_token_error,
             "tail_logit_max_abs_error": tail_logit_error,
             "zero_initialization_logit_max_abs_error": _maximum_error(
@@ -810,6 +817,11 @@ def run_precheck(args: argparse.Namespace) -> Dict[str, object]:
                 / "models"
                 / "dinov3_xcnorm_pair_adapter_a1.py"
             ),
+            "a0_operator_model_sha256": _sha256(
+                Path(__file__).resolve().parents[1]
+                / "models"
+                / "dinov3_xcnorm_pair_adapter_a0.py"
+            ),
             "a0_shared_protocol_sha256": _sha256(
                 Path(__file__).resolve().with_name(
                     "precheck_dinov3_xcnorm_a0_sourcefold.py"
@@ -817,6 +829,17 @@ def run_precheck(args: argparse.Namespace) -> Dict[str, object]:
             ),
             "model_builder_sha256": _sha256(
                 Path(__file__).resolve().parents[1] / "models" / "model.py"
+            ),
+            "dataset_pipeline_sha256": _sha256(
+                Path(__file__).resolve().parents[1] / "data" / "dataset.py"
+            ),
+            "probe_loader_sha256": _sha256(
+                Path(__file__).resolve().with_name(
+                    "probe_embedding_prototypes.py"
+                )
+            ),
+            "timm_eva_source_sha256": _sha256(
+                Path(inspect.getsourcefile(type(model)) or "").resolve()
             ),
         },
         "train_split_used": True,
