@@ -176,6 +176,7 @@ def _apply_timm_input_normalization(model_config: ModelConfig) -> Dict[str, obje
     if model_type not in {
         "timm_classifier",
         "dinov3_surface_patch_hybrid_v2",
+        "dinov3_surface_pair_hybrid_v3",
         "vit_registers_pretrained_hybrid",
     }:
         return {
@@ -371,6 +372,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
             "vit_b_16",
             "timm_classifier",
             "dinov3_surface_patch_hybrid_v2",
+            "dinov3_surface_pair_hybrid_v3",
             "vit_registers_pretrained_hybrid",
             "mambavision_nano",
         ),
@@ -456,11 +458,16 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--dinov3-surface-hybrid-mode",
-        choices=("local_surface", "generic_token_adapter"),
+        choices=(
+            "local_surface",
+            "generic_token_adapter",
+            "relative_surface_pair",
+            "generic_token_pair",
+        ),
         default="local_surface",
         help=(
-            "Hybrid V2 branch: patch-aligned RGB surface evidence or the "
-            "capacity-matched DINO-only causal control."
+            "Hybrid V2/V3 branch selector. Each model type accepts only its "
+            "locked pair of modes."
         ),
     )
     parser.add_argument(
@@ -7118,6 +7125,35 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
                 "Pretrained Hybrid V2 requires a revision-pinned local "
                 "--pretrained-checkpoint-path and SHA-256; use --no-pretrained "
                 "only for the matched random-init control."
+            )
+    if args.model_type == "dinov3_surface_pair_hybrid_v3":
+        locked_dino_model = "vit_small_patch16_dinov3.lvd1689m"
+        if research_track != "pretrained" or not bool(args.pretrained):
+            raise ValueError(
+                "dinov3_surface_pair_hybrid_v3 requires the pretrained track "
+                "and locked external DINO initialization."
+            )
+        if str(args.timm_model_name).strip() != locked_dino_model:
+            raise ValueError(
+                "dinov3_surface_pair_hybrid_v3 is locked to "
+                f"--timm-model-name {locked_dino_model}."
+            )
+        if int(args.image_size) != 256:
+            raise ValueError(
+                "dinov3_surface_pair_hybrid_v3 is locked to --image-size 256."
+            )
+        if str(args.dinov3_surface_hybrid_mode) not in {
+            "relative_surface_pair",
+            "generic_token_pair",
+        }:
+            raise ValueError(
+                "Surface Pair Hybrid V3 requires mode relative_surface_pair "
+                "or generic_token_pair."
+            )
+        if pretrained_checkpoint_path is None:
+            raise ValueError(
+                "Surface Pair Hybrid V3 requires a revision-pinned local DINO "
+                "checkpoint and SHA-256."
             )
 
     effective_trainable_module_prefixes = str(
@@ -30238,6 +30274,7 @@ def main() -> None:
     if input_normalization_summary.get("enabled") or model_config.model_type in {
         "timm_classifier",
         "dinov3_surface_patch_hybrid_v2",
+        "dinov3_surface_pair_hybrid_v3",
         "vit_registers_pretrained_hybrid",
     }:
         print({"input_normalization": input_normalization_summary}, flush=True)

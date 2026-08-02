@@ -405,6 +405,7 @@ class DinoV3SurfacePatchHybridV2(nn.Module):
         # their explicit random-init causal control.  This flag controls only
         # LR grouping; it does not claim external initialization provenance.
         self.uses_timm_backbone_lr_split = True
+        self.is_pretrained_surface_hybrid = True
         self.is_pretrained_surface_patch_hybrid_v2 = True
         self.pretrained_classifier_parameter_prefixes = tuple(
             f"backbone.{name}." for name in classifier_module_names
@@ -603,6 +604,51 @@ class DinoV3SurfacePatchHybridV2(nn.Module):
             "generic_token_context": gate_context,
         }
 
+    def _build_gated_patch_residual(
+        self,
+        images: Tensor,
+        pre_fusion_tokens: Tensor,
+        patch_tokens: Tensor,
+        detached_patch_tokens: Tensor,
+        *,
+        return_trace: bool,
+    ) -> Tuple[Tensor, Dict[str, Any]]:
+        """Build the V2 residual behind a protected V3-compatible hook."""
+
+        del pre_fusion_tokens
+
+        if self.mode == LOCAL_SURFACE_MODE:
+            raw_delta, gate_context, mode_trace = self._local_surface_residual(
+                images,
+                detached_patch_tokens,
+                return_trace=return_trace,
+            )
+        else:
+            raw_delta, gate_context, mode_trace = self._generic_token_residual(
+                detached_patch_tokens
+            )
+
+        normalized_delta = self._normalize_delta(
+            raw_delta,
+            detached_patch_tokens,
+        )
+        raw_gate = self.fusion_gate(gate_context)
+        gate = (
+            torch.sigmoid(raw_gate.float()) * self.max_gate_scale
+        ).to(device=patch_tokens.device, dtype=patch_tokens.dtype)
+        typed_delta = normalized_delta.to(
+            device=patch_tokens.device,
+            dtype=patch_tokens.dtype,
+        )
+        gated_residual = gate * typed_delta
+        return gated_residual, {
+            **mode_trace,
+            "raw_surface_delta": raw_delta,
+            "normalized_surface_delta": normalized_delta,
+            "raw_gate": raw_gate,
+            "gate": gate,
+        }
+
     def _run_backbone_block(
         self,
         block_index: int,
@@ -676,31 +722,14 @@ class DinoV3SurfacePatchHybridV2(nn.Module):
         )
         prefix_tokens, patch_tokens = self._validate_dino_tokens(pre_fusion_tokens)
         detached_patch_tokens = patch_tokens.detach()
-
-        if self.mode == LOCAL_SURFACE_MODE:
-            raw_delta, gate_context, mode_trace = self._local_surface_residual(
-                images,
-                detached_patch_tokens,
-                return_trace=return_trace,
-            )
-        else:
-            raw_delta, gate_context, mode_trace = self._generic_token_residual(
-                detached_patch_tokens
-            )
-
-        normalized_delta = self._normalize_delta(
-            raw_delta,
+        gated_residual, fusion_trace = self._build_gated_patch_residual(
+            images,
+            pre_fusion_tokens,
+            patch_tokens,
             detached_patch_tokens,
+            return_trace=return_trace,
         )
-        raw_gate = self.fusion_gate(gate_context)
-        gate = (
-            torch.sigmoid(raw_gate.float()) * self.max_gate_scale
-        ).to(device=patch_tokens.device, dtype=patch_tokens.dtype)
-        typed_delta = normalized_delta.to(
-            device=patch_tokens.device,
-            dtype=patch_tokens.dtype,
-        )
-        fused_patch_tokens = patch_tokens + gate * typed_delta
+        fused_patch_tokens = patch_tokens + gated_residual
         injected_tokens = torch.cat((prefix_tokens, fused_patch_tokens), dim=1)
         post_fusion_tokens = self._run_backbone_block(
             self.fusion_block_index,
@@ -713,19 +742,15 @@ class DinoV3SurfacePatchHybridV2(nn.Module):
 
         if not return_trace:
             return post_fusion_tokens, {}
-        gated_residual = gate * typed_delta
+        gate = fusion_trace["gate"]
         patch_norm = patch_tokens.detach().float().norm(dim=-1)
         gated_residual_norm = gated_residual.detach().float().norm(dim=-1)
         trace: Dict[str, Any] = {
-            **mode_trace,
+            **fusion_trace,
             "mode": self.mode,
             "dino_tokens": pre_fusion_tokens,
             "dino_prefix_tokens": prefix_tokens,
             "dino_patch_tokens": patch_tokens,
-            "raw_surface_delta": raw_delta,
-            "normalized_surface_delta": normalized_delta,
-            "raw_gate": raw_gate,
-            "gate": gate,
             "gated_residual": gated_residual,
             "fused_patch_tokens": fused_patch_tokens,
             "injected_tokens": injected_tokens,

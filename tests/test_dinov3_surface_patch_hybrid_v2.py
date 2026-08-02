@@ -16,6 +16,13 @@ from trkh.models.dinov3_surface_patch_hybrid_v2 import (
     DinoV3SurfaceHybridContractError,
     DinoV3SurfacePatchHybridV2,
 )
+from trkh.models.dinov3_surface_pair_hybrid_v3 import (
+    GENERIC_TOKEN_PAIR_MODE,
+    PAIR_EVIDENCE_PARAMETER_COUNT,
+    PAIR_RESIDUAL_RATIO_CAP,
+    RELATIVE_SURFACE_PAIR_MODE,
+    DinoV3SurfacePairHybridV3,
+)
 
 
 class _FakePatchEmbed(nn.Module):
@@ -70,6 +77,8 @@ class _FakeDinoBackbone(nn.Module):
         )
         self.norm_pre = nn.Identity()
         self.norm = nn.LayerNorm(self.embed_dim)
+        self.fc_norm = nn.Identity()
+        self.head_drop = nn.Dropout(p=0.0)
         self.head = nn.Linear(self.embed_dim, int(num_classes))
         self.blocks = nn.ModuleList(
             [_FakeEvaBlock(self.embed_dim) for _ in range(12)]
@@ -81,7 +90,7 @@ class _FakeDinoBackbone(nn.Module):
         self,
         patches: torch.Tensor,
     ) -> tuple[torch.Tensor, None]:
-        prefix = self.prefix.expand(int(patches.size(0)), -1, -1)
+        prefix = self.prefix.expand(patches.size(0), -1, -1)
         return torch.cat((prefix, patches), dim=1), None
 
     def forward_features(self, images: torch.Tensor) -> torch.Tensor:
@@ -98,6 +107,7 @@ class _FakeDinoBackbone(nn.Module):
         pre_logits: bool = False,
     ) -> torch.Tensor:
         pooled = tokens[:, self.num_prefix_tokens :].mean(dim=1)
+        pooled = self.head_drop(self.fc_norm(pooled))
         return pooled if pre_logits else self.head(pooled)
 
     def get_classifier(self) -> nn.Module:
@@ -122,6 +132,21 @@ def _build_model(mode: str = LOCAL_SURFACE_MODE) -> DinoV3SurfacePatchHybridV2:
         max_gate_scale=0.25,
         externally_pretrained=True,
         source_provenance={"checkpoint": {"sha256": "a" * 64}},
+    )
+
+
+def _build_pair_model(
+    mode: str = RELATIVE_SURFACE_PAIR_MODE,
+) -> DinoV3SurfacePairHybridV3:
+    return DinoV3SurfacePairHybridV3(
+        _FakeDinoBackbone(),
+        num_classes=5,
+        mode=mode,
+        expected_embed_dim=384,
+        expected_prefix_tokens=5,
+        expected_patch_count=4,
+        externally_pretrained=True,
+        source_provenance={"checkpoint": {"sha256": "b" * 64}},
     )
 
 
@@ -563,6 +588,62 @@ def test_create_model_wires_hybrid_v2_without_replaying_external_weights(
         assert model(torch.zeros(1, 3, 256, 256)).shape == (1, 5)
 
 
+def test_create_model_wires_surface_pair_v3_for_checkpoint_rebuild_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from trkh.models import model as model_module
+
+    observed: dict[str, object] = {}
+
+    def fake_timm_builder(**kwargs: object) -> nn.Module:
+        observed.update(kwargs)
+        backbone = _FakeDinoBackbone()
+        backbone.is_pretrained_timm_classifier = False
+        backbone.pretrained_provenance = {
+            "initialization_source": "architecture_only_rebuild"
+        }
+        return backbone
+
+    monkeypatch.setattr(model_module, "_build_timm_classifier", fake_timm_builder)
+    model = model_module.create_model(
+        num_classes=5,
+        model_config={
+            "model_type": "dinov3_surface_pair_hybrid_v3",
+            "research_track": "pretrained",
+            "pretrained": False,
+            "_architecture_only_checkpoint_rebuild": True,
+            "timm_model_name": "vit_small_patch16_dinov3.lvd1689m",
+            "image_size": 256,
+            "dinov3_surface_hybrid_mode": "relative_surface_pair",
+            "input_mean": (0.1, 0.2, 0.3),
+            "input_std": (0.4, 0.5, 0.6),
+        },
+    ).eval()
+
+    assert model.model_type == "dinov3_surface_pair_hybrid_v3"
+    assert model.mode == RELATIVE_SURFACE_PAIR_MODE
+    assert model.added_parameter_count() == 160
+    assert observed["pretrained"] is False
+    assert observed["architecture_only_checkpoint_rebuild"] is True
+    assert model.input_mean.flatten().tolist() == pytest.approx([0.1, 0.2, 0.3])
+    assert model.input_std.flatten().tolist() == pytest.approx([0.4, 0.5, 0.6])
+    with torch.no_grad():
+        assert model(torch.zeros(1, 3, 256, 256)).shape == (1, 5)
+
+    with pytest.raises(ValueError, match="requires pretrained=True"):
+        model_module.create_model(
+            num_classes=5,
+            model_config={
+                "model_type": "dinov3_surface_pair_hybrid_v3",
+                "research_track": "pretrained",
+                "pretrained": False,
+                "timm_model_name": "vit_small_patch16_dinov3.lvd1689m",
+                "image_size": 256,
+                "dinov3_surface_hybrid_mode": "relative_surface_pair",
+            },
+        )
+
+
 def test_random_init_checkpoint_rebuild_restores_false_external_provenance(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -613,6 +694,58 @@ def test_random_init_checkpoint_rebuild_restores_false_external_provenance(
     assert restored.is_pretrained_timm_classifier is False
     assert restored.uses_timm_backbone_lr_split is True
     assert restored.pretrained_provenance["external_initialization_used"] is False
+    assert restored.pretrained_provenance["external_initialization_replayed"] is False
+
+
+@pytest.mark.parametrize(
+    "mode",
+    (RELATIVE_SURFACE_PAIR_MODE, GENERIC_TOKEN_PAIR_MODE),
+)
+def test_pair_v3_checkpoint_rebuild_is_strict_and_never_replays_pretraining(
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
+) -> None:
+    from trkh.models import model as model_module
+
+    torch.manual_seed(79)
+    source = DinoV3SurfacePairHybridV3(
+        _FakeDinoBackbone(),
+        num_classes=5,
+        mode=mode,
+        expected_patch_count=256,
+        externally_pretrained=True,
+        source_provenance={"external_initialization_used": True},
+    ).eval()
+    with torch.no_grad():
+        source.pair_evidence_head[-1].weight.normal_(0.0, 0.01)
+
+    def fake_timm_builder(**kwargs: object) -> nn.Module:
+        assert kwargs["pretrained"] is False
+        assert kwargs["architecture_only_checkpoint_rebuild"] is True
+        backbone = _FakeDinoBackbone()
+        backbone.is_pretrained_timm_classifier = True
+        backbone.pretrained_provenance = {"architecture_only": True}
+        return backbone
+
+    monkeypatch.setattr(model_module, "_build_timm_classifier", fake_timm_builder)
+    checkpoint_payload = {
+        "class_names": [f"class_{index}" for index in range(5)],
+        "model_config": {
+            "model_type": "dinov3_surface_pair_hybrid_v3",
+            "research_track": "pretrained",
+            "pretrained": True,
+            "timm_model_name": "vit_small_patch16_dinov3.lvd1689m",
+            "image_size": 256,
+            "dinov3_surface_hybrid_mode": mode,
+        },
+        "model_state": source.state_dict(),
+        "pretrained_provenance": copy.deepcopy(source.pretrained_provenance),
+    }
+    restored = model_module.build_model_from_checkpoint(checkpoint_payload).eval()
+    images = torch.randn(2, 3, 256, 256)
+    with torch.no_grad():
+        assert torch.equal(restored(images), source(images))
+    assert restored.pretrained_provenance["external_initialization_used"] is True
     assert restored.pretrained_provenance["external_initialization_replayed"] is False
 
 
@@ -677,3 +810,191 @@ def test_runtime_fails_closed_on_patch_count_and_input_geometry() -> None:
         model(torch.randn(1, 3, 31, 32))
     with pytest.raises(DinoV3SurfaceHybridContractError, match=r"\[B,3,H,W\]"):
         model(torch.randn(1, 1, 32, 32))
+
+
+@pytest.mark.parametrize(
+    "mode",
+    (RELATIVE_SURFACE_PAIR_MODE, GENERIC_TOKEN_PAIR_MODE),
+)
+def test_pair_v3_step_zero_identity_shape_capacity_and_trace(mode: str) -> None:
+    torch.manual_seed(101)
+    model = _build_pair_model(mode).eval()
+    images = torch.randn(2, 3, 32, 32)
+    with torch.no_grad():
+        native = model.backbone.forward_head(model.backbone.forward_features(images))
+        observed = model(images)
+        tokens, trace = model.forward_features_with_fusion_trace(images)
+
+    assert torch.equal(observed, native)
+    assert tokens.shape == (2, 9, 384)
+    assert trace["surface_descriptor_tensor"].shape == (2, 4, 7)
+    assert trace["surface_feature_map"].shape == (2, 7, 2, 2)
+    assert trace["surface_pair_scores"].shape == (2, 4, 3)
+    assert trace["signed_pair_coefficients"].shape == (2, 4, 3)
+    assert trace["semantic_pair_directions"].shape == (3, 384)
+    assert torch.count_nonzero(trace["gated_residual"]) == 0
+    assert torch.count_nonzero(trace["gate"]) == 0
+    assert model.added_parameter_count() == PAIR_EVIDENCE_PARAMETER_COUNT == 160
+    assert model.is_pretrained_surface_hybrid is True
+    assert model.is_pretrained_surface_pair_hybrid_v3 is True
+    assert model.is_pretrained_surface_patch_hybrid_v2 is False
+    assert model.fusion_provenance()["observed_added_parameter_count"] == 160
+
+
+def test_pair_v3_relative_descriptor_is_scale_invariant_and_patch_local() -> None:
+    model = _build_pair_model(RELATIVE_SURFACE_PAIR_MODE).eval()
+    rgb = torch.full((1, 3, 32, 32), 0.4)
+    checker = torch.tensor([[0.08, -0.08], [-0.08, 0.08]]).repeat(8, 8)
+    rgb[:, 0, :16, 16:] += checker
+    rgb[:, 1, :16, 16:] -= checker * 0.5
+    mean = model.input_mean
+    std = model.input_std
+    normalized = (rgb - mean) / std
+    scaled_normalized = (rgb * 0.7 - mean) / std
+
+    with torch.no_grad():
+        descriptor, descriptor_map = model.relative_surface_descriptor(normalized)
+        scaled_descriptor, _ = model.relative_surface_descriptor(scaled_normalized)
+        baseline, _ = model.relative_surface_descriptor(
+            (torch.full_like(rgb, 0.4) - mean) / std
+        )
+        dark, _ = model.relative_surface_descriptor(
+            (torch.zeros_like(rgb) - mean) / std
+        )
+
+    assert descriptor.shape == (1, 4, 7)
+    assert descriptor_map.shape == (1, 7, 2, 2)
+    assert torch.allclose(descriptor, scaled_descriptor, atol=2e-5, rtol=2e-5)
+    changed = torch.nonzero(
+        (descriptor - baseline).abs().sum(dim=-1).flatten() > 1e-6,
+        as_tuple=False,
+    ).flatten()
+    assert changed.tolist() == [1]
+    assert torch.isfinite(dark).all()
+    assert torch.count_nonzero(dark) == 0
+    with torch.no_grad():
+        model.pair_evidence_head[-1].weight.normal_(0.0, 0.1)
+        assert torch.count_nonzero(model.pair_evidence_head(dark)) == 0
+
+
+@pytest.mark.parametrize(
+    "mode",
+    (RELATIVE_SURFACE_PAIR_MODE, GENERIC_TOKEN_PAIR_MODE),
+)
+def test_pair_v3_identity_initialization_opens_head_without_rng_shift(
+    mode: str,
+) -> None:
+    torch.manual_seed(103)
+    backbone = _FakeDinoBackbone()
+    expected_rng = torch.rand(12)
+    torch.manual_seed(103)
+    model = DinoV3SurfacePairHybridV3(
+        _FakeDinoBackbone(),
+        num_classes=5,
+        mode=mode,
+        expected_patch_count=4,
+    ).train()
+    observed_rng = torch.rand(12)
+    assert torch.equal(observed_rng, expected_rng)
+
+    images = torch.randn(4, 3, 32, 32)
+    labels = torch.tensor([0, 1, 2, 4], dtype=torch.long)
+    optimizer = torch.optim.SGD(model.parameters(), lr=1e-3)
+    F.cross_entropy(model(images), labels).backward()
+    assert _nonzero_gradient_in_prefix(model, "pair_evidence_head.2.")
+    assert not _nonzero_gradient_in_prefix(model, "pair_evidence_head.0.")
+    optimizer.step()
+    optimizer.zero_grad(set_to_none=True)
+    F.cross_entropy(model(images), labels).backward()
+    assert _nonzero_gradient_in_prefix(model, "pair_evidence_head.0.")
+
+
+def test_pair_v3_residual_is_bounded_and_semantically_oriented() -> None:
+    torch.manual_seed(107)
+    model = _build_pair_model(RELATIVE_SURFACE_PAIR_MODE).eval()
+    output = model.pair_evidence_head[-1]
+    assert isinstance(output, nn.Linear)
+    with torch.no_grad():
+        output.weight.normal_(0.0, 0.2)
+        _, trace = model.forward_features_with_fusion_trace(
+            torch.randn(2, 3, 32, 32)
+        )
+
+    ratios = trace["gated_residual_norm_ratio"]
+    assert torch.all(ratios >= 0.0)
+    assert torch.all(ratios < PAIR_RESIDUAL_RATIO_CAP)
+    classifier_weight = model.get_classifier().weight.detach()
+    pair_weights = classifier_weight[1:2] - classifier_weight[[0, 2, 4]]
+    aligned_change = (
+        pair_weights * trace["semantic_pair_directions"]
+    ).sum(dim=-1)
+    assert torch.all(aligned_change > 0.0)
+
+
+def test_pair_v3_strict_state_roundtrip_and_optimizer_contract() -> None:
+    torch.manual_seed(109)
+    source = _build_pair_model(RELATIVE_SURFACE_PAIR_MODE).eval()
+    images = torch.randn(2, 3, 32, 32)
+    with torch.no_grad():
+        source.pair_evidence_head[-1].weight.normal_(0.0, 0.01)
+        expected = source(images)
+    restored = _build_pair_model(RELATIVE_SURFACE_PAIR_MODE).eval()
+    restored.load_state_dict(source.state_dict(), strict=True)
+    with torch.no_grad():
+        observed = restored(images)
+    assert torch.equal(observed, expected)
+
+    groups = build_optimizer_param_groups(
+        restored,
+        weight_decay=0.05,
+        learning_rate=1.5e-4,
+        backbone_lr_scale=0.1,
+    )
+    group_by_parameter_id = {
+        id(parameter): group
+        for group in groups
+        for parameter in group["params"]
+    }
+    for name, parameter in restored.named_parameters():
+        group = group_by_parameter_id[id(parameter)]
+        if name.startswith("backbone.") and not name.startswith("backbone.head."):
+            assert str(group["name"]).startswith("backbone_")
+            assert group["lr"] == pytest.approx(1.5e-5)
+        else:
+            assert str(group["name"]).startswith("head_")
+
+
+@pytest.mark.parametrize(
+    "mode",
+    (RELATIVE_SURFACE_PAIR_MODE, GENERIC_TOKEN_PAIR_MODE),
+)
+def test_pair_v3_onnx_contract_keeps_batch_axis_dynamic(mode: str, tmp_path) -> None:
+    pytest.importorskip("onnx")
+    ort = pytest.importorskip("onnxruntime")
+    torch.manual_seed(113)
+    model = _build_pair_model(mode).eval()
+    with torch.no_grad():
+        model.pair_evidence_head[-1].weight.normal_(0.0, 0.05)
+    output_path = tmp_path / f"pair_v3_{mode}.onnx"
+    torch.onnx.export(
+        model,
+        torch.randn(1, 3, 32, 32),
+        output_path,
+        export_params=True,
+        opset_version=17,
+        do_constant_folding=True,
+        input_names=["images"],
+        output_names=["logits"],
+        dynamic_axes={"images": {0: "batch"}, "logits": {0: "batch"}},
+    )
+
+    images = torch.randn(2, 3, 32, 32)
+    with torch.no_grad():
+        expected = model(images).numpy()
+    session = ort.InferenceSession(
+        str(output_path),
+        providers=["CPUExecutionProvider"],
+    )
+    observed = session.run(["logits"], {"images": images.numpy()})[0]
+    assert observed.shape == (2, 5)
+    assert observed == pytest.approx(expected, abs=1e-5, rel=1e-5)

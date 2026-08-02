@@ -11,8 +11,22 @@ from trkh.tools.export_timm_predictions import (
     build_export_model,
     checkpoint_eval_transform,
     checkpoint_export_metadata,
+    metrics_from_predictions,
     parse_args as parse_timm_args,
 )
+
+
+def test_timm_export_metrics_include_auditable_confusion_matrix() -> None:
+    metrics = metrics_from_predictions(
+        [0, 0, 1, 2, 2],
+        [0, 1, 1, 1, 2],
+        ["a", "b", "c"],
+    )
+    assert metrics["confusion_matrix"] == [
+        [1, 1, 0],
+        [0, 1, 0],
+        [0, 1, 1],
+    ]
 
 
 def test_timm_export_requires_explicit_test_authorization(

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import time
 from pathlib import Path
@@ -50,6 +51,22 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Select serialized model_state or EMA weights. auto reproduces the "
             "checkpoint's recorded validation/deployment weight source."
+        ),
+    )
+    parser.add_argument(
+        "--surface-pair-branch-off",
+        action="store_true",
+        help=(
+            "For a trained Surface Pair Hybrid V3 checkpoint, evaluate the same "
+            "co-adapted DINO backbone/head with only its pair residual disabled."
+        ),
+    )
+    parser.add_argument(
+        "--audit-surface-pair-routing",
+        action="store_true",
+        help=(
+            "On a clean non-TTA V3 export, record full-split routing and actual "
+            "residual/token telemetry."
         ),
     )
     parser.add_argument("--model", default="", help="Override model name if checkpoint args are missing.")
@@ -377,11 +394,15 @@ def metrics_from_predictions(y_true: Sequence[int], y_pred: Sequence[int], class
         average="macro",
         zero_division=0,
     )
+    confusion = [[0] * len(classes) for _ in classes]
+    for target, prediction in zip(y_true, y_pred):
+        confusion[int(target)][int(prediction)] += 1
     return {
         "accuracy": float(accuracy_score(y_true, y_pred)) if y_true else 0.0,
         "macro_precision": float(macro_precision),
         "macro_recall": float(macro_recall),
         "macro_f1": float(macro_f1),
+        "confusion_matrix": confusion,
         "per_class": [
             {
                 "class_index": index,
@@ -599,6 +620,48 @@ def align_imagefolder_class_order(
     }
 
 
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _sample_identity_sha256(
+    samples: Sequence[Tuple[str, int]],
+    targets: Sequence[int],
+    *,
+    data_root: Path,
+) -> str:
+    if len(samples) != len(targets):
+        raise ValueError("Prediction rows and dataset samples are misaligned.")
+    root = Path(data_root).resolve()
+    digest = hashlib.sha256()
+    for (raw_path, _), target in zip(samples, targets):
+        path = Path(raw_path).resolve()
+        try:
+            relative = path.relative_to(root).as_posix()
+        except ValueError as error:
+            raise ValueError(f"Sample escaped the declared data root: {path}") from error
+        digest.update(f"{relative}\t{int(target)}\n".encode("utf-8"))
+    return digest.hexdigest()
+
+
+def _distribution_summary(values: Sequence[np.ndarray]) -> Dict[str, float]:
+    if not values:
+        return {"mean": 0.0, "p50": 0.0, "p95": 0.0, "max": 0.0}
+    array = np.concatenate([np.asarray(value, dtype=np.float64).reshape(-1) for value in values])
+    if array.size == 0 or not np.isfinite(array).all():
+        raise ValueError("Surface-pair routing audit contains non-finite values.")
+    return {
+        "mean": float(array.mean()),
+        "p50": float(np.quantile(array, 0.50)),
+        "p95": float(np.quantile(array, 0.95)),
+        "max": float(array.max()),
+    }
+
+
 def build_export_model(
     checkpoint: Mapping[str, Any],
     *,
@@ -682,34 +745,111 @@ def main() -> None:
     spatial_crop_fractions = _parse_float_list(args.tta_spatial_crop_fractions)
     channel_stretch_percentiles = _parse_percentile_pairs(args.tta_channel_stretch_percentiles)
     luma_stretch_percentiles = _parse_percentile_pairs(args.tta_luma_stretch_percentiles)
+    model_config = checkpoint.get("model_config")
+    model_config = dict(model_config) if isinstance(model_config, Mapping) else {}
+    is_surface_pair_v3 = bool(
+        getattr(model, "is_pretrained_surface_pair_hybrid_v3", False)
+    )
+    if bool(args.surface_pair_branch_off) and not is_surface_pair_v3:
+        raise ValueError("--surface-pair-branch-off requires a V3 checkpoint.")
+    tta_enabled = bool(
+        args.tta_horizontal_flip
+        or brightness_deltas
+        or contrast_scales
+        or saturation_scales
+        or gamma_values
+        or sharpness_amounts
+        or zoom_scales
+        or spatial_crop_fractions
+        or channel_stretch_percentiles
+        or luma_stretch_percentiles
+    )
+    if bool(args.audit_surface_pair_routing):
+        if not is_surface_pair_v3:
+            raise ValueError("--audit-surface-pair-routing requires a V3 checkpoint.")
+        if bool(args.surface_pair_branch_off) or tta_enabled:
+            raise ValueError(
+                "Surface-pair routing audit requires the active branch and no TTA."
+            )
+    inference_model = model.backbone if bool(args.surface_pair_branch_off) else model
     criterion = nn.CrossEntropyLoss()
     losses: List[float] = []
     y_true: List[int] = []
     y_pred: List[int] = []
     probabilities: List[List[float]] = []
+    routing_values: Dict[str, List[np.ndarray]] = {
+        "residual_to_token_ratio": [],
+        "routing_strength_proxy": [],
+        "absolute_signed_pair_coefficient": [],
+        "competitor_entropy": [],
+        "competitor_max_weight": [],
+        "non_class3_mass": [],
+    }
+    routing_by_class: Dict[int, Dict[str, List[np.ndarray]]] = {
+        class_index: {name: [] for name in routing_values}
+        for class_index in range(len(classes))
+    }
     start = time.perf_counter()
     with torch.inference_mode():
         for images, labels in tqdm(loader, desc=f"{model_name} {args.split}"):
             images = images.to(device, non_blocking=True)
             labels = labels.to(device, non_blocking=True)
-            logits = _forward_tta(
-                model,
-                images,
-                autocast_device=autocast_device,
-                amp=bool(args.amp),
-                mean=model_mean,
-                std=model_std,
-                horizontal_flip=bool(args.tta_horizontal_flip),
-                brightness_deltas=brightness_deltas,
-                contrast_scales=contrast_scales,
-                saturation_scales=saturation_scales,
-                gamma_values=gamma_values,
-                sharpness_amounts=sharpness_amounts,
-                zoom_scales=zoom_scales,
-                spatial_crop_fractions=spatial_crop_fractions,
-                channel_stretch_percentiles=channel_stretch_percentiles,
-                luma_stretch_percentiles=luma_stretch_percentiles,
-            )
+            if bool(args.audit_surface_pair_routing):
+                with torch.autocast(
+                    device_type=autocast_device,
+                    enabled=bool(args.amp) and device.type == "cuda",
+                ):
+                    tokens, trace = model.forward_features_with_fusion_trace(images)
+                    logits = model.forward_head(tokens)
+                residual_ratio = trace["gated_residual_norm_ratio"].float()
+                routing_strength = trace["pair_routing_strength"].float().squeeze(-1)
+                signed_coefficients = trace["signed_pair_coefficients"].float()
+                competitor_weights = trace["pair_competitor_weights"].float()
+                competitor_entropy = -(
+                    competitor_weights
+                    * competitor_weights.clamp_min(1e-12).log()
+                ).sum(dim=-1)
+                audit_batch = {
+                    "residual_to_token_ratio": residual_ratio,
+                    "routing_strength_proxy": routing_strength,
+                    "absolute_signed_pair_coefficient": signed_coefficients.abs(),
+                    "competitor_entropy": competitor_entropy,
+                    "competitor_max_weight": competitor_weights.amax(dim=-1),
+                    "non_class3_mass": trace["pair_non_class3_mass"].float().squeeze(-1),
+                }
+                labels_cpu = labels.detach().cpu().tolist()
+                for name, values in audit_batch.items():
+                    values_cpu = values.detach().cpu().numpy()
+                    routing_values[name].append(values_cpu)
+                    flattened = values_cpu.reshape(values_cpu.shape[0], -1)
+                    per_image = (
+                        np.quantile(flattened, 0.95, axis=1)
+                        if name == "residual_to_token_ratio"
+                        else flattened.mean(axis=1)
+                    )
+                    for row_index, class_index in enumerate(labels_cpu):
+                        routing_by_class[int(class_index)][name].append(
+                            np.asarray([per_image[row_index]], dtype=np.float64)
+                        )
+            else:
+                logits = _forward_tta(
+                    inference_model,
+                    images,
+                    autocast_device=autocast_device,
+                    amp=bool(args.amp),
+                    mean=model_mean,
+                    std=model_std,
+                    horizontal_flip=bool(args.tta_horizontal_flip),
+                    brightness_deltas=brightness_deltas,
+                    contrast_scales=contrast_scales,
+                    saturation_scales=saturation_scales,
+                    gamma_values=gamma_values,
+                    sharpness_amounts=sharpness_amounts,
+                    zoom_scales=zoom_scales,
+                    spatial_crop_fractions=spatial_crop_fractions,
+                    channel_stretch_percentiles=channel_stretch_percentiles,
+                    luma_stretch_percentiles=luma_stretch_percentiles,
+                )
             loss = criterion(logits, labels)
             probs = logits.softmax(dim=1)
             losses.append(float(loss.item()))
@@ -745,6 +885,24 @@ def main() -> None:
             row.update({f"prob_{index}": float(probs[index]) for index in range(len(classes))})
             writer.writerow(row)
 
+    routing_audit: Dict[str, object] | None = None
+    if bool(args.audit_surface_pair_routing):
+        routing_audit = {
+            "schema_version": 1,
+            "scope": "full_export_split",
+            "statistics": {
+                name: _distribution_summary(values)
+                for name, values in routing_values.items()
+            },
+            "per_true_class_image_level": {
+                str(class_index): {
+                    name: _distribution_summary(values)
+                    for name, values in by_metric.items()
+                }
+                for class_index, by_metric in routing_by_class.items()
+            },
+        }
+
     metrics = {
         "model": model_name,
         "checkpoint": str(args.checkpoint),
@@ -754,6 +912,25 @@ def main() -> None:
         "inference_time_ms_per_image": float(elapsed * 1000.0 / max(1, len(y_true))),
         "model_rebuild_source": model_rebuild_source,
         "weight_selection": weight_selection,
+        "checkpoint_sha256": _sha256(args.checkpoint),
+        "prediction_file_sha256": _sha256(prediction_path),
+        "sample_identity_sha256": _sample_identity_sha256(
+            dataset.samples,
+            y_true,
+            data_root=args.data,
+        ),
+        "model_type": str(model_config.get("model_type", "")),
+        "dinov3_surface_hybrid_mode": str(
+            model_config.get("dinov3_surface_hybrid_mode", "")
+        ),
+        "experiment_protocol_id": str(
+            checkpoint.get(
+                "experiment_protocol_id",
+                model_config.get("experiment_protocol_id", ""),
+            )
+        ),
+        "surface_pair_branch_off": bool(args.surface_pair_branch_off),
+        "surface_pair_routing_audit": routing_audit,
         "preprocessing": preprocessing,
         "tta": {
             "horizontal_flip": bool(args.tta_horizontal_flip),

@@ -48,6 +48,12 @@ HYBRID_V2_LOCAL_SURFACE_PROTOCOL_ID = (
 HYBRID_V2_LOCAL_SURFACE_RANDOMINIT_PROTOCOL_ID = (
     "TRKH_PRETRAINED_CLASSF_HYBRID_V2_LOCAL_SURFACE_RANDOMINIT_B2_20260802"
 )
+HYBRID_V3_PAIR_GENERIC_PROTOCOL_ID = (
+    "TRKH_PRETRAINED_CLASSF_HYBRID_V3_PAIR_GENERIC_B2_20260802"
+)
+HYBRID_V3_PAIR_RELATIVE_PROTOCOL_ID = (
+    "TRKH_PRETRAINED_CLASSF_HYBRID_V3_PAIR_RELATIVE_B2_20260802"
+)
 PRMR_R1_CONTROL_PROTOCOL_ID = "TRKH_PRETRAINED_CLASSF_PRMR_R1_CONTROL_20260801"
 PRMR_R1_PROTOCOL_ID = "TRKH_PRETRAINED_CLASSF_PRMR_R1_20260801"
 DINO_MODEL_NAME = "vit_small_patch16_dinov3.lvd1689m"
@@ -58,6 +64,7 @@ DINO_SOURCE_LICENSE = "dinov3-license"
 EXPECTED_PARAMETER_COUNT = 21_588_869
 HYBRID_V2_GENERIC_EXPECTED_PARAMETER_COUNT = 21_618_859
 HYBRID_V2_LOCAL_SURFACE_EXPECTED_PARAMETER_COUNT = 21_618_694
+HYBRID_V3_PAIR_EXPECTED_PARAMETER_COUNT = 21_589_029
 EXPECTED_CLASS_NAMES = (
     "Xoai_Song_Chua_KhoDap",
     "Xoai_Song_ChuaNhe_CoNguyCo",
@@ -245,6 +252,47 @@ EXPERIMENTS: Mapping[str, Experiment] = {
         dinov3_surface_hybrid_mode="local_surface",
         expected_parameter_count=HYBRID_V2_LOCAL_SURFACE_EXPECTED_PARAMETER_COUNT,
         external_initialization_used=False,
+    ),
+    "hybrid-v3-pair-generic": Experiment(
+        key="hybrid-v3-pair-generic",
+        protocol_id=HYBRID_V3_PAIR_GENERIC_PROTOCOL_ID,
+        run_prefix="pretrained_dinov3_classf_hybrid_v3_pair_generic_b2",
+        balanced_epoch_sampling=False,
+        tempered_class_sampling_power=0.5,
+        ldam_max_margin=0.3,
+        single_semantic_delta_from_b0=(
+            "class_sampling_prior:uniform->n_c**0.5;"
+            "model:direct_dinov3->bounded_semantic_pair_residual;"
+            "evidence:fixed_detached_dino_token_summary"
+        ),
+        research_role="hybrid_v3_pair_mechanism_probe_control",
+        promotion_eligible=False,
+        reference_experiment="b2-tempered-p05",
+        full_train_authorized=False,
+        model_type="dinov3_surface_pair_hybrid_v3",
+        dinov3_surface_hybrid_mode="generic_token_pair",
+        expected_parameter_count=HYBRID_V3_PAIR_EXPECTED_PARAMETER_COUNT,
+    ),
+    "hybrid-v3-pair-relative": Experiment(
+        key="hybrid-v3-pair-relative",
+        protocol_id=HYBRID_V3_PAIR_RELATIVE_PROTOCOL_ID,
+        run_prefix="pretrained_dinov3_classf_hybrid_v3_pair_relative_b2",
+        balanced_epoch_sampling=False,
+        tempered_class_sampling_power=0.5,
+        ldam_max_margin=0.3,
+        single_semantic_delta_from_b0=(
+            "class_sampling_prior:uniform->n_c**0.5;"
+            "model:direct_dinov3->bounded_semantic_pair_residual;"
+            "evidence:fixed_detached_dino_token_summary->"
+            "exact_patch_relative_surface_statistics"
+        ),
+        research_role="hybrid_v3_pair_relative_surface_probe_candidate",
+        promotion_eligible=True,
+        reference_experiment="hybrid-v3-pair-generic",
+        full_train_authorized=False,
+        model_type="dinov3_surface_pair_hybrid_v3",
+        dinov3_surface_hybrid_mode="relative_surface_pair",
+        expected_parameter_count=HYBRID_V3_PAIR_EXPECTED_PARAMETER_COUNT,
     ),
     "prmr-r1-control": Experiment(
         key="prmr-r1-control",
@@ -510,13 +558,21 @@ def validate_auto_resume_checkpoint(
             True if expected_parsed is None else bool(expected_parsed.pretrained),
         ),
     }
-    if expected_model_type == "dinov3_surface_patch_hybrid_v2":
+    if expected_model_type in {
+        "dinov3_surface_patch_hybrid_v2",
+        "dinov3_surface_pair_hybrid_v3",
+    }:
         required.update(
             {
                 "dinov3_surface_hybrid_mode": (
                     str(model_config.get("dinov3_surface_hybrid_mode", "")),
                     str(expected_parsed.dinov3_surface_hybrid_mode),
                 ),
+            }
+        )
+    if expected_model_type == "dinov3_surface_patch_hybrid_v2":
+        required.update(
+            {
                 "dinov3_surface_initial_gate_scale": (
                     float(
                         model_config.get(
@@ -885,12 +941,17 @@ def build_train_args(
             [
                 "--dinov3-surface-hybrid-mode",
                 experiment_config.dinov3_surface_hybrid_mode,
-                "--dinov3-surface-initial-gate-scale",
-                "0.05",
-                "--dinov3-surface-max-gate-scale",
-                "0.25",
             ]
         )
+        if experiment_config.model_type == "dinov3_surface_patch_hybrid_v2":
+            args.extend(
+                [
+                    "--dinov3-surface-initial-gate-scale",
+                    "0.05",
+                    "--dinov3-surface-max-gate-scale",
+                    "0.25",
+                ]
+            )
     args.extend(
         [
             "--experiment-protocol-id",
@@ -1078,7 +1139,7 @@ def _preflight_model(
     hybrid_initialization: Dict[str, object] | None = None
     with torch.inference_mode():
         probe = torch.zeros(1, 3, 256, 256)
-        if bool(getattr(model, "is_pretrained_surface_patch_hybrid_v2", False)):
+        if bool(getattr(model, "is_pretrained_surface_hybrid", False)):
             fused_tokens, fusion_trace = model.forward_features_with_fusion_trace(
                 probe
             )
@@ -1095,12 +1156,13 @@ def _preflight_model(
             )
             if not exact_native_identity or max_abs_logit_delta != 0.0:
                 raise RuntimeError(
-                    "Hybrid V2 must equal native DINO exactly at step zero; "
+                    "Pretrained surface hybrid must equal native DINO exactly "
+                    "at step zero; "
                     f"max_abs_logit_delta={max_abs_logit_delta}."
                 )
             if initial_residual_ratio_max != 0.0:
                 raise RuntimeError(
-                    "Hybrid V2 step-zero residual must be zero; "
+                    "Pretrained surface hybrid step-zero residual must be zero; "
                     f"observed ratio={initial_residual_ratio_max}."
                 )
             hybrid_initialization = {
@@ -1119,6 +1181,12 @@ def _preflight_model(
                     initial_residual_ratio_max
                 ),
                 "branch_opening_contract": (
+                    "zero_pair_output_step0;pair_output_gradient_step1;"
+                    "pair_hidden_after_first_update"
+                    if bool(
+                        getattr(model, "is_pretrained_surface_pair_hybrid_v3", False)
+                    )
+                    else
                     "zero_output_projection_step0;projection_gradient_step1;"
                     "upstream_specialist_and_gate_after_first_update"
                 ),
@@ -1216,6 +1284,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
             "hybrid-v2-generic/hybrid-v2-local-surface are the matched "
             "capacity-control/surface probe pair on B2 sampling; the "
             "hybrid-v2-local-surface-randominit arm isolates initialization; "
+            "hybrid-v3-pair-generic/hybrid-v3-pair-relative isolate the "
+            "source of evidence under one bounded semantic-pair mechanism; "
             "prmr-r1-control/prmr-r1 are a "
             "matched probe pair and never authorize full training by themselves."
         ),
@@ -1428,6 +1498,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         repo_root / "tests" / "test_resume_weight_and_distillation_source.py",
         repo_root / "tests" / "test_attention_viz_headless.py",
         repo_root / "tests" / "test_mobile_onnx_quantization.py",
+        repo_root / "tests" / "test_pretrained_export_safety.py",
     ]
     test_result: Dict[str, object] = {
         "skipped": bool(args.skip_focused_tests),

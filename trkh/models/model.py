@@ -13838,6 +13838,62 @@ def _build_dinov3_surface_patch_hybrid_v2(
     return model
 
 
+def _build_dinov3_surface_pair_hybrid_v3(
+    num_classes: int,
+    *,
+    model_name: str,
+    mode: str,
+    input_mean: Sequence[float],
+    input_std: Sequence[float],
+    pretrained: bool = False,
+    pretrained_checkpoint_path: str = "",
+    pretrained_checkpoint_sha256: str = "",
+    pretrained_source_url: str = "",
+    pretrained_source_revision: str = "",
+    pretrained_source_license: str = "",
+    pretrained_backbone_gradient_checkpointing: bool = False,
+    architecture_only_checkpoint_rebuild: bool = False,
+) -> nn.Module:
+    from trkh.models.dinov3_surface_pair_hybrid_v3 import (
+        DinoV3SurfacePairHybridV3,
+    )
+
+    locked_model_name = "vit_small_patch16_dinov3.lvd1689m"
+    if str(model_name).strip() != locked_model_name:
+        raise ValueError(
+            "DINOv3 surface pair hybrid V3 is locked to "
+            f"{locked_model_name!r}; got {model_name!r}."
+        )
+    backbone = _build_timm_classifier(
+        num_classes=num_classes,
+        model_name=locked_model_name,
+        pretrained=pretrained,
+        pretrained_checkpoint_path=pretrained_checkpoint_path,
+        pretrained_checkpoint_sha256=pretrained_checkpoint_sha256,
+        pretrained_source_url=pretrained_source_url,
+        pretrained_source_revision=pretrained_source_revision,
+        pretrained_source_license=pretrained_source_license,
+        architecture_only_checkpoint_rebuild=architecture_only_checkpoint_rebuild,
+    )
+    model = DinoV3SurfacePairHybridV3(
+        backbone,
+        num_classes=num_classes,
+        mode=mode,
+        input_mean=input_mean,
+        input_std=input_std,
+        expected_embed_dim=384,
+        expected_prefix_tokens=5,
+        expected_patch_count=256,
+        externally_pretrained=bool(
+            getattr(backbone, "is_pretrained_timm_classifier", False)
+        ),
+        source_provenance=getattr(backbone, "pretrained_provenance", {}),
+    )
+    if bool(pretrained_backbone_gradient_checkpointing):
+        model.set_grad_checkpointing(True)
+    return model
+
+
 MAMBAVISION_NANO_SPEC = {
     "factory": "mamba_vision_T",
     "resolution": 256,
@@ -14079,23 +14135,27 @@ def create_model(
         "vit_b_16",
         "timm_classifier",
         "dinov3_surface_patch_hybrid_v2",
+        "dinov3_surface_pair_hybrid_v3",
         "vit_registers_pretrained_hybrid",
     }:
         raise ValueError(
             "pretrained/external weights: --pretrained hien chi ho tro model_type "
             "resnet50, mobilenet_v3_large, vit_b_16, timm_classifier, "
-            "dinov3_surface_patch_hybrid_v2, hoac vit_registers_pretrained_hybrid. "
+            "dinov3_surface_patch_hybrid_v2, dinov3_surface_pair_hybrid_v3, "
+            "hoac vit_registers_pretrained_hybrid. "
             "Cac kien truc TRKH custom "
             "vit_registers/vit_registers_hybrid van train tu dau."
         )
     if pretrained_checkpoint_path and model_type not in {
         "timm_classifier",
         "dinov3_surface_patch_hybrid_v2",
+        "dinov3_surface_pair_hybrid_v3",
         "vit_registers_pretrained_hybrid",
     }:
         raise ValueError(
             "Explicit local pretrained checkpoints are supported only by timm_classifier, "
-            "dinov3_surface_patch_hybrid_v2, and vit_registers_pretrained_hybrid."
+            "dinov3_surface_patch_hybrid_v2, dinov3_surface_pair_hybrid_v3, "
+            "and vit_registers_pretrained_hybrid."
         )
     if pretrained_checkpoint_path and not pretrained:
         raise ValueError("A local pretrained checkpoint requires pretrained=True.")
@@ -14247,6 +14307,43 @@ def create_model(
             input_std=input_std,
             initial_gate_scale=dinov3_surface_initial_gate_scale,
             max_gate_scale=dinov3_surface_max_gate_scale,
+            pretrained=pretrained,
+            pretrained_checkpoint_path=pretrained_checkpoint_path,
+            pretrained_checkpoint_sha256=pretrained_checkpoint_sha256,
+            pretrained_source_url=pretrained_source_url,
+            pretrained_source_revision=pretrained_source_revision,
+            pretrained_source_license=pretrained_source_license,
+            pretrained_backbone_gradient_checkpointing=(
+                pretrained_backbone_gradient_checkpointing
+            ),
+            architecture_only_checkpoint_rebuild=(
+                architecture_only_checkpoint_rebuild
+            ),
+        )
+    elif model_type == "dinov3_surface_pair_hybrid_v3":
+        if research_track != "pretrained":
+            raise ValueError(
+                "dinov3_surface_pair_hybrid_v3 belongs only to the pretrained "
+                "research track."
+            )
+        if not pretrained and not architecture_only_checkpoint_rebuild:
+            raise ValueError(
+                "dinov3_surface_pair_hybrid_v3 requires pretrained=True; "
+                "pretrained=False is reserved for hidden architecture-only "
+                "checkpoint reconstruction."
+            )
+        image_size = int(config.get("image_size", 256))
+        if image_size != 256:
+            raise ValueError(
+                "dinov3_surface_pair_hybrid_v3 is locked to image_size=256; "
+                f"got {image_size}."
+            )
+        model = _build_dinov3_surface_pair_hybrid_v3(
+            num_classes=num_classes,
+            model_name=timm_model_name,
+            mode=dinov3_surface_hybrid_mode,
+            input_mean=input_mean,
+            input_std=input_std,
             pretrained=pretrained,
             pretrained_checkpoint_path=pretrained_checkpoint_path,
             pretrained_checkpoint_sha256=pretrained_checkpoint_sha256,

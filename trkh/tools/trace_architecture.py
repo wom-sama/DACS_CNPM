@@ -97,19 +97,38 @@ def _forward_generic_feature_trace(
 ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
     hybrid_trace = getattr(model, "forward_features_with_fusion_trace", None)
     if callable(hybrid_trace) and bool(
-        getattr(model, "is_pretrained_surface_patch_hybrid_v2", False)
+        getattr(model, "is_pretrained_surface_hybrid", False)
     ):
         tokens, trace = hybrid_trace(images)
         logits = model.forward_head(tokens)
         prefix_tokens = int(getattr(model, "num_prefix_tokens", 0) or 0)
+        is_pair_v3 = bool(
+            getattr(model, "is_pretrained_surface_pair_hybrid_v3", False)
+        )
         selected = {
             "surface_descriptor": trace.get("surface_descriptor_tensor"),
             "surface_feature_map": trace.get("surface_feature_map"),
             "pre_fusion_patches": trace.get("dino_patch_tokens"),
-            "fusion_gate": trace.get("gate"),
             "gated_residual": trace.get("gated_residual"),
             "post_fusion_patches": trace.get("post_fusion_tokens")[:, prefix_tokens:],
+            "surface_pair_scores": trace.get("surface_pair_scores"),
+            "signed_pair_coefficients": trace.get("signed_pair_coefficients"),
+            (
+                "routing_strength_proxy" if is_pair_v3 else "fusion_gate"
+            ): trace.get(
+                "pair_routing_strength" if is_pair_v3 else "gate"
+            ),
         }
+        if is_pair_v3:
+            selected["residual_to_token_ratio"] = trace.get(
+                "gated_residual_norm_ratio"
+            )
+        signed_pairs = trace.get("signed_pair_coefficients")
+        if is_pair_v3 and torch.is_tensor(signed_pairs):
+            for pair_index, competitor in enumerate((0, 2, 4)):
+                selected[f"signed_pair_1_vs_{competitor}"] = signed_pairs[
+                    ..., pair_index : pair_index + 1
+                ]
         return logits, {
             name: value.detach().float().cpu()
             for name, value in selected.items()
@@ -151,6 +170,16 @@ def _generic_spatial_activation_map(tensor: torch.Tensor) -> torch.Tensor | None
         if side * side == token_count:
             return tensor[0].pow(2).mean(dim=-1).sqrt().view(side, side)
     return None
+
+
+def _signed_token_spatial_map(tensor: torch.Tensor) -> torch.Tensor | None:
+    if tensor.ndim != 3 or int(tensor.size(-1)) != 1:
+        return None
+    token_count = int(tensor.size(1))
+    side = int(round(token_count ** 0.5))
+    if side * side != token_count:
+        return None
+    return tensor[0, :, 0].view(side, side)
 
 
 def parse_args() -> argparse.Namespace:
@@ -245,6 +274,24 @@ def _heatmap_image(values: torch.Tensor, size: Tuple[int, int]) -> Image.Image:
     red = np.clip(1.5 * array, 0.0, 1.0)
     green = np.clip(1.5 - np.abs(array - 0.5) * 3.0, 0.0, 1.0)
     blue = np.clip(1.5 * (1.0 - array), 0.0, 1.0)
+    rgb = np.stack((red, green, blue), axis=-1)
+    image = Image.fromarray((rgb * 255.0).round().astype(np.uint8))
+    return image.resize(size, Image.Resampling.NEAREST)
+
+
+def _signed_heatmap_image(values: torch.Tensor, size: Tuple[int, int]) -> Image.Image:
+    array = values.detach().cpu().float().squeeze().numpy()
+    finite = np.isfinite(array)
+    limit = float(np.abs(array[finite]).max()) if finite.any() else 0.0
+    if limit > 0.0:
+        array = np.clip(array / limit, -1.0, 1.0)
+    else:
+        array = np.zeros_like(array, dtype=np.float32)
+    array = np.nan_to_num(array, nan=0.0, posinf=1.0, neginf=-1.0)
+    magnitude = np.abs(array)
+    red = np.where(array >= 0.0, 1.0, 1.0 - magnitude)
+    green = 1.0 - magnitude
+    blue = np.where(array <= 0.0, 1.0, 1.0 - magnitude)
     rgb = np.stack((red, green, blue), axis=-1)
     image = Image.fromarray((rgb * 255.0).round().astype(np.uint8))
     return image.resize(size, Image.Resampling.NEAREST)
@@ -576,25 +623,55 @@ def main() -> None:
                 generic_features.items(),
                 start=1,
             ):
-                activation_map = _generic_spatial_activation_map(feature)
+                signed_map = (
+                    _signed_token_spatial_map(feature)
+                    if feature_name.startswith("signed_pair_")
+                    else None
+                )
+                activation_map = (
+                    signed_map
+                    if signed_map is not None
+                    else _generic_spatial_activation_map(feature)
+                )
                 if activation_map is None:
                     continue
                 activation_stats[feature_name] = {
                     "mean": float(activation_map.mean().item()),
+                    "min": float(activation_map.min().item()),
                     "max": float(activation_map.max().item()),
                 }
+                if signed_map is not None:
+                    activation_stats[feature_name].update(
+                        {
+                            "positive_fraction": float((signed_map > 0).float().mean()),
+                            "negative_fraction": float((signed_map < 0).float().mean()),
+                        }
+                    )
                 safe_name = feature_name.replace(".", "_")
-                _heatmap_image(activation_map, input_image.size).save(
+                render = (
+                    _signed_heatmap_image(activation_map, input_image.size)
+                    if signed_map is not None
+                    else _heatmap_image(activation_map, input_image.size)
+                )
+                render.save(
                     class_dir / f"02_{feature_index:02d}_{safe_name}_activation.png"
                 )
 
             record = {
                 "trace_mode": (
-                    "hybrid_v2_fusion_trace"
+                    "hybrid_v3_pair_fusion_trace"
                     if bool(
                         getattr(
                             model,
-                            "is_pretrained_surface_patch_hybrid_v2",
+                            "is_pretrained_surface_pair_hybrid_v3",
+                            False,
+                        )
+                    )
+                    else "hybrid_v2_fusion_trace"
+                    if bool(
+                        getattr(
+                            model,
+                            "is_pretrained_surface_hybrid",
                             False,
                         )
                     )

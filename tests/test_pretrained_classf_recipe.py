@@ -24,6 +24,9 @@ from trkh.recipes.pretrained_classf_b0 import (
     HYBRID_V2_LOCAL_SURFACE_EXPECTED_PARAMETER_COUNT,
     HYBRID_V2_LOCAL_SURFACE_PROTOCOL_ID,
     HYBRID_V2_LOCAL_SURFACE_RANDOMINIT_PROTOCOL_ID,
+    HYBRID_V3_PAIR_EXPECTED_PARAMETER_COUNT,
+    HYBRID_V3_PAIR_GENERIC_PROTOCOL_ID,
+    HYBRID_V3_PAIR_RELATIVE_PROTOCOL_ID,
     PRMR_R1_CONTROL_PROTOCOL_ID,
     PRMR_R1_PROTOCOL_ID,
     build_train_args,
@@ -728,6 +731,78 @@ def test_hybrid_v2_probe_pair_inherits_b2_and_differs_only_by_model_mode(
     assert local_spec.expected_parameter_count == (
         HYBRID_V2_LOCAL_SURFACE_EXPECTED_PARAMETER_COUNT
     )
+
+
+def test_hybrid_v3_pair_arms_are_single_source_ablation_on_b2(
+    tmp_path: Path,
+) -> None:
+    checkpoint = tmp_path / "model.safetensors"
+    checkpoint.write_bytes(b"unit-test-placeholder")
+    common = {
+        "data_yaml": tmp_path / "class_f" / "data.yaml",
+        "dino_checkpoint": checkpoint,
+        "output_dir": tmp_path / "runs",
+        "stage": "probe",
+        "run_tag": "unit",
+        "batch_size": 16,
+        "num_workers": 2,
+        "eval_num_workers": 1,
+    }
+    b2_args = build_train_args(**common, experiment="b2-tempered-p05")
+    generic_args = build_train_args(
+        **common,
+        experiment="hybrid-v3-pair-generic",
+    )
+    relative_args = build_train_args(
+        **common,
+        experiment="hybrid-v3-pair-relative",
+    )
+    generic = parse_args(generic_args)
+    relative = parse_args(relative_args)
+
+    assert generic.experiment_protocol_id == HYBRID_V3_PAIR_GENERIC_PROTOCOL_ID
+    assert relative.experiment_protocol_id == HYBRID_V3_PAIR_RELATIVE_PROTOCOL_ID
+    assert generic.model_type == relative.model_type == (
+        "dinov3_surface_pair_hybrid_v3"
+    )
+    assert generic.dinov3_surface_hybrid_mode == "generic_token_pair"
+    assert relative.dinov3_surface_hybrid_mode == "relative_surface_pair"
+    assert "--dinov3-surface-initial-gate-scale" not in generic_args
+    assert "--dinov3-surface-max-gate-scale" not in relative_args
+    assert generic.tempered_class_sampling_power == pytest.approx(0.5)
+    assert relative.tempered_class_sampling_power == pytest.approx(0.5)
+    assert generic.tempered_leakage_group_manifest == ""
+    assert relative.tempered_leakage_group_manifest == ""
+
+    normalized_b2 = _strip_hybrid_v2_model_args(
+        _strip_lineage_only_args(b2_args)
+    )
+    assert _strip_hybrid_v2_model_args(
+        _strip_lineage_only_args(generic_args)
+    ) == normalized_b2
+    assert _strip_hybrid_v2_model_args(
+        _strip_lineage_only_args(relative_args)
+    ) == normalized_b2
+    assert _strip_hybrid_v2_model_args(
+        _strip_lineage_only_args(generic_args)
+    ) == _strip_hybrid_v2_model_args(
+        _strip_lineage_only_args(relative_args)
+    )
+
+    generic_spec = recipe.experiment_spec("hybrid-v3-pair-generic")
+    relative_spec = recipe.experiment_spec("hybrid-v3-pair-relative")
+    assert generic_spec.reference_experiment == "b2-tempered-p05"
+    assert relative_spec.reference_experiment == "hybrid-v3-pair-generic"
+    assert generic_spec.expected_parameter_count == (
+        HYBRID_V3_PAIR_EXPECTED_PARAMETER_COUNT
+    )
+    assert relative_spec.expected_parameter_count == (
+        HYBRID_V3_PAIR_EXPECTED_PARAMETER_COUNT
+    )
+    assert generic_spec.full_train_authorized is False
+    assert relative_spec.full_train_authorized is False
+    assert generic_spec.promotion_eligible is False
+    assert relative_spec.promotion_eligible is True
 
 
 def test_group_manifest_can_be_bound_to_canonical_root_with_dev_yaml(
