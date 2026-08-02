@@ -4,6 +4,7 @@ import numpy as np
 import torch
 
 from trkh.tools.audit_dinov3_depth_trajectory_b12 import (
+    DEFAULT_BATCH_SIZE,
     EMBED_DIM,
     FEATURES_PER_ARM,
     PATCH_COUNT,
@@ -14,6 +15,10 @@ from trkh.tools.audit_dinov3_depth_trajectory_b12 import (
     pair_features,
     summarize_pair_maps,
 )
+
+
+def test_extraction_batch_matches_locked_a0_cache_batch() -> None:
+    assert DEFAULT_BATCH_SIZE == 32
 
 
 def test_locked_map_summary_uses_linear_patch_quantiles() -> None:

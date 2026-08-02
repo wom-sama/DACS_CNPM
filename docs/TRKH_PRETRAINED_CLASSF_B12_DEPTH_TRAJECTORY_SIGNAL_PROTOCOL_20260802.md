@@ -1,6 +1,6 @@
 # B12 TRAIN-only signal gate: patch-depth trajectory
 
-Protocol: `TRKH_PRETRAINED_CLASSF_B12_DEPTH_TRAJECTORY_SIGNAL_20260802`
+Protocol: `TRKH_PRETRAINED_CLASSF_B12_DEPTH_TRAJECTORY_SIGNAL_20260802_R2`
 
 Role: representation-readiness audit only. This protocol does not authorize a model, trainer integration, validation, test, full train, or deployment audit.
 
@@ -21,7 +21,9 @@ B12 is new only if all remain true: track aligned patch deltas in depth order; u
 
 ## Locked patch-depth representation
 
-Run the frozen FP32 B9 once with local batch `24`, data workers `0`, four CPU threads and tap zero-based blocks `[2,5,8,11]`. Apply B9's final norm to each state, remove its five prefix tokens, and retain the aligned `16 x 16` patch grid. Block-11 mean-patch logits through the frozen B9 head must match the existing base-logit cache within `1e-6`; otherwise no artifact is valid. A separate TRAIN-only preflight must bind the exact runner, protocol, model-builder, dataset-builder and reused cache/fold-guard source hashes before feature extraction begins.
+Run the frozen FP32 B9 once with local batch `32`, data workers `0`, four CPU threads and tap zero-based blocks `[2,5,8,11]`. Batch `32` is the immutable A0 cache extraction batch and is required for bit-exact CUDA reproduction of its logits. Apply B9's final norm to each state, remove its five prefix tokens, and retain the aligned `16 x 16` patch grid. Block-11 mean-patch logits through the frozen B9 head must match the existing base-logit cache within `1e-6`; otherwise no artifact is valid. A separate TRAIN-only preflight must bind the exact runner, protocol, model-builder, dataset-builder and reused cache/fold-guard source hashes before feature extraction begins.
+
+Implementation amendment R2 (before any signal result): the first formal attempt used batch `24` and stopped at sample 120 because cache parity was `1.475214958190918e-6`. No feature, OOF, summary, or scientific metric artifact was written or inspected. A parity-only diagnostic found zero argmax changes, mean absolute error `1.848351287965973e-7`, same-forward parity `0`, and bit-exact cache parity at the original cache batch `32`. R2 therefore changes only the extraction batch and protocol/source bindings; `1e-6` parity and every scientific feature, control, fit, bootstrap, and decision gate remain unchanged.
 
 For rivals `j in {0,2,4}`, define the fixed unit direction `d_j=(W_1-W_j)/||W_1-W_j||`, using the frozen B9 classifier. Let `x_l(p)` be patch `p` after block `l` and final norm.
 

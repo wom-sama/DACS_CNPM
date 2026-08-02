@@ -47,7 +47,7 @@ from trkh.tools.screen_dinov3_cgaer_b11_sourcefold import (  # noqa: E402
 )
 
 
-PROTOCOL_ID = "TRKH_PRETRAINED_CLASSF_B12_DEPTH_TRAJECTORY_SIGNAL_20260802"
+PROTOCOL_ID = "TRKH_PRETRAINED_CLASSF_B12_DEPTH_TRAJECTORY_SIGNAL_20260802_R2"
 SEED = 20260802
 FOLDS = 5
 LAYERS = (2, 5, 8, 11)
@@ -66,7 +66,9 @@ LOGISTIC_TOL = 1e-9
 LOGISTIC_MAX_ITER = 2_000
 BOOTSTRAP_REPLICATES = 5_000
 PARITY_ATOL = 1e-6
-DEFAULT_BATCH_SIZE = 24
+# Match the immutable A0 cache extraction batch so the locked cache-logit
+# parity check is bit-exact instead of depending on CUDA GEMM batch shape.
+DEFAULT_BATCH_SIZE = 32
 DEFAULT_WORKERS = 0
 
 
@@ -633,7 +635,7 @@ def assess_readiness(
 
 def _prepare_inputs(args: argparse.Namespace) -> Dict[str, object]:
     if int(args.batch_size) != DEFAULT_BATCH_SIZE or int(args.workers) != DEFAULT_WORKERS:
-        raise ValueError("B12 local extraction is locked to batch=24, workers=0")
+        raise ValueError("B12 local extraction is locked to batch=32, workers=0")
     data_yaml = args.data.expanduser().resolve()
     checkpoint_path = args.checkpoint.expanduser().resolve()
     if _sha256(data_yaml) != EXPECTED_DATA_SHA256:
@@ -816,9 +818,9 @@ def _extract_features(
                 raise ValueError("B12 intermediate patch geometry changed")
             final_logits = head(intermediates[-1].mean(dim=1)).float()
             end = cursor + int(images.size(0))
-            reference = torch.from_numpy(np.asarray(base_logits[cursor:end], dtype=np.float32)).to(
-                device=device
-            )
+            reference = torch.from_numpy(
+                np.asarray(base_logits[cursor:end], dtype=np.float32).copy()
+            ).to(device=device)
             parity = float((final_logits - reference).abs().max().cpu())
             max_parity = max(max_parity, parity)
             if parity > PARITY_ATOL:
