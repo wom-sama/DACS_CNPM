@@ -622,7 +622,7 @@ def test_b10_group_tempered_is_single_train_sampling_delta_and_probe_only(
     ) == "pretrained_dinov3_classf_b10_group_tempered_p05_probe_unit"
 
 
-def test_hybrid_v2_probe_pair_inherits_b10_and_differs_only_by_model_mode(
+def test_hybrid_v2_probe_pair_inherits_b2_and_differs_only_by_model_mode(
     tmp_path: Path,
 ) -> None:
     checkpoint = tmp_path / "model.safetensors"
@@ -637,9 +637,9 @@ def test_hybrid_v2_probe_pair_inherits_b10_and_differs_only_by_model_mode(
         "num_workers": 2,
         "eval_num_workers": 1,
     }
-    b10_args = build_train_args(
+    b2_args = build_train_args(
         **common,
-        experiment="b10-group-tempered-p05",
+        experiment="b2-tempered-p05",
     )
     generic_args = build_train_args(
         **common,
@@ -663,10 +663,6 @@ def test_hybrid_v2_probe_pair_inherits_b10_and_differs_only_by_model_mode(
     random_spec = recipe.experiment_spec(
         "hybrid-v2-local-surface-randominit"
     )
-    manifest_path = str(
-        (common["data_yaml"].resolve().parent / "manifest.csv").resolve()
-    )
-
     assert generic.experiment_protocol_id == HYBRID_V2_GENERIC_PROTOCOL_ID
     assert local.experiment_protocol_id == HYBRID_V2_LOCAL_SURFACE_PROTOCOL_ID
     assert random_control.experiment_protocol_id == (
@@ -693,32 +689,32 @@ def test_hybrid_v2_probe_pair_inherits_b10_and_differs_only_by_model_mode(
     assert generic.pretrained_source_revision == local.pretrained_source_revision == recipe.DINO_SOURCE_REVISION
     assert generic.pretrained_source_license == local.pretrained_source_license == recipe.DINO_SOURCE_LICENSE
     assert generic.tempered_class_sampling_power == local.tempered_class_sampling_power == pytest.approx(0.5)
-    assert generic.tempered_leakage_group_manifest == manifest_path
-    assert local.tempered_leakage_group_manifest == manifest_path
-    assert generic_train.tempered_leakage_group_manifest == manifest_path
-    assert local_train.tempered_leakage_group_manifest == manifest_path
+    assert generic.tempered_leakage_group_manifest == ""
+    assert local.tempered_leakage_group_manifest == ""
+    assert generic_train.tempered_leakage_group_manifest == ""
+    assert local_train.tempered_leakage_group_manifest == ""
 
     # Removing only identity and architecture selectors leaves the complete
-    # optimizer/loss/augmentation/sampler schedule byte-for-byte matched to B10.
-    normalized_b10 = _strip_hybrid_v2_model_args(
-        _strip_lineage_only_args(b10_args)
+    # optimizer/loss/augmentation/sampler schedule byte-for-byte matched to B2.
+    normalized_b2 = _strip_hybrid_v2_model_args(
+        _strip_lineage_only_args(b2_args)
     )
     assert _strip_hybrid_v2_model_args(
         _strip_lineage_only_args(generic_args)
-    ) == normalized_b10
+    ) == normalized_b2
     assert _strip_hybrid_v2_model_args(
         _strip_lineage_only_args(local_args)
-    ) == normalized_b10
+    ) == normalized_b2
     assert _strip_external_initialization_args(
         _strip_lineage_only_args(random_args)
     ) == _strip_external_initialization_args(
         _strip_lineage_only_args(local_args)
     )
 
-    assert generic_spec.reference_experiment == "b10-group-tempered-p05"
-    assert local_spec.reference_experiment == "b10-group-tempered-p05"
-    assert generic_spec.tempered_leakage_group_sampling is True
-    assert local_spec.tempered_leakage_group_sampling is True
+    assert generic_spec.reference_experiment == "b2-tempered-p05"
+    assert local_spec.reference_experiment == "b2-tempered-p05"
+    assert generic_spec.tempered_leakage_group_sampling is False
+    assert local_spec.tempered_leakage_group_sampling is False
     assert generic_spec.full_train_authorized is False
     assert local_spec.full_train_authorized is False
     assert generic_spec.promotion_eligible is False

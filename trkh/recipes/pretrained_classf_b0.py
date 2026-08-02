@@ -40,13 +40,13 @@ B10_GROUP_TEMPERED_P05_PROTOCOL_ID = (
     "TRKH_PRETRAINED_CLASSF_B10_GROUP_TEMPERED_P05_20260802"
 )
 HYBRID_V2_GENERIC_PROTOCOL_ID = (
-    "TRKH_PRETRAINED_CLASSF_HYBRID_V2_GENERIC_20260802"
+    "TRKH_PRETRAINED_CLASSF_HYBRID_V2_GENERIC_B2_20260802"
 )
 HYBRID_V2_LOCAL_SURFACE_PROTOCOL_ID = (
-    "TRKH_PRETRAINED_CLASSF_HYBRID_V2_LOCAL_SURFACE_20260802"
+    "TRKH_PRETRAINED_CLASSF_HYBRID_V2_LOCAL_SURFACE_B2_20260802"
 )
 HYBRID_V2_LOCAL_SURFACE_RANDOMINIT_PROTOCOL_ID = (
-    "TRKH_PRETRAINED_CLASSF_HYBRID_V2_LOCAL_SURFACE_RANDOMINIT_20260802"
+    "TRKH_PRETRAINED_CLASSF_HYBRID_V2_LOCAL_SURFACE_RANDOMINIT_B2_20260802"
 )
 PRMR_R1_CONTROL_PROTOCOL_ID = "TRKH_PRETRAINED_CLASSF_PRMR_R1_CONTROL_20260801"
 PRMR_R1_PROTOCOL_ID = "TRKH_PRETRAINED_CLASSF_PRMR_R1_20260801"
@@ -188,19 +188,17 @@ EXPERIMENTS: Mapping[str, Experiment] = {
     "hybrid-v2-generic": Experiment(
         key="hybrid-v2-generic",
         protocol_id=HYBRID_V2_GENERIC_PROTOCOL_ID,
-        run_prefix="pretrained_dinov3_classf_hybrid_v2_generic",
+        run_prefix="pretrained_dinov3_classf_hybrid_v2_generic_b2",
         balanced_epoch_sampling=False,
         tempered_class_sampling_power=0.5,
         ldam_max_margin=0.3,
         single_semantic_delta_from_b0=(
             "class_sampling_prior:uniform->n_c**0.5;"
-            "within_class_sampling:image_uniform->leakage_group_uniform;"
             "model:direct_dinov3->pre_final_capacity_matched_generic_adapter"
         ),
-        tempered_leakage_group_sampling=True,
         research_role="hybrid_v2_capacity_matched_probe_control",
         promotion_eligible=False,
-        reference_experiment="b10-group-tempered-p05",
+        reference_experiment="b2-tempered-p05",
         full_train_authorized=False,
         model_type="dinov3_surface_patch_hybrid_v2",
         dinov3_surface_hybrid_mode="generic_token_adapter",
@@ -209,19 +207,17 @@ EXPERIMENTS: Mapping[str, Experiment] = {
     "hybrid-v2-local-surface": Experiment(
         key="hybrid-v2-local-surface",
         protocol_id=HYBRID_V2_LOCAL_SURFACE_PROTOCOL_ID,
-        run_prefix="pretrained_dinov3_classf_hybrid_v2_local_surface",
+        run_prefix="pretrained_dinov3_classf_hybrid_v2_local_surface_b2",
         balanced_epoch_sampling=False,
         tempered_class_sampling_power=0.5,
         ldam_max_margin=0.3,
         single_semantic_delta_from_b0=(
             "class_sampling_prior:uniform->n_c**0.5;"
-            "within_class_sampling:image_uniform->leakage_group_uniform;"
             "model:direct_dinov3->pre_final_exact_patch_local_surface_residual"
         ),
-        tempered_leakage_group_sampling=True,
         research_role="hybrid_v2_local_surface_matched_probe",
         promotion_eligible=False,
-        reference_experiment="b10-group-tempered-p05",
+        reference_experiment="b2-tempered-p05",
         full_train_authorized=False,
         model_type="dinov3_surface_patch_hybrid_v2",
         dinov3_surface_hybrid_mode="local_surface",
@@ -230,17 +226,15 @@ EXPERIMENTS: Mapping[str, Experiment] = {
     "hybrid-v2-local-surface-randominit": Experiment(
         key="hybrid-v2-local-surface-randominit",
         protocol_id=HYBRID_V2_LOCAL_SURFACE_RANDOMINIT_PROTOCOL_ID,
-        run_prefix="pretrained_dinov3_classf_hybrid_v2_local_surface_randominit",
+        run_prefix="pretrained_dinov3_classf_hybrid_v2_local_surface_randominit_b2",
         balanced_epoch_sampling=False,
         tempered_class_sampling_power=0.5,
         ldam_max_margin=0.3,
         single_semantic_delta_from_b0=(
             "class_sampling_prior:uniform->n_c**0.5;"
-            "within_class_sampling:image_uniform->leakage_group_uniform;"
             "model:direct_dinov3->pre_final_exact_patch_local_surface_residual;"
             "initialization:locked_dinov3_checkpoint->random"
         ),
-        tempered_leakage_group_sampling=True,
         research_role=(
             "matched_initialization_ablation_under_fixed_finetune_protocol"
         ),
@@ -1220,7 +1214,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
             "exploratory canonical reference; b10-group-tempered-p05 changes "
             "only train sampling within each class to leakage-group-uniform; "
             "hybrid-v2-generic/hybrid-v2-local-surface are the matched "
-            "capacity-control/surface probe pair on B10 sampling; the "
+            "capacity-control/surface probe pair on B2 sampling; the "
             "hybrid-v2-local-surface-randominit arm isolates initialization; "
             "prmr-r1-control/prmr-r1 are a "
             "matched probe pair and never authorize full training by themselves."

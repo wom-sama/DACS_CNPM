@@ -5,7 +5,7 @@
 - Keep `class_f` immutable and keep the test split sealed.
 - Close PRMR R1 as **diagnostic-positive but not promotable**.
 - Do not reuse the two-backbone A0 hybrid.
-- Isolate the next two interventions: first class-conditioned group exposure, then a spatial surface adapter on top of the pure DINO path.
+- Close class-conditioned group exposure after its matched failure; isolate a spatial surface adapter on top of the winning B2 pure-DINO path.
 
 ## Evidence, not assumptions
 
@@ -38,13 +38,13 @@ Artifacts:
 - Control: `runs/pretrained_dinov3_classf_prmr_r1_control_probe_20260801_prmr_r1_control_r1/postaudit/val_only/robustness_val_full_r2/robustness_summary.json`
 - Candidate: `runs/pretrained_dinov3_classf_prmr_r1_probe_20260802_prmr_r1_candidate_r2/postaudit/val_only/robustness_val_full_r2/robustness_summary.json`
 
-## Next experiment 1: B10 group-tempered exposure
+## Closed experiment: B10 group-tempered exposure
 
 Keep the B2/B9 tempered class quota unchanged. Within each class, sample leakage groups uniformly, then rows uniformly within the selected `(class, group)` bucket. This is class-conditioned group balancing, not global group balancing. It must be default-off, manifest-driven, fail-closed, and must not alter raw data, splits, augmentation, loss, or model. Its matched probe control is a fresh same-commit/same-dtype B2 probe; B9 remains the 30-epoch deployment reference, not the sampler-effect comparator.
 
-Promote only after a matched pure-DINO probe keeps macro-F1 non-negative, improves class-1 F1 by at least `0.005`, reduces `2 -> 1` by at least `10%`, and loses at most one true positive in either stable/relabelled class-1 cohort. The aggregate gates are executable in `trkh.tools.assess_pretrained_classf_probe`; the cohort guard requires the fixed provenance post-audit. If it fails, close it before changing the model.
+The matched deterministic BF16 probe rejected B10. Relative to B2, macro-F1 changed `0.851013 -> 0.844122`, class-1 F1 `0.657061 -> 0.626087`, and `2 -> 1` false positives `40 -> 46`; all three locked gates failed. Group-uniform sampling therefore removed useful correlated-view exposure under this short budget and is not the Hybrid foundation. The hashed decision artifact is `runs/pretrained_dinov3_classf_b10_group_tempered_p05_probe_matched_bd4ae00_seed42_bf16_r1/postaudit/val_only/b10_vs_b2_metric_gate.json`.
 
-## Next experiment 2: DINOv3 spatial surface hybrid V2
+## Next experiment: DINOv3 spatial surface hybrid V2
 
 Use DINOv3-S as the primary path. Four non-overlapping `2x2/2` mobile stages create exact `16x16` patch bins from RGB plus an exact-bin mean. Per-cell channel LayerNorm avoids BatchNorm leaking statistics across patches or samples. Fuse a per-patch residual **before DINO block 11 (zero-based)**, then reuse that pretrained attention/MLP block to integrate local evidence. A smooth `r/sqrt(1+||r||²)` bound scales the residual by the detached primary-patch norm, so its relative norm stays below the learned gate (`0.05` initial, `0.25` maximum). Zero-initialized branch output projections make the configured Hybrid bit-exact to native DINO at step 0 without zeroing the gate: the projection learns on step 1 and the upstream specialist/gate open after that update. Do not add the old keeper, global descriptor collapse, handcrafted texture bank, or a zero scalar gate.
 
@@ -54,6 +54,8 @@ Matched arms:
 2. capacity-matched generic DINO-token adapter;
 3. DINO plus local RGB surface adapter;
 4. the same V2 architecture with random DINO initialization.
+
+Arms 1--3 now inherit B2's `n_c**0.5` class quota with image-uniform sampling inside each class. They do not inherit rejected B10 group-uniform sampling. The protocol IDs and run prefixes include the B2 lineage so earlier B10-based smoke artifacts cannot be mistaken for matched evidence.
 
 The local adapter adds `29,825` parameters (`+0.138%`); its generic control adds `29,990` (difference `165`, or `0.55%` of adapter capacity). Construction is isolated with `torch.random.fork_rng`, so adding either branch cannot shift later augmentation/dropout RNG. On 20 development images, configured step-0 logits match native DINO exactly; actual-DINO backward checks show the output projection learning on step 1 and the specialist/gate learning from step 2, including with gradient checkpointing. All three current Hybrid preflights passed after this identity-preserving change; the local preflight also passed all 122 focused tests. No test inference was performed. PRMR remains off in all arms.
 
