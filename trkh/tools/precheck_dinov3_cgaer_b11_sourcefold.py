@@ -260,7 +260,7 @@ def _architecture_smoke(features: np.ndarray, base_logits: np.ndarray, labels: n
     base = torch.from_numpy(
         np.array(base_logits[:16], dtype=np.float32, copy=True)
     )
-    target = torch.from_numpy(np.asarray(labels[:16], dtype=np.int64))
+    target = torch.from_numpy(np.array(labels[:16], dtype=np.int64, copy=True))
     with torch.no_grad():
         active_candidate, trace = candidate(z, base, return_trace=True)
         active_control = control(z, base)
