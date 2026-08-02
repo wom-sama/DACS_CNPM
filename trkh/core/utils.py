@@ -235,9 +235,13 @@ def build_optimizer_param_groups(
     is_pretrained_timm_classifier = bool(
         getattr(model, "is_pretrained_timm_classifier", False)
     )
+    uses_timm_backbone_lr_split = bool(
+        is_pretrained_timm_classifier
+        or getattr(model, "uses_timm_backbone_lr_split", False)
+    )
     exact_no_decay_names: set[str] = set()
     timm_no_weight_decay = getattr(model, "no_weight_decay", None)
-    if is_pretrained_timm_classifier and callable(timm_no_weight_decay):
+    if uses_timm_backbone_lr_split and callable(timm_no_weight_decay):
         exact_no_decay_names.update(
             str(name) for name in timm_no_weight_decay()
         )
@@ -245,7 +249,7 @@ def build_optimizer_param_groups(
         (
             is_detection_model
             or is_pretrained_hybrid
-            or is_pretrained_timm_classifier
+            or uses_timm_backbone_lr_split
         )
         and abs(lr_scale - 1.0) > 1e-12
     )
@@ -266,7 +270,7 @@ def build_optimizer_param_groups(
             is_head = not name.startswith(
                 "pretrained_semantic_branch.backbone."
             )
-        elif use_split_lr and is_pretrained_timm_classifier:
+        elif use_split_lr and uses_timm_backbone_lr_split:
             classifier_prefixes = tuple(
                 str(prefix)
                 for prefix in getattr(
@@ -279,16 +283,28 @@ def build_optimizer_param_groups(
                 raise ValueError(
                     "Pretrained timm classifier is missing classifier parameter prefixes."
                 )
+            task_prefixes = tuple(
+                str(prefix)
+                for prefix in getattr(
+                    model,
+                    "pretrained_task_parameter_prefixes",
+                    (),
+                )
+            )
             is_timm_qv_lora = (
                 ".attn.qkv.q_lora." in name
                 or ".attn.qkv.v_lora." in name
             )
-            is_head = is_timm_qv_lora or name.startswith(classifier_prefixes)
+            is_head = (
+                is_timm_qv_lora
+                or name.startswith(classifier_prefixes)
+                or (bool(task_prefixes) and name.startswith(task_prefixes))
+            )
         else:
             is_head = name.startswith(DETECTION_HEAD_PREFIXES) if use_split_lr else True
         group_name = "head" if is_head else "backbone"
         timm_shape_no_decay = (
-            is_pretrained_timm_classifier and parameter.ndim <= 1
+            uses_timm_backbone_lr_split and parameter.ndim <= 1
         )
         use_decay = (
             name not in exact_no_decay_names
@@ -636,7 +652,11 @@ def resolve_amp_dtype(device: Optional[torch.device] = None) -> torch.dtype:
                     return torch.bfloat16
             except Exception:
                 pass
-        return torch.float16
+            raise RuntimeError(
+                "BF16 AMP was explicitly requested but this CUDA device does "
+                "not support BF16; rerun with --amp-dtype fp16."
+            )
+        return torch.bfloat16
     if requested in {"fp16", "float16", "half"}:
         return torch.float16
     if requested in {"auto"}:

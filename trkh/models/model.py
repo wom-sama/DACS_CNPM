@@ -13778,6 +13778,66 @@ def _build_timm_classifier(
     )
 
 
+def _build_dinov3_surface_patch_hybrid_v2(
+    num_classes: int,
+    *,
+    model_name: str,
+    mode: str,
+    input_mean: Sequence[float],
+    input_std: Sequence[float],
+    initial_gate_scale: float,
+    max_gate_scale: float,
+    pretrained: bool = False,
+    pretrained_checkpoint_path: str = "",
+    pretrained_checkpoint_sha256: str = "",
+    pretrained_source_url: str = "",
+    pretrained_source_revision: str = "",
+    pretrained_source_license: str = "",
+    pretrained_backbone_gradient_checkpointing: bool = False,
+    architecture_only_checkpoint_rebuild: bool = False,
+) -> nn.Module:
+    from trkh.models.dinov3_surface_patch_hybrid_v2 import (
+        DinoV3SurfacePatchHybridV2,
+    )
+
+    locked_model_name = "vit_small_patch16_dinov3.lvd1689m"
+    if str(model_name).strip() != locked_model_name:
+        raise ValueError(
+            "DINOv3 surface hybrid V2 is locked to "
+            f"{locked_model_name!r}; got {model_name!r}."
+        )
+    backbone = _build_timm_classifier(
+        num_classes=num_classes,
+        model_name=locked_model_name,
+        pretrained=pretrained,
+        pretrained_checkpoint_path=pretrained_checkpoint_path,
+        pretrained_checkpoint_sha256=pretrained_checkpoint_sha256,
+        pretrained_source_url=pretrained_source_url,
+        pretrained_source_revision=pretrained_source_revision,
+        pretrained_source_license=pretrained_source_license,
+        architecture_only_checkpoint_rebuild=architecture_only_checkpoint_rebuild,
+    )
+    model = DinoV3SurfacePatchHybridV2(
+        backbone,
+        num_classes=num_classes,
+        mode=mode,
+        input_mean=input_mean,
+        input_std=input_std,
+        expected_embed_dim=384,
+        expected_prefix_tokens=5,
+        expected_patch_count=256,
+        initial_gate_scale=initial_gate_scale,
+        max_gate_scale=max_gate_scale,
+        externally_pretrained=bool(
+            getattr(backbone, "is_pretrained_timm_classifier", False)
+        ),
+        source_provenance=getattr(backbone, "pretrained_provenance", {}),
+    )
+    if bool(pretrained_backbone_gradient_checkpointing):
+        model.set_grad_checkpointing(True)
+    return model
+
+
 MAMBAVISION_NANO_SPEC = {
     "factory": "mamba_vision_T",
     "resolution": 256,
@@ -13982,6 +14042,15 @@ def create_model(
     pretrained_backbone_gradient_checkpointing = bool(
         config.pop("pretrained_backbone_gradient_checkpointing", False)
     )
+    dinov3_surface_hybrid_mode = str(
+        config.pop("dinov3_surface_hybrid_mode", "local_surface")
+    ).strip().lower()
+    dinov3_surface_initial_gate_scale = float(
+        config.pop("dinov3_surface_initial_gate_scale", 0.05)
+    )
+    dinov3_surface_max_gate_scale = float(
+        config.pop("dinov3_surface_max_gate_scale", 0.25)
+    )
     timm_qv_lora = bool(config.pop("timm_qv_lora", False))
     timm_qv_lora_layers = config.pop("timm_qv_lora_layers", "8,9,10,11")
     timm_qv_lora_rank = int(config.pop("timm_qv_lora_rank", 4))
@@ -13990,10 +14059,16 @@ def create_model(
     architecture_only_checkpoint_rebuild = bool(
         config.pop("_architecture_only_checkpoint_rebuild", False)
     )
-    # Input normalization is consumed by the data transforms, not by model
-    # constructors. Keep checkpoints/configs with these fields loadable.
-    config.pop("input_mean", None)
-    config.pop("input_std", None)
+    # Most models consume normalization only in data transforms. Hybrid V2 also
+    # needs the same locked values to recover RGB for its local scratch branch.
+    input_mean = tuple(
+        float(value)
+        for value in config.pop("input_mean", (0.485, 0.456, 0.406))
+    )
+    input_std = tuple(
+        float(value)
+        for value in config.pop("input_std", (0.229, 0.224, 0.225))
+    )
     if pretrained and research_track == "no_pretrain":
         raise ValueError(
             "External pretrained initialization requires research_track=pretrained."
@@ -14003,21 +14078,24 @@ def create_model(
         "mobilenet_v3_large",
         "vit_b_16",
         "timm_classifier",
+        "dinov3_surface_patch_hybrid_v2",
         "vit_registers_pretrained_hybrid",
     }:
         raise ValueError(
             "pretrained/external weights: --pretrained hien chi ho tro model_type "
-            "resnet50, mobilenet_v3_large, vit_b_16, timm_classifier, hoac "
-            "vit_registers_pretrained_hybrid. Cac kien truc TRKH custom "
+            "resnet50, mobilenet_v3_large, vit_b_16, timm_classifier, "
+            "dinov3_surface_patch_hybrid_v2, hoac vit_registers_pretrained_hybrid. "
+            "Cac kien truc TRKH custom "
             "vit_registers/vit_registers_hybrid van train tu dau."
         )
     if pretrained_checkpoint_path and model_type not in {
         "timm_classifier",
+        "dinov3_surface_patch_hybrid_v2",
         "vit_registers_pretrained_hybrid",
     }:
         raise ValueError(
-            "Explicit local pretrained checkpoints are supported only by timm_classifier "
-            "and vit_registers_pretrained_hybrid."
+            "Explicit local pretrained checkpoints are supported only by timm_classifier, "
+            "dinov3_surface_patch_hybrid_v2, and vit_registers_pretrained_hybrid."
         )
     if pretrained_checkpoint_path and not pretrained:
         raise ValueError("A local pretrained checkpoint requires pretrained=True.")
@@ -14149,6 +14227,39 @@ def create_model(
                 alpha=timm_qv_lora_alpha,
                 dropout=timm_qv_lora_dropout,
             )
+    elif model_type == "dinov3_surface_patch_hybrid_v2":
+        if research_track != "pretrained":
+            raise ValueError(
+                "dinov3_surface_patch_hybrid_v2 belongs only to the pretrained "
+                "research track, including its explicit random-init control."
+            )
+        image_size = int(config.get("image_size", 256))
+        if image_size != 256:
+            raise ValueError(
+                "dinov3_surface_patch_hybrid_v2 is locked to image_size=256; "
+                f"got {image_size}."
+            )
+        model = _build_dinov3_surface_patch_hybrid_v2(
+            num_classes=num_classes,
+            model_name=timm_model_name,
+            mode=dinov3_surface_hybrid_mode,
+            input_mean=input_mean,
+            input_std=input_std,
+            initial_gate_scale=dinov3_surface_initial_gate_scale,
+            max_gate_scale=dinov3_surface_max_gate_scale,
+            pretrained=pretrained,
+            pretrained_checkpoint_path=pretrained_checkpoint_path,
+            pretrained_checkpoint_sha256=pretrained_checkpoint_sha256,
+            pretrained_source_url=pretrained_source_url,
+            pretrained_source_revision=pretrained_source_revision,
+            pretrained_source_license=pretrained_source_license,
+            pretrained_backbone_gradient_checkpointing=(
+                pretrained_backbone_gradient_checkpointing
+            ),
+            architecture_only_checkpoint_rebuild=(
+                architecture_only_checkpoint_rebuild
+            ),
+        )
     elif model_type == "mambavision_nano":
         if temporal_frames != 1:
             raise ValueError("mambavision_nano is locked to temporal_frames=1.")
@@ -14242,6 +14353,10 @@ def _attach_checkpoint_pretrained_provenance(
         restored_provenance["initialization_source"] = "serialized_model_state"
         restored_provenance["external_initialization_replayed"] = False
         model.pretrained_provenance = restored_provenance
+        if "external_initialization_used" in restored_provenance:
+            model.is_pretrained_timm_classifier = bool(
+                restored_provenance["external_initialization_used"]
+            )
         return
     model.pretrained_provenance = {
         "model_name": str(model_config.get("timm_model_name", "")),

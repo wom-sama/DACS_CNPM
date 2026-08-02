@@ -95,6 +95,27 @@ def _forward_generic_feature_trace(
     model: torch.nn.Module,
     images: torch.Tensor,
 ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+    hybrid_trace = getattr(model, "forward_features_with_fusion_trace", None)
+    if callable(hybrid_trace) and bool(
+        getattr(model, "is_pretrained_surface_patch_hybrid_v2", False)
+    ):
+        tokens, trace = hybrid_trace(images)
+        logits = model.forward_head(tokens)
+        prefix_tokens = int(getattr(model, "num_prefix_tokens", 0) or 0)
+        selected = {
+            "surface_descriptor": trace.get("surface_descriptor_tensor"),
+            "surface_feature_map": trace.get("surface_feature_map"),
+            "pre_fusion_patches": trace.get("dino_patch_tokens"),
+            "fusion_gate": trace.get("gate"),
+            "gated_residual": trace.get("gated_residual"),
+            "post_fusion_patches": trace.get("post_fusion_tokens")[:, prefix_tokens:],
+        }
+        return logits, {
+            name: value.detach().float().cpu()
+            for name, value in selected.items()
+            if torch.is_tensor(value)
+        }
+
     captured: Dict[str, torch.Tensor] = {}
     handles = []
 
@@ -568,7 +589,17 @@ def main() -> None:
                 )
 
             record = {
-                "trace_mode": "generic_feature_stages",
+                "trace_mode": (
+                    "hybrid_v2_fusion_trace"
+                    if bool(
+                        getattr(
+                            model,
+                            "is_pretrained_surface_patch_hybrid_v2",
+                            False,
+                        )
+                    )
+                    else "generic_feature_stages"
+                ),
                 "model_type": str(getattr(model, "model_type", type(model).__name__)),
                 "class_id": int(class_index),
                 "class_name": class_name,

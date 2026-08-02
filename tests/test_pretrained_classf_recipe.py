@@ -9,14 +9,21 @@ import torch
 
 import trkh.recipes.pretrained_classf_b0 as recipe
 from trkh.data.dataset import TemperedClassBatchSampler
+from trkh.core.utils import resolve_amp_dtype
 from trkh.recipes.pretrained_classf_b0 import (
     B1_MARGIN0_PROTOCOL_ID,
     B1_NATURAL_PROTOCOL_ID,
     B2_TEMPERED_P05_PROTOCOL_ID,
     B9_B2_REFERENCE_COMPLETION_PROTOCOL_ID,
+    B10_GROUP_TEMPERED_P05_PROTOCOL_ID,
     DINO_MODEL_NAME,
     DINO_SHA256,
     EXPECTED_CLASS_NAMES,
+    HYBRID_V2_GENERIC_EXPECTED_PARAMETER_COUNT,
+    HYBRID_V2_GENERIC_PROTOCOL_ID,
+    HYBRID_V2_LOCAL_SURFACE_EXPECTED_PARAMETER_COUNT,
+    HYBRID_V2_LOCAL_SURFACE_PROTOCOL_ID,
+    HYBRID_V2_LOCAL_SURFACE_RANDOMINIT_PROTOCOL_ID,
     PRMR_R1_CONTROL_PROTOCOL_ID,
     PRMR_R1_PROTOCOL_ID,
     build_train_args,
@@ -62,6 +69,42 @@ def _strip_lineage_only_args(args: list[str]) -> list[str]:
             continue
         normalized.append(argument)
         index += 1
+    return normalized
+
+
+def _strip_hybrid_v2_model_args(args: list[str]) -> list[str]:
+    normalized: list[str] = []
+    skip_value_for = {
+        "--model-type",
+        "--dinov3-surface-hybrid-mode",
+        "--dinov3-surface-initial-gate-scale",
+        "--dinov3-surface-max-gate-scale",
+    }
+    index = 0
+    while index < len(args):
+        argument = args[index]
+        if argument in skip_value_for:
+            index += 2
+            continue
+        normalized.append(argument)
+        index += 1
+    return normalized
+
+
+def _strip_external_initialization_args(args: list[str]) -> list[str]:
+    normalized = list(args)
+    if "--pretrained" in normalized:
+        normalized.remove("--pretrained")
+    for option in (
+        "--pretrained-checkpoint-path",
+        "--pretrained-checkpoint-sha256",
+        "--pretrained-source-url",
+        "--pretrained-source-revision",
+        "--pretrained-source-license",
+    ):
+        if option in normalized:
+            index = normalized.index(option)
+            del normalized[index : index + 2]
     return normalized
 
 
@@ -177,6 +220,60 @@ def test_amp_init_scale_rejects_non_positive_or_nonfinite_values(
             run_tag="unit",
             amp_init_scale=value,
         )
+
+
+def test_amp_dtype_is_explicit_in_recipe_hash_and_train_config(tmp_path: Path) -> None:
+    (tmp_path / "model.safetensors").write_bytes(b"unit-test-placeholder")
+    common = {
+        "data_yaml": tmp_path / "data.yaml",
+        "dino_checkpoint": tmp_path / "model.safetensors",
+        "output_dir": tmp_path / "runs",
+        "stage": "probe",
+        "run_tag": "amp_dtype_unit",
+        "experiment": "b10-group-tempered-p05",
+    }
+    bf16_args = build_train_args(**common, amp_dtype="bf16")
+    fp16_args = build_train_args(**common, amp_dtype="fp16")
+    bf16 = parse_args(bf16_args)
+    _, bf16_train, _ = build_configs(bf16)
+    fp16 = parse_args(fp16_args)
+
+    assert bf16_args[bf16_args.index("--amp-dtype") + 1] == "bf16"
+    assert "--deterministic" in bf16_args
+    assert bf16.amp_dtype == "bf16"
+    assert bf16_train.amp_dtype == "bf16"
+    assert bf16_train.deterministic is True
+    assert fp16.amp_dtype == "fp16"
+    assert bf16.recipe_train_contract_sha256 != fp16.recipe_train_contract_sha256
+
+
+def test_random_init_arm_does_not_require_or_hash_unused_dino_file(
+    tmp_path: Path,
+) -> None:
+    args = build_train_args(
+        data_yaml=tmp_path / "data.yaml",
+        dino_checkpoint=None,
+        output_dir=tmp_path / "runs",
+        stage="smoke",
+        run_tag="random_without_weights",
+        experiment="hybrid-v2-local-surface-randominit",
+    )
+    parsed = parse_args(args)
+
+    assert parsed.pretrained is False
+    assert parsed.pretrained_checkpoint_path is None
+    assert parsed.pretrained_checkpoint_sha256 == ""
+    assert "--pretrained-source-url" not in args
+
+
+def test_explicit_bf16_fails_closed_on_unsupported_cuda(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TRKH_AMP_DTYPE", "bf16")
+    monkeypatch.setattr(torch.cuda, "is_bf16_supported", lambda: False)
+
+    with pytest.raises(RuntimeError, match="does not support BF16"):
+        resolve_amp_dtype(torch.device("cuda"))
 
 
 def test_train_epoch_reports_successful_optimizer_updates() -> None:
@@ -475,6 +572,286 @@ def test_b9_reference_completion_provenance_is_explicitly_non_promotable() -> No
     )
 
 
+def test_b10_group_tempered_is_single_train_sampling_delta_and_probe_only(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "model.safetensors").write_bytes(b"unit-test-placeholder")
+    common = {
+        "data_yaml": tmp_path / "class_f" / "data.yaml",
+        "dino_checkpoint": tmp_path / "model.safetensors",
+        "output_dir": tmp_path / "runs",
+        "stage": "probe",
+        "run_tag": "unit",
+        "batch_size": 16,
+        "num_workers": 2,
+        "eval_num_workers": 1,
+    }
+    control_args = build_train_args(
+        **common,
+        experiment="b2-tempered-p05",
+    )
+    candidate_args = build_train_args(
+        **common,
+        experiment="b10-group-tempered-p05",
+    )
+    control = parse_args(control_args)
+    candidate = parse_args(candidate_args)
+    _, candidate_config, _ = build_configs(candidate)
+    candidate_spec = recipe.experiment_spec("b10-group-tempered-p05")
+    manifest_path = str(
+        (common["data_yaml"].resolve().parent / "manifest.csv").resolve()
+    )
+
+    assert candidate.experiment_protocol_id == B10_GROUP_TEMPERED_P05_PROTOCOL_ID
+    assert candidate_spec.reference_experiment == "b2-tempered-p05"
+    assert candidate_spec.tempered_leakage_group_sampling is True
+    assert candidate_spec.full_train_authorized is False
+    assert candidate_spec.promotion_eligible is False
+    assert control.tempered_leakage_group_manifest == ""
+    assert candidate.tempered_leakage_group_manifest == manifest_path
+    assert candidate_config.tempered_leakage_group_manifest == manifest_path
+    assert candidate.tempered_class_sampling_power == control.tempered_class_sampling_power == 0.5
+    assert _strip_lineage_only_args(candidate_args) == (
+        _strip_lineage_only_args(control_args)
+        + ["--tempered-leakage-group-manifest", manifest_path]
+    )
+    assert run_name(
+        "probe",
+        "unit",
+        experiment="b10-group-tempered-p05",
+    ) == "pretrained_dinov3_classf_b10_group_tempered_p05_probe_unit"
+
+
+def test_hybrid_v2_probe_pair_inherits_b10_and_differs_only_by_model_mode(
+    tmp_path: Path,
+) -> None:
+    checkpoint = tmp_path / "model.safetensors"
+    checkpoint.write_bytes(b"unit-test-placeholder")
+    common = {
+        "data_yaml": tmp_path / "class_f" / "data.yaml",
+        "dino_checkpoint": checkpoint,
+        "output_dir": tmp_path / "runs",
+        "stage": "probe",
+        "run_tag": "unit",
+        "batch_size": 16,
+        "num_workers": 2,
+        "eval_num_workers": 1,
+    }
+    b10_args = build_train_args(
+        **common,
+        experiment="b10-group-tempered-p05",
+    )
+    generic_args = build_train_args(
+        **common,
+        experiment="hybrid-v2-generic",
+    )
+    local_args = build_train_args(
+        **common,
+        experiment="hybrid-v2-local-surface",
+    )
+    random_args = build_train_args(
+        **common,
+        experiment="hybrid-v2-local-surface-randominit",
+    )
+    generic = parse_args(generic_args)
+    local = parse_args(local_args)
+    random_control = parse_args(random_args)
+    _, generic_train, _ = build_configs(generic)
+    _, local_train, _ = build_configs(local)
+    generic_spec = recipe.experiment_spec("hybrid-v2-generic")
+    local_spec = recipe.experiment_spec("hybrid-v2-local-surface")
+    random_spec = recipe.experiment_spec(
+        "hybrid-v2-local-surface-randominit"
+    )
+    manifest_path = str(
+        (common["data_yaml"].resolve().parent / "manifest.csv").resolve()
+    )
+
+    assert generic.experiment_protocol_id == HYBRID_V2_GENERIC_PROTOCOL_ID
+    assert local.experiment_protocol_id == HYBRID_V2_LOCAL_SURFACE_PROTOCOL_ID
+    assert random_control.experiment_protocol_id == (
+        HYBRID_V2_LOCAL_SURFACE_RANDOMINIT_PROTOCOL_ID
+    )
+    assert generic.model_type == local.model_type == (
+        "dinov3_surface_patch_hybrid_v2"
+    )
+    assert generic.dinov3_surface_hybrid_mode == "generic_token_adapter"
+    assert local.dinov3_surface_hybrid_mode == "local_surface"
+    assert generic.dinov3_surface_initial_gate_scale == pytest.approx(0.05)
+    assert local.dinov3_surface_initial_gate_scale == pytest.approx(0.05)
+    assert generic.dinov3_surface_max_gate_scale == pytest.approx(0.25)
+    assert local.dinov3_surface_max_gate_scale == pytest.approx(0.25)
+    assert generic.pretrained is local.pretrained is True
+    assert random_control.pretrained is False
+    assert str(random_control.pretrained_checkpoint_path or "") == ""
+    assert random_control.pretrained_checkpoint_sha256 == ""
+    assert generic.timm_model_name == local.timm_model_name == DINO_MODEL_NAME
+    assert generic.pretrained_checkpoint_path == checkpoint.absolute()
+    assert local.pretrained_checkpoint_path == checkpoint.absolute()
+    assert generic.pretrained_checkpoint_sha256 == local.pretrained_checkpoint_sha256 == DINO_SHA256
+    assert generic.pretrained_source_url == local.pretrained_source_url == recipe.DINO_SOURCE_URL
+    assert generic.pretrained_source_revision == local.pretrained_source_revision == recipe.DINO_SOURCE_REVISION
+    assert generic.pretrained_source_license == local.pretrained_source_license == recipe.DINO_SOURCE_LICENSE
+    assert generic.tempered_class_sampling_power == local.tempered_class_sampling_power == pytest.approx(0.5)
+    assert generic.tempered_leakage_group_manifest == manifest_path
+    assert local.tempered_leakage_group_manifest == manifest_path
+    assert generic_train.tempered_leakage_group_manifest == manifest_path
+    assert local_train.tempered_leakage_group_manifest == manifest_path
+
+    # Removing only identity and architecture selectors leaves the complete
+    # optimizer/loss/augmentation/sampler schedule byte-for-byte matched to B10.
+    normalized_b10 = _strip_hybrid_v2_model_args(
+        _strip_lineage_only_args(b10_args)
+    )
+    assert _strip_hybrid_v2_model_args(
+        _strip_lineage_only_args(generic_args)
+    ) == normalized_b10
+    assert _strip_hybrid_v2_model_args(
+        _strip_lineage_only_args(local_args)
+    ) == normalized_b10
+    assert _strip_external_initialization_args(
+        _strip_lineage_only_args(random_args)
+    ) == _strip_external_initialization_args(
+        _strip_lineage_only_args(local_args)
+    )
+
+    assert generic_spec.reference_experiment == "b10-group-tempered-p05"
+    assert local_spec.reference_experiment == "b10-group-tempered-p05"
+    assert generic_spec.tempered_leakage_group_sampling is True
+    assert local_spec.tempered_leakage_group_sampling is True
+    assert generic_spec.full_train_authorized is False
+    assert local_spec.full_train_authorized is False
+    assert generic_spec.promotion_eligible is False
+    assert local_spec.promotion_eligible is False
+    assert random_spec.reference_experiment == "hybrid-v2-local-surface"
+    assert random_spec.external_initialization_used is False
+    assert random_spec.full_train_authorized is False
+    assert generic_spec.expected_parameter_count == (
+        HYBRID_V2_GENERIC_EXPECTED_PARAMETER_COUNT
+    )
+    assert local_spec.expected_parameter_count == (
+        HYBRID_V2_LOCAL_SURFACE_EXPECTED_PARAMETER_COUNT
+    )
+
+
+def test_group_manifest_can_be_bound_to_canonical_root_with_dev_yaml(
+    tmp_path: Path,
+) -> None:
+    canonical_manifest = tmp_path / "canonical" / "manifest.csv"
+    args = build_train_args(
+        data_yaml=tmp_path / "configs" / "class_f_5class_dev.yaml",
+        dino_checkpoint=tmp_path / "model.safetensors",
+        output_dir=tmp_path / "runs",
+        stage="probe",
+        run_tag="unit",
+        experiment="b10-group-tempered-p05",
+        tempered_leakage_group_manifest=canonical_manifest,
+    )
+
+    parsed = parse_args(args)
+    assert parsed.tempered_leakage_group_manifest == str(
+        canonical_manifest.resolve()
+    )
+
+
+def test_hybrid_v2_auto_resume_validates_model_mode_and_gate(
+    tmp_path: Path,
+) -> None:
+    data_yaml = tmp_path / "class_f_dev.yaml"
+    data_yaml.write_text("format: classification_folder\n", encoding="utf-8")
+    expected_args = build_train_args(
+        data_yaml=data_yaml,
+        dino_checkpoint=tmp_path / "model.safetensors",
+        output_dir=tmp_path / "runs",
+        stage="probe",
+        run_tag="resume_hybrid",
+        source_commit="a" * 40,
+        source_tree_sha256="b" * 64,
+        dataset_image_tree_sha256="c" * 64,
+        experiment="hybrid-v2-local-surface",
+    )
+    expected = parse_args(expected_args)
+    train_config = {
+        "experiment_protocol_id": expected.experiment_protocol_id,
+        "source_commit": expected.source_commit,
+        "source_tree_sha256": expected.source_tree_sha256,
+        "dataset_image_tree_sha256": expected.dataset_image_tree_sha256,
+        "recipe_train_contract_sha256": expected.recipe_train_contract_sha256,
+    }
+    for field in (
+        "illumination_consistency_loss_weight",
+        "illumination_consistency_probability",
+        "illumination_consistency_brightness",
+        "illumination_consistency_contrast",
+        "illumination_consistency_gamma",
+        "illumination_consistency_temperature",
+        "illumination_consistency_mode",
+        "illumination_consistency_focus_class",
+        "illumination_consistency_negative_classes",
+        "illumination_consistency_margin_retention",
+        "illumination_consistency_start_epoch",
+    ):
+        train_config[field] = getattr(expected, field)
+    checkpoint = {
+        "class_names": list(EXPECTED_CLASS_NAMES),
+        "data_yaml": str(data_yaml),
+        "model_config": {
+            "model_type": "dinov3_surface_patch_hybrid_v2",
+            "research_track": "pretrained",
+            "pretrained": True,
+            "timm_model_name": DINO_MODEL_NAME,
+            "pretrained_checkpoint_sha256": DINO_SHA256,
+            "dinov3_surface_hybrid_mode": "local_surface",
+            "dinov3_surface_initial_gate_scale": 0.05,
+            "dinov3_surface_max_gate_scale": 0.25,
+        },
+        "train_config": train_config,
+        "epoch": 2,
+    }
+    checkpoint_path = tmp_path / "hybrid_last.pt"
+    torch.save(checkpoint, checkpoint_path)
+
+    summary = validate_auto_resume_checkpoint(
+        checkpoint_path,
+        training_data_yaml=data_yaml,
+        expected_train_args=expected_args,
+    )
+    assert summary["model_type"] == "dinov3_surface_patch_hybrid_v2"
+
+    checkpoint["model_config"]["dinov3_surface_hybrid_mode"] = (
+        "generic_token_adapter"
+    )
+    torch.save(checkpoint, checkpoint_path)
+    with pytest.raises(ValueError, match="pretrained contract mismatch"):
+        validate_auto_resume_checkpoint(
+            checkpoint_path,
+            training_data_yaml=data_yaml,
+            expected_train_args=expected_args,
+        )
+
+
+def test_pretrained_checkpoint_sha_extraction_supports_direct_and_hybrid_schema() -> None:
+    direct = torch.nn.Linear(2, 2)
+    direct.pretrained_provenance = {
+        "initialization": {"checkpoint": {"sha256": DINO_SHA256}}
+    }
+    hybrid = torch.nn.Linear(2, 2)
+    hybrid.pretrained_provenance = {
+        "primary_backbone": {
+            "initialization": {"checkpoint": {"sha256": DINO_SHA256}}
+        }
+    }
+
+    assert recipe._pretrained_checkpoint_sha256(direct) == DINO_SHA256
+    assert recipe._pretrained_checkpoint_sha256(hybrid) == DINO_SHA256
+
+    hybrid.pretrained_provenance["initialization"] = {
+        "checkpoint": {"sha256": "f" * 64}
+    }
+    with pytest.raises(RuntimeError, match="conflicting pretrained checkpoint"):
+        recipe._pretrained_checkpoint_sha256(hybrid)
+
+
 def test_prmr_r1_probe_pair_is_matched_and_train_only(tmp_path: Path) -> None:
     (tmp_path / "model.safetensors").write_bytes(b"unit-test-placeholder")
     common = dict(
@@ -706,6 +1083,7 @@ def test_classf_prmr_r1_resume_checkpoint_is_bound_to_full_semantic_contract(
             "model_config": {
                 "model_type": "timm_classifier",
                 "research_track": "pretrained",
+                "pretrained": True,
                 "timm_model_name": DINO_MODEL_NAME,
                 "pretrained_checkpoint_sha256": DINO_SHA256,
             },

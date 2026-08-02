@@ -64,6 +64,9 @@ from trkh.data.dataset import (
     build_train_transform,
     normalize_class_conditional_augmentation_scales,
 )
+from trkh.data.leakage_groups import (
+    load_tempered_leakage_group_ids as _load_tempered_leakage_group_ids,
+)
 from trkh.training.debug_and_optimization import (
     GradientCheckpointingEnabler,
     MultiScaleTransform,
@@ -170,7 +173,11 @@ def _apply_timm_input_normalization(model_config: ModelConfig) -> Dict[str, obje
             "input_size": [3, 256, 256],
             "configured_image_size": int(model_config.image_size),
         }
-    if model_type not in {"timm_classifier", "vit_registers_pretrained_hybrid"}:
+    if model_type not in {
+        "timm_classifier",
+        "dinov3_surface_patch_hybrid_v2",
+        "vit_registers_pretrained_hybrid",
+    }:
         return {
             "enabled": False,
             "mean": tuple(float(value) for value in model_config.input_mean),
@@ -363,6 +370,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
             "mobilenet_v3_large",
             "vit_b_16",
             "timm_classifier",
+            "dinov3_surface_patch_hybrid_v2",
             "vit_registers_pretrained_hybrid",
             "mambavision_nano",
         ),
@@ -445,6 +453,27 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         action="store_true",
         default=False,
         help="Enable the timm backbone gradient-checkpointing hook when supported.",
+    )
+    parser.add_argument(
+        "--dinov3-surface-hybrid-mode",
+        choices=("local_surface", "generic_token_adapter"),
+        default="local_surface",
+        help=(
+            "Hybrid V2 branch: patch-aligned RGB surface evidence or the "
+            "capacity-matched DINO-only causal control."
+        ),
+    )
+    parser.add_argument(
+        "--dinov3-surface-initial-gate-scale",
+        type=float,
+        default=0.05,
+        help="Strictly positive initial patch-residual scale for Hybrid V2.",
+    )
+    parser.add_argument(
+        "--dinov3-surface-max-gate-scale",
+        type=float,
+        default=0.25,
+        help="Hard upper bound for the Hybrid V2 patch-residual gate.",
     )
     parser.add_argument(
         "--timm-qv-lora",
@@ -1436,6 +1465,15 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--deterministic", action="store_true", default=False)
     parser.add_argument("--disable-amp", action="store_true", default=False)
     parser.add_argument(
+        "--amp-dtype",
+        choices=("auto", "bf16", "fp16"),
+        default="auto",
+        help=(
+            "Requested CUDA AMP dtype. Serialized in TrainConfig so resume "
+            "cannot silently switch numeric precision."
+        ),
+    )
+    parser.add_argument(
         "--amp-init-scale",
         type=float,
         default=65536.0,
@@ -1472,6 +1510,16 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         help=(
             "Bat sampler train-only q_c proportional n_c**power; power=0 la class-uniform, "
             "power=1 la natural prior. Xung dot voi weighted/natural/auto-tune sampler."
+        ),
+    )
+    parser.add_argument(
+        "--tempered-leakage-group-manifest",
+        type=str,
+        default="",
+        help=(
+            "Optional canonical manifest.csv. Khi bat, giu nguyen tempered class quota "
+            "nhung chia deu exposure theo leakage_group trong tung class; train-only va "
+            "fail-closed neu manifest khong khop dataset."
         ),
     )
     parser.add_argument("--imbalance-auto-tune", action="store_true", default=False)
@@ -5212,6 +5260,27 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
             raise ValueError(
                 "--tempered-class-sampling-power chi ho tro classification-only."
             )
+    tempered_group_manifest = str(
+        args.tempered_leakage_group_manifest or ""
+    ).strip()
+    if tempered_group_manifest:
+        if args.tempered_class_sampling_power is None:
+            raise ValueError(
+                "--tempered-leakage-group-manifest yeu cau "
+                "--tempered-class-sampling-power."
+            )
+        if args.auxiliary_train_data is not None:
+            raise ValueError(
+                "--tempered-leakage-group-manifest khong ho tro auxiliary/mixed train."
+            )
+        if (
+            str(args.hard_sample_manifest or "").strip()
+            and float(args.hard_sample_repeat_factor) > 1.0
+        ):
+            raise ValueError(
+                "--tempered-leakage-group-manifest khong ket hop hard-sample repeat "
+                "de tranh nhan doi sample trong cung leakage_group."
+            )
     if args.sam_rho < 0.0:
         raise ValueError("--sam-rho phai >= 0.")
     if args.ldam_max_margin < 0.0:
@@ -7019,6 +7088,37 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
             raise ValueError(
                 "Pretrained hybrid provenance is incomplete: " + ", ".join(missing_provenance)
             )
+    if args.model_type == "dinov3_surface_patch_hybrid_v2":
+        locked_dino_model = "vit_small_patch16_dinov3.lvd1689m"
+        if research_track != "pretrained":
+            raise ValueError(
+                "dinov3_surface_patch_hybrid_v2 requires --research-track pretrained, "
+                "including the explicit random-init control."
+            )
+        if str(args.timm_model_name).strip() != locked_dino_model:
+            raise ValueError(
+                "dinov3_surface_patch_hybrid_v2 is locked to "
+                f"--timm-model-name {locked_dino_model}."
+            )
+        if int(args.image_size) != 256:
+            raise ValueError(
+                "dinov3_surface_patch_hybrid_v2 is locked to --image-size 256."
+            )
+        if not (
+            0.0
+            < float(args.dinov3_surface_initial_gate_scale)
+            < float(args.dinov3_surface_max_gate_scale)
+        ):
+            raise ValueError(
+                "Hybrid V2 requires 0 < --dinov3-surface-initial-gate-scale "
+                "< --dinov3-surface-max-gate-scale."
+            )
+        if bool(args.pretrained) and pretrained_checkpoint_path is None:
+            raise ValueError(
+                "Pretrained Hybrid V2 requires a revision-pinned local "
+                "--pretrained-checkpoint-path and SHA-256; use --no-pretrained "
+                "only for the matched random-init control."
+            )
 
     effective_trainable_module_prefixes = str(
         args.trainable_module_prefixes or ""
@@ -7053,6 +7153,11 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         pretrained_backbone_gradient_checkpointing=bool(
             args.pretrained_backbone_gradient_checkpointing
         ),
+        dinov3_surface_hybrid_mode=str(args.dinov3_surface_hybrid_mode),
+        dinov3_surface_initial_gate_scale=float(
+            args.dinov3_surface_initial_gate_scale
+        ),
+        dinov3_surface_max_gate_scale=float(args.dinov3_surface_max_gate_scale),
         timm_qv_lora=bool(args.timm_qv_lora),
         timm_qv_lora_layers=args.timm_qv_lora_layers,
         timm_qv_lora_rank=args.timm_qv_lora_rank,
@@ -7490,6 +7595,7 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         early_stopping_patience=args.patience,
         seed=args.seed,
         amp=not args.disable_amp,
+        amp_dtype=str(args.amp_dtype),
         amp_init_scale=float(args.amp_init_scale),
         deterministic=args.deterministic,
         use_class_weights=not args.disable_class_weights,
@@ -7505,6 +7611,9 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         balanced_epoch_multiplier=args.balanced_epoch_multiplier,
         balanced_epoch_tolerance=args.balanced_epoch_tolerance,
         tempered_class_sampling_power=args.tempered_class_sampling_power,
+        tempered_leakage_group_manifest=str(
+            args.tempered_leakage_group_manifest or ""
+        ).strip(),
         auto_tune_imbalance=bool(args.imbalance_auto_tune and not args.disable_imbalance_auto_tune),
         imbalance_sampler_disable_threshold=args.imbalance_sampler_disable_threshold,
         max_train_batches=args.max_train_batches,
@@ -8834,6 +8943,7 @@ def build_tempered_class_sampler(
     num_classes: int,
     power: float,
     epoch_multiplier: float = 1.0,
+    group_ids: Optional[Sequence[str]] = None,
 ) -> TemperedClassBatchSampler:
     return TemperedClassBatchSampler(
         labels=dataset.labels(),
@@ -8841,6 +8951,7 @@ def build_tempered_class_sampler(
         num_classes=num_classes,
         power=power,
         epoch_multiplier=epoch_multiplier,
+        group_ids=group_ids,
     )
 
 
@@ -8857,6 +8968,13 @@ def resolve_imbalance_strategy(
         train_config.use_weighted_sampler or train_config.balanced_epoch_sampling
     )
     use_tempered_sampler = train_config.tempered_class_sampling_power is not None
+    use_tempered_group_sampler = bool(
+        str(train_config.tempered_leakage_group_manifest or "").strip()
+    )
+    if use_tempered_group_sampler and not use_tempered_sampler:
+        raise ValueError(
+            "tempered_leakage_group_manifest yeu cau tempered_class_sampling_power."
+        )
     if (
         train_config.auto_tune_imbalance
         and not train_config.use_weighted_sampler
@@ -8910,9 +9028,12 @@ def resolve_imbalance_strategy(
         "intervention_strength": strength,
         "use_weighted_sampler": use_weighted_sampler,
         "use_tempered_sampler": bool(use_tempered_sampler),
+        "use_tempered_group_sampler": bool(use_tempered_group_sampler),
         "uses_class_sampler": uses_class_sampler,
         "sampler_type": (
-            "tempered_class_prior"
+            "tempered_class_leakage_group_uniform"
+            if use_tempered_group_sampler
+            else "tempered_class_prior"
             if use_tempered_sampler
             else "strict_balanced"
             if use_weighted_sampler
@@ -8924,6 +9045,11 @@ def resolve_imbalance_strategy(
             float(train_config.tempered_class_sampling_power)
             if use_tempered_sampler
             else None
+        ),
+        "tempered_leakage_group_manifest": (
+            str(train_config.tempered_leakage_group_manifest).strip()
+            if use_tempered_group_sampler
+            else ""
         ),
         "weighted_sampler_power": sampler_power,
         "weighted_sampler_epoch_multiplier": sampler_epoch_multiplier,
@@ -27544,6 +27670,15 @@ def _runtime_pretrained_provenance(model: nn.Module) -> Optional[Dict[str, objec
             runtime_provenance["semantic_branch"]["runtime_effective_gate"] = float(
                 effective_gate().detach().float().cpu().item()
             )
+    fusion_telemetry = getattr(
+        provenance_model,
+        "fusion_runtime_parameter_telemetry",
+        None,
+    )
+    if callable(fusion_telemetry):
+        runtime_provenance["fusion_runtime_parameter_telemetry"] = (
+            fusion_telemetry()
+        )
     return to_serializable(runtime_provenance)
 
 
@@ -30034,6 +30169,14 @@ def main() -> None:
         train_config,
         expected_num_classes=int(args.expected_num_classes or 0),
     )
+    amp_dtype_request = str(getattr(train_config, "amp_dtype", "auto")).strip().lower()
+    if amp_dtype_request not in {"auto", "bf16", "fp16"}:
+        raise ValueError(
+            "TrainConfig amp_dtype must be one of auto/bf16/fp16; "
+            f"got {amp_dtype_request!r}."
+        )
+    train_config.amp_dtype = amp_dtype_request
+    os.environ["TRKH_AMP_DTYPE"] = amp_dtype_request
     _validate_final_distillation_config(train_config)
     detection_mode = model_config.model_type in DETECTION_MODEL_TYPES
     if detection_mode:
@@ -30094,6 +30237,7 @@ def main() -> None:
     input_normalization_summary = _apply_timm_input_normalization(model_config)
     if input_normalization_summary.get("enabled") or model_config.model_type in {
         "timm_classifier",
+        "dinov3_surface_patch_hybrid_v2",
         "vit_registers_pretrained_hybrid",
     }:
         print({"input_normalization": input_normalization_summary}, flush=True)
@@ -30103,6 +30247,13 @@ def main() -> None:
         class_name_mode=args.class_name_mode,
         expected_num_classes=args.expected_num_classes or None,
     )
+    if (
+        str(train_config.tempered_leakage_group_manifest or "").strip()
+        and data_spec.data_format != "classification_folder"
+    ):
+        raise ValueError(
+            "--tempered-leakage-group-manifest chi ho tro classification_folder."
+        )
     _validate_and_normalize_illumination_consistency_config(
         train_config,
         expected_num_classes=int(data_spec.num_classes),
@@ -31107,7 +31258,7 @@ def main() -> None:
         sampler_type = str(imbalance_summary["sampler_type"])
         skipped_reason = (
             "tempered_class_sampler_enabled"
-            if sampler_type == "tempered_class_prior"
+            if sampler_type.startswith("tempered_class")
             else "strict_balanced_sampler_enabled"
         )
         print(
@@ -31317,6 +31468,24 @@ def main() -> None:
         }
     print({"targeted_copy_paste": targeted_copy_paste_summary}, flush=True)
 
+    tempered_group_ids: Optional[List[str]] = None
+    tempered_group_manifest_summary: Dict[str, object] = {"enabled": False}
+    if imbalance_summary["use_tempered_group_sampler"]:
+        (
+            tempered_group_ids,
+            tempered_group_manifest_summary,
+        ) = _load_tempered_leakage_group_ids(
+            Path(str(imbalance_summary["tempered_leakage_group_manifest"])),
+            sample_paths=_expanded_dataset_sample_paths(train_dataset),
+            labels=_expanded_dataset_labels(train_dataset),
+            train_root=data_spec.train_images,
+            class_names=data_spec.class_names,
+        )
+        print(
+            {"tempered_leakage_group_manifest": tempered_group_manifest_summary},
+            flush=True,
+        )
+
     if imbalance_summary["use_tempered_sampler"]:
         train_sampler = build_tempered_class_sampler(
             train_dataset,
@@ -31324,6 +31493,7 @@ def main() -> None:
             num_classes=data_spec.num_classes,
             power=float(imbalance_summary["tempered_class_sampling_power"]),
             epoch_multiplier=float(imbalance_summary["sampler_epoch_multiplier"]),
+            group_ids=tempered_group_ids,
         )
     elif imbalance_summary["use_weighted_sampler"]:
         train_sampler = build_weighted_sampler(
@@ -31347,8 +31517,13 @@ def main() -> None:
         )
         tempered_exposure_summary = {
             "enabled": True,
-            "source": "train_split_labels_only",
+            "source": (
+                "train_labels_plus_train_leakage_groups"
+                if tempered_group_ids is not None
+                else "train_split_labels_only"
+            ),
             "scope": "executed_epoch_prefix",
+            "leakage_group_manifest": tempered_group_manifest_summary,
             **train_sampler.exposure_summary(num_batches=executed_num_batches),
         }
         if (
@@ -32471,6 +32646,7 @@ def main() -> None:
         "dataset_balance_auto_config": balance_auto_summary,
         "balanced_epoch_exposure": balanced_exposure_summary,
         "tempered_epoch_exposure": tempered_exposure_summary,
+        "tempered_leakage_group_manifest": tempered_group_manifest_summary,
         "train_class_counts": train_class_counts,
         "val_class_counts": val_class_counts,
         "test_class_counts": test_class_counts,

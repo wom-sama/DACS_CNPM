@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import csv
 import hashlib
+import importlib.metadata
 import json
 import math
 import os
@@ -35,6 +36,18 @@ B2_TEMPERED_P05_PROTOCOL_ID = "TRKH_PRETRAINED_CLASSF_B2_TEMPERED_P05_20260731"
 B9_B2_REFERENCE_COMPLETION_PROTOCOL_ID = (
     "TRKH_PRETRAINED_CLASSF_B9_B2_REFERENCE_COMPLETION_20260801"
 )
+B10_GROUP_TEMPERED_P05_PROTOCOL_ID = (
+    "TRKH_PRETRAINED_CLASSF_B10_GROUP_TEMPERED_P05_20260802"
+)
+HYBRID_V2_GENERIC_PROTOCOL_ID = (
+    "TRKH_PRETRAINED_CLASSF_HYBRID_V2_GENERIC_20260802"
+)
+HYBRID_V2_LOCAL_SURFACE_PROTOCOL_ID = (
+    "TRKH_PRETRAINED_CLASSF_HYBRID_V2_LOCAL_SURFACE_20260802"
+)
+HYBRID_V2_LOCAL_SURFACE_RANDOMINIT_PROTOCOL_ID = (
+    "TRKH_PRETRAINED_CLASSF_HYBRID_V2_LOCAL_SURFACE_RANDOMINIT_20260802"
+)
 PRMR_R1_CONTROL_PROTOCOL_ID = "TRKH_PRETRAINED_CLASSF_PRMR_R1_CONTROL_20260801"
 PRMR_R1_PROTOCOL_ID = "TRKH_PRETRAINED_CLASSF_PRMR_R1_20260801"
 DINO_MODEL_NAME = "vit_small_patch16_dinov3.lvd1689m"
@@ -43,6 +56,8 @@ DINO_SOURCE_URL = "https://huggingface.co/timm/vit_small_patch16_dinov3.lvd1689m
 DINO_SOURCE_REVISION = "3bf4720a82ec2066db88137180ff1f83a675cef0"
 DINO_SOURCE_LICENSE = "dinov3-license"
 EXPECTED_PARAMETER_COUNT = 21_588_869
+HYBRID_V2_GENERIC_EXPECTED_PARAMETER_COUNT = 21_618_859
+HYBRID_V2_LOCAL_SURFACE_EXPECTED_PARAMETER_COUNT = 21_618_694
 EXPECTED_CLASS_NAMES = (
     "Xoai_Song_Chua_KhoDap",
     "Xoai_Song_ChuaNhe_CoNguyCo",
@@ -75,12 +90,17 @@ class Experiment:
     tempered_class_sampling_power: float | None
     ldam_max_margin: float
     single_semantic_delta_from_b0: str | None
+    tempered_leakage_group_sampling: bool = False
     research_role: str = "unclassified"
     promotion_eligible: bool = False
     reference_experiment: str | None = None
     known_probe_class1_f1: float | None = None
     required_probe_class1_f1: float | None = None
     full_train_authorized: bool = False
+    model_type: str = "timm_classifier"
+    dinov3_surface_hybrid_mode: str | None = None
+    expected_parameter_count: int = EXPECTED_PARAMETER_COUNT
+    external_initialization_used: bool = True
     extra_train_args: tuple[str, ...] = ()
 
 
@@ -146,6 +166,91 @@ EXPERIMENTS: Mapping[str, Experiment] = {
         known_probe_class1_f1=0.653409,
         required_probe_class1_f1=0.66,
         full_train_authorized=True,
+    ),
+    "b10-group-tempered-p05": Experiment(
+        key="b10-group-tempered-p05",
+        protocol_id=B10_GROUP_TEMPERED_P05_PROTOCOL_ID,
+        run_prefix="pretrained_dinov3_classf_b10_group_tempered_p05",
+        balanced_epoch_sampling=False,
+        tempered_class_sampling_power=0.5,
+        ldam_max_margin=0.3,
+        single_semantic_delta_from_b0=(
+            "class_sampling_prior:uniform->n_c**0.5;"
+            "within_class_sampling:image_uniform->leakage_group_uniform"
+        ),
+        tempered_leakage_group_sampling=True,
+        research_role="train_group_decorrelation_probe",
+        promotion_eligible=False,
+        reference_experiment="b2-tempered-p05",
+        required_probe_class1_f1=0.66,
+        full_train_authorized=False,
+    ),
+    "hybrid-v2-generic": Experiment(
+        key="hybrid-v2-generic",
+        protocol_id=HYBRID_V2_GENERIC_PROTOCOL_ID,
+        run_prefix="pretrained_dinov3_classf_hybrid_v2_generic",
+        balanced_epoch_sampling=False,
+        tempered_class_sampling_power=0.5,
+        ldam_max_margin=0.3,
+        single_semantic_delta_from_b0=(
+            "class_sampling_prior:uniform->n_c**0.5;"
+            "within_class_sampling:image_uniform->leakage_group_uniform;"
+            "model:direct_dinov3->pre_final_capacity_matched_generic_adapter"
+        ),
+        tempered_leakage_group_sampling=True,
+        research_role="hybrid_v2_capacity_matched_probe_control",
+        promotion_eligible=False,
+        reference_experiment="b10-group-tempered-p05",
+        full_train_authorized=False,
+        model_type="dinov3_surface_patch_hybrid_v2",
+        dinov3_surface_hybrid_mode="generic_token_adapter",
+        expected_parameter_count=HYBRID_V2_GENERIC_EXPECTED_PARAMETER_COUNT,
+    ),
+    "hybrid-v2-local-surface": Experiment(
+        key="hybrid-v2-local-surface",
+        protocol_id=HYBRID_V2_LOCAL_SURFACE_PROTOCOL_ID,
+        run_prefix="pretrained_dinov3_classf_hybrid_v2_local_surface",
+        balanced_epoch_sampling=False,
+        tempered_class_sampling_power=0.5,
+        ldam_max_margin=0.3,
+        single_semantic_delta_from_b0=(
+            "class_sampling_prior:uniform->n_c**0.5;"
+            "within_class_sampling:image_uniform->leakage_group_uniform;"
+            "model:direct_dinov3->pre_final_exact_patch_local_surface_residual"
+        ),
+        tempered_leakage_group_sampling=True,
+        research_role="hybrid_v2_local_surface_matched_probe",
+        promotion_eligible=False,
+        reference_experiment="b10-group-tempered-p05",
+        full_train_authorized=False,
+        model_type="dinov3_surface_patch_hybrid_v2",
+        dinov3_surface_hybrid_mode="local_surface",
+        expected_parameter_count=HYBRID_V2_LOCAL_SURFACE_EXPECTED_PARAMETER_COUNT,
+    ),
+    "hybrid-v2-local-surface-randominit": Experiment(
+        key="hybrid-v2-local-surface-randominit",
+        protocol_id=HYBRID_V2_LOCAL_SURFACE_RANDOMINIT_PROTOCOL_ID,
+        run_prefix="pretrained_dinov3_classf_hybrid_v2_local_surface_randominit",
+        balanced_epoch_sampling=False,
+        tempered_class_sampling_power=0.5,
+        ldam_max_margin=0.3,
+        single_semantic_delta_from_b0=(
+            "class_sampling_prior:uniform->n_c**0.5;"
+            "within_class_sampling:image_uniform->leakage_group_uniform;"
+            "model:direct_dinov3->pre_final_exact_patch_local_surface_residual;"
+            "initialization:locked_dinov3_checkpoint->random"
+        ),
+        tempered_leakage_group_sampling=True,
+        research_role=(
+            "matched_initialization_ablation_under_fixed_finetune_protocol"
+        ),
+        promotion_eligible=False,
+        reference_experiment="hybrid-v2-local-surface",
+        full_train_authorized=False,
+        model_type="dinov3_surface_patch_hybrid_v2",
+        dinov3_surface_hybrid_mode="local_surface",
+        expected_parameter_count=HYBRID_V2_LOCAL_SURFACE_EXPECTED_PARAMETER_COUNT,
+        external_initialization_used=False,
     ),
     "prmr-r1-control": Experiment(
         key="prmr-r1-control",
@@ -377,8 +482,21 @@ def validate_auto_resume_checkpoint(
     model_config = checkpoint.get("model_config", {})
     if not isinstance(model_config, Mapping):
         raise ValueError("Auto-resume checkpoint model_config is invalid.")
+    expected_parsed = (
+        parse_train_args(expected_train_args)
+        if expected_train_args is not None
+        else None
+    )
+    expected_model_type = (
+        str(expected_parsed.model_type)
+        if expected_parsed is not None
+        else "timm_classifier"
+    )
     required = {
-        "model_type": (str(model_config.get("model_type", "")), "timm_classifier"),
+        "model_type": (
+            str(model_config.get("model_type", "")),
+            expected_model_type,
+        ),
         "research_track": (
             str(model_config.get("research_track", "")),
             "pretrained",
@@ -389,9 +507,42 @@ def validate_auto_resume_checkpoint(
         ),
         "pretrained_checkpoint_sha256": (
             str(model_config.get("pretrained_checkpoint_sha256", "")).lower(),
-            DINO_SHA256,
+            DINO_SHA256
+            if expected_parsed is None or bool(expected_parsed.pretrained)
+            else "",
+        ),
+        "pretrained": (
+            bool(model_config.get("pretrained", False)),
+            True if expected_parsed is None else bool(expected_parsed.pretrained),
         ),
     }
+    if expected_model_type == "dinov3_surface_patch_hybrid_v2":
+        required.update(
+            {
+                "dinov3_surface_hybrid_mode": (
+                    str(model_config.get("dinov3_surface_hybrid_mode", "")),
+                    str(expected_parsed.dinov3_surface_hybrid_mode),
+                ),
+                "dinov3_surface_initial_gate_scale": (
+                    float(
+                        model_config.get(
+                            "dinov3_surface_initial_gate_scale",
+                            float("nan"),
+                        )
+                    ),
+                    float(expected_parsed.dinov3_surface_initial_gate_scale),
+                ),
+                "dinov3_surface_max_gate_scale": (
+                    float(
+                        model_config.get(
+                            "dinov3_surface_max_gate_scale",
+                            float("nan"),
+                        )
+                    ),
+                    float(expected_parsed.dinov3_surface_max_gate_scale),
+                ),
+            }
+        )
     mismatches = {
         key: {"observed": observed, "expected": expected}
         for key, (observed, expected) in required.items()
@@ -405,7 +556,7 @@ def validate_auto_resume_checkpoint(
     resume_lineage: Dict[str, object] = {}
     resume_illumination_contract: Dict[str, object] = {}
     if expected_train_args is not None:
-        expected_parsed = parse_train_args(expected_train_args)
+        assert expected_parsed is not None
         expected_lineage = {
             "experiment_protocol_id": str(
                 expected_parsed.experiment_protocol_id
@@ -522,7 +673,7 @@ def run_name(stage: str, run_tag: str, *, experiment: str = "b0") -> str:
 def build_train_args(
     *,
     data_yaml: Path,
-    dino_checkpoint: Path,
+    dino_checkpoint: Optional[Path],
     output_dir: Path,
     stage: str,
     run_tag: str,
@@ -531,11 +682,13 @@ def build_train_args(
     eval_num_workers: int = 2,
     seed: int = 42,
     amp_init_scale: Optional[float] = None,
+    amp_dtype: str = "auto",
     auto_resume: bool = False,
     source_commit: str = "",
     source_tree_sha256: str = "",
     dataset_image_tree_sha256: str = "",
     experiment: str = "b0",
+    tempered_leakage_group_manifest: Optional[Path] = None,
 ) -> list[str]:
     stage_name = str(stage).strip().lower()
     if stage_name not in STAGES:
@@ -553,8 +706,31 @@ def build_train_args(
         not math.isfinite(float(amp_init_scale)) or float(amp_init_scale) <= 0.0
     ):
         raise ValueError("amp_init_scale must be finite and > 0.")
+    resolved_amp_dtype = str(amp_dtype).strip().lower()
+    if resolved_amp_dtype not in {"auto", "bf16", "fp16"}:
+        raise ValueError("amp_dtype must be one of auto/bf16/fp16.")
     stage_spec = STAGES[stage_name]
     experiment_config = experiment_spec(experiment)
+    if experiment_config.external_initialization_used and dino_checkpoint is None:
+        raise ValueError(
+            f"{experiment_config.key} requires a locked DINOv3 checkpoint."
+        )
+
+    external_initialization_args: list[str] = []
+    if experiment_config.external_initialization_used:
+        external_initialization_args = [
+            "--pretrained",
+            "--pretrained-checkpoint-path",
+            str(_absolute_path_without_resolving_symlink(Path(dino_checkpoint))),
+            "--pretrained-checkpoint-sha256",
+            DINO_SHA256,
+            "--pretrained-source-url",
+            DINO_SOURCE_URL,
+            "--pretrained-source-revision",
+            DINO_SOURCE_REVISION,
+            "--pretrained-source-license",
+            DINO_SOURCE_LICENSE,
+        ]
 
     args = [
         "--data",
@@ -568,22 +744,12 @@ def build_train_args(
         "--run-name",
         run_name(stage_name, run_tag, experiment=experiment_config.key),
         "--model-type",
-        "timm_classifier",
+        experiment_config.model_type,
         "--research-track",
         "pretrained",
-        "--pretrained",
         "--timm-model-name",
         DINO_MODEL_NAME,
-        "--pretrained-checkpoint-path",
-        str(_absolute_path_without_resolving_symlink(dino_checkpoint)),
-        "--pretrained-checkpoint-sha256",
-        DINO_SHA256,
-        "--pretrained-source-url",
-        DINO_SOURCE_URL,
-        "--pretrained-source-revision",
-        DINO_SOURCE_REVISION,
-        "--pretrained-source-license",
-        DINO_SOURCE_LICENSE,
+        *external_initialization_args,
         "--image-size",
         "256",
         "--batch-size",
@@ -625,6 +791,9 @@ def build_train_args(
         "0",
         "--seed",
         str(int(seed)),
+        "--deterministic",
+        "--amp-dtype",
+        resolved_amp_dtype,
         "--disable-class-weights",
         "--balanced-epoch-multiplier",
         "1.0",
@@ -717,6 +886,17 @@ def build_train_args(
         str(stage_spec.max_val_batches),
         "--skip-final-test",
     ]
+    if experiment_config.dinov3_surface_hybrid_mode is not None:
+        args.extend(
+            [
+                "--dinov3-surface-hybrid-mode",
+                experiment_config.dinov3_surface_hybrid_mode,
+                "--dinov3-surface-initial-gate-scale",
+                "0.05",
+                "--dinov3-surface-max-gate-scale",
+                "0.25",
+            ]
+        )
     args.extend(
         [
             "--experiment-protocol-id",
@@ -738,6 +918,18 @@ def build_train_args(
         )
     elif not experiment_config.balanced_epoch_sampling:
         args.append("--disable-balanced-epoch-sampling")
+    if experiment_config.tempered_leakage_group_sampling:
+        group_manifest = (
+            Path(tempered_leakage_group_manifest).resolve()
+            if tempered_leakage_group_manifest is not None
+            else (Path(data_yaml).resolve().parent / "manifest.csv").resolve()
+        )
+        args.extend(
+            [
+                "--tempered-leakage-group-manifest",
+                str(group_manifest),
+            ]
+        )
     args.extend(experiment_config.extra_train_args)
     if (
         experiment_config.key == "prmr-r1"
@@ -803,15 +995,49 @@ def _git_snapshot(repo_root: Path) -> Dict[str, object]:
         }
 
 
-def _preflight_model(train_args: Sequence[str]) -> Dict[str, object]:
+def _pretrained_checkpoint_sha256(model: torch.nn.Module) -> str:
+    provenance = getattr(model, "pretrained_provenance", {})
+    if not isinstance(provenance, Mapping):
+        return ""
+
+    containers = [provenance]
+    primary_backbone = provenance.get("primary_backbone")
+    if isinstance(primary_backbone, Mapping):
+        containers.append(primary_backbone)
+
+    observed: set[str] = set()
+    for container in containers:
+        initialization = container.get("initialization")
+        if not isinstance(initialization, Mapping):
+            continue
+        checkpoint = initialization.get("checkpoint")
+        if not isinstance(checkpoint, Mapping):
+            continue
+        sha256 = str(checkpoint.get("sha256", "")).strip().lower()
+        if sha256:
+            observed.add(sha256)
+    if len(observed) > 1:
+        raise RuntimeError(
+            "Model exposes conflicting pretrained checkpoint provenance: "
+            f"{sorted(observed)}."
+        )
+    return next(iter(observed), "")
+
+
+def _preflight_model(
+    train_args: Sequence[str],
+    *,
+    expected_parameter_count: int = EXPECTED_PARAMETER_COUNT,
+    expected_external_initialization: bool = True,
+) -> Dict[str, object]:
     parsed = parse_train_args(train_args)
     model_config, _, _ = build_configs(parsed)
     model = create_model(num_classes=5, model_config=model_config)
     parameter_count = sum(int(parameter.numel()) for parameter in model.parameters())
-    if parameter_count != EXPECTED_PARAMETER_COUNT:
+    if parameter_count != int(expected_parameter_count):
         raise RuntimeError(
-            "DINOv3 five-class parameter count drifted: "
-            f"{parameter_count} != {EXPECTED_PARAMETER_COUNT}."
+            "Pretrained five-class model parameter count drifted: "
+            f"{parameter_count} != {int(expected_parameter_count)}."
         )
     groups = build_optimizer_param_groups(
         model,
@@ -855,31 +1081,99 @@ def _preflight_model(train_args: Sequence[str]) -> Dict[str, object]:
     ):
         raise RuntimeError(f"Pretrained backbone LR split is inactive: {backbone_lrs}.")
     model.eval()
+    hybrid_initialization: Dict[str, object] | None = None
     with torch.inference_mode():
-        logits = model(torch.zeros(1, 3, 256, 256))
+        probe = torch.zeros(1, 3, 256, 256)
+        if bool(getattr(model, "is_pretrained_surface_patch_hybrid_v2", False)):
+            fused_tokens, fusion_trace = model.forward_features_with_fusion_trace(
+                probe
+            )
+            logits = model.forward_head(fused_tokens)
+            native_logits = model.backbone.forward_head(
+                model.backbone.forward_features(probe)
+            )
+            exact_native_identity = bool(torch.equal(logits, native_logits))
+            max_abs_logit_delta = float(
+                (logits - native_logits).abs().max().cpu().item()
+            )
+            initial_residual_ratio_max = float(
+                fusion_trace["gated_residual_norm_ratio"].max().cpu().item()
+            )
+            if not exact_native_identity or max_abs_logit_delta != 0.0:
+                raise RuntimeError(
+                    "Hybrid V2 must equal native DINO exactly at step zero; "
+                    f"max_abs_logit_delta={max_abs_logit_delta}."
+                )
+            if initial_residual_ratio_max != 0.0:
+                raise RuntimeError(
+                    "Hybrid V2 step-zero residual must be zero; "
+                    f"observed ratio={initial_residual_ratio_max}."
+                )
+            hybrid_initialization = {
+                "native_logit_identity_exact": exact_native_identity,
+                "max_abs_logit_delta": max_abs_logit_delta,
+                "argmax_mismatch_count": int(
+                    (logits.argmax(dim=1) != native_logits.argmax(dim=1))
+                    .sum()
+                    .cpu()
+                    .item()
+                ),
+                "initial_gate_mean": float(
+                    fusion_trace["gate_mean"].cpu().item()
+                ),
+                "initial_residual_norm_ratio_max": (
+                    initial_residual_ratio_max
+                ),
+                "branch_opening_contract": (
+                    "zero_output_projection_step0;projection_gradient_step1;"
+                    "upstream_specialist_and_gate_after_first_update"
+                ),
+            }
+        else:
+            logits = model(probe)
     if not torch.is_tensor(logits) or tuple(logits.shape) != (1, 5):
         raise RuntimeError(f"Unexpected DINOv3 output shape: {getattr(logits, 'shape', None)}.")
-    provenance = getattr(model, "pretrained_provenance", {})
-    observed_sha = (
-        provenance.get("initialization", {})
-        .get("checkpoint", {})
-        .get("sha256", "")
-        if isinstance(provenance, Mapping)
-        else ""
-    )
-    if observed_sha != DINO_SHA256:
+    observed_sha = _pretrained_checkpoint_sha256(model)
+    expected_sha = DINO_SHA256 if expected_external_initialization else ""
+    if observed_sha != expected_sha:
         raise RuntimeError(
-            f"Model did not consume the locked DINO file: {observed_sha!r}."
+            "Model external-initialization provenance is wrong: "
+            f"observed_sha={observed_sha!r}, expected_sha={expected_sha!r}."
         )
-    return {
+    observed_external_initialization = bool(
+        getattr(model, "pretrained_provenance", {}).get(
+            "external_initialization_used",
+            getattr(model, "is_pretrained_timm_classifier", False),
+        )
+    )
+    if observed_external_initialization != bool(expected_external_initialization):
+        raise RuntimeError(
+            "Model external-initialization flag is wrong: "
+            f"observed={observed_external_initialization}, "
+            f"expected={bool(expected_external_initialization)}."
+        )
+    trainable_parameter_count = int(
+        sum(parameter.numel() for parameter in model.parameters() if parameter.requires_grad)
+    )
+    result = {
         "parameter_count": parameter_count,
+        "expected_parameter_count": int(expected_parameter_count),
+        "trainable_parameter_count": trainable_parameter_count,
+        "frozen_parameter_count": int(parameter_count - trainable_parameter_count),
         "optimizer_groups": group_names,
         "declared_no_decay_parameters": sorted(declared_no_decay),
         "no_decay_violations": no_decay_violations,
         "backbone_learning_rates": backbone_lrs,
         "output_shape": list(logits.shape),
         "pretrained_checkpoint_sha256": observed_sha,
+        "external_initialization_used": observed_external_initialization,
     }
+    if hybrid_initialization is not None:
+        result["hybrid_initialization"] = hybrid_initialization
+        telemetry = getattr(model, "parameter_telemetry", None)
+        if callable(telemetry):
+            result["hybrid_parameter_telemetry"] = telemetry()
+    return result
 
 
 def _best_history_row(run_dir: Path) -> Dict[str, object]:
@@ -923,7 +1217,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
             "the train sampler; b1-margin0 changes only LDAM max margin; "
             "b2-tempered-p05 uses q_c proportional n_c**0.5; "
             "b9-b2-reference-completion repeats B2 semantics only as an "
-            "exploratory canonical reference; prmr-r1-control/prmr-r1 are a "
+            "exploratory canonical reference; b10-group-tempered-p05 changes "
+            "only train sampling within each class to leakage-group-uniform; "
+            "hybrid-v2-generic/hybrid-v2-local-surface are the matched "
+            "capacity-control/surface probe pair on B10 sampling; the "
+            "hybrid-v2-local-surface-randominit arm isolates initialization; "
+            "prmr-r1-control/prmr-r1 are a "
             "matched probe pair and never authorize full training by themselves."
         ),
     )
@@ -947,7 +1246,15 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
             "fingerprinted canonical contract."
         ),
     )
-    parser.add_argument("--dino-checkpoint", type=Path, required=True)
+    parser.add_argument(
+        "--dino-checkpoint",
+        type=Path,
+        default=None,
+        help=(
+            "Locked DINOv3 weights; required only when the selected arm uses "
+            "external initialization."
+        ),
+    )
     parser.add_argument("--output-dir", type=Path, default=Path("runs"))
     parser.add_argument("--run-tag", type=str, default="20260731")
     parser.add_argument("--batch-size", type=int, choices=sorted(ACCUMULATION_BY_BATCH), default=24)
@@ -1005,24 +1312,39 @@ def main(argv: Sequence[str] | None = None) -> None:
             "B9 is a one-run 30-epoch-cap reference completion; only "
             "preflight or full mode is allowed."
         )
+    if args.mode in {"probe", "full"} and args.amp_dtype == "auto":
+        raise RuntimeError(
+            f"{args.mode} requires explicit --amp-dtype bf16 or fp16 so "
+            "numeric precision cannot drift across GPU types."
+        )
     experiment_slug = experiment_config.key.replace("-", "_")
     repo_root = Path(__file__).resolve().parents[2]
     data_yaml = args.data.resolve()
     training_data_yaml = (
         args.train_data.resolve() if args.train_data is not None else data_yaml
     )
-    dino_checkpoint = _absolute_path_without_resolving_symlink(
-        args.dino_checkpoint
-    )
+    dino_checkpoint: Path | None = None
+    dino_sha = ""
+    if experiment_config.external_initialization_used:
+        if args.dino_checkpoint is None:
+            raise ValueError(
+                f"{experiment_config.key} requires --dino-checkpoint."
+            )
+        dino_checkpoint = _absolute_path_without_resolving_symlink(
+            args.dino_checkpoint
+        )
+        if not dino_checkpoint.is_file():
+            raise FileNotFoundError(
+                f"DINOv3 checkpoint not found: {dino_checkpoint}"
+            )
+        dino_sha = _sha256(dino_checkpoint)
+        if dino_sha != DINO_SHA256:
+            raise ValueError(
+                "DINOv3 SHA-256 mismatch: "
+                f"observed={dino_sha}, expected={DINO_SHA256}."
+            )
     output_dir = args.output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
-    if not dino_checkpoint.is_file():
-        raise FileNotFoundError(f"DINOv3 checkpoint not found: {dino_checkpoint}")
-    dino_sha = _sha256(dino_checkpoint)
-    if dino_sha != DINO_SHA256:
-        raise ValueError(
-            f"DINOv3 SHA-256 mismatch: observed={dino_sha}, expected={DINO_SHA256}."
-        )
     dataset_contract = (
         load_canonical_attestation(
             args.canonical_attestation,
@@ -1084,6 +1406,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         eval_num_workers=args.eval_num_workers,
         seed=args.seed,
         amp_init_scale=args.amp_init_scale,
+        amp_dtype=args.amp_dtype,
         auto_resume=bool(args.auto_resume),
         source_commit=(
             str(git.get("commit", "")).strip().lower()
@@ -1095,6 +1418,7 @@ def main(argv: Sequence[str] | None = None) -> None:
             dataset_contract["image_tree_sha256"]
         ).lower(),
         experiment=experiment_config.key,
+        tempered_leakage_group_manifest=(data_yaml.parent / "manifest.csv"),
     )
 
     focused_tests = [
@@ -1103,6 +1427,9 @@ def main(argv: Sequence[str] | None = None) -> None:
         repo_root / "tests" / "test_canonical_classf_defaults.py",
         repo_root / "tests" / "test_deploy_classification_folder.py",
         repo_root / "tests" / "test_pretrained_classf_recipe.py",
+        repo_root / "tests" / "test_tempered_leakage_group_sampler.py",
+        repo_root / "tests" / "test_dinov3_surface_patch_hybrid_v2.py",
+        repo_root / "tests" / "test_assess_pretrained_classf_probe.py",
         repo_root / "tests" / "test_illumination_consistency_loss.py",
         repo_root / "tests" / "test_resume_weight_and_distillation_source.py",
         repo_root / "tests" / "test_attention_viz_headless.py",
@@ -1124,7 +1451,13 @@ def main(argv: Sequence[str] | None = None) -> None:
                 f"Focused {experiment_config.key} tests failed."
             )
 
-    model_preflight = _preflight_model(train_args)
+    model_preflight = _preflight_model(
+        train_args,
+        expected_parameter_count=experiment_config.expected_parameter_count,
+        expected_external_initialization=(
+            experiment_config.external_initialization_used
+        ),
+    )
     preflight_dir = output_dir / (
         f"preflight_classf_{experiment_slug}_{args.run_tag}"
     )
@@ -1140,8 +1473,21 @@ def main(argv: Sequence[str] | None = None) -> None:
             "tempered_class_sampling_power": (
                 experiment_config.tempered_class_sampling_power
             ),
+            "tempered_leakage_group_sampling": (
+                experiment_config.tempered_leakage_group_sampling
+            ),
             "single_semantic_delta_from_b0": (
                 experiment_config.single_semantic_delta_from_b0
+            ),
+            "model_type": experiment_config.model_type,
+            "dinov3_surface_hybrid_mode": (
+                experiment_config.dinov3_surface_hybrid_mode
+            ),
+            "expected_parameter_count": (
+                experiment_config.expected_parameter_count
+            ),
+            "external_initialization_used": (
+                experiment_config.external_initialization_used
             ),
             "research_role": experiment_config.research_role,
             "promotion_eligible": experiment_config.promotion_eligible,
@@ -1163,17 +1509,29 @@ def main(argv: Sequence[str] | None = None) -> None:
         "development_data": development_contract,
         "dino": {
             "model_name": DINO_MODEL_NAME,
-            "checkpoint": str(dino_checkpoint),
+            "checkpoint": str(dino_checkpoint) if dino_checkpoint is not None else None,
             "sha256": dino_sha,
-            "source_url": DINO_SOURCE_URL,
-            "source_revision": DINO_SOURCE_REVISION,
-            "source_license": DINO_SOURCE_LICENSE,
+            "source_url": (
+                DINO_SOURCE_URL if experiment_config.external_initialization_used else None
+            ),
+            "source_revision": (
+                DINO_SOURCE_REVISION
+                if experiment_config.external_initialization_used
+                else None
+            ),
+            "source_license": (
+                DINO_SOURCE_LICENSE
+                if experiment_config.external_initialization_used
+                else None
+            ),
+            "consumed_by_model": experiment_config.external_initialization_used,
         },
         "git": git,
         "archive_source": archive_source,
         "runtime": {
             "python": str(args.python.resolve()),
             "torch": torch.__version__,
+            "timm": importlib.metadata.version("timm"),
             "cuda_available": bool(torch.cuda.is_available()),
             "cuda_device": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
             "amp_dtype_request": args.amp_dtype,

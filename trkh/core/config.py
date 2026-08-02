@@ -143,6 +143,9 @@ class ModelConfig:
     pretrained_semantic_initial_scale: float = 0.0
     pretrained_semantic_max_scale: float = 0.25
     pretrained_backbone_gradient_checkpointing: bool = False
+    dinov3_surface_hybrid_mode: str = "local_surface"
+    dinov3_surface_initial_gate_scale: float = 0.05
+    dinov3_surface_max_gate_scale: float = 0.25
     timm_qv_lora: bool = False
     timm_qv_lora_layers: str = "8,9,10,11"
     timm_qv_lora_rank: int = 4
@@ -494,6 +497,7 @@ class TrainConfig:
     early_stopping_patience: int = 15
     seed: int = 42
     amp: bool = True
+    amp_dtype: str = "auto"
     amp_init_scale: float = 65536.0
     deterministic: bool = False
     use_class_weights: bool = True
@@ -506,6 +510,7 @@ class TrainConfig:
     balanced_epoch_multiplier: float = 1.0
     balanced_epoch_tolerance: float = 0.10
     tempered_class_sampling_power: Optional[float] = None
+    tempered_leakage_group_manifest: str = ""
     auto_tune_imbalance: bool = False
     imbalance_sampler_disable_threshold: float = 0.18
     save_last_checkpoint: bool = True

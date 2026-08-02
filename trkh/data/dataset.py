@@ -4036,6 +4036,7 @@ class TemperedClassBatchSampler(StrictBalancedBatchSampler):
         epoch_multiplier: float = 1.0,
         seed: int = 42,
         drop_last: bool = False,
+        group_ids: Optional[Sequence[str]] = None,
     ) -> None:
         power = float(power)
         if not math.isfinite(power) or not 0.0 <= power <= 1.0:
@@ -4070,6 +4071,36 @@ class TemperedClassBatchSampler(StrictBalancedBatchSampler):
             float(weight / weight_sum) for weight in raw_weights
         ]
         self._batch_allocations = self._build_batch_allocations()
+        self.group_ids: Optional[List[str]] = None
+        self.class_to_group_to_indices: Dict[int, Dict[str, List[int]]] = {}
+        if group_ids is not None:
+            if len(group_ids) != len(self.labels):
+                raise ValueError(
+                    "TemperedClassBatchSampler group_ids phai co cung do dai voi labels: "
+                    f"groups={len(group_ids)}, labels={len(self.labels)}."
+                )
+            normalized_group_ids = [str(group_id).strip() for group_id in group_ids]
+            empty_indices = [
+                index
+                for index, group_id in enumerate(normalized_group_ids)
+                if not group_id
+            ]
+            if empty_indices:
+                raise ValueError(
+                    "TemperedClassBatchSampler group_ids khong duoc rong; "
+                    f"invalid_indices={empty_indices[:10]}."
+                )
+            self.group_ids = normalized_group_ids
+            self.class_to_group_to_indices = {
+                class_index: {} for class_index in self.active_classes
+            }
+            for sample_index, (class_index, group_id) in enumerate(
+                zip(self.labels, normalized_group_ids)
+            ):
+                self.class_to_group_to_indices[class_index].setdefault(
+                    group_id,
+                    [],
+                ).append(sample_index)
 
     def _build_batch_allocations(self) -> List[List[Tuple[int, int]]]:
         residual = [0.0 for _ in range(self.num_classes)]
@@ -4156,7 +4187,131 @@ class TemperedClassBatchSampler(StrictBalancedBatchSampler):
                 "max_prefix_absolute_quota_error": float(max_prefix_error),
             }
         )
+        if self.group_ids is not None:
+            source_group_counts: List[int] = []
+            source_max_group_sizes: List[int] = []
+            minimum_group_exposures: List[int] = []
+            maximum_group_exposures: List[int] = []
+            group_label_sets: Dict[str, set[int]] = {}
+            for class_index in range(self.num_classes):
+                groups = self.class_to_group_to_indices.get(class_index, {})
+                group_count = int(len(groups))
+                class_exposure = int(observed_counts[class_index])
+                source_group_counts.append(group_count)
+                source_max_group_sizes.append(
+                    max((len(indices) for indices in groups.values()), default=0)
+                )
+                if group_count > 0:
+                    minimum_group_exposures.append(class_exposure // group_count)
+                    maximum_group_exposures.append(
+                        int(math.ceil(float(class_exposure) / float(group_count)))
+                    )
+                else:
+                    minimum_group_exposures.append(0)
+                    maximum_group_exposures.append(0)
+                for group_id in groups:
+                    group_label_sets.setdefault(group_id, set()).add(class_index)
+            label_cardinality_histogram = Counter(
+                len(labels) for labels in group_label_sets.values()
+            )
+            summary.update(
+                {
+                    "group_sampling_enabled": True,
+                    "group_sampling_scope": "class_conditioned_leakage_group_uniform",
+                    "source_unique_group_count": int(len(group_label_sets)),
+                    "source_group_counts_by_class": source_group_counts,
+                    "source_max_group_sizes_by_class": source_max_group_sizes,
+                    "min_group_exposure_by_class": minimum_group_exposures,
+                    "max_group_exposure_by_class": maximum_group_exposures,
+                    "max_within_class_group_exposure_gap": int(
+                        max(
+                            (
+                                maximum - minimum
+                                for minimum, maximum in zip(
+                                    minimum_group_exposures,
+                                    maximum_group_exposures,
+                                )
+                            ),
+                            default=0,
+                        )
+                    ),
+                    "mixed_label_group_count": int(
+                        sum(1 for labels in group_label_sets.values() if len(labels) > 1)
+                    ),
+                    "group_label_cardinality_histogram": {
+                        str(cardinality): int(count)
+                        for cardinality, count in sorted(
+                            label_cardinality_histogram.items()
+                        )
+                    },
+                }
+            )
         return summary
+
+    def __iter__(self) -> Iterator[List[int]]:
+        if self.group_ids is None:
+            yield from super().__iter__()
+            return
+
+        generator = torch.Generator()
+        generator.manual_seed(self.seed + max(0, self.epoch))
+
+        class_group_pools: Dict[int, List[str]] = {}
+        class_group_positions: Dict[int, int] = {}
+        member_pools: Dict[Tuple[int, str], List[int]] = {}
+        member_positions: Dict[Tuple[int, str], int] = {}
+
+        def shuffled_values(values: Sequence) -> List:
+            order = torch.randperm(len(values), generator=generator).tolist()
+            return [values[index] for index in order]
+
+        for class_index in self.active_classes:
+            groups = self.class_to_group_to_indices[class_index]
+            group_names = sorted(groups)
+            class_group_pools[class_index] = shuffled_values(group_names)
+            class_group_positions[class_index] = 0
+            for group_id in group_names:
+                key = (class_index, group_id)
+                member_pools[key] = shuffled_values(groups[group_id])
+                member_positions[key] = 0
+
+        def draw_index(class_index: int) -> int:
+            group_position = class_group_positions[class_index]
+            group_pool = class_group_pools[class_index]
+            if group_position >= len(group_pool):
+                group_pool = shuffled_values(
+                    sorted(self.class_to_group_to_indices[class_index])
+                )
+                class_group_pools[class_index] = group_pool
+                class_group_positions[class_index] = 0
+                group_position = 0
+            group_id = group_pool[group_position]
+            class_group_positions[class_index] = group_position + 1
+
+            key = (class_index, group_id)
+            member_position = member_positions[key]
+            member_pool = member_pools[key]
+            if member_position >= len(member_pool):
+                member_pool = shuffled_values(
+                    self.class_to_group_to_indices[class_index][group_id]
+                )
+                member_pools[key] = member_pool
+                member_positions[key] = 0
+                member_position = 0
+            sampled_index = int(member_pool[member_position])
+            member_positions[key] = member_position + 1
+            return sampled_index
+
+        for batch_index in range(self.num_batches):
+            batch_indices: List[int] = []
+            for class_index, sample_count in self._allocation_for_batch(batch_index):
+                for _ in range(sample_count):
+                    batch_indices.append(draw_index(class_index))
+            shuffle_order = torch.randperm(
+                len(batch_indices),
+                generator=generator,
+            ).tolist()
+            yield [batch_indices[index] for index in shuffle_order]
 
 
 def build_rare_class_repeat_factors(
