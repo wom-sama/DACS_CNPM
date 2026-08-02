@@ -80,7 +80,14 @@ def _atomic_json(path: Path, payload: object) -> None:
 def _source_hashes() -> Dict[str, str]:
     tool = Path(__file__).resolve()
     model = tool.parents[1] / "models" / "dinov3_cgaer_bridge_b11.py"
-    return {"preflight_tool_sha256": _sha256(tool), "model_sha256": _sha256(model)}
+    runner = tool.with_name("screen_dinov3_cgaer_b11_sourcefold.py")
+    if not runner.is_file():
+        raise FileNotFoundError("locked B11 runner source is absent")
+    return {
+        "preflight_tool_sha256": _sha256(tool),
+        "model_sha256": _sha256(model),
+        "runner_sha256": _sha256(runner),
+    }
 
 
 def _load_cache(cache_dir: Path) -> Dict[str, object]:

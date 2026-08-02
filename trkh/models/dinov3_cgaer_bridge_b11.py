@@ -189,11 +189,24 @@ class DinoV3CGAERBridgeB11(nn.Module):
             return_trace=True,
         )
         uncapped, trace = result
-        uncapped_norm = torch.linalg.vector_norm(uncapped, dim=-1, keepdim=True)
+        # Keep the trust-region arithmetic in FP32 so a finite, large FP16/
+        # BF16 vector cannot overflow its squared norm and collapse to zero.
+        low_precision = uncapped.dtype in (
+            torch.float16,
+            torch.bfloat16,
+        )
+        cap_work = uncapped.float() if low_precision else uncapped
+        uncapped_norm = torch.linalg.vector_norm(
+            cap_work, dim=-1, keepdim=True
+        )
         scale = torch.rsqrt(
             1.0 + torch.square(uncapped_norm / CGAER_B11_RESIDUAL_L2_CAP)
         )
-        residual = uncapped * scale
+        if low_precision:
+            # Leave one FP16-ulp-scale guard below the mathematical cap after
+            # casting the five-vector back to its inference dtype.
+            scale = scale * (1.0 - 2.0**-10)
+        residual = (cap_work * scale).to(dtype=uncapped.dtype)
         if not return_trace:
             return residual
         trace.update(
@@ -201,7 +214,7 @@ class DinoV3CGAERBridgeB11(nn.Module):
                 "residual": residual,
                 "uncapped_residual_l2_norm": uncapped_norm.squeeze(-1),
                 "residual_l2_norm": torch.linalg.vector_norm(
-                    residual, dim=-1
+                    residual.float(), dim=-1
                 ),
                 "residual_scale": scale.squeeze(-1),
             }

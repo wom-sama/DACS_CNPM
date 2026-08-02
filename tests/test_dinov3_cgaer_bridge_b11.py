@@ -177,6 +177,20 @@ def test_b11_control_coordinates_are_unbounded_before_common_cap() -> None:
     assert float(torch.linalg.vector_norm(capped)) < 0.5
 
 
+def test_b11_low_precision_cap_does_not_overflow_to_zero() -> None:
+    model = DinoV3CGAERBridgeB11(CGAER_B11_CONTROL_MODE).half()
+    base = torch.zeros(1, 5, dtype=torch.float16)
+    raw = torch.tensor(
+        ((1_000.0, -1_000.0, 0.0, 0.0, 0.0),),
+        dtype=torch.float16,
+    )
+    residual = model.residual_from_raw_outputs(raw, base)
+    norm = torch.linalg.vector_norm(residual.float())
+
+    assert torch.isfinite(residual).all()
+    assert 0.49 < float(norm) < CGAER_B11_RESIDUAL_L2_CAP
+
+
 @pytest.mark.parametrize(
     "mode", (CGAER_B11_CANDIDATE_MODE, CGAER_B11_CONTROL_MODE)
 )

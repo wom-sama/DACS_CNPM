@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from trkh.tools import precheck_dinov3_cgaer_b11_sourcefold as preflight_module
 from trkh.tools.precheck_dinov3_cgaer_b11_sourcefold import (
     EXPECTED_ASSIGNMENT_CSV_SHA256,
     EXPECTED_CACHE_HASHES,
@@ -106,4 +107,16 @@ def test_runner_validator_rehashes_sources_and_fails_closed(tmp_path: Path) -> N
     unsafe["test_permission"] = True
     path.write_text(json.dumps(unsafe), encoding="utf-8")
     with pytest.raises(ValueError, match="stale/unsafe"):
+        validate_runner_preflight(path, expected_sha256=_sha256(path))
+
+
+def test_runner_validator_binds_exact_runner_source(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "preflight.json"
+    path.write_text(json.dumps(_valid_payload()), encoding="utf-8")
+    changed = dict(_source_hashes())
+    changed["runner_sha256"] = "0" * 64
+    monkeypatch.setattr(preflight_module, "_source_hashes", lambda: changed)
+    with pytest.raises(ValueError, match="sources_current"):
         validate_runner_preflight(path, expected_sha256=_sha256(path))
