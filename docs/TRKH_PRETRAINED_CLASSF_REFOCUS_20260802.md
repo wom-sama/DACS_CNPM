@@ -6,7 +6,7 @@
 - Close PRMR R1 as **diagnostic-positive but not promotable**.
 - Do not reuse the two-backbone A0 hybrid.
 - Close class-conditioned group exposure and PR-SPR-V3 after their matched failures.
-- Preserve B9 pure DINO as the current presentation/teacher reference. Frozen-B9 Post-Norm XCNorm A0 is now closed; only one placement-controlled A1 screen may proceed on train groups before validation can be considered. Mobile promotion still requires a later locked distillation and device audit.
+- Preserve B9 pure DINO as the current presentation/teacher reference. XCNorm A0/A1 and B11-CGAER are closed by matched TRAIN-only screens. Do not launch another late pooled-feature adapter, uncertainty router, or width/loss/LR sweep on this representation. Mobile promotion still requires a later locked distillation and device audit.
 
 ## Evidence, not assumptions
 
@@ -178,8 +178,28 @@ The single screen uses FP32, seed `20260731`, five fixed epochs, AdamW `lr=1.5e-
 
 Promotion requires every gate: candidate class-1 F1 improves by at least `+0.005` versus both B9 and control with both bootstrap lower bounds above zero; at least four of five fold wins versus control; class-1 TP is at least `98%` of B9 and no lower than control; total non-class-1 FP into class 1 is at most `90%` of B9 and no higher than control, with its rate-delta upper bounds below zero versus B9 and at most zero versus control; each `0/2/3/4 -> 1` count is no higher than both; macro-F1 lower bounds are at least `-0.002` versus both; mixed-versus-pure gate AUROC is at least `0.75` with lower bound at least `0.70`; the gate ranks the binary event “this row is a class-1 FP or FN” against all train rows with AUROC at least `0.75`; fixing `g=0.5` loses at least `0.002` class-1 F1 without reducing FP; residual p95 is in `[0.01,0.5)`; and all paired updates, hashes, branch-off and finite-value checks pass. The error-triage AUROC is not a claim that uncertainty alone knows the FP-versus-FN correction direction; the ordered-energy coordinates must prove that through the matched F1/TP/FP gates. This population clarification was committed after the first formal preflight created no artifact and before any candidate OOF update; it preserves the originally measured train-only diagnostic rather than silently replacing it with the narrower conditional-boundary AUROC. Failure closes exact B11 without width/LR/loss/cap/gate sweeps. Passing authorizes a separately frozen validation protocol, not test access or a generalization claim. ONNX, CPU/mobile and robustness audits occur only after this train-fold gate passes.
 
+## Closed experiment: B11 conflict-gated adjacent-energy residual
+
+The one locked FP32 TRAIN-only run on commit `6a008d7` completed all `1305/1305` paired updates with zero skipped/non-finite update, exact branch-off and verified cache/fold/source hashes. It constructed neither validation nor test. The accepted preflight already showed that a fixed linear score in frozen B9 space can rank mixed versus pure components (`AUROC 0.825639`) and the event “row is a class-1 FP or FN” versus all train rows (`0.846424`); the narrower FP-versus-FN boundary population was only `0.577538` and was never promoted as a directional claim.
+
+| TRAIN-only OOF arm | Accuracy | Macro-F1 | C1 P/R/F1 | C1 TP/FN | FP into C1 (`0/2/3/4`) |
+|---|---:|---:|---:|---:|---:|
+| Frozen B9 | `0.966900` | `0.955234` | `0.859745/0.949698/0.902486` | `472/25` | `77` (`36/34/3/4`) |
+| Equal-parameter categorical control | `0.963397` | `0.950075` | `0.889113/0.887324/0.888218` | `441/56` | `55` (`23/26/1/5`) |
+| B11 candidate | `0.963155` | `0.950157` | `0.870906/0.909457/0.889764` | `452/45` | `67` (`27/31/2/7`) |
+| Candidate with gate forced to `0.5` | — | `0.951093` | `—/—/0.888889` | `444/53` | `58` |
+
+B11 loses class-1 F1 versus B9 by `-0.012722`, with a 5,000-draw component-bootstrap interval entirely below zero `[-0.024204,-0.002457]`; macro-F1 also falls by `-0.005077 [-0.008498,-0.001932]`. Its tiny class-1 F1 delta over the control is inconclusive, `+0.001546 [-0.006033,+0.009470]`, with only two of five fold wins. Although it removes 13 B9 false positives, it loses 20 B9 true positives. Against the control it recovers 11 true positives but creates 12 false positives and removes none; its FP-rate interval is strictly worse, `+0.001542 [+0.000665,+0.002597]`.
+
+The mechanism failed, not merely the promotion threshold. Candidate residual p95 reaches `0.468004` under a `0.5` cap, yet its learned gate inverts the preregistered signal: mixed-versus-pure AUROC is `0.480222 [0.399984,0.553564]` and class-1 error-event AUROC is `0.378410 [0.324786,0.437553]`. Forcing the gate to `0.5` changes class-1 F1 by only `+0.000875 [-0.005746,+0.007584]`. Pair AUROCs remain effectively unchanged around `0.996--1.000`, so the pooled post-norm B9 feature contains an uncertainty ranking but supplies no learned correction direction. End-to-end CE repurposed the shared gate as a class-routing coordinate while its auxiliary BCE memorized the training folds. A separately frozen/two-stage gate could recover triage AUROC, but cannot solve this missing-direction result and is therefore not an admissible B12.
+
+This closes the exact B11 family and the broader strategy of correcting B9 with a tiny head after final pooling. No validation, test, robustness, ONNX, or mobile audit is authorized from B11. The next experiment must either expose genuinely new pre-pooling/local evidence with a measured precondition, or add independently defensible supervision; it must not retune B11's width, cap, loss weight, learning rate, gate, or ordinal coordinates.
+
 Authoritative artifacts:
 
+- Accepted B11 preflight SHA256 `04ba96201dea663ab1e47f3dc51a8197746fc66bab1c869545aaf3f5b39c3745`: `runs/preflight_cgaer_b11_6a008d7_r1/preflight.json`
+- Closed B11 summary SHA256 `b63b0100a060e4272d5465deaa204dbe7277a6d6f140451d09fadd61d2aca5f5`: `runs/pretrained_dinov3_classf_b11_cgaer_sourcefold_6a008d7_r1/summary.json`
+- Closed B11 OOF SHA256 `95ee6a1c990cd48f55530ee9a2355dfb0f7c53a5a6d2b1ed6897af581ebdb5c8`: `runs/pretrained_dinov3_classf_b11_cgaer_sourcefold_6a008d7_r1/train_oof_logits.npz`
 - Accepted end-to-end A1 integration preflight SHA256 `2039c1165a0d6d44fe460fb54ac1aa1397942b1920d042f97dc2cb4b7d7fa0d6`: `runs/preflight_xcnorm_a1_actual_b9_287ab18_r1/preflight.json`
 - Closed A1 summary SHA256 `1d07c0afdf46d57e80b6b516f1c0004101a39c0b8bdbc0dbd2bb7a906861a10`: `runs/pretrained_dinov3_classf_xcnorm_a1_sourcefold_74f046d_r1/summary.json`
 - Closed A1 OOF SHA256 `c49bcdad986805c25ad7f13830dd678291cf34bcdf305ce477f9c3eb10702e6b`: `runs/pretrained_dinov3_classf_xcnorm_a1_sourcefold_74f046d_r1/train_oof_logits.npz`
