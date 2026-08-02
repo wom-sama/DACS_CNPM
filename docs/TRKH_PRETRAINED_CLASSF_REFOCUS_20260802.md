@@ -5,7 +5,8 @@
 - Keep `class_f` immutable and keep the test split sealed.
 - Close PRMR R1 as **diagnostic-positive but not promotable**.
 - Do not reuse the two-backbone A0 hybrid.
-- Close class-conditioned group exposure after its matched failure; isolate a spatial surface adapter on top of the winning B2 pure-DINO path.
+- Close class-conditioned group exposure and PR-SPR-V3 after their matched failures.
+- Preserve B9 pure DINO as the current presentation/teacher reference. Screen the next spatial adapter only as a frozen-B9, train-only experiment before opening validation again; mobile promotion still requires a later locked distillation and device audit.
 
 ## Evidence, not assumptions
 
@@ -71,9 +72,11 @@ The matched result rejects the local V2 branch. Exact FP32 validation gives:
 
 | Arm | Macro-F1 | Class-1 F1 | `0 -> 1` | `2 -> 1` | `4 -> 1` |
 |---|---:|---:|---:|---:|---:|
-| B2 pure DINO | `0.851080` | `0.658892` | `16` | `40` | `16` |
+| B2 pure DINO | `0.851080` | `0.658892` | `16` | `38` | `16` |
 | Generic token adapter | `0.856577` | `0.670391` | `19` | `43` | `16` |
 | Local RGB adapter | `0.846433` | `0.633609` | `14` | `52` | `22` |
+
+This V2 B2 row is one internally consistent exact export, not the later V3 control: checkpoint SHA `6ee4a39a...27411`, selected-state SHA `645da0e8...e9b47`, prediction CSV SHA `9450ff78...33aa4`. Its CSV gives `2 -> 1 = 38`; the value `40` in older gate summaries came from in-training metrics. The V3 table below deliberately uses its own separately hashed B2 control and must not be spliced into this row.
 
 The local branch is active, not collapsed: removing it after co-adaptation lowers class-1 F1 from `0.633609` to `0.539171`. Its mean residual/token ratio is about `0.069`, versus `0.038` for the generic control, while its gate is nearly always on. On true class 2, the local branch preferentially raises class-1 probability for low-saturation, low-`R-G` images. The old six-channel input `[RGB, patch_mean_RGB]` therefore duplicates absolute colour while the free `64 -> 384` projection can override DINO semantics in an unconstrained direction. This is an architecture failure, not evidence that more CNN depth is needed.
 
@@ -98,6 +101,36 @@ The executable V3 verdict accepts only full canonical validation exports with cl
 Because near-duplicate sequences inflate the aggregate score, the post-probe mechanism audit must also report stable-label, relabelled, mixed-group, near-train-neighbour and far/boundary cohorts. Improvement confined to the near-neighbour cohort is a failure even if aggregate validation passes.
 
 Because validation informed this design, V3 remains exploratory. A final confirmatory claim needs a new source/time/site holdout; the current test split stays sealed until the complete protocol is frozen.
+
+## Closed experiment: PR-SPR-V3
+
+The locked seed-42 BF16 probe completed without non-finite or skipped updates, but the hardened full-validation FP32 verdict rejected V3:
+
+| Arm | Accuracy | Macro-F1 | Class-1 F1 | Restricted `0/2/4 -> 1` FP |
+|---|---:|---:|---:|---:|
+| B2 pure DINO | `0.890278` | `0.852012` | `0.655172` | `74` |
+| Pair-generic control | `0.875353` | `0.830924` | `0.597101` | `82` |
+| Relative-surface candidate | `0.883017` | `0.843025` | `0.639296` | `71` |
+| Candidate checkpoint, branch off | `0.883017` | `0.842870` | `0.637427` | `72` |
+
+The descriptor is useful relative to the same-capacity generic arm (`+0.01210` macro-F1, `+0.04219` class-1 F1, restricted FP `82 -> 71`), but it does not recover B2. More importantly, the active branch changes no argmax correction and only removes one restricted FP relative to its own branch-off path. Its residual/token p95 is only `7.37e-5`, far below the allowed `0.04` cap: the adapter is starved and most of the observed difference was absorbed into the co-adapted backbone.
+
+The mechanism audit rejects the earlier “wrong direction through block 11” hypothesis. On 25 deterministic train images, finite differences along all three `W_1-W_{0,2,4}` directions increased their intended margin in `25/25` cases; candidate directions also retain cosine `0.987--0.990` with B2. The actual design errors are that V3 restarted a full 21.6M-parameter fine-tune from the generic DINO source instead of inheriting B9, while a 160-parameter zero-initialized branch competed with that moving backbone and remained nearly closed.
+
+Dataset cohorts do not rescue V3. Relative to B2, candidate class-1 recall is lower on stable labels (`0.5584` versus `0.5844`), relabelled labels (`0.8148` versus `0.8519`), mixed-source sessions (`0.6308` versus `0.6923`) and source-near rows (`0.6628` versus `0.7209`). It improves accuracy/macro-F1 on source-far rows (`0.8845/0.8378` versus `0.8810/0.8311`) but retains the same class-1 recall; therefore the failure is neither confined to near duplicates nor explainable by data alone.
+
+Authoritative artifacts:
+
+- Locked verdict: `runs/evidence_v3_exact_36eca38/locked_verdict.json`
+- Exact predictions and routing: `runs/evidence_v3_exact_36eca38/{b2,generic,candidate,branch_off}`
+- Train/validation integrity review (pHash radius 3): `runs/classf_integrity_review_trainval_p3_20260802`
+- Final mobile proxy: `runs/engineering_v3_mobile_clean_36eca38/summary.json`
+
+## Locked next screen: frozen-B9 Post-Norm XCNorm A0
+
+Do not tune V3 on validation. The next single hypothesis first strict-loads the selected EMA state from B9 `best.pt`, freezes the complete DINO backbone/norm/classifier, and trains only a `3,672`-parameter local adapter. Candidate and control share `384 -> 8`, an `8 x 8 x 3 x 3` local operator, and `8 -> 3`; they differ only in normalized cross-correlation versus ordinary convolution. The pair residual is injected after the final DINO norm and before average pooling, where `W_1-W_j` has exact classifier geometry. Step-zero and branch-off logits must be bit-exact B9.
+
+The first screen uses five immutable component-group folds derived only from train: same crop source, declared train group, adjacent source IDs and pHash distance at most 3 remain in one component. B9 has already seen all train rows, so this is a conditional adapter comparison, not an independent generalization estimate. No validation/test dataset is constructed. XCNorm must beat its equal-parameter convolution control by at least `0.020` mean pair AUROC, win at least four of five folds, retain at least `98%` class-1 TP, reduce restricted FP by at least `10%`, keep macro-F1 within `0.002`, and demonstrate a non-collapsed residual p95 in `[1e-3, 0.04)`. Failure closes A0; passing authorizes one frozen protocol evaluation on validation, not test access.
 
 ## Process corrections
 
