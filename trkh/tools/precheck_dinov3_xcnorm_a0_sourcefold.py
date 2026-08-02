@@ -104,6 +104,18 @@ def _json_sha256(value: object) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def _flush_and_close_memmaps(*arrays: np.memmap) -> None:
+    """Flush and release Windows mappings before atomic cache promotion."""
+
+    for array in arrays:
+        array.flush()
+        mapping = getattr(array, "_mmap", None)
+        if mapping is None:
+            raise TypeError("A0 cache writer must be backed by numpy.memmap")
+        if not mapping.closed:
+            mapping.close()
+
+
 def _relative_train_path(path: Path, data_root: Path) -> str:
     resolved = path.expanduser().resolve()
     try:
@@ -536,8 +548,7 @@ def _load_or_extract_cache(
             cursor = end
     if cursor != EXPECTED_TRAIN_SAMPLES:
         raise RuntimeError(f"cache row mismatch: {cursor}")
-    for array in (tokens, logits, labels):
-        array.flush()
+    _flush_and_close_memmaps(tokens, logits, labels)
     del tokens, logits, labels
     for key in ("tokens", "logits", "labels"):
         partial[key].replace(paths[key])

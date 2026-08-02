@@ -19,6 +19,7 @@ from trkh.tools.precheck_dinov3_xcnorm_a0_sourcefold import (
     assign_locked_folds,
     build_paired_adapters,
     build_train_union_groups,
+    _flush_and_close_memmaps,
 )
 
 
@@ -81,6 +82,28 @@ def test_train_only_guard_rejects_val_and_test(tmp_path: Path) -> None:
 
 def test_deterministic_cuda_workspace_is_set_before_runtime() -> None:
     assert os.environ["CUBLAS_WORKSPACE_CONFIG"] == ":4096:8"
+
+
+def test_memmap_is_closed_before_atomic_promotion(tmp_path: Path) -> None:
+    partial = tmp_path / "cache.npy.partial"
+    final = tmp_path / "cache.npy"
+    values = np.lib.format.open_memmap(
+        partial,
+        mode="w+",
+        dtype=np.float32,
+        shape=(3,),
+    )
+    values[:] = [1.0, 2.0, 3.0]
+    mapping = values._mmap
+    _flush_and_close_memmaps(values)
+    assert mapping.closed
+    del values
+
+    partial.replace(final)
+    np.testing.assert_array_equal(
+        np.load(final, allow_pickle=False),
+        np.asarray([1.0, 2.0, 3.0], dtype=np.float32),
+    )
 
 
 def test_paired_adapters_are_identical_capacity_and_head_is_frozen() -> None:
