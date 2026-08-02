@@ -257,7 +257,9 @@ def _architecture_smoke(features: np.ndarray, base_logits: np.ndarray, labels: n
     candidate, control = _paired_bridges()
     state_equal = all(torch.equal(value, control.state_dict()[key]) for key, value in candidate.state_dict().items())
     z = torch.from_numpy(np.asarray(features[:16], dtype=np.float32))
-    base = torch.from_numpy(np.asarray(base_logits[:16], dtype=np.float32))
+    base = torch.from_numpy(
+        np.array(base_logits[:16], dtype=np.float32, copy=True)
+    )
     target = torch.from_numpy(np.asarray(labels[:16], dtype=np.int64))
     with torch.no_grad():
         active_candidate, trace = candidate(z, base, return_trace=True)
@@ -337,10 +339,15 @@ def _readiness_diagnostic(
         raise RuntimeError("readiness OOF scores are incomplete")
     eligible = np.asarray(conflict["eligible"], dtype=bool)
     prediction = np.asarray(base_logits).argmax(axis=1)
+    boundary_error = np.logical_or(
+        np.logical_and(labels == 1, prediction != 1),
+        np.logical_and(labels != 1, prediction == 1),
+    )
     boundary = np.logical_or(labels == 1, prediction == 1)
-    boundary_error = prediction[boundary] != labels[boundary]
+    conditional_error = prediction[boundary] != labels[boundary]
     mixed_auc = float(roc_auc_score(mixed[eligible], scores[eligible]))
-    error_auc = float(roc_auc_score(boundary_error, scores[boundary]))
+    error_auc = float(roc_auc_score(boundary_error, scores))
+    conditional_auc = float(roc_auc_score(conditional_error, scores[boundary]))
     return {
         "status": "non_authorizing_fixed_linear_train_only_readiness",
         "input": "mean_postnorm_B9_feature_plus_B9_logits",
@@ -348,6 +355,7 @@ def _readiness_diagnostic(
         "seed": SEED,
         "mixed_vs_pure_auroc": mixed_auc,
         "b9_class1_boundary_error_auroc": error_auc,
+        "b9_class1_boundary_error_conditional_auroc": conditional_auc,
         "mixed_samples": int(mixed.sum()),
         "boundary_errors": int(boundary_error.sum()),
         "passed": mixed_auc >= 0.75 and error_auc >= 0.75,

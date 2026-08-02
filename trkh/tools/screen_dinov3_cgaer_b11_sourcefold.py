@@ -459,15 +459,23 @@ def _gate_aurocs(
         raise ValueError("gate scores are incomplete/non-finite")
     if np.unique(mixed[eligible]).size != 2:
         raise ValueError("mixed/pure gate AUROC lacks binary support")
+    errors = np.logical_or(
+        np.logical_and(labels == 1, predicted != 1),
+        np.logical_and(labels != 1, predicted == 1),
+    )
     boundary = np.logical_or(labels == 1, predicted == 1)
-    errors = predicted[boundary] != labels[boundary]
-    if np.unique(errors).size != 2:
+    conditional_errors = predicted[boundary] != labels[boundary]
+    if np.unique(errors).size != 2 or np.unique(conditional_errors).size != 2:
         raise ValueError("class-1 boundary gate AUROC lacks binary support")
     return {
         "mixed_vs_pure": float(roc_auc_score(mixed[eligible], gates[eligible])),
         "mixed_vs_pure_samples": int(eligible.sum()),
-        "class1_boundary_error": float(roc_auc_score(errors, gates[boundary])),
-        "class1_boundary_samples": int(boundary.sum()),
+        "class1_boundary_error": float(roc_auc_score(errors, gates)),
+        "class1_boundary_error_conditional": float(
+            roc_auc_score(conditional_errors, gates[boundary])
+        ),
+        "class1_boundary_samples": int(labels.size),
+        "class1_boundary_conditional_samples": int(boundary.sum()),
         "class1_boundary_errors": int(errors.sum()),
     }
 
