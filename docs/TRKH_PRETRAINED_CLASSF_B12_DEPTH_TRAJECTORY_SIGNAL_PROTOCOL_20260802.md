@@ -21,7 +21,7 @@ B12 is new only if all remain true: track aligned patch deltas in depth order; u
 
 ## Locked patch-depth representation
 
-Run the frozen FP32 B9 once and tap zero-based blocks `[2,5,8,11]`. Apply B9's final norm to each state, remove its five prefix tokens, and retain the aligned `16 x 16` patch grid. Block-11 mean-patch logits through the frozen B9 head must match the existing base-logit cache within `1e-6`; otherwise no artifact is valid.
+Run the frozen FP32 B9 once with local batch `24`, data workers `0`, four CPU threads and tap zero-based blocks `[2,5,8,11]`. Apply B9's final norm to each state, remove its five prefix tokens, and retain the aligned `16 x 16` patch grid. Block-11 mean-patch logits through the frozen B9 head must match the existing base-logit cache within `1e-6`; otherwise no artifact is valid. A separate TRAIN-only preflight must bind the exact runner, protocol, model-builder, dataset-builder and reused cache/fold-guard source hashes before feature extraction begins.
 
 For rivals `j in {0,2,4}`, define the fixed unit direction `d_j=(W_1-W_j)/||W_1-W_j||`, using the frozen B9 classifier. Let `x_l(p)` be patch `p` after block `l` and final norm.
 
@@ -58,4 +58,3 @@ The signal gate passes only if every condition holds:
 7. Block-11/base parity, exact path/label/fold/cache hashes, all `8278` OOF rows, finite features/scores, solver convergence, and TRAIN-only split guards all pass.
 
 Passing authorizes only a separate preregistration and implementation of `B12-DTSA-A0`: a patchwise low-rank diagonal state update over blocks `2/5/8`, injected before block 9 so blocks `9--11` integrate it. That future model must have fewer than `25,000` added parameters, strict B9 inheritance, a bit-exact disabled branch, an equal-parameter block-8-only control, and a depth-deranged falsification. Failure forbids writing that trainer or opening validation/test/mobile audits.
-
