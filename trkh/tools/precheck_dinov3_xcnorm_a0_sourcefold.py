@@ -55,6 +55,7 @@ FOLDS = 5
 SEED = 20260731
 EPOCHS = 5
 LR = 1.5e-4
+ADAPTER_BATCH_SIZE = 128
 # XCNorm is scale-normalized; weight decay would make the Conv/XCNorm pair
 # asymmetric without regularizing the effective XCNorm function.
 WEIGHT_DECAY = 0.0
@@ -83,7 +84,12 @@ def _parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--manifest", type=Path, default=None)
     parser.add_argument("--train-integrity-manifest", type=Path, required=True)
     parser.add_argument("--batch-size", type=int, default=32)
-    parser.add_argument("--adapter-batch-size", type=int, default=128)
+    parser.add_argument(
+        "--adapter-batch-size",
+        type=int,
+        default=ADAPTER_BATCH_SIZE,
+        help=f"locked paired-adapter batch size (must be {ADAPTER_BATCH_SIZE})",
+    )
     parser.add_argument("--workers", type=int, default=0)
     parser.add_argument("--device", type=str, default="")
     parser.add_argument("--torch-threads", type=int, default=4)
@@ -645,6 +651,7 @@ def run_oof_screen(
     residual_ratios: List[np.ndarray] = []
     fold_rows: List[Dict[str, object]] = []
     training_rows: List[Dict[str, object]] = []
+    schedule_contract_rows: List[Dict[str, object]] = []
     branch_off_error = 0.0
     paired_contracts: List[Dict[str, object]] = []
     nonfinite_updates = 0
@@ -672,6 +679,19 @@ def run_oof_screen(
         )
         for epoch in range(EPOCHS):
             schedule = _tempered_indices(fit, labels, SEED + fold * 100 + epoch, batch_size)
+            schedule_row = {
+                "fold": fold,
+                "epoch": epoch + 1,
+                "seed": SEED + fold * 100 + epoch,
+                "samples": int(schedule.size),
+                "class_counts": np.bincount(
+                    labels[schedule], minlength=5
+                ).astype(int).tolist(),
+                "schedule_int64_sha256": hashlib.sha256(
+                    np.asarray(schedule, dtype="<i8").tobytes()
+                ).hexdigest(),
+            }
+            schedule_contract_rows.append(schedule_row)
             losses = [0.0, 0.0]
             seen = 0
             control.train(); candidate.train()
@@ -710,7 +730,7 @@ def run_oof_screen(
                     losses[index] += float(loss.detach().cpu()) * count
                 seen += count
             training_rows.append({
-                "fold": fold, "epoch": epoch + 1, "samples": seen,
+                **schedule_row, "completed_samples": seen,
                 "control_loss": losses[0] / max(1, seen), "candidate_loss": losses[1] / max(1, seen),
             })
 
@@ -793,6 +813,7 @@ def run_oof_screen(
         "residual_ratio_p95": float(np.quantile(np.concatenate(residual_ratios), 0.95)),
         "branch_off_max_abs_error": branch_off_error,
         "training_rows": training_rows,
+        "schedule_contract_sha256": _json_sha256(schedule_contract_rows),
         "paired_contracts": paired_contracts,
         "completed_updates": completed_updates,
         "expected_updates": expected_updates,
@@ -819,6 +840,8 @@ def assess_readiness(screen: Mapping[str, object]) -> Dict[str, object]:
     assignment_hashes = screen.get("assignment_hashes", {})
     if not isinstance(assignment_hashes, Mapping):
         assignment_hashes = {}
+    training_rows = list(screen.get("training_rows", []))
+    schedule_hash = str(screen.get("schedule_contract_sha256", ""))
     checks = {
         "five_complete_group_disjoint_folds": len(fold_rows) == FOLDS and all(int(row.get("group_overlap", 1)) == 0 for row in fold_rows),
         "canonical_fold_assignment_locked": assignment_hashes.get("assignment_int64_sha256") == EXPECTED_ASSIGNMENT_INT64_SHA256 and assignment_hashes.get("path_fold_sha256") == EXPECTED_PATH_FOLD_SHA256,
@@ -826,6 +849,21 @@ def assess_readiness(screen: Mapping[str, object]) -> Dict[str, object]:
             int(row.get("control_parameters", -1)) == XCNORM_PAIR_ADDED_PARAMETER_COUNT
             and int(row.get("candidate_parameters", -1)) == XCNORM_PAIR_ADDED_PARAMETER_COUNT
             for row in screen.get("paired_contracts", [])
+        ),
+        "locked_batch_schedule_recorded": (
+            len(training_rows) == FOLDS * EPOCHS
+            and len(schedule_hash) == 64
+            and all(
+                len(str(row.get("schedule_int64_sha256", ""))) == 64
+                and int(row.get("samples", 0)) > 0
+                and len(list(row.get("class_counts", []))) == 5
+                and int(list(row.get("class_counts", [0] * 5))[3]) == 0
+                and all(
+                    int(list(row.get("class_counts", [0] * 5))[class_index]) > 0
+                    for class_index in (0, 1, 2, 4)
+                )
+                for row in training_rows
+            )
         ),
         "candidate_vs_conv_pair_auroc_gain": float(screen["mean_pair_auroc_gain"]) >= 0.020,
         "two_of_three_pair_gains": sum(value >= 0.010 for value in pair_gains.values()) >= 2,
@@ -862,8 +900,12 @@ def assess_readiness(screen: Mapping[str, object]) -> Dict[str, object]:
 
 
 def run_precheck(args: argparse.Namespace) -> Dict[str, object]:
-    if args.batch_size <= 0 or args.adapter_batch_size < 4 or args.workers < 0:
-        raise ValueError("cache batch must be positive, adapter batch >=4, workers non-negative")
+    if args.batch_size <= 0 or args.workers < 0:
+        raise ValueError("cache batch must be positive and workers non-negative")
+    if int(args.adapter_batch_size) != ADAPTER_BATCH_SIZE:
+        raise ValueError(
+            f"adapter batch size is protocol-locked to {ADAPTER_BATCH_SIZE}"
+        )
     torch.set_num_threads(max(1, int(args.torch_threads)))
     torch.manual_seed(SEED)
     torch.use_deterministic_algorithms(True)
@@ -961,7 +1003,11 @@ def run_precheck(args: argparse.Namespace) -> Dict[str, object]:
         "locked_optimization": {
             "folds": FOLDS, "seed": SEED, "epochs": EPOCHS,
             "optimizer": "AdamW", "learning_rate": LR,
+            "adapter_batch_size": ADAPTER_BATCH_SIZE,
+            "cache_batch_size": int(args.batch_size),
+            "cache_workers": int(args.workers),
             "weight_decay": WEIGHT_DECAY, "tempered_sampling_power": TEMPERED_POWER,
+            "batch_schedule_provenance": "per_fold_epoch_int64_sha256_and_class_counts",
             "early_stopping": False, "adapter_ema": False,
             "held_fold_selection": False, "paired_batch_schedule": True,
             "torch_deterministic_algorithms": True,

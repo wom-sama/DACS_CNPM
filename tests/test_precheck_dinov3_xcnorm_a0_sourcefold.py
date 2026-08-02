@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -11,6 +12,7 @@ from trkh.models.dinov3_xcnorm_pair_adapter_a0 import (
     XCNORM_PAIR_ADDED_PARAMETER_COUNT,
 )
 from trkh.tools.precheck_dinov3_xcnorm_a0_sourcefold import (
+    ADAPTER_BATCH_SIZE,
     EXPECTED_ASSIGNMENT_INT64_SHA256,
     EXPECTED_PATH_FOLD_SHA256,
     FOLDS,
@@ -20,6 +22,7 @@ from trkh.tools.precheck_dinov3_xcnorm_a0_sourcefold import (
     build_paired_adapters,
     build_train_union_groups,
     _flush_and_close_memmaps,
+    run_precheck,
 )
 
 
@@ -82,6 +85,12 @@ def test_train_only_guard_rejects_val_and_test(tmp_path: Path) -> None:
 
 def test_deterministic_cuda_workspace_is_set_before_runtime() -> None:
     assert os.environ["CUBLAS_WORKSPACE_CONFIG"] == ":4096:8"
+
+
+def test_adapter_batch_size_is_protocol_locked_before_any_io() -> None:
+    args = SimpleNamespace(batch_size=32, adapter_batch_size=64, workers=0)
+    with pytest.raises(ValueError, match=f"locked to {ADAPTER_BATCH_SIZE}"):
+        run_precheck(args)
 
 
 def test_memmap_is_closed_before_atomic_promotion(tmp_path: Path) -> None:
@@ -149,6 +158,18 @@ def _passing_screen() -> dict[str, object]:
         "skipped_updates": 0,
         "completed_updates": 100,
         "expected_updates": 100,
+        "training_rows": [
+            {
+                "fold": fold,
+                "epoch": epoch,
+                "samples": 128,
+                "class_counts": [32, 32, 32, 0, 32],
+                "schedule_int64_sha256": "a" * 64,
+            }
+            for fold in range(FOLDS)
+            for epoch in range(1, 6)
+        ],
+        "schedule_contract_sha256": "b" * 64,
         "assignment_hashes": {
             "assignment_int64_sha256": EXPECTED_ASSIGNMENT_INT64_SHA256,
             "path_fold_sha256": EXPECTED_PATH_FOLD_SHA256,
@@ -180,3 +201,11 @@ def test_readiness_rejects_class2_false_positive_regression() -> None:
     result = assess_readiness(screen)
     assert not result["full_validation_permission"]
     assert "b9_2_to_1_not_increased" in result["failed_checks"]
+
+
+def test_readiness_rejects_missing_schedule_provenance() -> None:
+    screen = _passing_screen()
+    screen["training_rows"] = screen["training_rows"][:-1]
+    result = assess_readiness(screen)
+    assert not result["clean_train_gates_passed"]
+    assert "locked_batch_schedule_recorded" in result["failed_checks"]
