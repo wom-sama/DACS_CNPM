@@ -208,6 +208,32 @@ Authoritative artifacts:
 - OOF logits SHA256 `5f982bb8119bbbba0367288c4a5d6f9ac3a7f1c2e2b47ad51a8d49e02075cf49`: `runs/pretrained_dinov3_classf_xcnorm_a0_trainfold_1dcc566_r1/train_oof_logits.npz`
 - Fold assignment SHA256 `afde4fec6b344b867d31e0e01b89f16c5f4be7fd551fdc1fdfd0ea34219d725f`: `runs/pretrained_dinov3_classf_xcnorm_a0_trainfold_1dcc566_r1/train_fold_assignments.csv`
 
+## Closed experiment: B12 same-patch depth trajectory
+
+B12 tested one fixed hypothesis: intermediate DINOv3 block trajectories from the same patch might add class-1 boundary information that is absent from the latest block. The corrected R2 run reproduced the immutable B9 cache bit-exactly (`max_abs=0`) and used only TRAIN descriptors, the fixed five source/union-component folds, a preregistered linear readout and whole-component bootstrap. It constructed neither validation nor test.
+
+| TRAIN-only pair screen | Mean C1-vs-rival AUROC | C1 TP | FP into C1 |
+|---|---:|---:|---:|
+| Raw B9 margin | `0.997776` | `1466` | `77` |
+| Latest-block control | `0.997424` | `1457` | `76` |
+| Deranged-depth control | `0.997511` | `1455` | `70` |
+| B12 trajectory candidate | `0.997589` | `1458` | `71` |
+
+The candidate's gain over the latest-block control is only `+0.000165 [-0.000023,+0.000380]`, and over the deranged control only `+0.000077 [-0.000101,+0.000265]`. It is significantly worse than the native B9 margin by `-0.000188 [-0.000355,-0.000021]`. Four of five fold means improve over latest, but only eight of fifteen rival-fold comparisons are positive. Recall/FP safety passes; every information-effect gate fails. Therefore the exact B12 trajectory family is closed: a larger SSM or attention module over these depth tokens would add capacity to relearn a signal already better represented by B9, not repair a demonstrated missing feature.
+
+- Accepted R2 preflight SHA256 `954b9db6daf3965bc3a1adfd6ae08fcabc36021d9bb0f6782b56fbd97c3c33ea`: `runs/preflight_b12_depth_trajectory_ae6b70a_r2/preflight.json`
+- Closed B12 summary SHA256 `083eca35eb2b6b78299c9d6c3130b2c6959f5de3533e7e71d25c759904e3775d`: `runs/pretrained_dinov3_classf_b12_depth_trajectory_signal_ae6b70a_r2/summary.json`
+- B12 feature SHA256 `fb7afeac35ad76e356ef7ced6691d20c58a28adf759e7bbee125121e132a06ec`; OOF SHA256 `d910851e2b793f38bf131a6aa8be693e61b368ea60a019640a447cea84ff44dc`.
+
+## TRAIN-only blinded boundary review queue
+
+The remaining data question is now a bounded human-review task, not an excuse for architecture sweeps. A sealed queue contains the 18 class-1 rows that are simultaneously endpoints of a cross-label `pHash<=3` relation and an adjacent-ID relation, plus six RGB-near-identical cross-label pairs (`pHash=0`, global SSIM at least `0.95`, RGB MAE at most `0.01`). B9 is correct on only `7/18` priority class-1 rows, but its predictions are hidden from the contact sheet to prevent reviewer anchoring. Two independent blinded reviewers and adjudication are required; no automatic relabeling is permitted.
+
+- Review directory: `runs/classf_train_boundary_review_priority_20260802`
+- Priority-P1 CSV SHA256 `6103ee946fb48147499fb167e23a8407614c04cf85d49b57c4e1d9e3cad20b46`
+- Priority-P2 CSV SHA256 `7987a7c639df84e494c4603eca10712c1d510775c88ee8078aff3fba91aec56d`
+- Contact-sheet SHA256 `c8bd6a05d984bb0f078185b48c5d16b02e5e369ff1a10e12946d75595bc324d7`; review-summary SHA256 `7cb6efe68c2677bcd3a37e69937d9d27331eec2ce56051b1162e58c61fe88609`.
+
 ## Process corrections
 
 - Never compare scores across yolo_f and canonical class_f as if they were matched.
