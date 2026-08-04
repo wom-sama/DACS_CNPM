@@ -215,12 +215,29 @@ def _git_contract() -> dict[str, object]:
 
 
 def _dependency_contract() -> dict[str, object]:
+    onnxruntime_distribution: dict[str, str] | None = None
+    for distribution in ("onnxruntime", "onnxruntime-gpu"):
+        try:
+            version = importlib.metadata.version(distribution)
+        except importlib.metadata.PackageNotFoundError:
+            continue
+        onnxruntime_distribution = {
+            "distribution": distribution,
+            "version": version,
+        }
+        break
+    if onnxruntime_distribution is None:
+        raise importlib.metadata.PackageNotFoundError(
+            "Neither onnxruntime nor onnxruntime-gpu is installed"
+        )
+    if onnxruntime_distribution["version"] != str(ort.__version__):
+        raise RuntimeError("ONNX Runtime module and distribution versions differ")
     return {
         "python": platform.python_version(),
         "python_executable": str(Path(sys.executable).resolve()),
         "numpy": importlib.metadata.version("numpy"),
         "onnx": importlib.metadata.version("onnx"),
-        "onnxruntime": importlib.metadata.version("onnxruntime"),
+        "onnxruntime": onnxruntime_distribution,
         "pillow": importlib.metadata.version("pillow"),
         "safetensors": importlib.metadata.version("safetensors"),
         "scikit_learn": importlib.metadata.version("scikit-learn"),
@@ -386,12 +403,22 @@ def _run_model_focused_tests(
     return {"command": command, "returncode": result.returncode, "output": combined}
 
 
+class _SingleInputExportWrapper(nn.Module):
+    def __init__(self, model: nn.Module) -> None:
+        super().__init__()
+        self.model = model
+
+    def forward(self, images: Tensor) -> Tensor:
+        return self.model(images)
+
+
 def _export_onnx(model: nn.Module, sample: Tensor, path: Path) -> dict[str, object]:
     model.cpu().eval()
+    export_model = _SingleInputExportWrapper(model).eval()
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=torch.jit.TracerWarning)
         torch.onnx.export(
-            model,
+            export_model,
             sample,
             str(path),
             input_names=["images"],
@@ -410,21 +437,8 @@ def _export_onnx(model: nn.Module, sample: Tensor, path: Path) -> dict[str, obje
         "sha256": _sha256(path),
         "operator_domains": domains,
         "operators": sorted({str(node.op_type) for node in graph.graph.node}),
+        "export_signature": "single_tensor_forward_wrapper",
     }
-
-
-def _disable_fused_attention_for_onnx(model: nn.Module) -> tuple[str, ...]:
-    """Force timm attention through its explicit, ONNX-traceable path."""
-    changed: list[str] = []
-    for name, module in model.named_modules():
-        if not hasattr(module, "fused_attn"):
-            continue
-        value = getattr(module, "fused_attn")
-        if not isinstance(value, bool):
-            raise TypeError(f"Unexpected fused_attn flag on {name}: {type(value)!r}")
-        setattr(module, "fused_attn", False)
-        changed.append(name)
-    return tuple(changed)
 
 
 def _ort_session(path: Path) -> ort.InferenceSession:
@@ -451,12 +465,6 @@ def _mobile_preflight(
     dino_weight: Path, efficientvim_checkpoint: Path
 ) -> dict[str, object]:
     dino = _build_dino(dino_weight, num_classes=CLASSES).cpu().eval()
-    disabled_dino_attention = _disable_fused_attention_for_onnx(dino)
-    if len(disabled_dino_attention) != len(dino.blocks):
-        raise ValueError(
-            "DINO ONNX attention inventory drifted: "
-            f"disabled={len(disabled_dino_attention)}, blocks={len(dino.blocks)}"
-        )
     efficientvim_source, _ = _build_efficientvim(efficientvim_checkpoint)
     efficientvim = _copy_efficientvim_backbone(efficientvim_source).cpu().eval()
     if sum(parameter.numel() for parameter in dino.parameters()) != DINO_5_CLASS_PARAMS:
@@ -550,7 +558,6 @@ def _mobile_preflight(
             "iterations_per_trial": ORT_ITERATIONS,
             "dino_input": [1, 3, DINO_IMAGE_SIZE, DINO_IMAGE_SIZE],
             "efficientvim_input": [1, 3, EFFICIENTVIM_IMAGE_SIZE, EFFICIENTVIM_IMAGE_SIZE],
-            "dino_fused_attention_disabled_for_onnx": list(disabled_dino_attention),
         },
         "parameters": {
             "dino_5class": DINO_5_CLASS_PARAMS,

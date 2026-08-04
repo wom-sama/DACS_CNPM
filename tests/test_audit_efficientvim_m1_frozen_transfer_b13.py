@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
+import onnxruntime as ort
 import pytest
 import torch
 from PIL import Image
@@ -14,8 +15,9 @@ from trkh.tools.audit_efficientvim_m1_frozen_transfer_b13 import (
     FOLDS,
     _TrainLedgerDataset,
     _assert_output_outside_data_root,
-    _disable_fused_attention_for_onnx,
+    _dependency_contract,
     _dino_descriptor,
+    _export_onnx,
     _fast_f1_from_predictions,
     _parse_args,
     _train_content_contract,
@@ -107,21 +109,35 @@ def test_dino_descriptor_rejects_geometry_drift() -> None:
         _dino_descriptor(Model(), torch.zeros(1, 3, 256, 256))
 
 
-def test_onnx_export_disables_every_fused_attention_module() -> None:
-    class Attention(torch.nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.fused_attn = True
+def test_onnx_export_wraps_optional_model_signature(tmp_path: Path) -> None:
+    class OptionalCausalAttention(torch.nn.Module):
+        def forward(
+            self,
+            images: torch.Tensor,
+            attn_mask: torch.Tensor | None = None,
+            is_causal: bool = False,
+        ) -> torch.Tensor:
+            return torch.nn.functional.scaled_dot_product_attention(
+                images,
+                images,
+                images,
+                attn_mask=attn_mask,
+                is_causal=is_causal,
+            )
 
-    class Model(torch.nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.blocks = torch.nn.ModuleList([Attention(), Attention()])
+    result = _export_onnx(
+        OptionalCausalAttention(),
+        torch.randn(1, 1, 2, 4),
+        tmp_path / "optional_signature.onnx",
+    )
+    assert result["operator_domains"] == [""]
+    assert result["export_signature"] == "single_tensor_forward_wrapper"
 
-    model = Model()
-    changed = _disable_fused_attention_for_onnx(model)
-    assert changed == ("blocks.0", "blocks.1")
-    assert all(not block.fused_attn for block in model.blocks)
+
+def test_dependency_contract_records_installed_onnxruntime_distribution() -> None:
+    runtime = _dependency_contract()["onnxruntime"]
+    assert runtime["distribution"] in {"onnxruntime", "onnxruntime-gpu"}
+    assert runtime["version"] == ort.__version__
 
 
 def test_train_ledger_dataset_preserves_index_and_label(tmp_path: Path) -> None:
