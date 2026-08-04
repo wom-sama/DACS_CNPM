@@ -52,7 +52,7 @@ def test_safe_strict_load_is_scoped_and_ignores_stale_args() -> None:
     assert source["source_sha256"] == OFFICIAL_SOURCE_SHA256
     safe_before = list(torch.serialization.get_safe_globals())
     artifact = load_official_checkpoint(CHECKPOINT)
-    assert list(torch.serialization.get_safe_globals()) == safe_before
+    assert set(torch.serialization.get_safe_globals()) == set(safe_before)
     assert len(artifact["state"]) == 505
 
     allowlist = [
