@@ -647,6 +647,28 @@ def _assert_output_outside_data_root(output_dir: Path, data_root: Path) -> None:
     raise ValueError(f"B13 output must stay outside immutable dataset root: {output}")
 
 
+def _preflight_check_contract(
+    *,
+    efficientvim_digest: str,
+    dino_shape: Sequence[int],
+    efficientvim_shape: Sequence[int],
+    mobile_passed: bool,
+) -> dict[str, bool]:
+    return {
+        "git_clean_canonical_branch": True,
+        "train_ledger_exact": True,
+        "validation_not_constructed": True,
+        "test_not_constructed": True,
+        "dino_strict_weight": True,
+        "efficientvim_strict_ema_weight": efficientvim_digest
+        == OFFICIAL_M1_E450_SHA256,
+        "descriptor_shapes_exact": tuple(dino_shape) == (1, DINO_FEATURE_DIM)
+        and tuple(efficientvim_shape) == (1, EFFICIENTVIM_FEATURE_DIM),
+        "official_parity_tests": True,
+        "mobile_precondition": bool(mobile_passed),
+    }
+
+
 def build_preflight(args: argparse.Namespace) -> dict[str, object]:
     ledger = _prepare_ledger(args)
     _assert_output_outside_data_root(args.output_dir, ledger["data_root"])
@@ -671,18 +693,12 @@ def build_preflight(args: argparse.Namespace) -> dict[str, object]:
         Path(official_source["root"]), efficientvim_checkpoint
     )
     mobile = _mobile_preflight(dino_weight, efficientvim_checkpoint)
-    checks = {
-        "git_clean_canonical_branch": True,
-        "train_ledger_exact": True,
-        "validation_constructed": False,
-        "test_constructed": False,
-        "dino_strict_weight": True,
-        "efficientvim_strict_ema_weight": efficientvim_digest == OFFICIAL_M1_E450_SHA256,
-        "descriptor_shapes_exact": tuple(dino_feature.shape) == (1, DINO_FEATURE_DIM)
-        and tuple(efficientvim_feature.shape) == (1, EFFICIENTVIM_FEATURE_DIM),
-        "official_parity_tests": True,
-        "mobile_precondition": bool(mobile["passed"]),
-    }
+    checks = _preflight_check_contract(
+        efficientvim_digest=efficientvim_digest,
+        dino_shape=dino_feature.shape,
+        efficientvim_shape=efficientvim_feature.shape,
+        mobile_passed=bool(mobile["passed"]),
+    )
     payload = {
         "schema_version": 1,
         "protocol_id": PROTOCOL_ID,

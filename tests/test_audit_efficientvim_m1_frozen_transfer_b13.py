@@ -20,6 +20,7 @@ from trkh.tools.audit_efficientvim_m1_frozen_transfer_b13 import (
     _export_onnx,
     _fast_f1_from_predictions,
     _parse_args,
+    _preflight_check_contract,
     _train_content_contract,
     assess_gate,
     classification_summary,
@@ -138,6 +139,20 @@ def test_dependency_contract_records_installed_onnxruntime_distribution() -> Non
     runtime = _dependency_contract()["onnxruntime"]
     assert runtime["distribution"] in {"onnxruntime", "onnxruntime-gpu"}
     assert runtime["version"] == ort.__version__
+
+
+def test_preflight_check_contract_uses_positive_safety_conditions() -> None:
+    checks = _preflight_check_contract(
+        efficientvim_digest=(
+            "c04c83b982a9a136cec8dca98c5397540bb7d8b18acaa22e559edca042c937a6"
+        ),
+        dino_shape=(1, 384),
+        efficientvim_shape=(1, 320),
+        mobile_passed=True,
+    )
+    assert checks["validation_not_constructed"]
+    assert checks["test_not_constructed"]
+    assert all(checks.values())
 
 
 def test_train_ledger_dataset_preserves_index_and_label(tmp_path: Path) -> None:
