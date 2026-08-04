@@ -17,19 +17,25 @@ from trkh.models.efficientvim_m1 import (
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-CHECKPOINT = (
-    PROJECT_ROOT
-    / "runs"
-    / "pretrained_assets"
-    / "efficientvim_m1"
-    / "official_EfficientViM_M1_e450.pth"
+CHECKPOINT = Path(
+    os.environ.get(
+        "TRKH_EFFICIENTVIM_CHECKPOINT",
+        str(
+            PROJECT_ROOT
+            / "runs"
+            / "pretrained_assets"
+            / "efficientvim_m1"
+            / "official_EfficientViM_M1_e450.pth"
+        ),
+    )
 )
-OFFICIAL_CLONE = (
-    Path(os.environ.get("TEMP", ""))
-    / "TRKH_EfficientViM_audit_20260803"
-    / "classification"
-    / "models"
+OFFICIAL_REPOSITORY_ROOT = Path(
+    os.environ.get(
+        "TRKH_EFFICIENTVIM_OFFICIAL_ROOT",
+        str(Path(os.environ.get("TEMP", "")) / "TRKH_EfficientViM_audit_20260803"),
+    )
 )
+OFFICIAL_CLONE = OFFICIAL_REPOSITORY_ROOT / "classification" / "models"
 
 
 def test_shapes_and_parameter_count() -> None:

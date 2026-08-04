@@ -15,6 +15,7 @@ Primary sources are the [CVPR 2025 paper](https://openaccess.thecvf.com/content/
 - Worktree/branch: `D:\DataAI\AIEx\TRKH_pretrained`, `research/pretrained-classf-b1`.
 - Canonical data: `D:\DataAI\AIEx\newdataset\class_f\data.yaml`; TRAIN only, exactly `8278` rows with class counts `[1987,497,1326,2080,2388]` and fixed class order from the data YAML.
 - A0 ordered TRAIN cache supplies only the immutable path/label ledger; its image tensors, B9 tokens and B9 logits are not candidate inputs.
+- The accepted preflight hashes every one of the `8278` ordered TRAIN image files as `relative_path + byte_length + file_SHA256`; formal execution recomputes this aggregate before and after descriptor extraction. Validation/test files are never opened. Any TRAIN byte drift aborts the run.
 - Fold assignment CSV SHA256: `afde4fec6b344b867d31e0e01b89f16c5f4be7fd551fdc1fdfd0ea34219d725f`. Its five label-independent source/adjacency/pHash union components never cross fit/held folds.
 - Raw DINO source: timm `vit_small_patch16_dinov3.lvd1689m`, cached safetensors SHA256 `2a1ec16ae28ffa07bc0ead0241ee7df9fc26451fe6f9f839b7b3afa0a906b040`.
 - EfficientViM source checkpoint: official non-distilled M1 e450, SHA256 `c04c83b982a9a136cec8dca98c5397540bb7d8b18acaa22e559edca042c937a6`. B13 explicitly selects `model_ema`: the checkpoint records `73.4800001` for EMA versus `73.4560000` for the ordinary model. This is a preregistered policy choice, not a claim that the official loader always prefers EMA.
