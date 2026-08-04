@@ -22,7 +22,7 @@ Update rows in place; do not append chronology. States move `OPEN -> LOCKED -> C
 | `B12-01` | `CLOSED_FAIL` | A larger SSM/attention block over DINO depth tokens will recover missing signal. | Candidate gain versus latest is tiny/inconclusive and it is worse than the native B9 margin with CI below zero. | Independently measured missing information, not more capacity on the same tokens. |
 | `B13-01` | `CLOSED_FAIL` | EfficientViM-M1 final feature is already a superior mobile transfer representation. | Rejected TRAIN-only: versus raw DINO, M1 final-320 loses mean pair AUROC `-0.014154`, macro-F1 `-0.032695` and C1 F1 `-0.042563`; every bootstrap interval is below zero. Mobile eligibility passes, but it cannot authorize fine-tuning. | No same-evidence reopen: the locked B13 stop rule forbids M2/M3/M4, four-stage fusion and readout replacement after seeing the result. Reopen only with a newly acquired, independently sealed dataset/holdout fixed before model choice, not another interface on current `class_f`. |
 | `B14-01` | `CLOSED_FAIL` | A compact local/global backbone can be selected by trying several pretrained families until one wins. | Rejected as a process and then tested once as preregistered. Official iFormer-S v0.9 pooled-320 passed source, strict-load, ONNX and mobile gates (`0.196x` median, `0.211x` p95 DINO latency), but lost macro-F1 `-0.012474`, C1 F1 `-0.024587` and mean pair AUROC `-0.005353`; pair-AUROC and C1 non-inferiority failed. Summary SHA256 `9ad53ca882ceec174cbe19aca9dfd8e268c1c4380ae8172ee3c745d0f166ba90`. | No same-evidence reopen: no iFormer variants, stage/readout/input/fine-tune sweeps or backup architecture. Reopen this exact route only on a newly acquired independently sealed dataset/holdout fixed before model/interface choice. |
-| `CLEAN-01` | `CLOSED` | Old pretrained runs can be deleted by name or age. | Rejected. A reviewed Tier-A manifest preserved 21 small evidence files, verified 14 keeper roots and deleted exactly 10 superseded/incomplete roots (`9,073,944,908` bytes). | Tier B-D need a new manifest and verification; they do not reopen the completed Tier-A scope. |
+| `CLEAN-01` | `CLOSED` | Old pretrained runs can be deleted by name or age. | Rejected. Tier A deleted exactly 10 superseded/incomplete roots (`9,073,944,908` bytes). Tier B then preserved 36 hashed evidence files and deleted exactly six zero-metric one-epoch smoke roots (`3,184,449,161` bytes); B9/B13/B14/assets and 18 critical anchors were reverified. | Any Tier C-D cleanup needs a new exact manifest and verification; completed tiers do not authorize name/age/wildcard deletion. |
 | `SEAL-01` | `GUARD` | Freezing a protocol permits reuse of the historical test. | False. B13 is TRAIN-only; current validation is exploratory/design-exposed and historical test cannot select or confirm a new model. | A new claim requires a prospectively sealed source/time/site holdout. |
 
 ## Evidence, not assumptions
@@ -269,6 +269,14 @@ The reviewed cleanup copied and rehashed `21` small evidence artifacts (`3,197,4
 - Inventory SHA256 `94323fb180e5f05cdb2345e72adcaaf09e71607855042e8a0c850deefd704c93`
 - Preserved-evidence manifest SHA256 `9b67cb7d6133fd2c73feb2308d38f7dfff012af413b4dfeed466295b153a7417`
 - Execution result SHA256 `4808dd861d2d5cf9bfd6f96d65b064765126a2ad9c6266d3797fece3392c4d48`: `runs/cleanup_pretrained_tier_a_20260804`
+
+## Completed cleanup: pretrained Tier B
+
+The reviewed Tier-B manifest copied and rehashed `36` configuration/metric/history/stage files (`730,695` bytes), then deleted exactly six obsolete one-epoch smoke roots totaling `3,184,449,161` bytes. The measured free-space increase was `3,183,550,464` bytes; all 18 B9/B13/B14/assets/data/presentation anchors passed before and after deletion.
+
+- Inventory SHA256 `043dfba698d9092842c5191a2bc368acb8b697c522a554c8f3f593966d70a40f`
+- Preserved-evidence manifest SHA256 `09e04951db9c5f7740c6ad558d52cf911f1750859629826f9b0f212f6d8c593a`
+- Execution result SHA256 `1c0f77c8e4112bd1bc6a0134fd38c90eccb336e8733b61aeedb27fc0644a8fbe`: `runs/cleanup_pretrained_tier_b_20260804`
 
 ## TRAIN-only blinded boundary review queue
 
