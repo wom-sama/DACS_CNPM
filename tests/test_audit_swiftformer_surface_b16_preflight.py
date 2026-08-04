@@ -432,6 +432,35 @@ def test_head_reset_is_truncated_normal_zero_bias_reproducible_and_rng_safe(
     )
 
 
+def test_swiftformer_stage_channels_accepts_current_timm_list_and_featureinfo() -> None:
+    expected = [48, 56, 112, 220]
+
+    class ListModel:
+        feature_info = [{"num_chs": value} for value in expected]
+
+    class FeatureInfo:
+        def get_dicts(self):
+            return [{"num_chs": value} for value in expected]
+
+    class FeatureInfoModel:
+        feature_info = FeatureInfo()
+
+    assert b16._swiftformer_stage_channels(ListModel()) == expected
+    assert b16._swiftformer_stage_channels(FeatureInfoModel()) == expected
+
+
+@pytest.mark.parametrize(
+    "feature_info",
+    [None, [], [{"num_chs": True}], [{"num_chs": 0}], [{"wrong": 48}]],
+)
+def test_swiftformer_stage_channels_rejects_malformed_runtime_metadata(
+    feature_info: object,
+) -> None:
+    model = type("Model", (), {"feature_info": feature_info})()
+    with pytest.raises(TypeError, match="feature_info"):
+        b16._swiftformer_stage_channels(model)
+
+
 def test_offline_asset_resolver_is_content_addressed(tmp_path: Path) -> None:
     path = tmp_path / "tiny.safetensors"
     path.write_bytes(b"locked")

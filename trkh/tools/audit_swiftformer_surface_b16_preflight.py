@@ -649,6 +649,24 @@ def reset_swiftformer_five_class_heads(
     }
 
 
+def _swiftformer_stage_channels(student: nn.Module) -> list[int]:
+    feature_info = getattr(student, "feature_info", None)
+    if hasattr(feature_info, "get_dicts"):
+        stages = feature_info.get_dicts()
+    elif isinstance(feature_info, (list, tuple)):
+        stages = feature_info
+    else:
+        raise TypeError("SwiftFormer feature_info must be a list/tuple or timm FeatureInfo")
+    if not stages or any(
+        not isinstance(stage, Mapping)
+        or type(stage.get("num_chs")) is not int
+        or int(stage["num_chs"]) <= 0
+        for stage in stages
+    ):
+        raise TypeError("SwiftFormer feature_info contains an invalid num_chs entry")
+    return [int(stage["num_chs"]) for stage in stages]
+
+
 def _strict_load_models(
     student_path: Path,
     dino_path: Path,
@@ -685,10 +703,7 @@ def _strict_load_models(
     )
     observed_student = {
         "runtime_class": f"{type(student).__module__}.{type(student).__name__}",
-        "stages": [
-            int(stage["num_chs"])
-            for stage in getattr(student, "feature_info").get_dicts()
-        ],
+        "stages": _swiftformer_stage_channels(student),
         "head": [int(student.head.in_features), int(student.head.out_features)],
         "head_dist": [
             int(student.head_dist.in_features),
