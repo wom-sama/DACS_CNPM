@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -8,6 +9,106 @@ import numpy as np
 import pytest
 
 import trkh.tools.audit_iformer_s_frozen_transfer_b14 as b14
+
+
+def _valid_mobile_payload() -> dict[str, object]:
+    latency = {
+        "iformer": {
+            "median_ms": 1.0,
+            "p95_ms": 2.0,
+            "trial_mean_ms": [1.0] * b14.ORT_TRIALS,
+        },
+        "dino": {
+            "median_ms": 10.0,
+            "p95_ms": 10.0,
+            "trial_mean_ms": [10.0] * b14.ORT_TRIALS,
+        },
+    }
+    export = {
+        "bytes": 1,
+        "sha256": "a" * 64,
+        "operator_domains": [""],
+        "operators": ["Conv"],
+        "export_signature": "single_tensor_forward_wrapper",
+    }
+    return {
+        "settings": {
+            "runtime": "onnxruntime_cpu",
+            "threads": b14.ORT_THREADS,
+            "batch": 1,
+            "warmups": b14.ORT_WARMUPS,
+            "trials": b14.ORT_TRIALS,
+            "iterations_per_trial": b14.ORT_ITERATIONS,
+            "iformer_input": [1, 3, 224, 224],
+            "dino_input": [1, 3, b14.DINO_IMAGE_SIZE, b14.DINO_IMAGE_SIZE],
+        },
+        "parameters": {
+            "iformer_5class": b14.PARAMETERS_5,
+            "dino_5class": b14.DINO_5_CLASS_PARAMS,
+        },
+        "exports": {"iformer": dict(export), "dino": dict(export)},
+        "parity": {
+            "iformer": {"max_abs": 1e-6, "argmax_equal": True},
+            "dino": {"max_abs": 1e-6, "argmax_equal": True},
+        },
+        "latency": latency,
+        "ratios": {
+            "parameters": b14.PARAMETERS_5 / b14.DINO_5_CLASS_PARAMS,
+            "median": 0.1,
+            "p95": 0.2,
+        },
+        "checks": {name: True for name in b14.MOBILE_CHECK_NAMES},
+        "passed": True,
+    }
+
+
+def _valid_preflight_structure() -> dict[str, object]:
+    checks = b14._preflight_checks(
+        project_git={
+            "branch": b14.EXPECTED_BRANCH,
+            "tracked_worktree_clean": True,
+        },
+        mobile_passed=True,
+    )
+    return {
+        "schema_version": 1,
+        "protocol_id": b14.PROTOCOL_ID,
+        "mode": "synthetic_preflight_no_dataset",
+        "focused_tests": {
+            "command": b14._focused_test_command(),
+            "returncode": 0,
+            "output": "16 passed in 1.0s",
+        },
+        "release": {
+            "api_url": b14.RELEASE_API_URL,
+            "release_id": 1,
+            "tag": b14.OFFICIAL_TAG,
+            "published_at": "2025-01-01T00:00:00Z",
+            "asset": {
+                "id": b14.OFFICIAL_CHECKPOINT_ASSET_ID,
+                "name": "iFormer_s.pth",
+                "bytes": b14.OFFICIAL_CHECKPOINT_BYTES,
+                "url": b14.OFFICIAL_CHECKPOINT_URL,
+            },
+            "fresh_download": {
+                "url": b14.OFFICIAL_CHECKPOINT_URL,
+                "bytes": b14.OFFICIAL_CHECKPOINT_BYTES,
+                "sha256": b14.OFFICIAL_CHECKPOINT_SHA256,
+                "in_memory": True,
+            },
+        },
+        "mobile": _valid_mobile_payload(),
+        "permissions": {
+            "train_descriptor_read": False,
+            "validation_not_constructed": True,
+            "test_not_constructed": True,
+            "validation_permission": False,
+            "test_permission": False,
+            "full_train_permission": False,
+        },
+        "checks": checks,
+        "passed": True,
+    }
 
 
 def _valid_b13_summary() -> dict[str, object]:
@@ -174,9 +275,40 @@ def test_focused_test_guard_rejects_skips(monkeypatch: pytest.MonkeyPatch) -> No
         b14._run_focused_tests(Path("source"), Path("checkpoint"))
 
 
-def test_partial_quarantine_records_retry_boundary(tmp_path: Path) -> None:
-    output = tmp_path / "formal_r1"
-    partial = tmp_path / "formal_r1.partial"
+def test_preflight_structure_rejects_tampering_behind_passed_true() -> None:
+    valid = _valid_preflight_structure()
+    assert all(b14._preflight_payload_structure_checks(valid).values())
+
+    tampered_mobile = deepcopy(valid)
+    tampered_mobile["mobile"]["passed"] = False  # type: ignore[index]
+    assert tampered_mobile["passed"] is True
+    assert not b14._preflight_payload_structure_checks(tampered_mobile)[
+        "mobile_contract_exact"
+    ]
+
+    tampered_focused = deepcopy(valid)
+    tampered_focused["focused_tests"]["returncode"] = 1  # type: ignore[index]
+    assert tampered_focused["passed"] is True
+    assert not b14._preflight_payload_structure_checks(tampered_focused)[
+        "focused_tests_exact"
+    ]
+
+    tampered_release = deepcopy(valid)
+    tampered_release["release"]["fresh_download"]["sha256"] = "0" * 64  # type: ignore[index]
+    assert tampered_release["passed"] is True
+    assert not b14._preflight_payload_structure_checks(tampered_release)[
+        "release_identity_exact"
+    ]
+
+
+def test_partial_quarantine_records_retry_boundary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(b14, "_repository_root", lambda: tmp_path)
+    runs = tmp_path / "runs"
+    runs.mkdir()
+    output = runs / "pretrained_iformer_s_classf_b14_frozen_transfer_test_r1"
+    partial = output.with_name(output.name + ".partial")
     partial.mkdir()
     (partial / "run_owner.json").write_text(
         json.dumps({"protocol_id": b14.PROTOCOL_ID}), encoding="utf-8"
@@ -195,18 +327,61 @@ def test_partial_quarantine_records_retry_boundary(tmp_path: Path) -> None:
         partial / "descriptor.npy"
     )
 
-    output2 = tmp_path / "formal_r2"
-    partial2 = tmp_path / "formal_r2.partial"
+    output2 = runs / "pretrained_iformer_s_classf_b14_frozen_transfer_test_r2"
+    partial2 = output2.with_name(output2.name + ".partial")
     partial2.mkdir()
     (partial2 / "run_owner.json").write_text(
         json.dumps({"protocol_id": b14.PROTOCOL_ID}), encoding="utf-8"
     )
-    (partial2 / "stage_metrics_constructed.json").write_text("{}", encoding="utf-8")
+    (partial2 / "stage_metric_construction_started.json").write_text(
+        "{}", encoding="utf-8"
+    )
     b14._quarantine_partial(
         SimpleNamespace(output_dir=output2), RuntimeError("after metrics")
     )
     manifest2 = json.loads(
         (partial2 / "failure_manifest.json").read_text(encoding="utf-8")
     )
-    assert manifest2["metrics_constructed"] is True
+    assert manifest2["metric_boundary_crossed"] is True
+    assert manifest2["metrics_constructed"] is False
     assert manifest2["retry_allowed"] is False
+
+
+def test_output_scope_rejects_nested_or_foreign_roots(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(b14, "_repository_root", lambda: tmp_path)
+    runs = tmp_path / "runs"
+    runs.mkdir()
+    valid = runs / "preflight_b14_iformer_s_frozen_transfer_test_r1"
+    assert b14._validated_b14_output_path(valid) == valid.resolve()
+    with pytest.raises(ValueError, match="fresh direct child"):
+        b14._validated_b14_output_path(runs / "protected" / valid.name)
+    with pytest.raises(ValueError, match="fresh direct child"):
+        b14._validated_b14_output_path(tmp_path / valid.name)
+    with pytest.raises(ValueError, match="fresh direct child"):
+        b14._validated_b14_output_path(runs / "unrelated_name")
+
+
+def test_output_scope_rejects_cross_mode_prefixes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(b14, "_repository_root", lambda: tmp_path)
+    runs = tmp_path / "runs"
+    runs.mkdir()
+    preflight = runs / f"{b14.PREFLIGHT_OUTPUT_PREFIX}test_r1"
+    formal = runs / f"{b14.FORMAL_OUTPUT_PREFIX}test_r1"
+    b14._validate_output_root(
+        preflight, tmp_path / "data", expected_prefix=b14.PREFLIGHT_OUTPUT_PREFIX
+    )
+    b14._validate_output_root(
+        formal, tmp_path / "data", expected_prefix=b14.FORMAL_OUTPUT_PREFIX
+    )
+    with pytest.raises(ValueError, match="requested mode"):
+        b14._validate_output_root(
+            formal, tmp_path / "data", expected_prefix=b14.PREFLIGHT_OUTPUT_PREFIX
+        )
+    with pytest.raises(ValueError, match="requested mode"):
+        b14._validate_output_root(
+            preflight, tmp_path / "data", expected_prefix=b14.FORMAL_OUTPUT_PREFIX
+        )

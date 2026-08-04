@@ -32,6 +32,8 @@ from trkh.models.iformer_s_official import (  # noqa: E402
     OFFICIAL_LICENSE_SHA256,
     OFFICIAL_REVISION,
     OFFICIAL_SOURCE_SHA256,
+    OFFICIAL_STATE_KEY,
+    OFFICIAL_STATE_TENSORS,
     OFFICIAL_TAG,
     PARAMETERS_5,
     build_official_iformer_s_5class,
@@ -133,6 +135,19 @@ EXPECTED_RUNTIME = {
 WALL_BUDGET_SECONDS = 15 * 60
 VRAM_BUDGET_BYTES = 6 * 1024**3
 ARTIFACT_BUDGET_BYTES = 100 * 1024**2
+PREFLIGHT_OUTPUT_PREFIX = "preflight_b14_iformer_s_frozen_transfer_"
+FORMAL_OUTPUT_PREFIX = "pretrained_iformer_s_classf_b14_frozen_transfer_"
+MOBILE_CHECK_NAMES = (
+    "iformer_5class_parameters_exact",
+    "parameter_ratio_lte_0p30",
+    "pooled_descriptor_shape_exact",
+    "official_logits_reconstructed_exact",
+    "onnx_standard_domains_only",
+    "onnx_parity_max_abs_lte_1e_5",
+    "onnx_argmax_exact",
+    "median_latency_ratio_lte_0p25",
+    "p95_latency_ratio_lte_0p30",
+)
 
 
 def _repository_root() -> Path:
@@ -365,9 +380,8 @@ def _release_contract() -> dict[str, object]:
     }
 
 
-def _run_focused_tests(source_root: Path, checkpoint: Path) -> dict[str, object]:
-    root = _repository_root()
-    command = [
+def _focused_test_command() -> list[str]:
+    return [
         sys.executable,
         "-m",
         "pytest",
@@ -376,6 +390,11 @@ def _run_focused_tests(source_root: Path, checkpoint: Path) -> dict[str, object]
         "tests/test_iformer_s_official.py",
         "tests/test_audit_iformer_s_frozen_transfer_b14.py",
     ]
+
+
+def _run_focused_tests(source_root: Path, checkpoint: Path) -> dict[str, object]:
+    root = _repository_root()
+    command = _focused_test_command()
     environment = os.environ.copy()
     environment["TRKH_IFORMER_OFFICIAL_ROOT"] = str(source_root)
     environment["TRKH_IFORMER_CHECKPOINT"] = str(checkpoint)
@@ -529,7 +548,9 @@ def _preflight_checks(
 def build_preflight(args: argparse.Namespace) -> dict[str, object]:
     _assert_locked_locations(args, include_data=False)
     output_dir, _unused_partial = _validate_output_root(
-        args.output_dir, _defaults()["data_root"]
+        args.output_dir,
+        _defaults()["data_root"],
+        expected_prefix=PREFLIGHT_OUTPUT_PREFIX,
     )
     project_git = _git_contract()
     if project_git["branch"] != EXPECTED_BRANCH or not project_git["tracked_worktree_clean"]:
@@ -809,14 +830,27 @@ def _output_bytes(root: Path) -> int:
     return sum(path.stat().st_size for path in root.rglob("*") if path.is_file())
 
 
-def _validate_output_root(output_dir: Path, data_root: Path) -> tuple[Path, Path]:
+def _validated_b14_output_path(output_dir: Path) -> Path:
     output = output_dir.expanduser().resolve()
     runs_root = (_repository_root() / "runs").resolve()
+    allowed_prefixes = (PREFLIGHT_OUTPUT_PREFIX, FORMAL_OUTPUT_PREFIX)
+    if output.parent != runs_root or not output.name.startswith(allowed_prefixes):
+        raise ValueError(
+            "B14 output must be a fresh direct child of runs with a locked B14 prefix"
+        )
+    return output
+
+
+def _validate_output_root(
+    output_dir: Path,
+    data_root: Path,
+    *,
+    expected_prefix: str,
+) -> tuple[Path, Path]:
+    output = _validated_b14_output_path(output_dir)
+    if not output.name.startswith(expected_prefix):
+        raise ValueError(f"B14 output does not match the requested mode: {expected_prefix}")
     immutable = data_root.expanduser().resolve()
-    try:
-        output.relative_to(runs_root)
-    except ValueError as error:
-        raise ValueError("B14 output must be inside the pretrained runs root") from error
     try:
         output.relative_to(immutable)
     except ValueError:
@@ -829,6 +863,205 @@ def _validate_output_root(output_dir: Path, data_root: Path) -> tuple[Path, Path
     return output, partial
 
 
+def _exact_true_keys(value: object, names: Sequence[str]) -> bool:
+    return (
+        isinstance(value, Mapping)
+        and set(value) == set(names)
+        and all(value[name] is True for name in names)
+    )
+
+
+def _positive_finite(value: object) -> bool:
+    return (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and bool(np.isfinite(float(value)))
+        and float(value) > 0.0
+    )
+
+
+def _mobile_payload_contract(mobile: object) -> bool:
+    if not isinstance(mobile, Mapping) or set(mobile) != {
+        "settings",
+        "parameters",
+        "exports",
+        "parity",
+        "latency",
+        "ratios",
+        "checks",
+        "passed",
+    }:
+        return False
+    expected_settings = {
+        "runtime": "onnxruntime_cpu",
+        "threads": ORT_THREADS,
+        "batch": 1,
+        "warmups": ORT_WARMUPS,
+        "trials": ORT_TRIALS,
+        "iterations_per_trial": ORT_ITERATIONS,
+        "iformer_input": [1, 3, 224, 224],
+        "dino_input": [1, 3, DINO_IMAGE_SIZE, DINO_IMAGE_SIZE],
+    }
+    if mobile.get("settings") != expected_settings or mobile.get("parameters") != {
+        "iformer_5class": PARAMETERS_5,
+        "dino_5class": DINO_5_CLASS_PARAMS,
+    }:
+        return False
+    if mobile.get("passed") is not True or not _exact_true_keys(
+        mobile.get("checks"), MOBILE_CHECK_NAMES
+    ):
+        return False
+
+    exports = mobile.get("exports")
+    parity = mobile.get("parity")
+    latency = mobile.get("latency")
+    ratios = mobile.get("ratios")
+    if not all(
+        isinstance(value, Mapping)
+        and set(value) == {"iformer", "dino"}
+        for value in (exports, parity, latency)
+    ) or not isinstance(ratios, Mapping):
+        return False
+
+    assert isinstance(exports, Mapping)
+    assert isinstance(parity, Mapping)
+    assert isinstance(latency, Mapping)
+    for name in ("iformer", "dino"):
+        export = exports[name]
+        if not isinstance(export, Mapping):
+            return False
+        digest = export.get("sha256")
+        domains = export.get("operator_domains")
+        operators = export.get("operators")
+        if not (
+            _positive_finite(export.get("bytes"))
+            and isinstance(digest, str)
+            and len(digest) == 64
+            and all(character in "0123456789abcdef" for character in digest)
+            and isinstance(domains, list)
+            and bool(domains)
+            and all(domain in {"", "ai.onnx"} for domain in domains)
+            and isinstance(operators, list)
+            and bool(operators)
+            and all(isinstance(operator, str) and operator for operator in operators)
+            and export.get("export_signature") == "single_tensor_forward_wrapper"
+        ):
+            return False
+
+        parity_entry = parity[name]
+        if not isinstance(parity_entry, Mapping):
+            return False
+        maximum = parity_entry.get("max_abs")
+        if not (
+            isinstance(maximum, (int, float))
+            and not isinstance(maximum, bool)
+            and bool(np.isfinite(float(maximum)))
+            and 0.0 <= float(maximum) <= 1e-5
+            and parity_entry.get("argmax_equal") is True
+        ):
+            return False
+
+        latency_entry = latency[name]
+        if not isinstance(latency_entry, Mapping):
+            return False
+        trial_means = latency_entry.get("trial_mean_ms")
+        if not (
+            _positive_finite(latency_entry.get("median_ms"))
+            and _positive_finite(latency_entry.get("p95_ms"))
+            and isinstance(trial_means, list)
+            and len(trial_means) == ORT_TRIALS
+            and all(_positive_finite(value) for value in trial_means)
+        ):
+            return False
+
+    if set(ratios) != {"parameters", "median", "p95"} or not all(
+        _positive_finite(ratios.get(name)) for name in ("parameters", "median", "p95")
+    ):
+        return False
+    expected_ratios = {
+        "parameters": PARAMETERS_5 / DINO_5_CLASS_PARAMS,
+        "median": float(latency["iformer"]["median_ms"])
+        / float(latency["dino"]["median_ms"]),
+        "p95": float(latency["iformer"]["p95_ms"])
+        / float(latency["dino"]["p95_ms"]),
+    }
+    return all(
+        bool(np.isclose(float(ratios[name]), expected, rtol=0.0, atol=1e-12))
+        for name, expected in expected_ratios.items()
+    ) and (
+        float(ratios["parameters"]) <= 0.30
+        and float(ratios["median"]) <= 0.25
+        and float(ratios["p95"]) <= 0.30
+    )
+
+
+def _preflight_payload_structure_checks(
+    payload: Mapping[str, object],
+) -> dict[str, bool]:
+    permissions = {
+        "train_descriptor_read": False,
+        "validation_not_constructed": True,
+        "test_not_constructed": True,
+        "validation_permission": False,
+        "test_permission": False,
+        "full_train_permission": False,
+    }
+    expected_preflight_checks = _preflight_checks(
+        project_git={
+            "branch": EXPECTED_BRANCH,
+            "tracked_worktree_clean": True,
+        },
+        mobile_passed=True,
+    )
+    focused = payload.get("focused_tests")
+    focused_output = focused.get("output") if isinstance(focused, Mapping) else None
+    release = payload.get("release")
+    asset = release.get("asset") if isinstance(release, Mapping) else None
+    fresh = release.get("fresh_download") if isinstance(release, Mapping) else None
+    return {
+        "schema_version_exact": payload.get("schema_version") == 1,
+        "mode_exact": payload.get("mode") == "synthetic_preflight_no_dataset",
+        "permissions_exact": payload.get("permissions") == permissions,
+        "top_level_passed": payload.get("passed") is True,
+        "preflight_checks_exact": _exact_true_keys(
+            payload.get("checks"), tuple(expected_preflight_checks)
+        )
+        and payload.get("checks") == expected_preflight_checks,
+        "focused_tests_exact": isinstance(focused, Mapping)
+        and set(focused) == {"command", "returncode", "output"}
+        and focused.get("command") == _focused_test_command()
+        and focused.get("returncode") == 0
+        and isinstance(focused_output, str)
+        and "passed" in focused_output.casefold()
+        and "skipped" not in focused_output.casefold(),
+        "release_identity_exact": isinstance(release, Mapping)
+        and set(release)
+        == {"api_url", "release_id", "tag", "published_at", "asset", "fresh_download"}
+        and release.get("api_url") == RELEASE_API_URL
+        and isinstance(release.get("release_id"), int)
+        and not isinstance(release.get("release_id"), bool)
+        and int(release.get("release_id", -1)) > 0
+        and release.get("tag") == OFFICIAL_TAG
+        and isinstance(release.get("published_at"), str)
+        and bool(release.get("published_at"))
+        and asset
+        == {
+            "id": OFFICIAL_CHECKPOINT_ASSET_ID,
+            "name": "iFormer_s.pth",
+            "bytes": OFFICIAL_CHECKPOINT_BYTES,
+            "url": OFFICIAL_CHECKPOINT_URL,
+        }
+        and fresh
+        == {
+            "url": OFFICIAL_CHECKPOINT_URL,
+            "bytes": OFFICIAL_CHECKPOINT_BYTES,
+            "sha256": OFFICIAL_CHECKPOINT_SHA256,
+            "in_memory": True,
+        },
+        "mobile_contract_exact": _mobile_payload_contract(payload.get("mobile")),
+    }
+
+
 def _validate_preflight(
     artifact: Path,
     expected_sha256: str,
@@ -836,6 +1069,11 @@ def _validate_preflight(
     args: argparse.Namespace,
 ) -> dict[str, object]:
     path = artifact.expanduser().resolve(strict=True)
+    if path.name != "preflight.json":
+        raise ValueError("Accepted B14 preflight must be named preflight.json")
+    preflight_root = _validated_b14_output_path(path.parent)
+    if not preflight_root.name.startswith(PREFLIGHT_OUTPUT_PREFIX):
+        raise ValueError("Accepted B14 preflight must come from a preflight output root")
     observed_sha = _sha256(path)
     if observed_sha != expected_sha256.casefold():
         raise ValueError("Accepted B14 preflight SHA-256 mismatch")
@@ -846,8 +1084,17 @@ def _validate_preflight(
     current_sources = _source_hashes()
     current_runtime = _runtime_contract()
     current_official = _official_source_contract(args.official_source_root)
+    current_dino = _resolve_dino_weight(args.dino_weight)
+    current_iformer = load_official_checkpoint(
+        args.iformer_checkpoint.expanduser().resolve(strict=True)
+    )
+    current_iformer_contract = {
+        key: value for key, value in current_iformer.items() if key != "state"
+    }
     weights = payload.get("weights")
+    structure_checks = _preflight_payload_structure_checks(payload)
     checks = {
+        **structure_checks,
         "passed": payload.get("passed") is True,
         "same_git": payload.get("git") == current_git,
         "same_sources": payload.get("source_hashes") == current_sources,
@@ -856,11 +1103,18 @@ def _validate_preflight(
         "same_device": payload.get("device") == _device_contract(args.device),
         "weights_mapping": isinstance(weights, Mapping),
         "iformer_weight": isinstance(weights, Mapping)
-        and isinstance(weights.get("iformer"), Mapping)
-        and weights["iformer"].get("sha256") == OFFICIAL_CHECKPOINT_SHA256,
+        and weights.get("iformer") == current_iformer_contract
+        and current_iformer_contract
+        == {
+            "path": str(args.iformer_checkpoint.expanduser().resolve(strict=True)),
+            "sha256": OFFICIAL_CHECKPOINT_SHA256,
+            "state_key": OFFICIAL_STATE_KEY,
+            "state_tensors": OFFICIAL_STATE_TENSORS,
+        },
         "dino_weight": isinstance(weights, Mapping)
-        and isinstance(weights.get("dino"), Mapping)
-        and weights["dino"].get("sha256") == DINO_WEIGHT_SHA256,
+        and weights.get("dino")
+        == {"path": str(current_dino), "sha256": DINO_WEIGHT_SHA256}
+        and _sha256(current_dino) == DINO_WEIGHT_SHA256,
     }
     if not all(checks.values()):
         raise RuntimeError(f"Accepted B14 preflight no longer applies: {checks}")
@@ -878,7 +1132,9 @@ def _run_formal(args: argparse.Namespace) -> dict[str, object]:
     data_root = args.data_root.expanduser().resolve(strict=True)
     if _sha256(data_yaml) != EXPECTED_DATA_YAML_SHA256:
         raise ValueError("Canonical class_f data YAML bytes changed")
-    output_dir, partial_dir = _validate_output_root(args.output_dir, data_root)
+    output_dir, partial_dir = _validate_output_root(
+        args.output_dir, data_root, expected_prefix=FORMAL_OUTPUT_PREFIX
+    )
     accepted = _validate_preflight(
         args.preflight_artifact, args.preflight_sha256, args=args
     )
@@ -931,6 +1187,14 @@ def _run_formal(args: argparse.Namespace) -> dict[str, object]:
     )
     _atomic_json(partial_dir / "train_paths.json", relative_paths)
     paths_sha = _sha256(partial_dir / "train_paths.json")
+    _atomic_json(
+        partial_dir / "stage_metric_construction_started.json",
+        {
+            "metric_boundary_crossed": True,
+            "retry_allowed": False,
+            "reason": "Fail-closed before constructing any candidate readout metric.",
+        },
+    )
     candidate_readout = fit_oof_readout(descriptors, labels, folds)
     candidate_scores = np.asarray(candidate_readout["scores"], dtype=np.float64)
     dino_metrics = dict(comparator["dino_metrics"])
@@ -1103,9 +1367,11 @@ def _run_formal(args: argparse.Namespace) -> dict[str, object]:
 
 
 def _quarantine_partial(args: argparse.Namespace, error: BaseException) -> None:
-    partial = args.output_dir.expanduser().resolve().with_name(
-        args.output_dir.expanduser().resolve().name + ".partial"
-    )
+    try:
+        output = _validated_b14_output_path(args.output_dir)
+    except (OSError, ValueError):
+        return
+    partial = output.with_name(output.name + ".partial")
     if not partial.is_dir():
         return
     owner_path = partial / "run_owner.json"
@@ -1129,6 +1395,9 @@ def _quarantine_partial(args: argparse.Namespace, error: BaseException) -> None:
                 "sha256": _sha256(path),
             }
         )
+    metric_boundary_crossed = (
+        partial / "stage_metric_construction_started.json"
+    ).is_file()
     metrics_constructed = (partial / "stage_metrics_constructed.json").is_file()
     _atomic_json(
         manifest_path,
@@ -1139,8 +1408,9 @@ def _quarantine_partial(args: argparse.Namespace, error: BaseException) -> None:
             "created_at_unix": time.time(),
             "error_type": type(error).__name__,
             "error": str(error),
+            "metric_boundary_crossed": metric_boundary_crossed,
             "metrics_constructed": metrics_constructed,
-            "retry_allowed": not metrics_constructed,
+            "retry_allowed": not metric_boundary_crossed,
             "partial_root": str(partial),
             "files": files,
             "deletion_requires_reviewed_cleanup_manifest": True,
