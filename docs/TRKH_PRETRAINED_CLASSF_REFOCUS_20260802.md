@@ -19,8 +19,8 @@ Update rows in place; do not append chronology. States move `OPEN -> LOCKED -> C
 | `V2-01` | `CLOSED_FAIL` | More CNN depth or tuning can rescue V2. | Branch is active, not collapsed; duplicated absolute colour plus a free `64->384` projection overrides DINO semantics (`C1 F1 0.633609`, `2->1=52` versus B2 `38`). | New constrained evidence source, capacity-matched control and pre-pooling integration; no same-recipe tuning. |
 | `V3-01` | `CLOSED_FAIL` | The classifier direction was wrong. | Direction finite differences pass; the zero-init 160-parameter branch is starved by a moving 21.6M backbone (`p95=7.37e-5`, zero argmax correction). | A successor must inherit/freeze a verified teacher and prove non-collapse before metrics. |
 | `B12-01` | `CLOSED_FAIL` | A larger SSM/attention block over DINO depth tokens will recover missing signal. | Candidate gain versus latest is tiny/inconclusive and it is worse than the native B9 margin with CI below zero. | Independently measured missing information, not more capacity on the same tokens. |
-| `B13-01` | `LOCKED` | EfficientViM-M1 is already a superior hybrid/mobile result. | Not established. B13 is only a raw frozen final-representation/mobile screen against raw DINO; it is neither a hybrid nor an SSM-over-ViT claim. | Pass opens one separately frozen fine-tune/distillation protocol; fail closes exact M1 final-feature transfer without post-hoc M2/M3/M4/readout sweeps. |
-| `CLEAN-01` | `OPEN` | Old pretrained runs can be deleted by name or age. | Rejected. B9 presentation, comparison/provenance, authoritative fold/cache, B12 closure, review queue, B13 weight and accepted preflights are protected until a current retention inventory exists. | A reviewed `KEEP/COMPACT/DELETE` manifest with resolved paths, bytes, hashes and dry-run verification. |
+| `B13-01` | `CLOSED_FAIL` | EfficientViM-M1 final feature is already a superior mobile transfer representation. | Rejected TRAIN-only: versus raw DINO, M1 final-320 loses mean pair AUROC `-0.014154`, macro-F1 `-0.032695` and C1 F1 `-0.042563`; every bootstrap interval is below zero. Mobile eligibility passes, but it cannot authorize fine-tuning. | Reopen only the materially different official four-stage representation under a separately locked screen; no M2/M3/M4 or final-feature/readout sweep. |
+| `CLEAN-01` | `CLOSED` | Old pretrained runs can be deleted by name or age. | Rejected. A reviewed Tier-A manifest preserved 21 small evidence files, verified 14 keeper roots and deleted exactly 10 superseded/incomplete roots (`9,073,944,908` bytes). | Tier B-D need a new manifest and verification; they do not reopen the completed Tier-A scope. |
 | `SEAL-01` | `GUARD` | Freezing a protocol permits reuse of the historical test. | False. B13 is TRAIN-only; current validation is exploratory/design-exposed and historical test cannot select or confirm a new model. | A new claim requires a prospectively sealed source/time/site holdout. |
 
 ## Evidence, not assumptions
@@ -239,6 +239,33 @@ The candidate's gain over the latest-block control is only `+0.000165 [-0.000023
 - Accepted R2 preflight SHA256 `954b9db6daf3965bc3a1adfd6ae08fcabc36021d9bb0f6782b56fbd97c3c33ea`: `runs/preflight_b12_depth_trajectory_ae6b70a_r2/preflight.json`
 - Closed B12 summary SHA256 `083eca35eb2b6b78299c9d6c3130b2c6959f5de3533e7e71d25c759904e3775d`: `runs/pretrained_dinov3_classf_b12_depth_trajectory_signal_ae6b70a_r2/summary.json`
 - B12 feature SHA256 `fb7afeac35ad76e356ef7ced6691d20c58a28adf759e7bbee125121e132a06ec`; OOF SHA256 `d910851e2b793f38bf131a6aa8be693e61b368ea60a019640a447cea84ff44dc`.
+
+## Closed experiment: B13 EfficientViM-M1 final feature
+
+B13 compared raw pretrained representations on the same `8278` TRAIN rows, immutable five component folds, fold-local balanced linear readout and 5,000 paired whole-component bootstrap draws. It constructed neither validation nor test.
+
+| TRAIN-only OOF arm | Accuracy | Macro-F1 | C1 P/R/F1 | Mean C1-vs-rival AUROC | Restricted FP rate |
+|---|---:|---:|---:|---:|---:|
+| DINOv3-S final patch mean, 384-D | `0.858178` | `0.802076` | `0.467532/0.579477/0.517520` | `0.946103` | `0.055604` |
+| EfficientViM-M1 final spatial feature, 320-D | `0.826407` | `0.769381` | `0.416036/0.553320/0.474957` | `0.931949` | `0.065076` |
+
+Candidate-minus-DINO intervals are macro-F1 `-0.032695 [-0.050192,-0.014300]`, C1 F1 `-0.042563 [-0.085055,-0.000096]`, and mean pair AUROC `-0.014154 [-0.022956,-0.005367]`; all three locked information gates fail. Recall retention (`0.9549x`) and restricted-FP control (`1.1703x`) pass, so this is not a C1-collapse result. Loss is broader: `2->1` rises `118->140`, `4->1` `40->54`, while correct class-2/class-4 predictions fall `1065->975` and `2186->2086`.
+
+The mobile precondition passes: the 5-class M1 graph has `0.264964x` DINO parameters, standard-domain ONNX parity, and Windows ORT CPU median/p95 latency ratios `0.074249/0.076133`. These are eligibility proxies, not a physical-phone claim. Post-hoc error overlap is descriptive only: prediction agreement is `81.05%`; M1 alone fixes `581` DINO errors while breaking `844` DINO-correct rows, including `79/92` respectively for true C1. This complementarity does not authorize an ensemble or a score sweep.
+
+The exact conclusion is narrow: a final-stage-only M1 transfer route loses fine-grained information. Official M1 assigns only `0.50765` fusion mass to its final feature and `0.49235` to the other three stages; therefore a separately preregistered official four-stage screen is mechanistically distinct. It must still pass before any M1 fine-tune/distillation recipe is allowed.
+
+- Accepted preflight SHA256 `51178282afa4a0c2283ea3f2b774beb23ab75082dc7e919b99fa20faf9870b96`: `runs/preflight_b13_efficientvim_frozen_transfer_f229649_r1/preflight.json`
+- Closed summary SHA256 `b017d34955f1c9126a611cf064cb919b6696ed9a19bf0f2b676838ad97955a75`: `runs/pretrained_efficientvim_classf_b13_frozen_transfer_f229649_r1/summary.json`
+- OOF SHA256 `82bcef6d293223b819f559122bffee822b7f2a2c80a200113dd6c0b7843def39`; final-feature SHA256 `b7da2700eb317c97adba6106b3fd5a7d38be290d4d483c94f10e4387ecb59014`.
+
+## Completed cleanup: pretrained Tier A
+
+The reviewed cleanup copied and rehashed `21` small evidence artifacts (`3,197,478` bytes), then rehashed and deleted ten exact superseded/incomplete roots totaling `9,073,944,908` bytes. All 14 protected roots and 125 anchor hashes survived; remaining free space was `37.055 GiB`. Tier B-D remain untouched.
+
+- Inventory SHA256 `94323fb180e5f05cdb2345e72adcaaf09e71607855042e8a0c850deefd704c93`
+- Preserved-evidence manifest SHA256 `9b67cb7d6133fd2c73feb2308d38f7dfff012af413b4dfeed466295b153a7417`
+- Execution result SHA256 `4808dd861d2d5cf9bfd6f96d65b064765126a2ad9c6266d3797fece3392c4d48`: `runs/cleanup_pretrained_tier_a_20260804`
 
 ## TRAIN-only blinded boundary review queue
 
