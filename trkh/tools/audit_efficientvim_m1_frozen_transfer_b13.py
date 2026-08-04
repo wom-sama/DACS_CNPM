@@ -413,6 +413,20 @@ def _export_onnx(model: nn.Module, sample: Tensor, path: Path) -> dict[str, obje
     }
 
 
+def _disable_fused_attention_for_onnx(model: nn.Module) -> tuple[str, ...]:
+    """Force timm attention through its explicit, ONNX-traceable path."""
+    changed: list[str] = []
+    for name, module in model.named_modules():
+        if not hasattr(module, "fused_attn"):
+            continue
+        value = getattr(module, "fused_attn")
+        if not isinstance(value, bool):
+            raise TypeError(f"Unexpected fused_attn flag on {name}: {type(value)!r}")
+        setattr(module, "fused_attn", False)
+        changed.append(name)
+    return tuple(changed)
+
+
 def _ort_session(path: Path) -> ort.InferenceSession:
     options = ort.SessionOptions()
     options.intra_op_num_threads = ORT_THREADS
@@ -437,6 +451,12 @@ def _mobile_preflight(
     dino_weight: Path, efficientvim_checkpoint: Path
 ) -> dict[str, object]:
     dino = _build_dino(dino_weight, num_classes=CLASSES).cpu().eval()
+    disabled_dino_attention = _disable_fused_attention_for_onnx(dino)
+    if len(disabled_dino_attention) != len(dino.blocks):
+        raise ValueError(
+            "DINO ONNX attention inventory drifted: "
+            f"disabled={len(disabled_dino_attention)}, blocks={len(dino.blocks)}"
+        )
     efficientvim_source, _ = _build_efficientvim(efficientvim_checkpoint)
     efficientvim = _copy_efficientvim_backbone(efficientvim_source).cpu().eval()
     if sum(parameter.numel() for parameter in dino.parameters()) != DINO_5_CLASS_PARAMS:
@@ -530,6 +550,7 @@ def _mobile_preflight(
             "iterations_per_trial": ORT_ITERATIONS,
             "dino_input": [1, 3, DINO_IMAGE_SIZE, DINO_IMAGE_SIZE],
             "efficientvim_input": [1, 3, EFFICIENTVIM_IMAGE_SIZE, EFFICIENTVIM_IMAGE_SIZE],
+            "dino_fused_attention_disabled_for_onnx": list(disabled_dino_attention),
         },
         "parameters": {
             "dino_5class": DINO_5_CLASS_PARAMS,

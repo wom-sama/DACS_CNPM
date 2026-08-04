@@ -14,6 +14,7 @@ from trkh.tools.audit_efficientvim_m1_frozen_transfer_b13 import (
     FOLDS,
     _TrainLedgerDataset,
     _assert_output_outside_data_root,
+    _disable_fused_attention_for_onnx,
     _dino_descriptor,
     _fast_f1_from_predictions,
     _parse_args,
@@ -104,6 +105,23 @@ def test_dino_descriptor_rejects_geometry_drift() -> None:
 
     with pytest.raises(ValueError, match="geometry"):
         _dino_descriptor(Model(), torch.zeros(1, 3, 256, 256))
+
+
+def test_onnx_export_disables_every_fused_attention_module() -> None:
+    class Attention(torch.nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.fused_attn = True
+
+    class Model(torch.nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.blocks = torch.nn.ModuleList([Attention(), Attention()])
+
+    model = Model()
+    changed = _disable_fused_attention_for_onnx(model)
+    assert changed == ("blocks.0", "blocks.1")
+    assert all(not block.fused_attn for block in model.blocks)
 
 
 def test_train_ledger_dataset_preserves_index_and_label(tmp_path: Path) -> None:
