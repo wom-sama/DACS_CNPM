@@ -8,6 +8,21 @@
 - Close class-conditioned group exposure and PR-SPR-V3 after their matched failures.
 - Preserve B9 pure DINO as the current presentation/teacher reference. XCNorm A0/A1 and B11-CGAER are closed by matched TRAIN-only screens. Do not launch another late pooled-feature adapter, uncertainty router, or width/loss/LR sweep on this representation. Mobile promotion still requires a later locked distillation and device audit.
 
+### Objection and decision state
+
+Update rows in place; do not append chronology. States move `OPEN -> LOCKED -> CLOSED`; a closed row reopens only on its stated new evidence. `GUARD` is permanent.
+
+| ID | State | Objection / exact scope | Decision and evidence anchor | Exit or reopen condition |
+|---|---|---|---|---|
+| `DATA-01` | `OPEN` | Dataset problems are either absent or already understood. | No class-map/loader or exact-SHA cross-label bug; the real unresolved issue is boundary supervision/provenance: `120` TRAIN pHash-radius-3 cross-label pairs, six RGB-near-identical pairs and `264/497` relabelled class-1 rows. | Two blinded reviewers plus adjudication for the 18-row C1 and six-pair queue, or immutable fruit/session/time provenance. No automatic relabel/raw edit. |
+| `HYB-CAUSE-01` | `CLOSED` | V2/V3 lose only because class_f is noisy. | Rejected for V2/V3: matched arms share the same data, while V2 actively widens `2->1` and V3 loses recall across stable, relabelled, mixed and near cohorts. This does not claim every hybrid must fail. | Reopen only for a materially different matched hybrid whose branch adds measured pre-pooling information. |
+| `V2-01` | `CLOSED_FAIL` | More CNN depth or tuning can rescue V2. | Branch is active, not collapsed; duplicated absolute colour plus a free `64->384` projection overrides DINO semantics (`C1 F1 0.633609`, `2->1=52` versus B2 `38`). | New constrained evidence source, capacity-matched control and pre-pooling integration; no same-recipe tuning. |
+| `V3-01` | `CLOSED_FAIL` | The classifier direction was wrong. | Direction finite differences pass; the zero-init 160-parameter branch is starved by a moving 21.6M backbone (`p95=7.37e-5`, zero argmax correction). | A successor must inherit/freeze a verified teacher and prove non-collapse before metrics. |
+| `B12-01` | `CLOSED_FAIL` | A larger SSM/attention block over DINO depth tokens will recover missing signal. | Candidate gain versus latest is tiny/inconclusive and it is worse than the native B9 margin with CI below zero. | Independently measured missing information, not more capacity on the same tokens. |
+| `B13-01` | `LOCKED` | EfficientViM-M1 is already a superior hybrid/mobile result. | Not established. B13 is only a raw frozen final-representation/mobile screen against raw DINO; it is neither a hybrid nor an SSM-over-ViT claim. | Pass opens one separately frozen fine-tune/distillation protocol; fail closes exact M1 final-feature transfer without post-hoc M2/M3/M4/readout sweeps. |
+| `CLEAN-01` | `OPEN` | Old pretrained runs can be deleted by name or age. | Rejected. B9 presentation, comparison/provenance, authoritative fold/cache, B12 closure, review queue, B13 weight and accepted preflights are protected until a current retention inventory exists. | A reviewed `KEEP/COMPACT/DELETE` manifest with resolved paths, bytes, hashes and dry-run verification. |
+| `SEAL-01` | `GUARD` | Freezing a protocol permits reuse of the historical test. | False. B13 is TRAIN-only; current validation is exploratory/design-exposed and historical test cannot select or confirm a new model. | A new claim requires a prospectively sealed source/time/site holdout. |
+
 ## Evidence, not assumptions
 
 - Canonical contract: 12,019 images; train/val/test `8278/2479/1262`; no declared `source_image` or `leakage_group` crosses a split.
@@ -101,7 +116,7 @@ The executable V3 verdict accepts only full canonical validation exports with cl
 
 Because near-duplicate sequences inflate the aggregate score, the post-probe mechanism audit must also report stable-label, relabelled, mixed-group, near-train-neighbour and far/boundary cohorts. Improvement confined to the near-neighbour cohort is a failure even if aggregate validation passes.
 
-Because validation informed this design, V3 remains exploratory. A final confirmatory claim needs a new source/time/site holdout; the current test split stays sealed until the complete protocol is frozen.
+Because validation informed this design, V3 remains exploratory. A final confirmatory claim needs a new prospectively sealed source/time/site holdout. Freezing a protocol does not reopen the historical project test, which remains forbidden for selection and confirmation.
 
 ## Closed experiment: PR-SPR-V3
 

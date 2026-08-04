@@ -13,6 +13,14 @@ TRKH now has two independent scientific tracks:
 | No-pretrain | `classification-only-research` in `D:\DataAI\AIEx\TRKH` | Forbidden in the classifier, teacher, router and inference graph | Preserves the original scratch contribution and all existing claims |
 | Pretrained | `research/pretrained-hybrid-v1` in `D:\DataAI\AIEx\TRKH_pretrained` | Allowed when declared and justified | Tests whether modern pretrained representations plus TRKH-specific reasoning improve the current class-1 boundary |
 
+Active-branch amendment (2026-08-04): canonical `class_f` work continues on
+`research/pretrained-classf-b1`, a direct descendant of
+`research/pretrained-hybrid-v1` at commit `73c96f3d8f42e80c62ab2c4e3c0691ff81f45b77`.
+`TRKH_pretrained` is a linked Git worktree whose common directory is
+`D:\DataAI\AIEx\TRKH\.git`; it is not an independent copied project. The branch
+rename narrows dataset/protocol scope and does not merge or overwrite the dirty
+no-pretrain worktree.
+
 The existing no-pretrain worktree, including its uncommitted files, must not be switched, reset, copied wholesale, or silently mixed into the pretrained track. Shared fixes may be ported only as reviewed, path-specific changes with their origin recorded.
 
 As of 2026-07-31, `D:\DataAI\AIEx\newdataset\class_f\data.yaml` is the only
