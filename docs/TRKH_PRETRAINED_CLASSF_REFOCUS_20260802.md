@@ -86,7 +86,8 @@ Update rows in place; do not append chronology. States move `OPEN -> LOCKED -> C
 | `B28-01` | `CLOSED_FAIL` | Feature-distance head selection from SubViT may still favor DINO outliers irrelevant to the five-class boundary; the router teacher must target the actual predicted-class margin without using the row label. | The full run confirms a real selector change: positive margin degradation `91.00%`, border selection `52.01% -> 39.05%`, route equality with max-head only `13.77%`. Nevertheless candidate-minus-base macro/C1 F1/pair-AUROC is `-0.001367/-0.005477/-0.000570`, restricted FP rises `317 -> 326`, and only 1/5 C1 folds improves. | Close raw-DINO final-attention plus patch-projection/Haar subpatchs on current evidence. Reopen only with a different measured local representation, not another head/K/PCA selector. |
 | `B29-01` | `CLOSED_FAIL` | B24's useful ConvNeXt complementarity should not require a 27.8M second inference backbone; a fast state-space student may learn its correction. | The fixed-fold pilot is strongly mechanism-positive: candidate-minus-control accuracy/macro/C1 F1 is `+0.020296/+0.020326/+0.028594`, restricted FP falls `69 -> 52`, and strict reload is exact. It fails only locked TP retention (`50 -> 48`). A 5,000-draw whole-component bootstrap keeps accuracy and macro lower bounds positive, while C1 F1 remains uncertain. | Do not rerun ordinary coupled KL or promote a bias tuned on fold 0. A successor may keep the exact backbone/teacher and change only the transfer/calibration equation, then confirm on TRAIN folds not used to choose that equation. Validation/test/full train remain sealed. |
 | `B30-01` | `CLOSED_FAIL` | B29's fusion signal is useful, but coupled KL can transmit harmful teacher margins and its unweighted retention can sacrifice minority TP. | TMORD beats raw DINO C1 F1 by `+0.056022` but loses to coupled KL by C1/macro/accuracy `-0.032447/-0.015821/-0.013577`, loses one TP and adds seven restricted FP. Positive-gain routing covers `78.75%` of pairs with mean `1.446` under cap `2`, so it is insufficiently selective and removes useful non-target structure. | Do not tune cap, C1 weight or gate. Preserve the coupled-KL control as evidence and complete that unchanged equation on TRAIN folds 2--4. |
-| `B31-01` | `LOCKED` | Fold-0 TP loss may be fold variance rather than a coupled-KL defect; fold 1 independently reverses it and produces a large all-metric gain. | Partial OOF folds 0--1 changes base to coupled-KL accuracy/macro/C1 F1 `0.837646/0.782891/0.506912 -> 0.863520/0.813721/0.573604`, TP `110 -> 113`, restricted FP `122 -> 82`, pair AUROC `0.943415 -> 0.955041`. | Train only unchanged folds 2--4. On those confirmation folds require aggregate C1/macro/accuracy gains `>=+0.010/+0.005/+0.005`, no aggregate TP loss, at least ten fewer restricted FP, and C1 gain on at least two folds. Pass authorizes one matched exploratory validation run, never test/full train. |
+| `B31-01` | `CLOSED_PASS` | Fold-0 TP loss may be fold variance rather than a coupled-KL defect; fold 1 independently reverses it and produces a large all-metric gain. | Confirmation folds 2--4 improve accuracy/macro/C1 F1 by `+0.027935/+0.031605/+0.058224`, add two TP and remove 61 restricted FP; C1 improves in 3/3 folds. Whole-component C1-gain CI is `[+0.03018,+0.08997]`. Full five-fold C1 F1 is `0.579051` versus `0.517520`. | Authorizes one train-all/matched exploratory validation of this exact raw-DINO+M1 equation. It does not authorize a B9 graft, test, train+val finalfit or presentation claim. |
+| `B32-01` | `LOCKED` | OOF success may disappear on validation or remain below supervised pure B9; attaching ConvNeXt knowledge directly to B9 is not justified. | A TRAIN-only conditional check rejects a direct B9 graft: exact B9 C1 F1/TP/FP is `0.902486/472/74`, while source-fold B9+ConvNeXt readout is `0.817391/423/114`. B32 instead trains the unchanged B31 raw-DINO-primary + M1 residual on all TRAIN rows and evaluates validation once. | Require hybrid-minus-matched-raw-base accuracy/macro/C1 gains `>=+0.010/+0.010/+0.020` with no TP loss; versus B9 require accuracy `>=0.907061`, macro `>=0.871324`, C1 F1 `>=0.72`, and no restricted-FP increase. Test/finalfit remain sealed. |
 | `KD-01` | `GUARD` | B19 proves that raw-DINO relation distillation itself improves SwiftFormer. | False. Stock, control and candidate all receive the same cosine-neighbour relation loss; B19 isolates spatial atoms under that objective, not relation KD versus CE-only. The normalized relation also does not preserve photometric magnitude by construction. | Any causal KD claim requires a separately preregistered matched experiment on prospectively sealed evidence; B19 cannot be reinterpreted as that ablation. |
 | `TELEM-01` | `LOCKED` | Final factor norms and scalar loss curves are enough to diagnose optimization if a successor fails. | Rejected. They prove activation and fit behaviour but cannot distinguish backbone absorption from branch starvation. | B21 records per-role gradient and update/parameter norms plus adapter residual ratios by epoch. Gradient-conflict telemetry is required only when an auxiliary objective exists; B21 deliberately has none. |
 | `LR-01` | `CLOSED` | Exact float equality is safe when a mathematically identical endpoint is produced through multiplication and division. | Rejected by the B18 real-fold counterexample. Endpoint values must be returned explicitly, while interior points retain the original formula; tests must exercise every locked fold horizon. | Permanent scheduler implementation rule. |
@@ -511,6 +512,39 @@ and complete six-epoch schedule. Folds 0--1 are loaded from their immutable
 score artifacts, not rerun. The primary promotion statistic is the aggregate of
 the previously unseen folds 2--4 under the `B31-01` gate; the five-fold OOF is
 reported secondarily. No validation/test dataset is constructed by B31.
+
+B31 completed `1,902` new updates, strict-reloaded all three states with zero
+error, and passed every gate. On confirmation folds 2--4, raw base versus
+coupled KL is accuracy `0.873346 -> 0.901281`, macro-F1
+`0.816688 -> 0.848294`, C1 P/R/F1
+`0.468421/0.595318/0.524300 -> 0.564263/0.602007/0.582524`, TP
+`178 -> 180`, and restricted FP `195 -> 134`. C1 improves in all three folds.
+A 5,000-draw union-component bootstrap gives accuracy gain
+`+0.02805 [0.02148,0.03479]`, macro `+0.03185 [0.02323,0.04073]`, and C1 F1
+`+0.05848 [0.03018,0.08997]`; the FP change is
+`-61.15 [-85,-39]`.
+
+Across all five OOF folds, accuracy/macro/C1 F1 changes
+`0.858178/0.802076/0.517520 -> 0.885238/0.833168/0.579051`, C1 TP
+`288 -> 293`, restricted FP `317 -> 216`, and mean pair AUROC
+`0.946103 -> 0.956651`. Full-OOF whole-component C1-gain CI is
+`[+0.03940,+0.08450]`. This promotes the exact coupled-KL hybrid mechanism to
+one matched exploratory validation; it is not yet evidence that it beats B9.
+
+- Result: `runs/b31_coupled_kd_oof_d5e3816_r1/summary.json`
+- Summary SHA256: `b117dcd1256bd85b53c330d782626d67dfbca84af19faefc4769c3e243737210`
+- OOF score SHA256: `d1e7e9538d3587b4b2ff8beac533d7415871e9f4989a9dedbea4f30a58124ae0`
+
+## Locked matched validation: B32 full-TRAIN raw-DINO + M1
+
+B32 fits the same balanced raw-DINO and DINO+ConvNeXt readouts on all 8,278
+TRAIN descriptors, trains one official M1 residual with the unchanged B31
+sampler/loss/six-epoch schedule, and extracts raw-DINO validation descriptors
+with the exact B13 preprocessing. Validation inference contains raw DINO, its
+saved linear primary readout and M1; ConvNeXt is TRAIN-teacher-only. The matched
+raw-DINO primary and retained exact B9 predictions are evaluated on the same
+ordered 2,479 rows under the `B32-01` gate. Current validation is design-exposed,
+so even a pass remains exploratory and cannot open test or finalfit by itself.
 
 ## PRMR R1 closure
 
