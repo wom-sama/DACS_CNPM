@@ -13,7 +13,7 @@ os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 import numpy as np
 import torch
 from safetensors.torch import load_file
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 
 from trkh.models.dinov3_multidepth_convpass_b21 import SPATIAL_MODE
 from trkh.models.efficientvim_residual_student_b29 import load_student_state_dict
@@ -67,27 +67,33 @@ def _source_hashes(repo: Path) -> dict[str, str]:
 def _extract_m1_residual(
     model: torch.nn.Module,
     dataset: _TrainLedgerDataset,
+    ordered_indices: np.ndarray,
     *,
     device: torch.device,
 ) -> tuple[np.ndarray, np.ndarray]:
+    ordered_indices = np.asarray(ordered_indices, dtype=np.int64)
+    subset = Subset(dataset, ordered_indices.tolist())
     loader = DataLoader(
-        dataset,
+        subset,
         batch_size=M1_BATCH_SIZE,
         shuffle=False,
         num_workers=0,
         pin_memory=True,
         drop_last=False,
     )
-    residual = np.full((len(dataset), CLASSES), np.nan, dtype=np.float32)
-    observed_labels = np.full(len(dataset), -1, dtype=np.int64)
+    residual = np.full((ordered_indices.size, CLASSES), np.nan, dtype=np.float32)
+    observed_labels = np.full(ordered_indices.size, -1, dtype=np.int64)
+    positions = {
+        int(index): position for position, index in enumerate(ordered_indices.tolist())
+    }
     model.to(device).eval()
     for images, labels, indices in loader:
         images = images.to(device=device, dtype=torch.float32, non_blocking=True)
         zeros = torch.zeros((images.shape[0], CLASSES), device=device)
         _logits, trace = model.forward_with_trace(images, zeros)
-        positions = indices.numpy().astype(np.int64, copy=False)
-        residual[positions] = trace["residual_scores"].cpu().numpy()
-        observed_labels[positions] = labels.numpy()
+        target = np.asarray([positions[int(index)] for index in indices], dtype=np.int64)
+        residual[target] = trace["residual_scores"].cpu().numpy()
+        observed_labels[target] = labels.numpy()
     if not np.isfinite(residual).all() or bool((observed_labels < 0).any()):
         raise B34ContractError("M1 residual extraction is incomplete or non-finite")
     return residual, observed_labels
@@ -209,10 +215,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         labels,
         _efficientvim_transform(),
     )
-    m1_residual, m1_labels = _extract_m1_residual(
-        m1_model, m1_dataset, device=device
+    fit_indices = np.flatnonzero(fit)
+    held_indices = np.flatnonzero(held)
+    fit_residual, fit_m1_labels = _extract_m1_residual(
+        m1_model, m1_dataset, fit_indices, device=device
     )
-    if not np.array_equal(m1_labels, labels):
+    held_residual, held_m1_labels = _extract_m1_residual(
+        m1_model, m1_dataset, held_indices, device=device
+    )
+    m1_residual = np.full((ROWS, CLASSES), np.nan, dtype=np.float32)
+    m1_residual[fit] = fit_residual
+    m1_residual[held] = held_residual
+    if not np.array_equal(fit_m1_labels, labels[fit]) or not np.array_equal(
+        held_m1_labels, labels[held]
+    ):
         raise B34ContractError("M1 extraction labels changed")
     del m1_model
     gc.collect()
