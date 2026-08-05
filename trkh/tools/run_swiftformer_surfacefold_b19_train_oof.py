@@ -7,6 +7,7 @@ import json
 import math
 import os
 import random
+import struct
 import subprocess
 import time
 import traceback
@@ -31,7 +32,7 @@ from torch import Tensor, nn
 from torchvision.transforms import InterpolationMode
 from torchvision.transforms import functional as TF
 
-# B18 deliberately reuses the immutable B17 SurfaceFold architecture; only the protocol gates change.
+# B19 deliberately reuses the immutable B17 SurfaceFold architecture; only the protocol gates change.
 from trkh.models.swiftformer_surfacefold_b17 import (
     SURFACEFOLD_MEAN_CONTROL_B17_MODE,
     SURFACEFOLD_OFF_B17_MODE,
@@ -41,8 +42,8 @@ from trkh.models.swiftformer_surfacefold_b17 import (
     surfacefold_s3_relation_loss_b17,
 )
 
-PROTOCOL_ID = "TRKH_PRETRAINED_CLASSF_B18_TARGETMATCH_SURFACEFOLD_XS_20260805"
-PROTOCOL_SHA256 = "a1bd634a8f9e4b8a259d4e8e68881bd85db5cdcf4b86577fcea595a071a7d475"
+PROTOCOL_ID = "TRKH_PRETRAINED_CLASSF_B19_BITEXACT_LR_SURFACEFOLD_XS_20260805"
+PROTOCOL_SHA256 = "740551a99d0899af5ee37990ab8d71890cf9351118bcac57b19bcc34482e01fc"
 EXPECTED_BRANCH = "research/pretrained-classf-b1"
 SEED = 20260805
 AUGMENTATION_SEED_BASE = 30260805
@@ -98,6 +99,7 @@ WORKERS = 0
 BACKBONE_LR = 3e-05
 TASK_LR = 0.0003
 MIN_LR = 1e-06
+EXPECTED_UPDATES_PER_EPOCH = (202, 206, 212, 207, 210)
 WEIGHT_DECAY = 0.05
 GRAD_CLIP = 0.7
 RELATION_WEIGHT = 0.1
@@ -107,8 +109,8 @@ EXPECTED_BOOTSTRAP_DRAW_SHA256 = "d8967cbc13b17b78dd225841bd82a1a3074a7f57c3728f
 MAX_CUDA_ALLOCATED_BYTES = 7 * 1024**3
 MAX_WALL_SECONDS = 12 * 60 * 60
 MAX_RETAINED_BYTES = int(1.5 * 1024**3)
-OUTPUT_PREFIX = "pretrained_surfacefold_xs_b18_train_oof_"
-PREFLIGHT_OUTPUT_PREFIX = "preflight_b18_surfacefold_xs_"
+OUTPUT_PREFIX = "pretrained_surfacefold_xs_b19_train_oof_"
+PREFLIGHT_OUTPUT_PREFIX = "preflight_b19_surfacefold_xs_"
 IMAGENET_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_STD = (0.229, 0.224, 0.225)
 METRIC_BARRIER_PHASE = "all_15_final_states_before_any_held_inference_or_metric"
@@ -123,8 +125,8 @@ _METRIC_BACKEND_LOADED = False
 _VALID_BARRIER_TOKENS: set[str] = set()
 
 
-class B18ContractError(RuntimeError):
-    """Raised when the prospective B18 contract is no longer exact."""
+class B19ContractError(RuntimeError):
+    """Raised when the prospective B19 contract is no longer exact."""
 
 
 @dataclass(frozen=True)
@@ -223,6 +225,10 @@ def _finite(value: object) -> bool:
     return isinstance(value, (int, float)) and (not isinstance(value, bool)) and math.isfinite(float(value))
 
 
+def _float64_bits(value: float) -> bytes:
+    return struct.pack("!d", float(value))
+
+
 def _json_bytes(payload: Mapping[str, object]) -> bytes:
     return json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2, allow_nan=False).encode("utf-8") + b"\n"
 
@@ -231,7 +237,7 @@ def _atomic_bytes(path: Path, payload: bytes) -> str:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists():
-        raise FileExistsError(f"Refuse to overwrite B18 artifact: {path}")
+        raise FileExistsError(f"Refuse to overwrite B19 artifact: {path}")
     temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
     try:
         temporary.write_bytes(payload)
@@ -240,7 +246,7 @@ def _atomic_bytes(path: Path, payload: bytes) -> str:
     finally:
         temporary.unlink(missing_ok=True)
     if sha256_file(path) != digest:
-        raise B18ContractError(f"Atomic B18 artifact hash drifted: {path}")
+        raise B19ContractError(f"Atomic B19 artifact hash drifted: {path}")
     return digest
 
 
@@ -252,7 +258,7 @@ def atomic_npz(path: Path, **arrays: np.ndarray) -> str:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists():
-        raise FileExistsError(f"Refuse to overwrite B18 artifact: {path}")
+        raise FileExistsError(f"Refuse to overwrite B19 artifact: {path}")
     temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
     try:
         with temporary.open("wb") as handle:
@@ -262,7 +268,7 @@ def atomic_npz(path: Path, **arrays: np.ndarray) -> str:
     finally:
         temporary.unlink(missing_ok=True)
     if sha256_file(path) != digest:
-        raise B18ContractError(f"Atomic B18 NPZ hash drifted: {path}")
+        raise B19ContractError(f"Atomic B19 NPZ hash drifted: {path}")
     return digest
 
 
@@ -291,12 +297,12 @@ def atomic_safetensors(path: Path, state: Mapping[str, Tensor], metadata: Mappin
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists():
-        raise FileExistsError(f"Refuse to overwrite B18 state: {path}")
+        raise FileExistsError(f"Refuse to overwrite B19 state: {path}")
     tensors = {str(name): tensor.detach().cpu().contiguous() for (name, tensor) in state.items()}
     if not tensors or any(
         (not bool(torch.isfinite(value).all()) for value in tensors.values() if value.is_floating_point())
     ):
-        raise B18ContractError("B18 state is empty or contains non-finite tensors")
+        raise B19ContractError("B19 state is empty or contains non-finite tensors")
     temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
     try:
         save_file(tensors, str(temporary), metadata=dict(metadata))
@@ -305,7 +311,7 @@ def atomic_safetensors(path: Path, state: Mapping[str, Tensor], metadata: Mappin
     finally:
         temporary.unlink(missing_ok=True)
     if sha256_file(path) != digest:
-        raise B18ContractError(f"Atomic B18 state hash drifted: {path}")
+        raise B19ContractError(f"Atomic B19 state hash drifted: {path}")
     return digest
 
 
@@ -335,19 +341,19 @@ def _git_contract() -> dict[str, object]:
 def _source_hashes() -> dict[str, str]:
     root = _repository_root()
     paths = {
-        "protocol": root / "docs" / "TRKH_PRETRAINED_CLASSF_B18_TARGETMATCH_SURFACEFOLD_PROTOCOL_20260805.md",
+        "protocol": root / "docs" / "TRKH_PRETRAINED_CLASSF_B19_BITEXACT_LR_PROTOCOL_20260805.md",
         "model": root / "trkh" / "models" / "swiftformer_surfacefold_b17.py",
         "model_test": root / "tests" / "test_swiftformer_surfacefold_b17.py",
         "deployment": root / "trkh" / "inference" / "surfacefold_deployment.py",
         "deployment_test": root / "tests" / "test_surfacefold_deployment.py",
-        "preflight_runner": root / "trkh" / "tools" / "audit_swiftformer_surfacefold_b18_preflight.py",
-        "preflight_test": root / "tests" / "test_audit_swiftformer_surfacefold_b18_preflight.py",
+        "preflight_runner": root / "trkh" / "tools" / "audit_swiftformer_surfacefold_b19_preflight.py",
+        "preflight_test": root / "tests" / "test_audit_swiftformer_surfacefold_b19_preflight.py",
         "formal_runner": Path(__file__).resolve(),
-        "formal_runner_test": root / "tests" / "test_run_swiftformer_surfacefold_b18_train_oof.py",
+        "formal_runner_test": root / "tests" / "test_run_swiftformer_surfacefold_b19_train_oof.py",
     }
     for name, path in paths.items():
         if not path.is_file():
-            raise FileNotFoundError(f"Missing B18 source: {name}={path}")
+            raise FileNotFoundError(f"Missing B19 source: {name}={path}")
         relative = path.relative_to(root)
         tracked = subprocess.run(
             ["git", "ls-files", "--error-unmatch", str(relative)],
@@ -356,19 +362,19 @@ def _source_hashes() -> dict[str, str]:
             text=True,
         )
         if tracked.returncode != 0:
-            raise B18ContractError(f"B18 source is not tracked: {relative}")
+            raise B19ContractError(f"B19 source is not tracked: {relative}")
     hashes = {name: sha256_file(path) for (name, path) in paths.items()}
     if hashes["protocol"] != PROTOCOL_SHA256:
-        raise B18ContractError("B18 protocol hash changed")
+        raise B19ContractError("B19 protocol hash changed")
     return hashes
 
 
 def _canonical_preflight_artifact(artifact: object, expected_sha256: object) -> tuple[Path, str]:
     if not isinstance(artifact, (str, Path)) or not _hex(str(expected_sha256), 64):
-        raise B18ContractError("Accepted B18 preflight path/hash schema is invalid")
+        raise B19ContractError("Accepted B19 preflight path/hash schema is invalid")
     raw_path = Path(artifact)
     if not raw_path.is_absolute():
-        raise B18ContractError("Accepted B18 preflight path must be absolute")
+        raise B19ContractError("Accepted B19 preflight path must be absolute")
     resolved = raw_path.resolve(strict=True)
     runs = (_repository_root() / "runs").resolve()
     if (
@@ -377,16 +383,16 @@ def _canonical_preflight_artifact(artifact: object, expected_sha256: object) -> 
         or (not resolved.parent.name.startswith(PREFLIGHT_OUTPUT_PREFIX))
         or (resolved != raw_path)
     ):
-        raise B18ContractError("Accepted B18 preflight is outside its canonical runs path")
+        raise B19ContractError("Accepted B19 preflight is outside its canonical runs path")
     sidecar = resolved.with_name("preflight.sha256")
     if set((child.name for child in resolved.parent.iterdir())) != {
         "preflight.json",
         "preflight.sha256",
     }:
-        raise B18ContractError("Accepted B18 preflight publication schema changed")
+        raise B19ContractError("Accepted B19 preflight publication schema changed")
     digest = sha256_file(resolved)
     if digest != expected_sha256 or sidecar.read_bytes() != f"{digest}\n".encode("ascii"):
-        raise B18ContractError("Accepted B18 preflight hash/sidecar mismatch")
+        raise B19ContractError("Accepted B19 preflight hash/sidecar mismatch")
     return (resolved, digest)
 
 
@@ -478,7 +484,7 @@ def _validate_preflight_payload(
         or payload.get("isolation") != {"dataset_attempts": [], "network_attempts": [], "process_attempts": []}
         or payload.get("end_rehash") != expected_end
     ):
-        raise B18ContractError("Accepted B18 preflight identity/schema/authorization changed")
+        raise B19ContractError("Accepted B19 preflight identity/schema/authorization changed")
 
 
 def validate_accepted_preflight(
@@ -490,7 +496,7 @@ def validate_accepted_preflight(
     git: Mapping[str, object],
     sources: Mapping[str, str],
 ) -> dict[str, object]:
-    from trkh.tools.audit_swiftformer_surfacefold_b18_preflight import (
+    from trkh.tools.audit_swiftformer_surfacefold_b19_preflight import (
         validate_accepted_preflight as validate_exact,
     )
 
@@ -504,11 +510,11 @@ def validate_accepted_preflight(
     (resolved, digest) = _canonical_preflight_artifact(accepted.get("artifact"), accepted.get("sha256"))
     payload = accepted.get("payload")
     if not isinstance(payload, Mapping):
-        raise B18ContractError("Accepted B18 preflight validator returned no payload")
+        raise B19ContractError("Accepted B19 preflight validator returned no payload")
     raw = resolved.read_bytes()
     decoded = json.loads(raw.decode("utf-8"))
     if not isinstance(decoded, Mapping) or raw != _json_bytes(decoded) or dict(decoded) != dict(payload):
-        raise B18ContractError("Accepted B18 preflight payload is not canonical/bound")
+        raise B19ContractError("Accepted B19 preflight payload is not canonical/bound")
     _validate_preflight_payload(payload, git=git, sources=sources)
     return {"artifact": str(resolved), "sha256": digest, "payload": dict(payload)}
 
@@ -565,8 +571,8 @@ def claim_train_authorization_once(
     """Consume the preflight's one-screen authorization before any data read."""
     preflight_sha = accepted_preflight.get("sha256")
     if not _hex(preflight_sha, 64):
-        raise B18ContractError("B18 authorization claim lacks a preflight SHA-256")
-    claims_root = (_repository_root() / "runs" / "b18_train_authorization_claims").resolve()
+        raise B19ContractError("B19 authorization claim lacks a preflight SHA-256")
+    claims_root = (_repository_root() / "runs" / "b19_train_authorization_claims").resolve()
     claims_root.mkdir(parents=True, exist_ok=True)
     path = claims_root / f"{preflight_sha}.json"
     payload = _claim_payload(
@@ -584,10 +590,10 @@ def claim_train_authorization_once(
             handle.flush()
             os.fsync(handle.fileno())
     except FileExistsError as exc:
-        raise B18ContractError(f"B18 preflight authorization was already consumed: {path}") from exc
+        raise B19ContractError(f"B19 preflight authorization was already consumed: {path}") from exc
     digest = sha256_file(path)
     if path.read_bytes() != encoded:
-        raise B18ContractError("B18 authorization claim changed during exclusive creation")
+        raise B19ContractError("B19 authorization claim changed during exclusive creation")
     return {"path": str(path), "sha256": digest, "payload": payload}
 
 
@@ -601,10 +607,10 @@ def validate_train_authorization_claim(
     args: argparse.Namespace,
 ) -> dict[str, object]:
     if set(claim) != {"path", "sha256", "payload"} or not _hex(claim.get("sha256"), 64):
-        raise B18ContractError("B18 authorization claim binding schema changed")
+        raise B19ContractError("B19 authorization claim binding schema changed")
     preflight_sha = accepted_preflight.get("sha256")
     path = Path(str(claim["path"])).resolve(strict=True)
-    expected = (_repository_root() / "runs" / "b18_train_authorization_claims" / f"{preflight_sha}.json").resolve()
+    expected = (_repository_root() / "runs" / "b19_train_authorization_claims" / f"{preflight_sha}.json").resolve()
     raw = path.read_bytes()
     decoded = json.loads(raw.decode("utf-8"))
     if (
@@ -616,7 +622,7 @@ def validate_train_authorization_claim(
         or dict(decoded) != claim["payload"]
         or not _finite(decoded.get("created_at_unix"))
     ):
-        raise B18ContractError("B18 authorization claim path/hash/payload changed")
+        raise B19ContractError("B19 authorization claim path/hash/payload changed")
     expected_payload = _claim_payload(
         accepted_preflight=accepted_preflight,
         git=git,
@@ -626,7 +632,7 @@ def validate_train_authorization_claim(
         created_at_unix=float(decoded["created_at_unix"]),
     )
     if dict(decoded) != expected_payload:
-        raise B18ContractError("B18 authorization claim bindings changed")
+        raise B19ContractError("B19 authorization claim bindings changed")
     return {"path": str(path), "sha256": claim["sha256"], "payload": dict(decoded)}
 
 
@@ -634,7 +640,7 @@ def compute_assignment_hashes(relative_paths: Sequence[str], folds: np.ndarray, 
     folds = np.asarray(folds, dtype=np.int64)
     groups = np.asarray(groups, dtype=np.int64)
     if len(relative_paths) != folds.size or folds.shape != groups.shape:
-        raise ValueError("B18 assignment arrays are not aligned")
+        raise ValueError("B19 assignment arrays are not aligned")
     path_fold = (
         "\n".join((f"{relative_paths[index]}\t{int(folds[index])}" for index in range(len(relative_paths)))) + "\n"
     )
@@ -662,18 +668,18 @@ def validate_assignment_arrays(
         or labels.shape != folds.shape
         or (labels.size != len(relative_paths))
     ):
-        raise ValueError("B18 assignment is empty or misaligned")
+        raise ValueError("B19 assignment is empty or misaligned")
     if bool((labels < 0).any()) or bool((labels >= CLASSES).any()) or bool((groups < 0).any()):
-        raise ValueError("B18 assignment label/group domain is invalid")
+        raise ValueError("B19 assignment label/group domain is invalid")
     if set(np.unique(folds).tolist()) != set(range(FOLDS)):
-        raise ValueError("B18 assignment must contain exactly folds 0..4")
+        raise ValueError("B19 assignment must contain exactly folds 0..4")
     fold_rows: list[dict[str, object]] = []
     for fold in range(FOLDS):
         held = folds == fold
         overlap = set(groups[held].tolist()) & set(groups[~held].tolist())
         counts = np.bincount(labels[held], minlength=CLASSES).astype(int)
         if overlap or bool((counts <= 0).any()):
-            raise ValueError(f"B18 fold {fold} is not component-disjoint/class-complete")
+            raise ValueError(f"B19 fold {fold} is not component-disjoint/class-complete")
         fold_rows.append(
             {
                 "fold": fold,
@@ -695,18 +701,18 @@ def validate_assignment_arrays(
             or tuple(np.bincount(labels, minlength=CLASSES).tolist()) != EXPECTED_CLASS_COUNTS
             or hashes != expected
         ):
-            raise B18ContractError("Locked B18 assignment counts/vector hashes changed")
+            raise B19ContractError("Locked B19 assignment counts/vector hashes changed")
     return {"hashes": hashes, "fold_rows": fold_rows}
 
 
 def read_locked_assignment_csv(path: Path) -> dict[str, object]:
     resolved = Path(path).expanduser().resolve(strict=True)
     if sha256_file(resolved) != EXPECTED_ASSIGNMENT_CSV_SHA256:
-        raise B18ContractError("B18 assignment CSV hash changed")
+        raise B19ContractError("B19 assignment CSV hash changed")
     with resolved.open("r", encoding="utf-8-sig", newline="") as handle:
         reader = csv.DictReader(handle)
         if list(reader.fieldnames or ()) != ["relative_path", "label", "union_group", "fold"]:
-            raise B18ContractError("B18 assignment CSV columns changed")
+            raise B19ContractError("B19 assignment CSV columns changed")
         rows = list(reader)
     relative_paths = [str(row["relative_path"]) for row in rows]
     labels = np.asarray([int(row["label"]) for row in rows], dtype=np.int64)
@@ -726,7 +732,7 @@ def read_locked_assignment_csv(path: Path) -> dict[str, object]:
 def _read_locked_data_root(data_yaml: Path) -> Path:
     resolved = Path(data_yaml).expanduser().resolve(strict=True)
     if resolved != EXPECTED_DATA_YAML.resolve() or sha256_file(resolved) != EXPECTED_DATA_SHA256:
-        raise B18ContractError("Canonical class_f YAML path/hash changed")
+        raise B19ContractError("Canonical class_f YAML path/hash changed")
     raw = yaml.safe_load(resolved.read_text(encoding="utf-8")) or {}
     data_format = str(raw.get("format", raw.get("data_format", ""))).strip().casefold()
     names = raw.get("names")
@@ -746,13 +752,13 @@ def _read_locked_data_root(data_yaml: Path) -> Path:
         or class_names != EXPECTED_CLASS_NAMES
         or train_root.expanduser().resolve() != (root / "train").resolve()
     ):
-        raise B18ContractError("Canonical B18 TRAIN data declaration changed")
+        raise B19ContractError("Canonical B19 TRAIN data declaration changed")
     return root
 
 
 def train_content_contract(relative_paths: Sequence[str], absolute_paths: Sequence[Path]) -> dict[str, object]:
     if not relative_paths or len(relative_paths) != len(absolute_paths):
-        raise ValueError("B18 TRAIN content paths are empty or misaligned")
+        raise ValueError("B19 TRAIN content paths are empty or misaligned")
     digest = hashlib.sha256()
     total_bytes = 0
     for relative, absolute in zip(relative_paths, absolute_paths):
@@ -761,7 +767,7 @@ def train_content_contract(relative_paths: Sequence[str], absolute_paths: Sequen
         file_sha = sha256_file(path)
         after = path.stat()
         if (before.st_size, before.st_mtime_ns) != (after.st_size, after.st_mtime_ns):
-            raise B18ContractError(f"TRAIN image changed while hashing: {path}")
+            raise B19ContractError(f"TRAIN image changed while hashing: {path}")
         encoded = str(relative).encode("utf-8")
         digest.update(len(encoded).to_bytes(8, "little"))
         digest.update(encoded)
@@ -776,7 +782,7 @@ def train_content_contract(relative_paths: Sequence[str], absolute_paths: Sequen
         "train_only": True,
     }
     if len(relative_paths) == EXPECTED_TRAIN_ROWS and payload["sha256"] != EXPECTED_TRAIN_CONTENT_SHA256:
-        raise B18ContractError("Canonical B18 TRAIN content hash changed")
+        raise B19ContractError("Canonical B19 TRAIN content hash changed")
     return payload
 
 
@@ -869,23 +875,23 @@ def load_raw_batch(
 
 def teacher_relation_target(teacher: nn.Module, images: Tensor, ledger: TeacherCallLedger) -> Tensor:
     if images.ndim != 4 or tuple(images.shape[1:]) != (3, 256, 256):
-        raise B18ContractError("DINO input must be [B,3,256,256]")
+        raise B19ContractError("DINO input must be [B,3,256,256]")
     with torch.inference_mode(), torch.autocast(device_type=images.device.type, enabled=False):
         tokens = teacher.forward_features(images.float())
     ledger.calls += 1
     ledger.rows += int(images.size(0))
     if not isinstance(tokens, Tensor) or tuple(tokens.shape[1:]) != (261, DINO_FEATURE_DIM):
-        raise B18ContractError(f"DINO token geometry changed: {getattr(tokens, 'shape', None)}")
+        raise B19ContractError(f"DINO token geometry changed: {getattr(tokens, 'shape', None)}")
     patch_map = (
         tokens[:, DINO_PREFIX_TOKENS:].reshape(images.size(0), 16, 16, DINO_FEATURE_DIM).permute(0, 3, 1, 2).float()
     )
     target = dino_s3_relation_target_b17(patch_map)
     if tuple(target.shape) != (images.size(0), 84) or target.requires_grad:
-        raise B18ContractError("DINO B18 relation target geometry/gradient changed")
+        raise B19ContractError("DINO B19 relation target geometry/gradient changed")
     return target
 
 
-def exact_b18_objective(
+def exact_b19_objective(
     logits: Tensor,
     student_s3: Tensor,
     labels: Tensor,
@@ -897,13 +903,13 @@ def exact_b18_objective(
     ce = F.cross_entropy(logits.float(), labels, weight=class_weights, reduction="mean")
     total = ce + RELATION_WEIGHT * relation
     if not bool(torch.isfinite(total)):
-        raise FloatingPointError("B18 exact CE+relation objective is non-finite")
+        raise FloatingPointError("B19 exact CE+relation objective is non-finite")
     return total, ce, relation
 
 
 def _rng_snapshot(device: torch.device) -> ArmRngState:
     if device.type != "cuda":
-        raise B18ContractError("B18 arm RNG streams require CUDA")
+        raise B19ContractError("B19 arm RNG streams require CUDA")
     return ArmRngState(torch.random.get_rng_state().clone(), torch.cuda.get_rng_state(device).clone())
 
 
@@ -924,7 +930,7 @@ def make_arm_rng_states(device: torch.device, seed: int) -> dict[str, ArmRngStat
     finally:
         _rng_restore(device, caller)
     if len({id(state.cpu) for state in result.values()}) != len(ARMS):
-        raise B18ContractError("B18 arms do not own disjoint RNG state tensors")
+        raise B19ContractError("B19 arms do not own disjoint RNG state tensors")
     return result
 
 
@@ -932,7 +938,7 @@ def run_with_arm_rng(
     arm: str, states: dict[str, ArmRngState], device: torch.device, function: Callable[[], Any]
 ) -> Any:
     if arm not in ARMS or set(states) != set(ARMS):
-        raise B18ContractError("B18 arm RNG state mapping changed")
+        raise B19ContractError("B19 arm RNG state mapping changed")
     caller = _rng_snapshot(device)
     try:
         _rng_restore(device, states[arm])
@@ -958,7 +964,7 @@ def _preserve_rng(function: Callable[[], Any]) -> Any:
 def reset_locked_five_class_heads(model: nn.Module, seed: int = SEED) -> dict[str, object]:
     old_heads = (getattr(model, "head", None), getattr(model, "head_dist", None))
     if not all(isinstance(head, nn.Linear) and head.in_features == 220 for head in old_heads):
-        raise B18ContractError("B18 head reset requires two pretrained 220-channel linear heads")
+        raise B19ContractError("B19 head reset requires two pretrained 220-channel linear heads")
     before_cpu = torch.random.get_rng_state().clone()
     before_cuda = [state.clone() for state in torch.cuda.get_rng_state_all()] if torch.cuda.is_initialized() else None
     cuda_devices = list(range(torch.cuda.device_count())) if torch.cuda.is_initialized() else []
@@ -979,7 +985,7 @@ def reset_locked_five_class_heads(model: nn.Module, seed: int = SEED) -> dict[st
             or any((not torch.equal(left, right) for (left, right) in zip(before_cuda, after_cuda)))
         )
     ):
-        raise B18ContractError("B18 five-class head reset consumed caller RNG")
+        raise B19ContractError("B19 five-class head reset consumed caller RNG")
     model.num_classes = CLASSES
     model.distilled_training = False
     return {
@@ -990,13 +996,13 @@ def reset_locked_five_class_heads(model: nn.Module, seed: int = SEED) -> dict[st
 
 
 def _formal_initialized_cuda_head_reset_probe() -> dict[str, object]:
-    """Repeat the B18 initialized-CUDA RNG proof before any TRAIN data access."""
+    """Repeat the B19 initialized-CUDA RNG proof before any TRAIN data access."""
     if not torch.cuda.is_available():
-        raise B18ContractError("Formal B18 head-reset RNG proof requires CUDA")
+        raise B19ContractError("Formal B19 head-reset RNG proof requires CUDA")
     torch.cuda.init()
     device_count = torch.cuda.device_count()
     if device_count < 1:
-        raise B18ContractError("Formal B18 head-reset RNG proof found no CUDA device")
+        raise B19ContractError("Formal B19 head-reset RNG proof found no CUDA device")
     before_cpu = torch.random.get_rng_state().clone()
     before_cuda = [state.clone() for state in torch.cuda.get_rng_state_all()]
 
@@ -1015,7 +1021,7 @@ def _formal_initialized_cuda_head_reset_probe() -> dict[str, object]:
         torch.equal(left, right) for left, right in zip(before_cuda, after_cuda)
     )
     if not cpu_equal or not cuda_equal:
-        raise B18ContractError("Formal B18 initialized-CUDA head reset consumed caller RNG")
+        raise B19ContractError("Formal B19 initialized-CUDA head reset consumed caller RNG")
     return {
         "cuda_initialized": torch.cuda.is_initialized(),
         "device_count": device_count,
@@ -1038,7 +1044,7 @@ def _tensor_sha256(*tensors: Tensor) -> str:
 def _projection_hash(model: SwiftFormerSurfaceFoldB17) -> str:
     projection = model.backbone.stages[3].downsample.proj
     if projection.bias is None:
-        raise B18ContractError("B18 frozen projection unexpectedly lacks bias")
+        raise B19ContractError("B19 frozen projection unexpectedly lacks bias")
     return _tensor_sha256(projection.weight, projection.bias)
 
 
@@ -1048,11 +1054,11 @@ def _assert_disjoint_model_storage(models: Mapping[str, nn.Module]) -> None:
         for name, tensor in model.state_dict().items():
             pointer = tensor.untyped_storage().data_ptr()
             if pointer in pointers:
-                raise B18ContractError(f"B18 arm storage aliases: {pointers[pointer]} and {arm}:{name}")
+                raise B19ContractError(f"B19 arm storage aliases: {pointers[pointer]} and {arm}:{name}")
             pointers[pointer] = f"{arm}:{name}"
 
 
-def build_b18_arm_models(base_five_class: nn.Module) -> dict[str, SwiftFormerSurfaceFoldB17]:
+def build_b19_arm_models(base_five_class: nn.Module) -> dict[str, SwiftFormerSurfaceFoldB17]:
 
     def build() -> dict[str, SwiftFormerSurfaceFoldB17]:
         return {arm: SwiftFormerSurfaceFoldB17(copy.deepcopy(base_five_class), ARM_MODES[arm]) for arm in ARMS}
@@ -1064,37 +1070,37 @@ def build_b18_arm_models(base_five_class: nn.Module) -> dict[str, SwiftFormerSur
         for (arm, model) in arms.items()
     }
     if counts != ARM_PARAMETERS or trainable != ARM_TRAINABLE_PARAMETERS:
-        raise B18ContractError(f"B18 arm parameter contracts changed: total={counts}, trainable={trainable}")
+        raise B19ContractError(f"B19 arm parameter contracts changed: total={counts}, trainable={trainable}")
     control = arms["surfacefold_mean_control"]
     candidate = arms["surfacefold_spatial_candidate"]
     if not (torch.equal(control.factor_p, candidate.factor_p) and torch.equal(control.factor_d, candidate.factor_d)):
-        raise B18ContractError("B18 candidate/control factor initial states differ")
+        raise B19ContractError("B19 candidate/control factor initial states differ")
     reference_backbone = arms[ARMS[0]].backbone.state_dict()
     for arm in ARMS[1:]:
         observed = arms[arm].backbone.state_dict()
         if observed.keys() != reference_backbone.keys() or any(
             (not torch.equal(reference_backbone[key], observed[key]) for key in reference_backbone)
         ):
-            raise B18ContractError("B18 arms do not share an identical base state")
+            raise B19ContractError("B19 arms do not share an identical base state")
     if len({_projection_hash(model) for model in arms.values()}) != 1:
-        raise B18ContractError("B18 arms do not share the immutable W0/b0 state")
+        raise B19ContractError("B19 arms do not share the immutable W0/b0 state")
     _assert_disjoint_model_storage(arms)
     for arm, model in arms.items():
         projection = model.backbone.stages[3].downsample.proj
         if projection.weight.requires_grad or projection.bias.requires_grad:
-            raise B18ContractError(f"B18 {arm} did not freeze W0/b0")
+            raise B19ContractError(f"B19 {arm} did not freeze W0/b0")
         for module in model.modules():
             if isinstance(module, nn.Dropout) and float(module.p) != 0.0:
-                raise B18ContractError(f"B18 {arm} contains active dropout")
+                raise B19ContractError(f"B19 {arm} contains active dropout")
             if float(getattr(module, "drop_prob", 0.0) or 0.0) != 0.0:
-                raise B18ContractError(f"B18 {arm} contains stochastic depth")
+                raise B19ContractError(f"B19 {arm} contains stochastic depth")
     return arms
 
 
 def _validate_asset(path: Path, expected_bytes: int, expected_sha: str) -> Path:
     resolved = Path(path).expanduser().resolve(strict=True)
     if resolved.stat().st_size != expected_bytes or sha256_file(resolved) != expected_sha:
-        raise B18ContractError(f"Locked pretrained asset changed: {resolved}")
+        raise B19ContractError(f"Locked pretrained asset changed: {resolved}")
     return resolved
 
 
@@ -1113,19 +1119,19 @@ def _load_templates(student_weight: Path, dino_weight: Path) -> tuple[nn.Module,
         forbidden = [
             key
             for key in teacher_state
-            if any((term in key.casefold() for term in ("class_f", "b18", "classifier_5")))
+            if any((term in key.casefold() for term in ("class_f", "b19", "classifier_5")))
         ]
         if forbidden:
-            raise B18ContractError(f"Forbidden class-fitted teacher state: {forbidden}")
+            raise B19ContractError(f"Forbidden class-fitted teacher state: {forbidden}")
         teacher.load_state_dict(teacher_state, strict=True)
         return (student, teacher)
 
     (student, teacher) = _preserve_rng(construct)
     teacher.eval().requires_grad_(False)
     if sum((parameter.numel() for parameter in student.parameters())) != 3035570:
-        raise B18ContractError("Five-class SwiftFormer parameter count changed")
+        raise B19ContractError("Five-class SwiftFormer parameter count changed")
     if int(getattr(teacher, "num_prefix_tokens", -1)) != 5 or tuple(teacher.patch_embed.grid_size) != (16, 16):
-        raise B18ContractError("Raw DINO architecture geometry changed")
+        raise B19ContractError("Raw DINO architecture geometry changed")
     return (student, teacher)
 
 
@@ -1163,13 +1169,13 @@ def build_discriminative_adamw_groups(model: nn.Module) -> list[dict[str, object
         if not parameter.requires_grad:
             continue
         if id(parameter) in seen:
-            raise B18ContractError(f"Duplicate B18 trainable parameter: {name}")
+            raise B19ContractError(f"Duplicate B19 trainable parameter: {name}")
         seen.add(id(parameter))
         role = "task" if _is_task_parameter(name) else "backbone"
         no_decay = name.endswith(".bias") or name in norm_names or "layer_scale" in name.casefold()
         buckets[role, not no_decay].append((name, parameter))
     if seen != expected:
-        raise B18ContractError("B18 AdamW groups do not exactly cover trainables")
+        raise B19ContractError("B19 AdamW groups do not exactly cover trainables")
     result: list[dict[str, object]] = []
     for role, decay in (("backbone", True), ("backbone", False), ("task", True), ("task", False)):
         values = buckets[role, decay]
@@ -1195,15 +1201,15 @@ def audit_and_clip_gradients(model: nn.Module, max_norm: float = GRAD_CLIP) -> d
     named = [(name, parameter) for (name, parameter) in model.named_parameters() if parameter.requires_grad]
     missing = [name for (name, parameter) in named if parameter.grad is None]
     if missing:
-        raise B18ContractError(f"B18 trainables lack gradients: {missing}")
+        raise B19ContractError(f"B19 trainables lack gradients: {missing}")
     try:
         norm = torch.nn.utils.clip_grad_norm_(
             [parameter for (_, parameter) in named], float(max_norm), error_if_nonfinite=True
         )
     except RuntimeError as exc:
-        raise B18ContractError("B18 gradient tensor is non-finite") from exc
+        raise B19ContractError("B19 gradient tensor is non-finite") from exc
     if not bool(torch.isfinite(norm)):
-        raise B18ContractError("B18 global gradient norm is non-finite")
+        raise B19ContractError("B19 global gradient norm is non-finite")
     return {
         "parameter_tensors": len(named),
         "parameter_elements": sum((parameter.numel() for (_, parameter) in named)),
@@ -1219,7 +1225,7 @@ class LockedOptimizerStepper:
         self.completed_steps = 0
         self.checkpoints: dict[str, dict[str, float]] = {}
         if self.steps_per_epoch < 2 or not optimizer.param_groups:
-            raise ValueError("B18 scheduler needs at least two steps and parameter groups")
+            raise ValueError("B19 scheduler needs at least two steps and parameter groups")
         names: set[str] = set()
         for index, group in enumerate(optimizer.param_groups):
             name = group.get("name", f"group_{index}")
@@ -1231,7 +1237,7 @@ class LockedOptimizerStepper:
                 or (not _finite(peak))
                 or (float(peak) <= MIN_LR)
             ):
-                raise ValueError("Invalid B18 optimizer group name/peak LR")
+                raise ValueError("Invalid B19 optimizer group name/peak LR")
             names.add(name)
             group["name"] = name
             group["lr"] = 0.0
@@ -1241,7 +1247,13 @@ class LockedOptimizerStepper:
 
     def _lr(self, peak: float, update: int) -> float:
         if update < 0 or update >= self.total_steps:
-            raise B18ContractError("B18 LR requested outside locked horizon")
+            raise B19ContractError("B19 LR requested outside locked horizon")
+        if update == 0:
+            return 0.0
+        if update == self.steps_per_epoch - 1:
+            return peak
+        if update == self.total_steps - 1:
+            return MIN_LR
         if update < self.steps_per_epoch:
             return float(peak * update / (self.steps_per_epoch - 1))
         progress = (update - self.steps_per_epoch + 1) / (self.total_steps - self.steps_per_epoch)
@@ -1267,7 +1279,7 @@ class LockedOptimizerStepper:
         if require_complete and (
             self.completed_steps != self.total_steps or set(self.checkpoints) != {"first", "warmup_last", "final"}
         ):
-            raise B18ContractError("B18 LR horizon is incomplete")
+            raise B19ContractError("B19 LR horizon is incomplete")
         payload: dict[str, object] = {
             "completed_steps": self.completed_steps,
             "total_steps": self.total_steps,
@@ -1278,17 +1290,18 @@ class LockedOptimizerStepper:
         }
         if require_complete:
             peaks = {str(group["name"]): float(group["peak_lr"]) for group in self.optimizer.param_groups}
+            first = payload["first_applied_lrs"]
+            warmup_last = payload["warmup_last_applied_lrs"]
+            final = payload["final_applied_lrs"]
             if (
-                any((value != 0.0 for value in payload["first_applied_lrs"].values()))
-                or payload["warmup_last_applied_lrs"] != peaks
-                or any(
-                    (
-                        not math.isclose(value, MIN_LR, rel_tol=0.0, abs_tol=1e-15)
-                        for value in payload["final_applied_lrs"].values()
-                    )
-                )
+                set(first) != set(peaks)
+                or set(warmup_last) != set(peaks)
+                or set(final) != set(peaks)
+                or any((_float64_bits(first[name]) != _float64_bits(0.0) for name in peaks))
+                or any((_float64_bits(warmup_last[name]) != _float64_bits(peaks[name]) for name in peaks))
+                or any((_float64_bits(final[name]) != _float64_bits(MIN_LR) for name in peaks))
             ):
-                raise B18ContractError("B18 applied LR checkpoints changed")
+                raise B19ContractError("B19 applied LR checkpoints changed")
         return payload
 
 
@@ -1297,10 +1310,35 @@ def sqrt_inverse_class_weights(labels: np.ndarray, fit: np.ndarray) -> tuple[np.
         np.int64
     )
     if counts.shape != (CLASSES,) or bool((counts <= 0).any()):
-        raise B18ContractError("Every B18 fit fold must contain all classes")
+        raise B19ContractError("Every B19 fit fold must contain all classes")
     weights = counts.astype(np.float64) ** (-0.5)
     weights /= weights.mean()
     return (counts, torch.tensor(weights, dtype=torch.float32))
+
+
+def derive_locked_updates_per_epoch(folds: np.ndarray) -> tuple[int, ...]:
+    raw = np.asarray(folds)
+    if (
+        raw.ndim != 1
+        or raw.shape != (EXPECTED_TRAIN_ROWS,)
+        or not np.issubdtype(raw.dtype, np.integer)
+    ):
+        raise B19ContractError(
+            f"B19 fold vector must be a one-dimensional integer vector with exactly {EXPECTED_TRAIN_ROWS} rows"
+        )
+    canonical = raw.astype(np.int64, copy=False)
+    if set(np.unique(canonical).tolist()) != set(range(FOLDS)):
+        raise B19ContractError("B19 fold vector must contain exactly folds 0..4")
+    derived = tuple(
+        math.ceil(
+            math.ceil(int(np.count_nonzero(canonical != fold)) / BATCH_SIZE)
+            / ACCUMULATION_STEPS
+        )
+        for fold in range(FOLDS)
+    )
+    if derived != EXPECTED_UPDATES_PER_EPOCH:
+        raise B19ContractError(f"B19 assignment-derived optimizer horizons changed: {derived}")
+    return derived
 
 
 def expected_state_ids() -> set[str]:
@@ -1311,12 +1349,12 @@ def _validate_preflight_binding(
     accepted: Mapping[str, object], *, git: Mapping[str, object], sources: Mapping[str, str]
 ) -> dict[str, object]:
     if set(accepted) != {"artifact", "sha256", "payload"}:
-        raise B18ContractError("B18 accepted-preflight binding schema changed")
+        raise B19ContractError("B19 accepted-preflight binding schema changed")
     (path, digest) = _canonical_preflight_artifact(accepted.get("artifact"), accepted.get("sha256"))
     raw = path.read_bytes()
     decoded = json.loads(raw.decode("utf-8"))
     if not isinstance(decoded, Mapping) or raw != _json_bytes(decoded) or dict(decoded) != accepted.get("payload"):
-        raise B18ContractError("B18 accepted-preflight artifact/payload changed")
+        raise B19ContractError("B19 accepted-preflight artifact/payload changed")
     _validate_preflight_payload(decoded, git=git, sources=sources)
     return {"artifact": str(path), "sha256": digest, "payload": dict(decoded)}
 
@@ -1331,7 +1369,7 @@ def _validate_state_records(
         or any((not isinstance(record, FinalStateRecord) for record in records))
         or {record.state_id for record in records} != expected_state_ids()
     ):
-        raise B18ContractError("B18 metric barrier requires exact 15 final states")
+        raise B19ContractError("B19 metric barrier requires exact 15 final states")
     states_root = (Path(output) / "states").resolve()
     result: list[dict[str, object]] = []
     for record in sorted(records, key=lambda item: item.state_id):
@@ -1368,7 +1406,7 @@ def _validate_state_records(
             or (not _finite(record.folded_max_abs_error))
             or (float(record.folded_max_abs_error) > 1e-06)
         ):
-            raise B18ContractError(f"B18 final state contract changed: {record.state_id}")
+            raise B19ContractError(f"B19 final state contract changed: {record.state_id}")
         strict_reload(record)
         result.append(asdict(record))
     partials = [
@@ -1377,7 +1415,7 @@ def _validate_state_records(
         if path.is_file() and (path.suffix in {".tmp", ".partial"} or ".tmp" in path.name)
     ]
     if partials:
-        raise B18ContractError(f"Partial B18 states remain: {partials}")
+        raise B19ContractError(f"Partial B19 states remain: {partials}")
     return result
 
 
@@ -1399,9 +1437,9 @@ def seal_metric_barrier(
         or _METRIC_BACKEND_LOADED
         or set(counters) != set(ZERO_BARRIER_COUNTERS)
     ):
-        raise B18ContractError("Held inference/logits/metrics occurred before B18 barrier")
+        raise B19ContractError("Held inference/logits/metrics occurred before B19 barrier")
     if _git_contract() != dict(git) or _source_hashes() != dict(sources):
-        raise B18ContractError("B18 git/source bindings changed before metric barrier sealing")
+        raise B19ContractError("B19 git/source bindings changed before metric barrier sealing")
     accepted = _validate_preflight_binding(accepted_preflight, git=git, sources=sources)
     claim = validate_train_authorization_claim(
         authorization_claim,
@@ -1434,7 +1472,7 @@ def seal_metric_barrier(
             "exact_15_states": True,
             "hash_metadata_strict_reload": True,
             "cross_mode_rejected": True,
-            "accepted_b18_preflight": True,
+            "accepted_b19_preflight": True,
             "held_inference_absent": True,
             "metrics_absent": True,
         },
@@ -1446,7 +1484,7 @@ def seal_metric_barrier(
     proof = _MetricBarrierSealProof(path=str(resolved), sha256=digest, nonce=uuid.uuid4().hex)
     pending_key = _barrier_seal_key(resolved, digest)
     if pending_key in _PENDING_BARRIER_SEALS:
-        raise B18ContractError("B18 metric barrier already has a pending private seal proof")
+        raise B19ContractError("B19 metric barrier already has a pending private seal proof")
     _PENDING_BARRIER_SEALS[pending_key] = proof
     try:
         return validate_metric_barrier(resolved, digest)
@@ -1460,9 +1498,9 @@ def validate_metric_barrier(path: Path, expected_sha256: str) -> MetricBarrierTo
     pending_key = _barrier_seal_key(resolved, digest)
     proof = _PENDING_BARRIER_SEALS.pop(pending_key, None)
     if proof is None:
-        raise B18ContractError("B18 metric capability requires a pending private seal proof")
+        raise B19ContractError("B19 metric capability requires a pending private seal proof")
     if proof.path != str(resolved) or proof.sha256 != digest or not proof.nonce:
-        raise B18ContractError("B18 private metric-barrier seal proof changed")
+        raise B19ContractError("B19 private metric-barrier seal proof changed")
     raw = resolved.read_bytes()
     payload = json.loads(raw.decode("utf-8"))
     if (
@@ -1471,11 +1509,11 @@ def validate_metric_barrier(path: Path, expected_sha256: str) -> MetricBarrierTo
         or not isinstance(payload, Mapping)
         or raw != _json_bytes(payload)
     ):
-        raise B18ContractError("B18 metric barrier identity/hash changed")
+        raise B19ContractError("B19 metric barrier identity/hash changed")
     _validate_barrier_payload(payload, resolved)
     token_key = _metric_token_key(digest, proof.nonce)
     if token_key in _VALID_BARRIER_TOKENS or token_key in _ACTIVE_BARRIER_SEALS:
-        raise B18ContractError("B18 private metric-barrier seal proof was replayed")
+        raise B19ContractError("B19 private metric-barrier seal proof was replayed")
     _VALID_BARRIER_TOKENS.add(token_key)
     _ACTIVE_BARRIER_SEALS[token_key] = proof
     return MetricBarrierToken(str(resolved), digest, proof.nonce)
@@ -1501,7 +1539,7 @@ def _validate_barrier_payload(payload: Mapping[str, object], resolved: Path) -> 
         "exact_15_states": True,
         "hash_metadata_strict_reload": True,
         "cross_mode_rejected": True,
-        "accepted_b18_preflight": True,
+        "accepted_b19_preflight": True,
         "held_inference_absent": True,
         "metrics_absent": True,
     }
@@ -1517,24 +1555,24 @@ def _validate_barrier_payload(payload: Mapping[str, object], resolved: Path) -> 
         or payload.get("checks") != expected_checks
         or not _hex(payload.get("git_head"), 40)
     ):
-        raise B18ContractError("B18 metric barrier schema/identity changed")
+        raise B19ContractError("B19 metric barrier schema/identity changed")
     source_hashes = payload.get("source_hashes")
     if (
         not isinstance(source_hashes, Mapping)
         or not source_hashes
         or any((not isinstance(key, str) or not _hex(value, 64) for key, value in source_hashes.items()))
     ):
-        raise B18ContractError("B18 metric barrier source hashes changed")
+        raise B19ContractError("B19 metric barrier source hashes changed")
     states = payload.get("states")
     if (
         not isinstance(states, list)
         or len(states) != 15
         or {row.get("state_id") for row in states if isinstance(row, Mapping)} != expected_state_ids()
     ):
-        raise B18ContractError("B18 metric barrier state list changed")
+        raise B19ContractError("B19 metric barrier state list changed")
     for row in states:
         if not isinstance(row, Mapping) or set(row) != set(FinalStateRecord.__dataclass_fields__):
-            raise B18ContractError("B18 metric barrier state schema changed")
+            raise B19ContractError("B19 metric barrier state schema changed")
         fold, arm = row.get("fold"), row.get("arm")
         if (
             not _strict_int(fold)
@@ -1547,7 +1585,7 @@ def _validate_barrier_payload(payload: Mapping[str, object], resolved: Path) -> 
             or not _finite(row.get("folded_max_abs_error"))
             or float(row["folded_max_abs_error"]) > 1e-06
         ):
-            raise B18ContractError("B18 metric barrier state identity changed")
+            raise B19ContractError("B19 metric barrier state identity changed")
         state_path = Path(str(row["path"])).resolve(strict=True)
         expected = (resolved.parent / "states" / f"fold_{fold}_{arm}.safetensors").resolve()
         exposure = resolved.parent / "folds" / f"fold_{fold}" / "exposure.npz"
@@ -1567,7 +1605,7 @@ def _validate_barrier_payload(payload: Mapping[str, object], resolved: Path) -> 
             or sha256_file(losses) != row.get("loss_curve_sha256")
             or not _hex(row.get("frozen_projection_sha256"), 64)
         ):
-            raise B18ContractError("B18 barrier-bound state changed")
+            raise B19ContractError("B19 barrier-bound state changed")
     accepted = payload.get("accepted_preflight")
     if not isinstance(accepted, Mapping) or accepted != {
         "artifact": accepted.get("artifact"),
@@ -1575,17 +1613,17 @@ def _validate_barrier_payload(payload: Mapping[str, object], resolved: Path) -> 
         "formal_train_permission": True,
         "deployment_status": "DEVICE_PENDING",
     }:
-        raise B18ContractError("B18 barrier preflight binding schema changed")
+        raise B19ContractError("B19 barrier preflight binding schema changed")
     _canonical_preflight_artifact(accepted["artifact"], accepted["sha256"])
     claim = payload.get("authorization_claim")
     if not isinstance(claim, Mapping) or set(claim) != {"path", "sha256"} or not _hex(claim.get("sha256"), 64):
-        raise B18ContractError("B18 barrier authorization-claim binding changed")
+        raise B19ContractError("B19 barrier authorization-claim binding changed")
     claim_path = Path(str(claim["path"])).resolve(strict=True)
     expected_claim = (
-        _repository_root() / "runs" / "b18_train_authorization_claims" / f"{accepted['sha256']}.json"
+        _repository_root() / "runs" / "b19_train_authorization_claims" / f"{accepted['sha256']}.json"
     ).resolve()
     if claim_path != expected_claim or claim["path"] != str(claim_path) or sha256_file(claim_path) != claim["sha256"]:
-        raise B18ContractError("B18 barrier authorization claim changed")
+        raise B19ContractError("B19 barrier authorization claim changed")
 
 
 def _assert_metric_token(token: MetricBarrierToken) -> None:
@@ -1599,11 +1637,11 @@ def _assert_metric_token(token: MetricBarrierToken) -> None:
         or proof.nonce != token.nonce
     ):
         _revoke_metric_token(key)
-        raise B18ContractError("Metrics require an unchanged validated B18 barrier")
+        raise B19ContractError("Metrics require an unchanged validated B19 barrier")
     try:
         path = Path(token.path).resolve(strict=True)
         if str(path) != proof.path or sha256_file(path) != proof.sha256:
-            raise B18ContractError("B18 active private metric-barrier seal proof changed")
+            raise B19ContractError("B19 active private metric-barrier seal proof changed")
         payload = json.loads(path.read_text(encoding="utf-8"))
         _validate_barrier_payload(payload, path)
         expected_git = {
@@ -1614,13 +1652,13 @@ def _assert_metric_token(token: MetricBarrierToken) -> None:
             "head_is_commit": True,
         }
         if _git_contract() != expected_git or _source_hashes() != payload["source_hashes"]:
-            raise B18ContractError("B18 git/source bindings changed after metric barrier sealing")
-    except B18ContractError:
+            raise B19ContractError("B19 git/source bindings changed after metric barrier sealing")
+    except B19ContractError:
         _revoke_metric_token(key)
         raise
     except (OSError, subprocess.SubprocessError, ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
         _revoke_metric_token(key)
-        raise B18ContractError("Metrics require unchanged B18 barrier state/preflight artifacts") from exc
+        raise B19ContractError("Metrics require unchanged B19 barrier state/preflight artifacts") from exc
 
 
 def _metric_backend(token: MetricBarrierToken) -> dict[str, Callable[..., Any]]:
@@ -1652,7 +1690,7 @@ def classification_summary(
     labels = np.asarray(labels, dtype=np.int64)
     logits = np.asarray(logits, dtype=np.float64)
     if labels.ndim != 1 or logits.shape != (labels.size, CLASSES) or (not np.isfinite(logits).all()):
-        raise ValueError("B18 labels/logits are misaligned or non-finite")
+        raise ValueError("B19 labels/logits are misaligned or non-finite")
     predictions = logits.argmax(axis=1).astype(np.int64)
     matrix = backend["confusion_matrix"](labels, predictions, labels=np.arange(CLASSES))
     (precision, recall, f1, support) = backend["precision_recall_fscore_support"](
@@ -1696,7 +1734,7 @@ def classification_summary(
     if folds is not None:
         fold_values = np.asarray(folds, dtype=np.int64)
         if fold_values.shape != labels.shape:
-            raise ValueError("B18 fold vector is misaligned")
+            raise ValueError("B19 fold vector is misaligned")
         result["folds"] = [
             {
                 "fold": fold,
@@ -1739,14 +1777,14 @@ def paired_component_bootstrap(
         or labels.shape != groups.shape
         or any((value.shape != (labels.size, CLASSES) or not np.isfinite(value).all() for value in scores.values()))
     ):
-        raise ValueError("B18 bootstrap inputs are invalid")
+        raise ValueError("B19 bootstrap inputs are invalid")
     members: dict[int, np.ndarray] = {}
     fold_groups: dict[int, list[int]] = {fold: [] for fold in range(FOLDS)}
     for group in np.unique(groups):
         positions = np.flatnonzero(groups == group)
         observed = np.unique(folds[positions])
         if observed.size != 1:
-            raise B18ContractError("Bootstrap union component crosses folds")
+            raise B19ContractError("Bootstrap union component crosses folds")
         members[int(group)] = positions
         fold_groups[int(observed[0])].append(int(group))
     comparisons = {
@@ -1774,7 +1812,7 @@ def paired_component_bootstrap(
         for fold in range(FOLDS):
             available = fold_groups[fold]
             if not available:
-                raise B18ContractError(f"Bootstrap fold {fold} has no component")
+                raise B19ContractError(f"Bootstrap fold {fold} has no component")
             draw = rng.integers(0, len(available), size=len(available), dtype=np.int64)
             draw_hash.update(np.asarray((replicate, fold), dtype="<i8").tobytes())
             draw_hash.update(draw.astype("<i8").tobytes())
@@ -1807,9 +1845,9 @@ def paired_component_bootstrap(
         or int(seed) != BOOTSTRAP_SEED
         or digest != EXPECTED_BOOTSTRAP_DRAW_SHA256
     ):
-        raise B18ContractError(f"B18 bootstrap draw contract changed: {digest}")
+        raise B19ContractError(f"B19 bootstrap draw contract changed: {digest}")
     if any((not np.isfinite(sample).all() for comparison in values.values() for sample in comparison.values())):
-        raise B18ContractError("B18 bootstrap produced a non-finite replicate")
+        raise B19ContractError("B19 bootstrap produced a non-finite replicate")
     intervals = {
         comparison: {
             metric: {
@@ -1831,7 +1869,7 @@ def paired_component_bootstrap(
     }
 
 
-def assess_b18_gate(
+def assess_b19_gate(
     summaries: Mapping[str, Mapping[str, object]],
     bootstrap: Mapping[str, object],
     token: MetricBarrierToken,
@@ -1840,7 +1878,7 @@ def assess_b18_gate(
 ) -> dict[str, object]:
     _assert_metric_token(token)
     if set(summaries) != set(OOF_NAMES):
-        raise ValueError("B18 gate requires all four OOF summaries")
+        raise ValueError("B19 gate requires all four OOF summaries")
     stock = summaries["stock_relation"]
     control = summaries["surfacefold_mean_control"]
     candidate = summaries["surfacefold_spatial_candidate"]
@@ -1933,7 +1971,7 @@ def assess_b18_gate(
 
 def _configure_determinism(device: torch.device) -> None:
     if device.type != "cuda" or not torch.cuda.is_available() or (not torch.cuda.is_bf16_supported()):
-        raise B18ContractError("Formal B18 requires a BF16-capable CUDA GPU")
+        raise B19ContractError("Formal B19 requires a BF16-capable CUDA GPU")
     torch.use_deterministic_algorithms(True)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
@@ -1956,12 +1994,12 @@ def _folded_parity(model: SwiftFormerSurfaceFoldB17) -> float:
         right = folded(inputs).float()
     maximum = float((left - right).abs().max())
     if not math.isfinite(maximum) or maximum > 1e-06:
-        raise B18ContractError(f"Trained B18 folded parity failed: {maximum}")
+        raise B19ContractError(f"Trained B19 folded parity failed: {maximum}")
     return maximum
 
 
 def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Locked TRAIN-only B18 SurfaceFold-XS 5-fold/3-arm OOF screen")
+    parser = argparse.ArgumentParser(description="Locked TRAIN-only B19 SurfaceFold-XS 5-fold/3-arm OOF screen")
     parser.add_argument("--confirm-protocol-id", required=True)
     parser.add_argument("--data", type=Path, required=True)
     parser.add_argument("--assignment-csv", type=Path, required=True)
@@ -1977,9 +2015,9 @@ def _validated_output(path: Path) -> Path:
     output = Path(path).expanduser().resolve()
     runs = (_repository_root() / "runs").resolve()
     if output.parent != runs or not output.name.startswith(OUTPUT_PREFIX):
-        raise B18ContractError("B18 output must be a fresh direct runs child")
+        raise B19ContractError("B19 output must be a fresh direct runs child")
     if output.exists() or output.with_name(output.name + ".partial").exists():
-        raise FileExistsError(f"Refuse to overwrite B18 output: {output}")
+        raise FileExistsError(f"Refuse to overwrite B19 output: {output}")
     return output
 
 
@@ -2002,10 +2040,10 @@ def _save_failure(output: Path, exc: BaseException, started: float) -> None:
 
 def _build_model_for_state(base: nn.Module, arm: str) -> SwiftFormerSurfaceFoldB17:
     if arm not in ARMS:
-        raise B18ContractError(f"Unknown B18 arm: {arm}")
+        raise B19ContractError(f"Unknown B19 arm: {arm}")
     model = _preserve_rng(lambda: SwiftFormerSurfaceFoldB17(copy.deepcopy(base), ARM_MODES[arm]))
     if sum((parameter.numel() for parameter in model.parameters())) != ARM_PARAMETERS[arm]:
-        raise B18ContractError(f"B18 reload model parameter count changed: {arm}")
+        raise B19ContractError(f"B19 reload model parameter count changed: {arm}")
     return model
 
 
@@ -2015,10 +2053,10 @@ def _rng_state_sha256(state: ArmRngState) -> str:
 
 def run_formal(args: argparse.Namespace) -> dict[str, object]:
     if args.confirm_protocol_id != PROTOCOL_ID:
-        raise B18ContractError("Explicit B18 protocol confirmation is missing")
+        raise B19ContractError("Explicit B19 protocol confirmation is missing")
     git = _git_contract()
     if git["branch"] != EXPECTED_BRANCH or git["clean"] is not True or git["head_is_commit"] is not True:
-        raise B18ContractError(f"Formal B18 requires a clean committed canonical branch: {git}")
+        raise B19ContractError(f"Formal B19 requires a clean committed canonical branch: {git}")
     sources = _source_hashes()
     accepted = validate_accepted_preflight(
         args.preflight_artifact,
@@ -2046,6 +2084,7 @@ def run_formal(args: argparse.Namespace) -> dict[str, object]:
         labels = assignment["labels"]
         groups = assignment["groups"]
         folds = assignment["folds"]
+        derived_updates_per_epoch = derive_locked_updates_per_epoch(folds)
         train_root = (data_root / "train").resolve()
         absolute_paths: list[Path] = []
         for relative in relative_paths:
@@ -2053,7 +2092,7 @@ def run_formal(args: argparse.Namespace) -> dict[str, object]:
             try:
                 path.relative_to(train_root)
             except ValueError as exc:
-                raise B18ContractError(f"Non-TRAIN path in B18 assignment: {path}") from exc
+                raise B19ContractError(f"Non-TRAIN path in B19 assignment: {path}") from exc
             absolute_paths.append(path)
         start_content = train_content_contract(relative_paths, absolute_paths)
         atomic_json(
@@ -2076,6 +2115,7 @@ def run_formal(args: argparse.Namespace) -> dict[str, object]:
                 "data_yaml_sha256": EXPECTED_DATA_SHA256,
                 "assignment_csv": str(Path(args.assignment_csv).resolve()),
                 "assignment_csv_sha256": EXPECTED_ASSIGNMENT_CSV_SHA256,
+                "assignment_derived_updates_per_epoch": list(derived_updates_per_epoch),
                 "train_content_start": start_content,
                 "deployment_status": "DEVICE_PENDING",
                 "train": True,
@@ -2105,10 +2145,12 @@ def run_formal(args: argparse.Namespace) -> dict[str, object]:
             class_weights = class_weights_cpu.to(device)
             shuffle_generator = torch.Generator(device="cpu").manual_seed(fold_seed)
             augmentation_generator = torch.Generator(device="cpu").manual_seed(AUGMENTATION_SEED_BASE + fold)
-            arms = {arm: model.to(device).train() for (arm, model) in build_b18_arm_models(base).items()}
+            arms = {arm: model.to(device).train() for (arm, model) in build_b19_arm_models(base).items()}
             initial_projection = {arm: _projection_hash(model) for (arm, model) in arms.items()}
             batches_per_epoch = math.ceil(fit_indices.size / BATCH_SIZE)
             updates_per_epoch = math.ceil(batches_per_epoch / ACCUMULATION_STEPS)
+            if updates_per_epoch != derived_updates_per_epoch[fold]:
+                raise B19ContractError("B19 fold optimizer horizon changed after formal lock")
             steppers: dict[str, LockedOptimizerStepper] = {}
             optimizer_contract: dict[str, object] = {}
             gradient_audit: dict[str, dict[str, int]] = {}
@@ -2151,7 +2193,7 @@ def run_formal(args: argparse.Namespace) -> dict[str, object]:
                     for within, batch_indices in enumerate(window):
                         (images, batch_labels, observed) = load_raw_batch(absolute_paths, labels, batch_indices)
                         if observed.tolist() != batch_indices or any((not fit[index] for index in batch_indices)):
-                            raise B18ContractError("B18 fit batch order/split exposure changed")
+                            raise B19ContractError("B19 fit batch order/split exposure changed")
                         (student_cpu, teacher_cpu, crops) = build_shared_batch_views(images, augmentation_generator)
                         for image in images:
                             image.close()
@@ -2175,7 +2217,7 @@ def run_formal(args: argparse.Namespace) -> dict[str, object]:
                             def forward_backward() -> tuple[float, float, float]:
                                 with torch.autocast("cuda", dtype=torch.bfloat16):
                                     (logits, s3) = model(student_images, return_s3=True)
-                                total, ce, relation = exact_b18_objective(
+                                total, ce, relation = exact_b19_objective(
                                     logits,
                                     s3,
                                     batch_labels,
@@ -2209,19 +2251,19 @@ def run_formal(args: argparse.Namespace) -> dict[str, object]:
                         gradient_audit[arm]["checked_parameter_tensors"] += int(audited["parameter_tensors"])
                         gradient_audit[arm]["checked_parameter_elements"] += int(audited["parameter_elements"])
                 if time.monotonic() - started > MAX_WALL_SECONDS:
-                    raise TimeoutError("B18 formal wall-time budget exceeded during training")
+                    raise TimeoutError("B19 formal wall-time budget exceeded during training")
             expected_calls = EPOCHS * batches_per_epoch
             if (
                 teacher_ledger.calls != expected_calls
                 or teacher_ledger.rows != EPOCHS * int(fit.sum())
                 or any((parameter.grad is not None for parameter in teacher.parameters()))
             ):
-                raise B18ContractError("DINO was not called exactly once per fit batch or acquired gradients")
+                raise B19ContractError("DINO was not called exactly once per fit batch or acquired gradients")
             exposure_counts = np.bincount(
                 np.asarray(exposure["indices"], dtype=np.int64), minlength=EXPECTED_TRAIN_ROWS
             )
             if not (np.all(exposure_counts[fit] == EPOCHS) and np.all(exposure_counts[~fit] == 0)):
-                raise B18ContractError("B18 exposure is not exact natural fit-only")
+                raise B19ContractError("B19 exposure is not exact natural fit-only")
             for arm in ARMS:
                 evidence = steppers[arm].evidence(require_complete=True)
                 audit = gradient_audit[arm]
@@ -2236,7 +2278,7 @@ def run_formal(args: argparse.Namespace) -> dict[str, object]:
                     or (_projection_hash(arms[arm]) != initial_projection[arm])
                 ):
                     immutable_projection_complete = False
-                    raise B18ContractError(f"B18 scheduler/gradient/W0-b0 contract failed: {arm}")
+                    raise B19ContractError(f"B19 scheduler/gradient/W0-b0 contract failed: {arm}")
             fold_root = output / "folds" / f"fold_{fold}"
             exposure_sha = atomic_npz(
                 fold_root / "exposure.npz",
@@ -2263,7 +2305,7 @@ def run_formal(args: argparse.Namespace) -> dict[str, object]:
                     row["factor_p_norm"] = float(model.factor_p.detach().float().norm())
                     row["factor_d_centered_norm"] = float(centered.norm())
                 if any((not _finite(value) for value in row.values() if isinstance(value, float))):
-                    raise B18ContractError("B18 mechanism telemetry is non-finite")
+                    raise B19ContractError("B19 mechanism telemetry is non-finite")
                 mechanism[arm] = row
             atomic_json(
                 fold_root / "train_contract.json",
@@ -2316,9 +2358,9 @@ def run_formal(args: argparse.Namespace) -> dict[str, object]:
                 )
             peak_allocated = max(peak_allocated, int(torch.cuda.max_memory_allocated(device)))
             if peak_allocated > MAX_CUDA_ALLOCATED_BYTES:
-                raise B18ContractError("B18 peak CUDA allocation exceeded 7 GiB")
+                raise B19ContractError("B19 peak CUDA allocation exceeded 7 GiB")
             if _directory_bytes(output) > MAX_RETAINED_BYTES:
-                raise B18ContractError("B18 retained artifact budget exceeded 1.5 GiB")
+                raise B19ContractError("B19 retained artifact budget exceeded 1.5 GiB")
             del arms, steppers
             torch.cuda.empty_cache()
         teacher.cpu()
@@ -2329,7 +2371,7 @@ def run_formal(args: argparse.Namespace) -> dict[str, object]:
             model = _build_model_for_state(base, record.arm)
             incompatible = model.load_state_dict(load_file(record.path, device="cpu"), strict=True)
             if incompatible.missing_keys or incompatible.unexpected_keys:
-                raise B18ContractError(f"Strict B18 reload failed: {record.state_id}")
+                raise B19ContractError(f"Strict B19 reload failed: {record.state_id}")
             if _projection_hash(model) != record.frozen_projection_sha256 or any(
                 (
                     not bool(torch.isfinite(tensor).all())
@@ -2337,7 +2379,7 @@ def run_formal(args: argparse.Namespace) -> dict[str, object]:
                     if tensor.is_floating_point()
                 )
             ):
-                raise B18ContractError(f"Reloaded B18 state is invalid: {record.state_id}")
+                raise B19ContractError(f"Reloaded B19 state is invalid: {record.state_id}")
 
         def cross_mode_rejection() -> None:
             candidate_path = output / "states" / "fold_0_surfacefold_spatial_candidate.safetensors"
@@ -2351,7 +2393,7 @@ def run_formal(args: argparse.Namespace) -> dict[str, object]:
                     model.load_state_dict(load_file(str(state_path), device="cpu"), strict=True)
                 except RuntimeError:
                     continue
-                raise B18ContractError("B18 cross-mode strict load unexpectedly passed")
+                raise B19ContractError("B19 cross-mode strict load unexpectedly passed")
 
         counters = dict(ZERO_BARRIER_COUNTERS)
         token = seal_metric_barrier(
@@ -2388,7 +2430,7 @@ def run_formal(args: argparse.Namespace) -> dict[str, object]:
                     (images, _batch_labels, observed) = load_raw_batch(absolute_paths, labels, batch_indices)
                     counters["held_image_open_count"] += len(images)
                     if observed.tolist() != batch_indices:
-                        raise B18ContractError("Held B18 row order changed")
+                        raise B19ContractError("Held B19 row order changed")
                     inputs = torch.stack([build_eval_view(image) for image in images]).to(device)
                     for image in images:
                         image.close()
@@ -2421,7 +2463,7 @@ def run_formal(args: argparse.Namespace) -> dict[str, object]:
             or (not np.isfinite(active_off_l2).all())
             or (counters["held_image_open_count"] != EXPECTED_TRAIN_ROWS)
         ):
-            raise B18ContractError("B18 OOF logits/telemetry are incomplete or duplicated")
+            raise B19ContractError("B19 OOF logits/telemetry are incomplete or duplicated")
         telemetry_npz_sha = atomic_npz(
             output / "oof" / "candidate_delta_off_telemetry_f32.npz",
             active_off_logit_l2=active_off_l2,
@@ -2510,7 +2552,7 @@ def run_formal(args: argparse.Namespace) -> dict[str, object]:
                 "passed": base_integrity,
             },
         )
-        gate = assess_b18_gate(summaries, bootstrap, token, integrity_complete=base_integrity)
+        gate = assess_b19_gate(summaries, bootstrap, token, integrity_complete=base_integrity)
         gate_bytes = _json_bytes(gate)
         gate_sha = hashlib.sha256(gate_bytes).hexdigest()
         before_final = _directory_bytes(output)
@@ -2569,12 +2611,12 @@ def run_formal(args: argparse.Namespace) -> dict[str, object]:
             summary = make_summary(predicted)
         predicted = int(summary["resources"]["retained_bytes_final"])
         if not base_integrity or predicted > MAX_RETAINED_BYTES:
-            raise B18ContractError("B18 final integrity/resource gate failed")
+            raise B19ContractError("B19 final integrity/resource gate failed")
         if _atomic_bytes(output / "gate.json", gate_bytes) != gate_sha:
-            raise B18ContractError("B18 gate digest changed during promotion")
+            raise B19ContractError("B19 gate digest changed during promotion")
         atomic_json(output / "summary.json", summary)
         if _directory_bytes(output) != predicted:
-            raise B18ContractError("B18 final retained-byte accounting changed")
+            raise B19ContractError("B19 final retained-byte accounting changed")
         return summary
     except BaseException as exc:
         _save_failure(output, exc, started)

@@ -59,10 +59,10 @@ from trkh.models.swiftformer_surfacefold_b17 import (
     surfacefold_s3_relation_loss_b17,
 )
 
-# B18 is a protocol correction and intentionally reuses the frozen B17 architecture.
+# B19 is a numerical correction and intentionally reuses the frozen B17 architecture.
 
-PROTOCOL_ID = "TRKH_PRETRAINED_CLASSF_B18_TARGETMATCH_SURFACEFOLD_XS_20260805"
-PROTOCOL_SHA256 = "a1bd634a8f9e4b8a259d4e8e68881bd85db5cdcf4b86577fcea595a071a7d475"
+PROTOCOL_ID = "TRKH_PRETRAINED_CLASSF_B19_BITEXACT_LR_SURFACEFOLD_XS_20260805"
+PROTOCOL_SHA256 = "740551a99d0899af5ee37990ab8d71890cf9351118bcac57b19bcc34482e01fc"
 MODEL_SHA256 = "7707ed6153fc4beed91312fc5d962f84a65652468e428f7da680546f899778db"
 DEPLOYMENT_SHA256 = "4d96ee14990f2103de966681717fe28898a8bffc5429bb90c191a9da06527dcb"
 EXPECTED_BRANCH = "research/pretrained-classf-b1"
@@ -79,7 +79,7 @@ STOCK_TRAINABLE = 2_813_590
 ACTIVE_TRAINABLE = 2_839_238
 FACTOR_PARAMETERS = 25_648
 EXPECTED_HEAD_STATE_SHA256 = "565f95d6fd66341df4b0caf012dc0aae53038b0a8fc988ab247a734ba83d20a1"
-EXPECTED_FOCUSED_TEST_COUNT = 93
+EXPECTED_FOCUSED_TEST_COUNT = 95
 SYNTHETIC_CE_WEIGHTS = (1.0, 1.1, 0.9, 1.2, 0.8)
 MAX_ONNX_BYTES = int(13.5 * 1024**2)
 MAX_ORT_BYTES = 14 * 1024**2
@@ -90,8 +90,8 @@ MAX_FOLD_ERROR = 1.0e-6
 MAX_ORACLE_ERROR = 1.0e-10
 MAX_FOLDED_SIZE_DELTA = 4096
 MAX_CUDA_ALLOCATED_BYTES = 7 * 1024**3
-OUTPUT_PREFIX = "preflight_b18_surfacefold_xs_"
-FAILURE_PREFIX = "failed_b18_surfacefold_xs_"
+OUTPUT_PREFIX = "preflight_b19_surfacefold_xs_"
+FAILURE_PREFIX = "failed_b19_surfacefold_xs_"
 DATASET_ROOT = Path(r"D:\DataAI\AIEx\newdataset\class_f")
 
 EXPECTED_RUNTIME = {
@@ -283,7 +283,7 @@ def _atomic_bytes(path: Path, value: bytes) -> None:
 
 def _publish(root: Path, filename: str, payload: Mapping[str, object]) -> dict[str, str]:
     if root.exists() or root.with_name(root.name + ".partial").exists():
-        raise FileExistsError(f"Refuse to overwrite B18 artifact root: {root}")
+        raise FileExistsError(f"Refuse to overwrite B19 artifact root: {root}")
     partial = root.with_name(root.name + ".partial")
     partial.mkdir(parents=False)
     try:
@@ -292,7 +292,7 @@ def _publish(root: Path, filename: str, payload: Mapping[str, object]) -> dict[s
         _atomic_bytes(partial / filename, encoded)
         _atomic_bytes(partial / f"{Path(filename).stem}.sha256", f"{digest}\n".encode("ascii"))
         if (partial / filename).read_bytes() != encoded:
-            raise RuntimeError("B18 atomic artifact verification failed")
+            raise RuntimeError("B19 atomic artifact verification failed")
         partial.replace(root)
     except BaseException:
         shutil.rmtree(partial, ignore_errors=True)
@@ -307,15 +307,15 @@ def _publish(root: Path, filename: str, payload: Mapping[str, object]) -> dict[s
 def _source_paths() -> dict[str, Path]:
     root = _root()
     return {
-        "protocol": root / "docs" / "TRKH_PRETRAINED_CLASSF_B18_TARGETMATCH_SURFACEFOLD_PROTOCOL_20260805.md",
+        "protocol": root / "docs" / "TRKH_PRETRAINED_CLASSF_B19_BITEXACT_LR_PROTOCOL_20260805.md",
         "model": root / "trkh" / "models" / "swiftformer_surfacefold_b17.py",
         "model_test": root / "tests" / "test_swiftformer_surfacefold_b17.py",
         "deployment": root / "trkh" / "inference" / "surfacefold_deployment.py",
         "deployment_test": root / "tests" / "test_surfacefold_deployment.py",
         "preflight_runner": Path(__file__).resolve(),
-        "preflight_test": root / "tests" / "test_audit_swiftformer_surfacefold_b18_preflight.py",
-        "formal_runner": root / "trkh" / "tools" / "run_swiftformer_surfacefold_b18_train_oof.py",
-        "formal_runner_test": root / "tests" / "test_run_swiftformer_surfacefold_b18_train_oof.py",
+        "preflight_test": root / "tests" / "test_audit_swiftformer_surfacefold_b19_preflight.py",
+        "formal_runner": root / "trkh" / "tools" / "run_swiftformer_surfacefold_b19_train_oof.py",
+        "formal_runner_test": root / "tests" / "test_run_swiftformer_surfacefold_b19_train_oof.py",
     }
 
 
@@ -324,7 +324,7 @@ def _source_hashes() -> dict[str, str]:
     hashes: dict[str, str] = {}
     for name, path in _source_paths().items():
         if not path.is_file():
-            raise FileNotFoundError(f"Bound B18 source is missing: {name}={path}")
+            raise FileNotFoundError(f"Bound B19 source is missing: {name}={path}")
         tracked = subprocess.run(
             ["git", "ls-files", "--error-unmatch", str(path.relative_to(root))],
             cwd=root,
@@ -332,10 +332,10 @@ def _source_hashes() -> dict[str, str]:
             text=True,
         )
         if tracked.returncode != 0:
-            raise RuntimeError(f"Bound B18 source is not tracked: {name}={path}")
+            raise RuntimeError(f"Bound B19 source is not tracked: {name}={path}")
         hashes[name] = _sha256(path)
     if any(hashes[name] != value for name, value in SOURCE_LOCKS.items()):
-        raise RuntimeError(f"B18 locked source changed: {hashes}")
+        raise RuntimeError(f"B19 locked source changed: {hashes}")
     return hashes
 
 
@@ -383,7 +383,7 @@ def _runtime_contract() -> dict[str, object]:
         "cudnn": int(torch.backends.cudnn.version() or 0),
     }
     if observed != EXPECTED_RUNTIME:
-        raise RuntimeError(f"B18 runtime drifted: {observed}")
+        raise RuntimeError(f"B19 runtime drifted: {observed}")
     return observed
 
 
@@ -399,14 +399,14 @@ def _timm_contract() -> dict[str, object]:
     }
     hashes = {name: _sha256(path) for name, path in paths.items()}
     if hashes != EXPECTED_TIMM_HASHES:
-        raise RuntimeError(f"B18 timm source drifted: {hashes}")
+        raise RuntimeError(f"B19 timm source drifted: {hashes}")
     return {"paths": {name: str(path) for name, path in paths.items()}, "sha256": hashes}
 
 
 def _offline_environment() -> dict[str, object]:
     observed = {name: str(os.environ.get(name, "")) for name in OFFLINE_ENV}
     if observed != OFFLINE_ENV or os.environ.get("CUBLAS_WORKSPACE_CONFIG") != ":4096:8":
-        raise RuntimeError(f"B18 offline/deterministic environment drifted: {observed}")
+        raise RuntimeError(f"B19 offline/deterministic environment drifted: {observed}")
     return {"environment": observed, "cublas_workspace_config": ":4096:8"}
 
 
@@ -433,7 +433,7 @@ def _isolation_guard(*, deny_process: bool = False) -> Iterator[dict[str, list[s
         def guarded(path: object, *args: object, **kwargs: object) -> Any:
             if _dataset_target(path):
                 audit["dataset_attempts"].append(f"{label}:{path!s}")
-                raise RuntimeError(f"B18 preflight blocked dataset access: {path}")
+                raise RuntimeError(f"B19 preflight blocked dataset access: {path}")
             return function(path, *args, **kwargs)
 
         return guarded
@@ -442,13 +442,13 @@ def _isolation_guard(*, deny_process: bool = False) -> Iterator[dict[str, list[s
         del kwargs
         target = repr(args[-1]) if args else "unknown"
         audit["network_attempts"].append(target)
-        raise RuntimeError(f"B18 preflight blocked network access: {target}")
+        raise RuntimeError(f"B19 preflight blocked network access: {target}")
 
     def deny_child_process(*args: object, **kwargs: object) -> None:
         del kwargs
         target = repr(args[0]) if args else "unknown"
         audit["process_attempts"].append(target)
-        raise RuntimeError(f"B18 guarded pytest blocked child process: {target}")
+        raise RuntimeError(f"B19 guarded pytest blocked child process: {target}")
 
     with ExitStack() as stack:
         for owner, name in (
@@ -476,7 +476,7 @@ def _isolation_guard(*, deny_process: bool = False) -> Iterator[dict[str, list[s
                 stack.enter_context(mock.patch.object(os, "startfile", deny_child_process))
         yield audit
     if any(audit.values()):
-        raise RuntimeError(f"B18 isolation guard observed attempts: {audit}")
+        raise RuntimeError(f"B19 isolation guard observed attempts: {audit}")
 
 
 def _resolve_asset(lock: AssetLock, explicit: Path | None) -> tuple[Path, dict[str, object]]:
@@ -488,10 +488,10 @@ def _resolve_asset(lock: AssetLock, explicit: Path | None) -> tuple[Path, dict[s
     else:
         path = explicit.expanduser().resolve()
     if not path.is_file():
-        raise FileNotFoundError(f"Locked B18 {lock.role} asset is missing: {path}")
+        raise FileNotFoundError(f"Locked B19 {lock.role} asset is missing: {path}")
     observed = {"bytes": int(path.stat().st_size), "sha256": _sha256(path)}
     if observed != {"bytes": lock.byte_count, "sha256": lock.sha256}:
-        raise RuntimeError(f"Locked B18 {lock.role} asset changed: {observed}")
+        raise RuntimeError(f"Locked B19 {lock.role} asset changed: {observed}")
     return path, {
         "role": lock.role,
         "repo_id": lock.repo_id,
@@ -506,7 +506,7 @@ def _resolve_asset(lock: AssetLock, explicit: Path | None) -> tuple[Path, dict[s
 
 def _device_contract(requested: str) -> tuple[torch.device, dict[str, object]]:
     if requested.casefold() != "cuda" or not torch.cuda.is_available():
-        raise RuntimeError("B18 formal preflight requires CUDA")
+        raise RuntimeError("B19 formal preflight requires CUDA")
     device = torch.device("cuda", torch.cuda.current_device())
     properties = torch.cuda.get_device_properties(device)
     observed = {
@@ -516,7 +516,7 @@ def _device_contract(requested: str) -> tuple[torch.device, dict[str, object]]:
         "bf16_supported": bool(torch.cuda.is_bf16_supported()),
     }
     if observed != EXPECTED_CUDA:
-        raise RuntimeError(f"B18 CUDA device drifted: {observed}")
+        raise RuntimeError(f"B19 CUDA device drifted: {observed}")
     return device, {"requested": "cuda", "resolved": str(device), **observed}
 
 
@@ -572,7 +572,7 @@ def _tensor_digest(values: Mapping[str, Tensor]) -> str:
 def reset_five_class_heads(model: nn.Module, *, seed: int = SEED) -> dict[str, object]:
     heads = (getattr(model, "head", None), getattr(model, "head_dist", None))
     if not all(isinstance(head, nn.Linear) and head.in_features == 220 for head in heads):
-        raise TypeError("B18 requires two pretrained 220-channel linear heads")
+        raise TypeError("B19 requires two pretrained 220-channel linear heads")
     before = _rng_digest()
     device, dtype = heads[0].weight.device, heads[0].weight.dtype
     with _preserve_initialized_rng():
@@ -592,11 +592,11 @@ def reset_five_class_heads(model: nn.Module, *, seed: int = SEED) -> dict[str, o
         "caller_rng_preserved": before == _rng_digest(),
     }
     if not result["bias_zero"] or not result["caller_rng_preserved"]:
-        raise RuntimeError(f"B18 deterministic head reset failed: {result}")
+        raise RuntimeError(f"B19 deterministic head reset failed: {result}")
     return result
 
 
-def build_b18_arms(base: nn.Module) -> ArmBundle:
+def build_b19_arms(base: nn.Module) -> ArmBundle:
     before = _rng_digest()
     stock = SwiftFormerSurfaceFoldB17(copy.deepcopy(base), SURFACEFOLD_OFF_B17_MODE)
     bundle = build_active_arms_after_stock(base, stock)
@@ -608,7 +608,7 @@ def build_active_arms_after_stock(
     base: nn.Module, qualified_stock: SwiftFormerSurfaceFoldB17
 ) -> ArmBundle:
     if qualified_stock.mode != SURFACEFOLD_OFF_B17_MODE:
-        raise ValueError("B18 active arms require the already-qualified stock arm")
+        raise ValueError("B19 active arms require the already-qualified stock arm")
     before = _rng_digest()
     control = SwiftFormerSurfaceFoldB17(
         copy.deepcopy(base), SURFACEFOLD_MEAN_CONTROL_B17_MODE
@@ -620,7 +620,7 @@ def build_active_arms_after_stock(
         torch.equal(value, qualified_stock.backbone.state_dict()[name])
         for name, value in base.state_dict().items()
     ):
-        raise RuntimeError("B18 active-arm base differs from qualified stock")
+        raise RuntimeError("B19 active-arm base differs from qualified stock")
     return ArmBundle(qualified_stock, control, candidate, before == _rng_digest())
 
 
@@ -631,7 +631,7 @@ def _stage_channels(student: nn.Module) -> list[int]:
         not isinstance(stage, Mapping) or type(stage.get("num_chs")) is not int
         for stage in stages
     ):
-        raise TypeError("B18 SwiftFormer feature_info contract changed")
+        raise TypeError("B19 SwiftFormer feature_info contract changed")
     return [int(stage["num_chs"]) for stage in stages]
 
 
@@ -699,10 +699,10 @@ def _strict_load_models(
         "all_frozen": True,
     }:
         raise RuntimeError(
-            f"B18 strict architecture contract failed: {student_observed}, {teacher_observed}"
+            f"B19 strict architecture contract failed: {student_observed}, {teacher_observed}"
         )
     if before != _rng_digest():
-        raise RuntimeError("B18 strict load/build changed caller RNG")
+        raise RuntimeError("B19 strict load/build changed caller RNG")
     return student, stock, teacher, {
         "student": {**student_observed, "strict_load": True, "head_reset": head_reset, "asset_keys": len(student_state)},
         "teacher": {**teacher_observed, "strict_load": True, "asset_keys": len(teacher_state)},
@@ -772,7 +772,7 @@ def _role_gradient(model: nn.Module, role: str) -> dict[str, object]:
         elif role == "d":
             matched = lower == "factor_d"
         else:
-            raise ValueError(f"Unknown B18 gradient role: {role}")
+            raise ValueError(f"Unknown B19 gradient role: {role}")
         if matched:
             selected.append((name, parameter))
     present = bool(selected)
@@ -863,7 +863,7 @@ def _total_objective_gradients(
 
 def _float64_factor_oracle(model: SwiftFormerSurfaceFoldB17) -> float:
     if model.factor_p is None or model.factor_d is None:
-        raise TypeError("B18 factor oracle requires an active arm")
+        raise TypeError("B19 factor oracle requires an active arm")
     generator = torch.Generator().manual_seed(SEED + 13)
     s2 = torch.randn(2, 112, 14, 14, generator=generator, dtype=torch.float64)
     p = model.factor_p.detach().double()
@@ -1246,7 +1246,7 @@ def _portable_deployment_evidence(
 
 def _stock_deployment_contract(stock: SwiftFormerSurfaceFoldB17) -> dict[str, object]:
     arrays = _synthetic_arrays()
-    with tempfile.TemporaryDirectory(prefix="trkh_b18_stock_") as temporary:
+    with tempfile.TemporaryDirectory(prefix="trkh_b19_stock_") as temporary:
         evidence = _portable_deployment_evidence(
             stock.fold_to_deploy(),
             "stock",
@@ -1256,11 +1256,11 @@ def _stock_deployment_contract(stock: SwiftFormerSurfaceFoldB17) -> dict[str, ob
         )
     if evidence["passed"] is not True:
         error = RuntimeError(
-            f"B18 stock deployment gate failed: {evidence['checks']}"
+            f"B19 stock deployment gate failed: {evidence['checks']}"
         )
         setattr(
             error,
-            "b18_gate_evidence",
+            "b19_gate_evidence",
             {"gate": "stock_deployment_first", "evidence": evidence},
         )
         raise error
@@ -1271,7 +1271,7 @@ def _folded_deployment_contract(
     bundle: ArmBundle, stock: Mapping[str, object]
 ) -> dict[str, object]:
     arrays = _synthetic_arrays()
-    with tempfile.TemporaryDirectory(prefix="trkh_b18_folded_") as temporary:
+    with tempfile.TemporaryDirectory(prefix="trkh_b19_folded_") as temporary:
         root = Path(temporary)
         arms = {
             "control": _portable_deployment_evidence(
@@ -1395,7 +1395,7 @@ def _cuda_contract(
     bundle: ArmBundle, teacher: nn.Module, device: torch.device
 ) -> dict[str, object]:
     if os.environ.get("CUBLAS_WORKSPACE_CONFIG") != ":4096:8":
-        raise RuntimeError("B18 CUDA preflight requires CUBLAS_WORKSPACE_CONFIG=:4096:8")
+        raise RuntimeError("B19 CUDA preflight requires CUBLAS_WORKSPACE_CONFIG=:4096:8")
     old_deterministic = torch.are_deterministic_algorithms_enabled()
     old_matmul_tf32 = bool(torch.backends.cuda.matmul.allow_tf32)
     old_cudnn_tf32 = bool(torch.backends.cudnn.allow_tf32)
@@ -1451,7 +1451,7 @@ def _cuda_contract(
             tokens = teacher_cuda.forward_features(shared_teacher.float())
             teacher_calls += 1
             if not isinstance(tokens, Tensor) or tuple(tokens.shape) != (16, 261, 384):
-                raise RuntimeError(f"B18 DINO geometry drifted: {getattr(tokens, 'shape', None)}")
+                raise RuntimeError(f"B19 DINO geometry drifted: {getattr(tokens, 'shape', None)}")
             raw_teacher = (
                 tokens[:, DINO_PREFIX_TOKENS:]
                 .reshape(16, 16, 16, DINO_CHANNELS)
@@ -1634,8 +1634,8 @@ def _cuda_contract(
 FOCUSED_TEST_PATHS = (
     "tests/test_swiftformer_surfacefold_b17.py",
     "tests/test_surfacefold_deployment.py",
-    "tests/test_audit_swiftformer_surfacefold_b18_preflight.py",
-    "tests/test_run_swiftformer_surfacefold_b18_train_oof.py",
+    "tests/test_audit_swiftformer_surfacefold_b19_preflight.py",
+    "tests/test_run_swiftformer_surfacefold_b19_train_oof.py",
 )
 
 
@@ -1649,11 +1649,11 @@ import uuid
 from pathlib import Path
 
 import pytest
-from trkh.tools import audit_swiftformer_surfacefold_b18_preflight as gate
+from trkh.tools import audit_swiftformer_surfacefold_b19_preflight as gate
 
 handshake = Path(sys.argv[1]).resolve()
 test_paths = sys.argv[2:]
-gate.DATASET_ROOT = Path(os.path.abspath(os.environ["TRKH_B18_CHILD_GUARD_ROOT"]))
+gate.DATASET_ROOT = Path(os.path.abspath(os.environ["TRKH_B19_CHILD_GUARD_ROOT"]))
 audit = {"dataset_attempts": [], "network_attempts": [], "process_attempts": []}
 error = None
 pytest_returncode = 86
@@ -1670,7 +1670,7 @@ recorder = Recorder()
 try:
     with gate._isolation_guard(deny_process=True) as observed:
         audit = observed
-        pytest_returncode = int(pytest.main(["-q", "-ra", "--noconftest", f"--rootdir={os.environ['TRKH_B18_PYTEST_ROOTDIR']}", *test_paths], plugins=[recorder]))
+        pytest_returncode = int(pytest.main(["-q", "-ra", "--noconftest", f"--rootdir={os.environ['TRKH_B19_PYTEST_ROOTDIR']}", *test_paths], plugins=[recorder]))
 except BaseException as caught:
     error = {"type": type(caught).__name__, "message": str(caught)}
 payload = {
@@ -1700,24 +1700,24 @@ def _run_guarded_pytest(
 ) -> dict[str, object]:
     paths = [str(value) for value in test_paths]
     if not paths or any(not value for value in paths) or len(paths) != len(set(paths)):
-        raise ValueError("B18 focused test paths must be non-empty and unique")
+        raise ValueError("B19 focused test paths must be non-empty and unique")
     bootstrap = _focused_test_bootstrap()
     bootstrap_sha256 = hashlib.sha256(bootstrap.encode("utf-8")).hexdigest()
     requested_root = (DATASET_ROOT if guard_root is None else guard_root).expanduser()
     root = Path(os.path.abspath(os.fspath(requested_root)))
     requested_pytest_root = (_root() if pytest_root is None else pytest_root).expanduser()
     resolved_pytest_root = Path(os.path.abspath(os.fspath(requested_pytest_root)))
-    with tempfile.TemporaryDirectory(prefix="trkh_b18_pytest_guard_") as temporary:
+    with tempfile.TemporaryDirectory(prefix="trkh_b19_pytest_guard_") as temporary:
         handshake = Path(temporary) / "child_guard.json"
         command = [sys.executable, "-c", bootstrap, str(handshake), *paths]
         environment = {
             **os.environ,
             **OFFLINE_ENV,
-            "TRKH_B18_CHILD_GUARD_ROOT": str(root),
-            "TRKH_B18_PYTEST_ROOTDIR": str(resolved_pytest_root),
+            "TRKH_B19_CHILD_GUARD_ROOT": str(root),
+            "TRKH_B19_PYTEST_ROOTDIR": str(resolved_pytest_root),
             "PYTEST_ADDOPTS": "",
             "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
-            "TRKH_B18_IN_GUARDED_PYTEST": "1",
+            "TRKH_B19_IN_GUARDED_PYTEST": "1",
         }
         result = subprocess.run(
             command,
@@ -1788,7 +1788,7 @@ def _focused_tests() -> dict[str, object]:
         and child["executed_nodeids"] == child["collected_nodeids"]
     )
     if evidence["passed"] is not True:
-        raise RuntimeError(f"B18 guarded focused tests failed/skipped: {evidence}")
+        raise RuntimeError(f"B19 guarded focused tests failed/skipped: {evidence}")
     return evidence
 
 
@@ -1808,7 +1808,7 @@ def _end_rehash(
         "weights": {"student": student, "teacher": teacher},
     }
     if observed != dict(start):
-        raise RuntimeError(f"B18 start/end rehash drifted: start={start}, end={observed}")
+        raise RuntimeError(f"B19 start/end rehash drifted: start={start}, end={observed}")
     return observed
 
 
@@ -2643,9 +2643,9 @@ def _validated_output(path: Path) -> Path:
     output = path.expanduser().resolve()
     runs = (_root() / "runs").resolve()
     if output.parent != runs or not output.name.startswith(OUTPUT_PREFIX):
-        raise ValueError("B18 output must be a direct runs child with the locked prefix")
+        raise ValueError("B19 output must be a direct runs child with the locked prefix")
     if output.exists() or output.with_name(output.name + ".partial").exists():
-        raise FileExistsError(f"Refuse to overwrite B18 output: {output}")
+        raise FileExistsError(f"Refuse to overwrite B19 output: {output}")
     return output
 
 
@@ -2653,7 +2653,7 @@ def _failure_path(requested: Path) -> Path:
     requested = requested.expanduser().resolve()
     runs = (_root() / "runs").resolve()
     if requested.parent != runs:
-        raise ValueError("B18 failure output requires a canonical runs child")
+        raise ValueError("B19 failure output requires a canonical runs child")
     suffix = requested.name[len(OUTPUT_PREFIX) :] if requested.name.startswith(OUTPUT_PREFIX) else requested.name
     candidate = runs / f"{FAILURE_PREFIX}{suffix}"
     if candidate.exists() or candidate.with_name(candidate.name + ".partial").exists():
@@ -2663,7 +2663,7 @@ def _failure_path(requested: Path) -> Path:
 
 def _write_failure(requested: Path, stage: str, error: BaseException) -> dict[str, str]:
     trace = traceback.format_exc()
-    gate_evidence = getattr(error, "b18_gate_evidence", None)
+    gate_evidence = getattr(error, "b19_gate_evidence", None)
     gate_evidence_sha256 = (
         hashlib.sha256(_canonical_bytes(gate_evidence)).hexdigest()
         if isinstance(gate_evidence, Mapping)
@@ -2692,7 +2692,7 @@ def _write_failure(requested: Path, stage: str, error: BaseException) -> dict[st
 
 def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Locked offline label-free B18 TargetMatch SurfaceFold-XS preflight"
+        description="Locked offline label-free B19 BitExact-LR SurfaceFold-XS preflight"
     )
     parser.add_argument("--output-dir", required=True, type=Path)
     parser.add_argument("--student-weight", type=Path, default=None)
@@ -2714,7 +2714,7 @@ def build_preflight(args: argparse.Namespace) -> dict[str, object]:
                 and git["clean"] is True
                 and git["head_is_commit"] is True
             ):
-                raise RuntimeError(f"B18 requires a clean committed canonical branch: {git}")
+                raise RuntimeError(f"B19 requires a clean committed canonical branch: {git}")
             sources = _source_hashes()
             runtime = _runtime_contract()
             timm_sources = _timm_contract()
@@ -2745,21 +2745,21 @@ def build_preflight(args: argparse.Namespace) -> dict[str, object]:
             stage = "mechanism_after_stock"
             mechanism = _mechanism_contract(bundle)
             if mechanism["passed"] is not True:
-                raise RuntimeError(f"B18 mechanism gate failed: {mechanism['checks']}")
+                raise RuntimeError(f"B19 mechanism gate failed: {mechanism['checks']}")
             stage = "folded_deployment"
             folded_deployment = _folded_deployment_contract(bundle, stock_deployment)
             if folded_deployment["passed"] is not True:
                 raise RuntimeError(
-                    f"B18 folded deployment gate failed: {folded_deployment['checks']}"
+                    f"B19 folded deployment gate failed: {folded_deployment['checks']}"
                 )
             stage = "cuda_batch16"
             cuda = _cuda_contract(bundle, teacher, device)
             if cuda["passed"] is not True:
-                raise RuntimeError(f"B18 CUDA gate failed: {cuda['checks']}")
+                raise RuntimeError(f"B19 CUDA gate failed: {cuda['checks']}")
             stage = "end_rehash"
             end_rehash = _end_rehash(start, student_path, teacher_path)
             if any(isolation.values()):
-                raise RuntimeError(f"B18 isolation attempts observed: {isolation}")
+                raise RuntimeError(f"B19 isolation attempts observed: {isolation}")
             checks = {
                 "clean_committed_canonical_branch": True,
                 "bound_sources_exact": all(sources[name] == value for name, value in SOURCE_LOCKS.items()),
@@ -2806,12 +2806,12 @@ def build_preflight(args: argparse.Namespace) -> dict[str, object]:
             }
             structure = _payload_checks(payload)
             if not all(structure.values()):
-                raise RuntimeError(f"B18 payload self-validation failed: {structure}")
+                raise RuntimeError(f"B19 payload self-validation failed: {structure}")
             stage = "final_rehash"
             if _end_rehash(start, student_path, teacher_path) != end_rehash:
-                raise RuntimeError("B18 final rehash changed")
+                raise RuntimeError("B19 final rehash changed")
             if any(isolation.values()):
-                raise RuntimeError("B18 isolation state changed before publish")
+                raise RuntimeError("B19 isolation state changed before publish")
             stage = "atomic_publish"
             _publish(output, "preflight.json", payload)
             return payload
@@ -2820,7 +2820,7 @@ def build_preflight(args: argparse.Namespace) -> dict[str, object]:
             failure = _write_failure(output, stage, error)
         except BaseException as write_error:
             failure = {"failure_write_error": repr(write_error)}
-        setattr(error, "b18_failure_artifact", failure)
+        setattr(error, "b19_failure_artifact", failure)
         raise
 
 
@@ -2828,7 +2828,7 @@ def _no_duplicate_keys(pairs: list[tuple[str, object]]) -> dict[str, object]:
     result: dict[str, object] = {}
     for key, value in pairs:
         if key in result:
-            raise ValueError(f"B18 artifact contains duplicate JSON key: {key!r}")
+            raise ValueError(f"B19 artifact contains duplicate JSON key: {key!r}")
         result[key] = value
     return result
 
@@ -2853,25 +2853,25 @@ def validate_accepted_preflight(
         or path.parent.parent != runs
         or not path.parent.name.startswith(OUTPUT_PREFIX)
     ):
-        raise ValueError("Accepted B18 preflight path is not canonical")
+        raise ValueError("Accepted B19 preflight path is not canonical")
     if {child.name for child in path.parent.iterdir()} != {
         "preflight.json",
         "preflight.sha256",
     }:
-        raise ValueError("Accepted B18 preflight root contains unexpected files")
+        raise ValueError("Accepted B19 preflight root contains unexpected files")
     raw = path.read_bytes()
     digest = hashlib.sha256(raw).hexdigest()
     if re.fullmatch(r"[0-9a-fA-F]{64}", expected_sha256) is None or digest != expected_sha256.casefold():
-        raise ValueError("Accepted B18 preflight SHA-256 mismatch")
+        raise ValueError("Accepted B19 preflight SHA-256 mismatch")
     sidecar = path.with_name("preflight.sha256").read_bytes()
     if sidecar != f"{digest}\n".encode("ascii"):
-        raise ValueError("Accepted B18 preflight sidecar mismatch")
+        raise ValueError("Accepted B19 preflight sidecar mismatch")
     try:
         payload = json.loads(raw.decode("utf-8"), object_pairs_hook=_no_duplicate_keys)
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
-        raise ValueError("Accepted B18 preflight JSON is invalid") from error
+        raise ValueError("Accepted B19 preflight JSON is invalid") from error
     if not isinstance(payload, Mapping) or raw != _canonical_bytes(payload):
-        raise ValueError("Accepted B18 preflight is not canonical JSON")
+        raise ValueError("Accepted B19 preflight is not canonical JSON")
     checks = _payload_checks(payload)
     git = _git_contract()
     sources = _source_hashes()
@@ -2893,9 +2893,9 @@ def validate_accepted_preflight(
         == _asset_identity(teacher),
     }
     if not all(current_checks.values()):
-        raise RuntimeError(f"Accepted B18 preflight no longer applies: {current_checks}")
+        raise RuntimeError(f"Accepted B19 preflight no longer applies: {current_checks}")
     if path.read_bytes() != raw or path.with_name("preflight.sha256").read_bytes() != sidecar:
-        raise RuntimeError("Accepted B18 preflight changed during validation")
+        raise RuntimeError("Accepted B19 preflight changed during validation")
     return {"artifact": str(path), "sha256": digest, "payload": dict(payload)}
 
 
@@ -2911,7 +2911,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "passed": False,
                     "error_type": type(error).__name__,
                     "error_message": str(error),
-                    "failure_artifact": getattr(error, "b18_failure_artifact", None),
+                    "failure_artifact": getattr(error, "b19_failure_artifact", None),
                 },
                 ensure_ascii=False,
                 sort_keys=True,
