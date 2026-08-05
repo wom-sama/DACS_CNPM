@@ -49,6 +49,9 @@
   positives for a large false-positive reduction. This supports the hybrid
   family and isolates calibration/knowledge transfer as the next problem; it
   does not authorize validation, test, full training, or a post-hoc bias claim.
+- Lock one B30 fold-1 loss ablation. It keeps the B29 teacher, model,
+  initialization, sampler and schedule; only coupled KL versus trust-margin
+  residual distillation changes. No architecture/backbone sweep is open.
 
 ### Objection and decision state
 
@@ -78,6 +81,7 @@ Update rows in place; do not append chronology. States move `OPEN -> LOCKED -> C
 | `B27-01` | `CLOSED_FAIL` | B26 failed because it softly pooled existing tokens; a sparse high-resolution route may expose information lost by patch-16 compression. | Max-over-head attention has mean entropy `0.889948`, but `49.85%` of its selected patches fall in the outer two grid cells and the most frequent top-1 sites lie on row 0/column 0. Candidate-minus-base macro/C1 F1/pair-AUROC is `-0.003302/-0.007406/-0.001741`; restricted FP rises `317 -> 337`. The spatially shifted control is also better than the candidate by `0.004326` C1 F1. | Close the max-head route and do not sweep K, subdivision or PCA. This does not close subpatch information because the matched route test failed. One successor may replace only head aggregation with prospectively defined decision-margin degradation. |
 | `B28-01` | `CLOSED_FAIL` | Feature-distance head selection from SubViT may still favor DINO outliers irrelevant to the five-class boundary; the router teacher must target the actual predicted-class margin without using the row label. | The full run confirms a real selector change: positive margin degradation `91.00%`, border selection `52.01% -> 39.05%`, route equality with max-head only `13.77%`. Nevertheless candidate-minus-base macro/C1 F1/pair-AUROC is `-0.001367/-0.005477/-0.000570`, restricted FP rises `317 -> 326`, and only 1/5 C1 folds improves. | Close raw-DINO final-attention plus patch-projection/Haar subpatchs on current evidence. Reopen only with a different measured local representation, not another head/K/PCA selector. |
 | `B29-01` | `CLOSED_FAIL` | B24's useful ConvNeXt complementarity should not require a 27.8M second inference backbone; a fast state-space student may learn its correction. | The fixed-fold pilot is strongly mechanism-positive: candidate-minus-control accuracy/macro/C1 F1 is `+0.020296/+0.020326/+0.028594`, restricted FP falls `69 -> 52`, and strict reload is exact. It fails only locked TP retention (`50 -> 48`). A 5,000-draw whole-component bootstrap keeps accuracy and macro lower bounds positive, while C1 F1 remains uncertain. | Do not rerun ordinary coupled KL or promote a bias tuned on fold 0. A successor may keep the exact backbone/teacher and change only the transfer/calibration equation, then confirm on TRAIN folds not used to choose that equation. Validation/test/full train remain sealed. |
+| `B30-01` | `LOCKED` | B29's fusion signal is useful, but coupled KL can transmit harmful teacher margins and its unweighted retention can sacrifice minority TP. | Fold 1 was fixed before reading its metrics. Coupled-KL control and TMORD candidate share the same official M1 state, DINO primary/fusion teacher, task loss, sampler and six-epoch schedule. TMORD transfers only positive true-vs-rival teacher margin gain (cap `2.0`) and weights C1 margin/retention `4x`. | Require C1 F1 `>=+0.005` versus base and coupled-KL, macro/accuracy deltas `>=-0.002`, no TP loss versus control, at most three added restricted FP, and an active bounded residual. Passing opens only the next unseen TRAIN fold. |
 | `KD-01` | `GUARD` | B19 proves that raw-DINO relation distillation itself improves SwiftFormer. | False. Stock, control and candidate all receive the same cosine-neighbour relation loss; B19 isolates spatial atoms under that objective, not relation KD versus CE-only. The normalized relation also does not preserve photometric magnitude by construction. | Any causal KD claim requires a separately preregistered matched experiment on prospectively sealed evidence; B19 cannot be reinterpreted as that ablation. |
 | `TELEM-01` | `LOCKED` | Final factor norms and scalar loss curves are enough to diagnose optimization if a successor fails. | Rejected. They prove activation and fit behaviour but cannot distinguish backbone absorption from branch starvation. | B21 records per-role gradient and update/parameter norms plus adapter residual ratios by epoch. Gradient-conflict telemetry is required only when an auxiliary objective exists; B21 deliberately has none. |
 | `LR-01` | `CLOSED` | Exact float equality is safe when a mathematically identical endpoint is produced through multiplication and division. | Rejected by the B18 real-fold counterexample. Endpoint values must be returned explicitly, while interior points retain the original formula; tests must exercise every locked fold horizon. | Permanent scheduler implementation rule. |
@@ -453,6 +457,24 @@ without changing `class_f` or adding another backbone.
 - Accepted preflight SHA256 `c618c226569562930bc2ebe61f2cdceb5c5afe26069dee675b851a294a9ecd2b`.
 - Result: `runs/b29_m1_teacher_residual_c1f67cb_r1/summary.json`
 - Summary SHA256: `b33519099671eb434c82a43edeca34fd8e4c90b04f65a6c7eb04f3915a4244f9`
+
+## Locked confirmation screen: B30 trust-margin residual distillation
+
+B30 uses TRAIN fold 1, which was fixed before its teacher or student metric was
+read. Both arms add the same official pretrained EfficientViM-M1 residual to a
+fold-fit DINO primary. The control repeats B29's coupled KL toward the same
+DINO+ConvNeXt teacher. For candidate true label `y` and rival `j`, TMORD defines
+`m_p=p_y-p_j`, `m_t=t_y-t_j`, and
+`m*=m_p+clip(m_t-m_p,0,2)`. A weighted Huber loss moves the student margin to
+`m*`; teacher corrections that reduce the true margin are therefore never
+targets. Class-1 margin pairs and primary-correct retention receive weight `4`,
+while task CE and the optimizer/sampler/six-epoch cosine remain unchanged.
+
+This is one loss-equation ablation, not another pretrained model search. It
+runs a focused unit preflight inside the single command and records source/Git,
+strict reload, score and state hashes. Its gate is the `B30-01` row above.
+Regardless of outcome, validation, test and full training remain closed; a pass
+permits only one additional unseen TRAIN fold.
 
 ## PRMR R1 closure
 
