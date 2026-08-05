@@ -121,9 +121,11 @@ def _load(args: argparse.Namespace) -> dict[str, object]:
         and arrays["groups"].shape == (8278,),
         "score_shapes": arrays["dino_scores"].shape == (8278, 5)
         and arrays["fusion_scores"].shape == (8278, 5),
-        "finite": np.isfinite(dino).all()
-        and np.isfinite(convnext).all()
-        and np.isfinite(arrays["dino_scores"]).all(),
+        "finite": bool(
+            np.isfinite(dino).all()
+            and np.isfinite(convnext).all()
+            and np.isfinite(arrays["dino_scores"]).all()
+        ),
     }
     if not all(checks.values()):
         raise ValueError(f"B25 retained contract failed: {checks}")
