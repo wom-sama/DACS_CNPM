@@ -89,7 +89,7 @@ Update rows in place; do not append chronology. States move `OPEN -> LOCKED -> C
 | `B31-01` | `CLOSED_PASS` | Fold-0 TP loss may be fold variance rather than a coupled-KL defect; fold 1 independently reverses it and produces a large all-metric gain. | Confirmation folds 2--4 improve accuracy/macro/C1 F1 by `+0.027935/+0.031605/+0.058224`, add two TP and remove 61 restricted FP; C1 improves in 3/3 folds. Whole-component C1-gain CI is `[+0.03018,+0.08997]`. Full five-fold C1 F1 is `0.579051` versus `0.517520`. | Authorizes one train-all/matched exploratory validation of this exact raw-DINO+M1 equation. It does not authorize a B9 graft, test, train+val finalfit or presentation claim. |
 | `B32-01` | `CLOSED_FAIL` | OOF success may disappear on validation or remain below supervised pure B9; attaching ConvNeXt knowledge directly to B9 is not justified. | B32 validates the mechanism versus raw DINO (`+0.019766/+0.021777/+0.031702` accuracy/macro/C1 F1; `+3` TP), but reaches only `0.887455/0.837360/0.583815` versus B9 `0.912061/0.876324/0.701149`, with 18 more restricted FP. | Do not tune raw-primary B32 on validation or run its audits. Its image-only M1 residual may be screened once as a fixed feature beside B9 under source-fold TRAIN readout. |
 | `B33-01` | `CLOSED_FAIL` | B32's M1 residual may contain useful knowledge even though its raw-DINO operating point is weaker than supervised B9. | The apparent TRAIN gain did not generalize. On design-exposed validation, exact B9 / B9-only readout / B9+M1 gives C1 F1 `0.701149 / 0.705202 / 0.656716`; the candidate loses 12 C1 TP while reducing restricted FP by only one versus B9. | The source-fold readout was not end-to-end OOF because both upstream generators had seen all TRAIN rows. Do not tune B33. Any successor must cross-fit every upstream state and evaluate a fold unseen by the primary, auxiliary branch and fusion readout. |
-| `B34-01` | `LOCKED` | B33 may fail because its upstream states saw all TRAIN, or because the raw-DINO-aligned M1 residual is intrinsically misaligned with a supervised DINO primary. | Reuse the preserved B21 spatial EMA and B29 candidate M1, both trained without component fold 0. Fit a balanced 5-D primary-only readout and a matched 10-D primary+M1 readout on folds 1--4; score fold 0 once. | Require C1 F1 gains `>=0.005` over raw primary and `>=0.010` over readout control, accuracy/macro no worse than `-0.002`, no C1 TP loss versus primary, and no restricted-FP or `2->1` increase versus control. Pass permits one B9-aligned cross-fitted residual fold; never validation/test. |
+| `B34-01` | `CLOSED_PASS` | B33 may fail because its upstream states saw all TRAIN, or because the raw-DINO-aligned M1 residual is intrinsically misaligned with a supervised DINO primary. | On held component fold 0, primary / primary-only readout / primary+M1 gives C1 F1 `0.674033 / 0.673367 / 0.684783`. Candidate-minus-control is `+0.003291/+0.004406/+0.011416` accuracy/macro/C1 F1, restricted FP `36 -> 25`, and `2->1` `17 -> 11`; candidate also retains two more TP than the raw primary. | All seven gates pass. This permits one fresh-fold B9-like primary plus a residual trained relative to that primary. Add a prospective pair-AUROC guard because B34 candidate ranking fell `0.978987 -> 0.971702`. Validation/test remain closed. |
 | `KD-01` | `GUARD` | B19 proves that raw-DINO relation distillation itself improves SwiftFormer. | False. Stock, control and candidate all receive the same cosine-neighbour relation loss; B19 isolates spatial atoms under that objective, not relation KD versus CE-only. The normalized relation also does not preserve photometric magnitude by construction. | Any causal KD claim requires a separately preregistered matched experiment on prospectively sealed evidence; B19 cannot be reinterpreted as that ablation. |
 | `TELEM-01` | `LOCKED` | Final factor norms and scalar loss curves are enough to diagnose optimization if a successor fails. | Rejected. They prove activation and fit behaviour but cannot distinguish backbone absorption from branch starvation. | B21 records per-role gradient and update/parameter norms plus adapter residual ratios by epoch. Gradient-conflict telemetry is required only when an auxiliary objective exists; B21 deliberately has none. |
 | `LR-01` | `CLOSED` | Exact float equality is safe when a mathematically identical endpoint is produced through multiplication and division. | Rejected by the B18 real-fold counterexample. Endpoint values must be returned explicitly, while interior points retain the original formula; tests must exercise every locked fold horizon. | Permanent scheduler implementation rule. |
@@ -613,6 +613,26 @@ were already observed. A pass only justifies the expensive next step--one
 fresh fold-specific B9-like primary and a residual target defined relative to
 that primary. A failure closes reuse of the current raw-DINO-aligned M1 for B9
 fusion; it does not define the ceiling of a newly aligned hybrid.
+
+B34 completed on commit `7a24f0f` and passed all seven locked gates. Raw B21
+spatial / primary-only readout / primary+M1 gives held-fold accuracy
+`0.880417 / 0.888097 / 0.891388`, macro-F1
+`0.846775 / 0.853443 / 0.857849`, and C1 P/R/F1
+`0.717647/0.635417/0.674033`, `0.650485/0.697917/0.673367`, and
+`0.715909/0.656250/0.684783`. Relative to the calibration control, the
+candidate removes 11 restricted FP and six `2->1` errors while gaining
+`+0.011416` C1 F1; relative to the raw primary it retains two more C1 TP.
+Both upstream checkpoints replay exactly (`B21` argmax exact; B29 maximum logit
+error `0`).
+
+The candidate's mean pair AUROC falls `0.978987 -> 0.971702`, so B34 is evidence
+of a better discrete operating point, not uniformly better ranking. The next
+fresh-fold experiment must preregister pair-AUROC noninferiority in addition to
+F1/TP/FP gates and train its residual directly relative to the B9-like primary.
+
+- Result: `runs/b34_crossfitted_supervised_m1_7a24f0f_r1/summary.json`
+- Summary SHA256: `426008b8d2a0aa1ccd7cc32c1afdee7f2c8fbf4555946ebdb88d6ad756de8b19`
+- Score SHA256: `2a52de214bf6dd062805a0c655ec73095edfa2917968336d8cca28f9bf22efe2`
 
 ## PRMR R1 closure
 
