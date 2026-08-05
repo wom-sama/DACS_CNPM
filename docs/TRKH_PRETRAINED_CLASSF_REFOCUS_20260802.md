@@ -41,10 +41,14 @@
   moved only three validation decisions. The exact soft-query decoder therefore
   repeats global token mixing rather than selecting new regional evidence.
 - Close B27/B28: decision-margin degradation fixes the selector diagnostics but
-  the raw-DINO subpatch descriptor still fails its information gates. Open B29
-  on the strongest measured alternative: distill the useful ConvNeXt fusion
-  correction into a canonical four-stage EfficientViM-M1 mobile residual while
-  keeping the DINO path unchanged.
+  the raw-DINO subpatch descriptor still fails its information gates.
+- Close the exact conventional-KL B29 pilot as mechanism-positive but not
+  promotable. On the fixed TRAIN design fold, the canonical four-stage
+  EfficientViM residual transfers enough ConvNeXt-teacher signal to improve
+  accuracy/macro/C1 F1 over its identical control, but trades two C1 true
+  positives for a large false-positive reduction. This supports the hybrid
+  family and isolates calibration/knowledge transfer as the next problem; it
+  does not authorize validation, test, full training, or a post-hoc bias claim.
 
 ### Objection and decision state
 
@@ -73,7 +77,7 @@ Update rows in place; do not append chronology. States move `OPEN -> LOCKED -> C
 | `B26-01` | `CLOSED_FAIL` | Uniform local mixing fails, final-token selection is deployment-closed, and old no-pretrain deep prompts suppressed C1 recall; a pretrained successor must add regional evidence without perturbing B9. | The strict-reloaded query residual is active (`p95=0.02463`) but its normalized attention entropy is `0.995904`, above the nonuniformity limit. Versus B9, macro/C1 F1 changes `0.876324/0.701149 -> 0.875392/0.697143`; C1 TP stays `122`, while restricted FP and `2->1` both rise by two. Only three argmaxes change: two correct class-2 rows become class 1 and one class-3 row is repaired. | Do not tune B26 query width, loss, LR or duration and do not run its mean-token control. A successor must route a sparse, input-dependent set of regions and add sub-patch/pixel information absent from the fixed 16x16 DINO tokens; test stays sealed. |
 | `B27-01` | `CLOSED_FAIL` | B26 failed because it softly pooled existing tokens; a sparse high-resolution route may expose information lost by patch-16 compression. | Max-over-head attention has mean entropy `0.889948`, but `49.85%` of its selected patches fall in the outer two grid cells and the most frequent top-1 sites lie on row 0/column 0. Candidate-minus-base macro/C1 F1/pair-AUROC is `-0.003302/-0.007406/-0.001741`; restricted FP rises `317 -> 337`. The spatially shifted control is also better than the candidate by `0.004326` C1 F1. | Close the max-head route and do not sweep K, subdivision or PCA. This does not close subpatch information because the matched route test failed. One successor may replace only head aggregation with prospectively defined decision-margin degradation. |
 | `B28-01` | `CLOSED_FAIL` | Feature-distance head selection from SubViT may still favor DINO outliers irrelevant to the five-class boundary; the router teacher must target the actual predicted-class margin without using the row label. | The full run confirms a real selector change: positive margin degradation `91.00%`, border selection `52.01% -> 39.05%`, route equality with max-head only `13.77%`. Nevertheless candidate-minus-base macro/C1 F1/pair-AUROC is `-0.001367/-0.005477/-0.000570`, restricted FP rises `317 -> 326`, and only 1/5 C1 folds improves. | Close raw-DINO final-attention plus patch-projection/Haar subpatchs on current evidence. Reopen only with a different measured local representation, not another head/K/PCA selector. |
-| `B29-01` | `LOCKED` | B24's useful ConvNeXt complementarity should not require a 27.8M second inference backbone; a fast state-space student may learn its correction. | On fixed TRAIN fold 0, a fusion readout fit only on the other four folds improves held accuracy/macro/C1 F1/pair-AUROC by `+0.024685/+0.024383/+0.027505/+0.016233`, keeps C1 recall and reduces restricted FP `75 -> 61`. Two exact EfficientViM-M1 students start with zero residual heads; control distills DINO, candidate distills fusion. Both use the canonical four-stage interface, identical task/retention loss, batches, six-epoch aligned schedule and bounded `±6` residual. | Require candidate C1 gain `>=+0.005` over base and `>=+0.010` over control, macro `>=+0.005` over control, no TP loss, at least three fewer FP than control, and recovery of at least 25% of the teacher C1 gain. Pass authorizes five-fold TRAIN OOF only. Validation/test/full train remain sealed. |
+| `B29-01` | `CLOSED_FAIL` | B24's useful ConvNeXt complementarity should not require a 27.8M second inference backbone; a fast state-space student may learn its correction. | The fixed-fold pilot is strongly mechanism-positive: candidate-minus-control accuracy/macro/C1 F1 is `+0.020296/+0.020326/+0.028594`, restricted FP falls `69 -> 52`, and strict reload is exact. It fails only locked TP retention (`50 -> 48`). A 5,000-draw whole-component bootstrap keeps accuracy and macro lower bounds positive, while C1 F1 remains uncertain. | Do not rerun ordinary coupled KL or promote a bias tuned on fold 0. A successor may keep the exact backbone/teacher and change only the transfer/calibration equation, then confirm on TRAIN folds not used to choose that equation. Validation/test/full train remain sealed. |
 | `KD-01` | `GUARD` | B19 proves that raw-DINO relation distillation itself improves SwiftFormer. | False. Stock, control and candidate all receive the same cosine-neighbour relation loss; B19 isolates spatial atoms under that objective, not relation KD versus CE-only. The normalized relation also does not preserve photometric magnitude by construction. | Any causal KD claim requires a separately preregistered matched experiment on prospectively sealed evidence; B19 cannot be reinterpreted as that ablation. |
 | `TELEM-01` | `LOCKED` | Final factor norms and scalar loss curves are enough to diagnose optimization if a successor fails. | Rejected. They prove activation and fit behaviour but cannot distinguish backbone absorption from branch starvation. | B21 records per-role gradient and update/parameter norms plus adapter residual ratios by epoch. Gradient-conflict telemetry is required only when an auxiliary objective exists; B21 deliberately has none. |
 | `LR-01` | `CLOSED` | Exact float equality is safe when a mathematically identical endpoint is produced through multiplication and division. | Rejected by the B18 real-fold counterexample. Endpoint values must be returned explicitly, while interior points retain the original formula; tests must exercise every locked fold horizon. | Permanent scheduler implementation rule. |
@@ -404,7 +408,7 @@ The exact raw-DINO attention/subpatch family is therefore closed.
 - Result: `runs/b28_margin_subpatch_train_oof_4510d43_r1/summary.json`
 - Summary SHA256: `c8cc82bff8f8c5dfeabe4f48d3e55e53b5b3dcb04738e28256270c7057c3df15`
 
-## Locked screen: B29 EfficientViM local-teacher residual
+## Closed design screen: B29 EfficientViM local-teacher residual
 
 B29 uses ConvNeXt only to construct a fold-fit TRAIN teacher. At inference the
 candidate consists of the unchanged DINO primary plus official pretrained
@@ -414,6 +418,41 @@ parameters, sampler, task loss, DINO trust target and schedule; candidate change
 only the KD target to the DINO+ConvNeXt fusion. This tests transfer of measured
 local complementarity across architectures rather than frozen M1 quality or a
 two-large-backbone ensemble. Fold-0 success permits five-fold OOF, not validation.
+
+The one fixed TRAIN-fold run completed `606` updates per arm in `449.98 s`,
+used `1.225 GB` peak CUDA allocation, strict-reloaded both student states with
+maximum error zero, and constructed neither validation nor test. Results are:
+
+| Fold-0 held TRAIN arm | Accuracy | Macro-F1 | C1 P/R/F1 | C1 TP | Restricted FP |
+|---|---:|---:|---:|---:|---:|
+| Raw DINO readout | `0.801975` | `0.746171` | `0.390625/0.520833/0.446429` | `50` | `75` |
+| Same-M1 DINO control | `0.806912` | `0.751753` | `0.409836/0.520833/0.458716` | `50` | `69` |
+| M1 fusion-teacher candidate | `0.827208` | `0.772079` | `0.475248/0.500000/0.487310` | `48` | `52` |
+
+Candidate-minus-control accuracy/macro/C1 F1 is
+`+0.020296/+0.020326/+0.028594`; the candidate also removes 17 restricted FP.
+A 5,000-draw whole-component bootstrap gives accuracy
+`+0.02025 [0.01100,0.02921]`, macro `+0.02030 [0.00837,0.03183]`, and C1 F1
+`+0.02883 [-0.00737,0.06736]`. The exact gate fails only because C1 TP changes
+`50 -> 48`. This is a calibration/transfer failure, not a collapsed hybrid:
+candidate residual absolute p95 is `2.62194` under the `6.0` bound.
+
+A diagnostic-only class-1 logit shift shows that `+0.16157` would recover the
+two TP while keeping candidate C1 F1/macro/accuracy at
+`0.502513/0.775483/0.828305`. Fold 0 has already been exposed, so this value
+must not be promoted or scored there again. The next equation must be fixed
+before using other TRAIN folds. It should replace coupled KL with trustworthy,
+class-aware transfer: gate teacher corrections by true-margin improvement,
+separate target/non-target knowledge, and learn any calibration only from the
+fit side. This follows the mechanisms in
+[DKD](https://openaccess.thecvf.com/content/CVPR2022/html/Zhao_Decoupled_Knowledge_Distillation_CVPR_2022_paper.html),
+[logit adjustment](https://openreview.net/pdf?id=37nvvqkCo5), and
+[trust-calibrated collaborative learning](https://openaccess.thecvf.com/content/CVPR2026/html/Zhou_Trust-calibrated_Collaborative_Learning_for_Long-Tailed_Visual_Recognition_CVPR_2026_paper.html)
+without changing `class_f` or adding another backbone.
+
+- Accepted preflight SHA256 `c618c226569562930bc2ebe61f2cdceb5c5afe26069dee675b851a294a9ecd2b`.
+- Result: `runs/b29_m1_teacher_residual_c1f67cb_r1/summary.json`
+- Summary SHA256: `b33519099671eb434c82a43edeca34fd8e4c90b04f65a6c7eb04f3915a4244f9`
 
 ## PRMR R1 closure
 
