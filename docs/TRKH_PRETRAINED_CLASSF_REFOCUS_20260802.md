@@ -17,13 +17,18 @@
 - Keep B20 `NOT_OPENED`. Haar plus log/opponent chromaticity is not a new
   observable: it is a prohibited kernel/magnitude neighbour of two already
   failed families. This closure no longer depends on a label review.
-- Close exact `B21-DINO-ConvPass-A0` after its valid fixed TRAIN-fold screen.
-  The multi-depth spatial path improves accuracy and macro-F1, but reduces
-  class-1 recall/F1 and increases `2 -> 1`; validation and test remain sealed.
-- Open only the bounded `B22` diagnostic: freeze the B21 spatial representation
-  and test one non-negative, bounded class-1 logit expert against scalar-bias
-  and logits-only controls. This is adaptive TRAIN-fold diagnosis, not
-  confirmatory evidence.
+- Close only the exact five-epoch joint-finetune recipe
+  `B21-DINO-ConvPass-A0`. Its spatial path improves accuracy and macro-F1 but
+  reduces class-1 recall/F1 and increases `2 -> 1`; validation and test remain
+  sealed. Because the run ended near peak LR on a 30-epoch horizon, it is not
+  evidence that ConvPass or pretrained hybrids reached their limit.
+- Close exact `B22`: a scalar class-1 bias almost restores the direct B21
+  boundary, while logits/features over-expand class 1. This rejects another
+  post-pooling repair, not a pre-pooling specialist initialized from B9.
+- Open one B23 screen: strict-load the selected supervised B9 EMA, freeze its
+  entire ViT/head, and train only the multi-depth spatial ConvPass with a
+  labelled-class-1 margin-retention guard. The six-epoch cosine horizon is
+  aligned with the six-epoch screen; no LR/width/loss sweep is authorized.
 
 ### Objection and decision state
 
@@ -44,8 +49,9 @@ Update rows in place; do not append chronology. States move `OPEN -> LOCKED -> C
 | `B18-01` | `CLOSED_FAIL` | Passing synthetic scheduler tests proves the exact real-fold LR evidence gate. | Rejected. B18 preflight passed with SHA256 `b32697dd4911f38ae2fb3ab42bc7aeb635ec92e9ad21a288aa02c763ad73dfda`, then the one-use TRAIN run stopped after fold-0 training because `3e-5 * 201 / 201` produced `2.9999999999999997e-5`; exact dictionary equality rejected the one-ULP difference (`3.388e-21`). Failure SHA256 is `75370288a392497b045a977924b0fdf8c3dc168a3849863ca69024c75afbc8ed`; validation/test are false and no fold state/OOF metric exists. | Exact B18 never reruns. B19 may only return literal `peak_lr/MIN_LR` at the two endpoints and test all locked update counts `202/206/212/207/210`; no architecture, data, loss, optimizer, schedule shape or gate change. |
 | `B19-01` | `CLOSED_FAIL` | An active, directly supervised, foldable spatial factor is sufficient to improve the class-1 boundary. | Rejected by a valid TRAIN-only screen. Candidate C1 F1 was `0.632939` versus control `0.630553`, delta `+0.002386 [-0.009669,+0.014988]`; pair-2 AUROC delta was `-0.000533`, `2->1` rose `80->84`, and restricted FP rose `131->135`. Active-minus-delta-off C1 F1 was real (`+0.043440 [+0.019285,+0.069964]`), so this is target/quality failure, not branch collapse. | Exact B19 never reruns or retunes. A successor must change the target and placement equation, use a matched primary backbone/control, and pass a bounded TRAIN-only screen. |
 | `OBS-01` | `CLOSED_FAIL` | Combining Haar with log/opponent chromaticity is a materially new interaction and may be probed immediately. | Rejected. Aligned Haar lost C1 F1 `-0.061779` to its control and added `119` restricted FP; CCR reached AUROC `0.535520`, changed C1 F1 `-0.026845`, and beat both controls in only `2/5` folds. For fixed linear operators, `H(A log RGB) = A(H log RGB)`, so Haar-on-log-opponent is not an interaction. The CCR stop rule also explicitly forbids post-failure signed/magnitude and derivative-kernel sweeps. | Closed independently of label status. Reopen only for a mathematically different observable supported by a new measured precondition. |
-| `B21-01` | `CLOSED_FAIL` | A hybrid cannot beat B9 because the previous local branches already exhausted spatial evidence. | The premise is too broad, but exact B21 fails its class-1 gate. On the same fold/seed/state, spatial versus direct changes accuracy `0.867800 -> 0.880417` and macro-F1 `0.839621 -> 0.846775`, while C1 F1 falls `0.691892 -> 0.674033`, C1 TP `64 -> 61`, and `2 -> 1` rises `15 -> 17`. Adapter p95 residual is `0.032020`; gradients, updates and strict reload are valid, so this is objective/routing failure rather than collapse. | Exact B21-A0 never reruns, retunes or opens validation/test. A successor must preserve class-1 decisions structurally or route a distinct expert; generic all-sample ConvPass is closed. |
-| `B22-01` | `OPEN_DIAGNOSTIC` | B21's useful spatial representation may be hidden by a single long-tail classifier, but another signed residual could again buy precision by losing C1 recall. | The arm disagreement is complementary: among 96 held C1 rows, both are correct on 58, direct-only on 6, spatial-only on 3. A descriptive spatial-plus-C1-union oracle reaches macro/C1 F1 `0.851623/0.697917`, but costs two forward passes and is not a selectable result. B22 therefore permits only a single-pass expert whose correction to logit 1 is bounded and non-negative, making C1 recall monotonic by construction. | First run one fixed frozen-feature TRAIN-fold diagnostic versus learned scalar-bias and logits-only controls. Only a feature-specific C1 gain over both controls with bounded FP and macro non-inferiority may authorize a prospectively locked fresh-fold direct/spatial/expert screen. |
+| `B21-01` | `CLOSED_FAIL` | A hybrid cannot beat B9 because the previous local branches already exhausted spatial evidence. | The premise is too broad, but exact B21 fails its class-1 gate. On the same fold/seed/state, spatial versus direct changes accuracy `0.867800 -> 0.880417` and macro-F1 `0.839621 -> 0.846775`, while C1 F1 falls `0.691892 -> 0.674033`, C1 TP `64 -> 61`, and `2 -> 1` rises `15 -> 17`. Adapter p95 residual is `0.032020`; gradients, updates and strict reload are valid. B21 also updated the full 21.6M primary model and stopped after five epochs with LR still `1.458e-4` on a 30-epoch horizon. | Do not rerun the exact short joint-finetune recipe or open its validation/test. A successor may strict-load a verified supervised reference, freeze/preserve its primary path, and use a screen-aligned schedule; that is a different initialization and optimization claim. |
+| `B22-01` | `CLOSED_FAIL` | B21's useful spatial representation may be hidden by a single long-tail classifier, but another signed residual could again buy precision by losing C1 recall. | Frozen spatial B21 has macro/C1 F1 `0.846775/0.674033`. Non-negative bias-only reaches `0.850331/0.691489`; logits-only reaches `0.797839/0.541935`; the 390-parameter feature/logit expert reaches `0.816621/0.584980`, with C1 FP `83` and `2->1=41`. The feature arm fits its binary objective (`0.465207 -> 0.226587`) but expands rather than separates the C1 region. | Exact B22 never retunes. Another post-pooling head on the same final representation is closed. Reopen only with new pre-pooling/local evidence and a matched ordinary-backbone control. |
+| `B23-01` | `LOCKED` | B21 may have failed because it restarted raw DINO, moved the full primary model at the same time as a zero-init adapter, and stopped before meaningful cosine decay. | B23 strict-loads B9 selected EMA `efe735...`, freezes all B9/head parameters, and trains only `170,880` spatial ConvPass parameters. The fixed loss is B9 LDAM-Focal plus `0.25` labelled-C1 margin retention and `0.10` KL trust region. Six epochs use one-epoch warmup and the same six-epoch cosine horizon. FP32 validation is design-exposed and is opened only after exact B9 confusion replay. | Candidate must gain at least `+0.005` C1 F1, retain at least `98%` B9 C1 TP, keep macro within `-0.002`, accuracy within `-0.005`, and not increase `2->1`. Passing authorizes one equal-capacity dephased control; failure closes this exact recipe without tuning. Test remains sealed. |
 | `KD-01` | `GUARD` | B19 proves that raw-DINO relation distillation itself improves SwiftFormer. | False. Stock, control and candidate all receive the same cosine-neighbour relation loss; B19 isolates spatial atoms under that objective, not relation KD versus CE-only. The normalized relation also does not preserve photometric magnitude by construction. | Any causal KD claim requires a separately preregistered matched experiment on prospectively sealed evidence; B19 cannot be reinterpreted as that ablation. |
 | `TELEM-01` | `LOCKED` | Final factor norms and scalar loss curves are enough to diagnose optimization if a successor fails. | Rejected. They prove activation and fit behaviour but cannot distinguish backbone absorption from branch starvation. | B21 records per-role gradient and update/parameter norms plus adapter residual ratios by epoch. Gradient-conflict telemetry is required only when an auxiliary objective exists; B21 deliberately has none. |
 | `LR-01` | `CLOSED` | Exact float equality is safe when a mathematically identical endpoint is produced through multiplication and division. | Rejected by the B18 real-fold counterexample. Endpoint values must be returned explicitly, while interior points retain the original formula; tests must exercise every locked fold horizon. | Permanent scheduler implementation rule. |
@@ -171,6 +177,66 @@ Authoritative artifacts:
 - Preflight: `runs/preflight_b21_convpass_9bbd899_r1/preflight.json`
 - Paired result: `runs/b21_dinov3_convpass_fold0_9bbd899_r1/summary.json`
 - Spatial EMA SHA256: `69b5902735be2b916ff127eed653bc128713398ae6f47db13aa99be4a491857c`
+
+The five-epoch outcome is a valid rejection of its locked Phase-B recipe, but
+not a convergence result. The run used a two-epoch warmup on a 30-epoch cosine
+horizon and ended at LR `1.458193e-4`, still `97.2%` of the `1.5e-4` peak.
+Further, it restarted from the raw DINO asset with a reset head and jointly
+updated all `21,759,749` parameters. The official ConvPass training recipe
+freezes the primary backbone and optimizes adapters plus the task head. A
+successor must therefore fix initialization/optimization causally instead of
+merely adding epochs to this exact run.
+
+## Closed diagnostic: B22 recall-monotonic post-pooling expert
+
+B22 froze the exact B21 spatial EMA and added only a non-negative bounded
+correction to class-1 logits. That construction guarantees that a row already
+predicted as class 1 cannot leave class 1. Three fixed arms used only TRAIN
+fold 0: one scalar bias, six logits-only parameters, and a 390-parameter
+standardized pooled-feature/logit expert.
+
+| Frozen TRAIN-fold arm | Accuracy | Macro-F1 | C1 P/R/F1 | C1 TP/FP | `2 -> 1` |
+|---|---:|---:|---:|---:|---:|
+| Spatial B21 base | `0.880417` | `0.846775` | `0.717647/0.635417/0.674033` | `61/24` | `17` |
+| Bias only | `0.880965` | `0.850331` | `0.706522/0.677083/0.691489` | `65/27` | `18` |
+| Logits only | `0.838727` | `0.797839` | `0.381818/0.875000/0.541935` | `84/130` | `70` |
+| Feature + logits | `0.856829` | `0.816621` | `0.471338/0.770833/0.584980` | `74/83` | `41` |
+
+The bias-only arm nearly recovers direct B21 C1 F1 `0.691892`, but does not
+beat it. The feature arm lowers its fit objective from `0.465207` to `0.226587`
+while widening the C1 region, so the missing information is not recoverable by
+another flexible head over the already pooled representation. No validation or
+test data was constructed.
+
+The first replay correctly failed before training because eval batch `64`
+changed BF16 near-boundary predictions relative to B21's batch `32`, despite
+identical state and preprocessing. Binding B22 to batch `32` restored bit-exact
+replay. Weight hashes alone are therefore insufficient for numerical evidence.
+
+- Result: `runs/b22_recall_monotonic_expert_diag_695b65d_r1/summary.json`
+- Summary SHA256: `e11d0254dcb96e22635ee93b8170ff4fcc43268b6a6e4897e8cb1872399f8c72`
+
+## Locked screen: B23 supervised-B9 guarded ConvPass
+
+B23 corrects two confounds rather than inventing another unrelated backbone.
+The official ConvPass recipe freezes the pretrained primary network and trains
+adapters plus the task head; B21 instead jointly moved the full primary model
+([official training code](https://github.com/JieShibo/PETL-ViT/blob/main/convpass/vtab/train.py)).
+Fine-grained ViT work also supports retaining local/middle-depth patch evidence
+rather than relying only on a final global vector
+([FFVT](https://arxiv.org/abs/2107.02341)). B23 therefore strict-loads the
+selected B9 EMA, freezes both its ViT and already-supervised head, and learns
+only the existing 24 spatial adapters before pooling. Its class-1 retention
+hinge permits stronger class-1 evidence and suppression of hard negatives, but
+penalizes loss of labelled class-1 margin relative to B9. The weak KL term is a
+trust region, not output-only distillation presented as a new representation.
+
+The fixed exploratory screen is six full TRAIN epochs, BF16 training/FP32
+evaluation, batch `16`, accumulation `3`, adapter LR `1.5e-4`, one-epoch warmup
+and six-epoch cosine decay. It must replay B9's exact FP32 validation confusion
+before training, and it never opens test. A pass authorizes the equal-parameter
+dephased topology control; it does not yet establish independent generalization
+or mobile readiness.
 
 ## PRMR R1 closure
 
@@ -448,6 +514,16 @@ labels are user-authoritative real-world ground truth.
 - Reject any promotable hybrid that injects after the last transformer block and immediately average-pools: A0 used this location only as an explicitly conditional operator screen and confirmed why it must not be a final architecture.
 - Matched arms must preserve post-construction RNG state; a shared numeric seed is insufficient if architectures consume different initialization RNG.
 - Probe/full recipes pin `--deterministic` and require an explicit AMP dtype; `auto` is rejected so BF16/FP16 cannot silently change across GPUs under one recipe hash.
+- A numerical replay must also pin evaluation batch size, backend flags and the
+  exact forward/pooling path. B22 showed that BF16 batch `64` versus `32` can
+  flip near-boundary argmax values with the same checkpoint.
+- If the claim is improvement of B9, strict-load its selected supervised EMA or
+  first produce a matched fold-specific pure checkpoint. Raw DINO plus a reset
+  head is not B9 inheritance.
+- A short screen whose last LR remains near its peak closes only that short
+  optimization recipe. It cannot support an asymptotic architecture-ceiling
+  claim; any successor must change the initialization/optimization hypothesis
+  prospectively rather than silently extending the failed run.
 - Archive rejected one-shot tools only through a hashed manifest; do not mass-delete research evidence.
 - `build_classification_grouped_split.py` now groups adjacent `Image_N` frames label-independently (`9bb1232`) and has a cross-class transition regression test. There is still no evidence that this tool generated canonical `class_f`; the fix is a forward provenance guard, not a retrospective corruption claim.
 - Use adjacency/pHash/union graphs only for fold exclusion and component bootstrap. Mixed-component status is not an ambiguity label: only `519/1604` mixed rows are direct endpoints of a cross-label relation, while `1085/1604` inherit the status transitively; prevalence is also class-confounded (`46.88%` for class 1 versus `7.08%` for class 4). This explains why B11's fixed component-Gini diagnostic can look strong while its learned OOF gate reverses.
