@@ -1,10 +1,23 @@
 from __future__ import annotations
 
+import torch
+from torch import nn
+
 from trkh.tools.run_b23_b9_guarded_convpass import (
+    AdapterEMA,
     EPOCHS,
     EXPECTED_B9_CONFUSION,
     _promotion_gate,
 )
+
+
+class _EMAToy(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.adapter_attn = nn.Linear(3, 3)
+        self.adapter_attn.register_buffer("permutation", torch.arange(3))
+        self.adapter_mlp = nn.Linear(3, 3)
+        self.adapter_mlp.register_buffer("permutation", torch.arange(3))
 
 
 def _metrics(*, c1_f1: float, macro: float, accuracy: float, tp: int, two: int):
@@ -33,3 +46,11 @@ def test_promotion_requires_joint_quality_and_transition_gates() -> None:
     assert _promotion_gate(base, passing)["passed"] is True
     assert _promotion_gate(base, failing)["passed"] is False
 
+
+def test_adapter_ema_preserves_integer_topology_buffers() -> None:
+    model = _EMAToy()
+    ema = AdapterEMA(model, 0.995)
+    ema.update(model)
+    ema.copy_to(model)
+    assert len(ema.shadow) == 4
+    assert len(ema.static) == 2

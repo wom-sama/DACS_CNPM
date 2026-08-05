@@ -330,7 +330,15 @@ class AdapterEMA:
     def __init__(self, model: nn.Module, decay: float) -> None:
         self.decay = float(decay)
         self.updates = 0
-        self.shadow = adapter_state_dict(model)
+        state = adapter_state_dict(model)
+        self.shadow = {
+            name: value for name, value in state.items() if value.is_floating_point()
+        }
+        self.static = {
+            name: value for name, value in state.items() if not value.is_floating_point()
+        }
+        if not self.shadow or not self.static:
+            raise B23ContractError("B23 EMA expected floating parameters and integer topology buffers.")
 
     @torch.no_grad()
     def update(self, model: nn.Module) -> None:
@@ -340,9 +348,12 @@ class AdapterEMA:
         for name, shadow in self.shadow.items():
             value = current[name].detach().cpu()
             shadow.mul_(decay).add_(value, alpha=1.0 - decay)
+        for name, expected in self.static.items():
+            if not torch.equal(current[name].detach().cpu(), expected):
+                raise B23ContractError(f"B23 static adapter buffer changed: {name}.")
 
     def copy_to(self, model: nn.Module) -> None:
-        load_adapter_state_dict(model, self.shadow)
+        load_adapter_state_dict(model, {**self.static, **self.shadow})
 
 
 def _adapter_norm(model: nn.Module) -> float:
@@ -448,6 +459,9 @@ def _preflight(args: argparse.Namespace, repo: Path, git: Mapping[str, Any]) -> 
         raise B23ContractError("B23 preflight gradients escaped the adapters.")
     if not bool(torch.isfinite(loss).item()):
         raise B23ContractError("B23 preflight loss is non-finite.")
+    ema = AdapterEMA(model, EMA_DECAY)
+    ema.update(model)
+    ema.copy_to(model)
     payload = {
         "schema_version": 1,
         "protocol_id": PROTOCOL_ID,
@@ -469,6 +483,8 @@ def _preflight(args: argparse.Namespace, repo: Path, git: Mapping[str, Any]) -> 
             "step_zero_max_abs": parity,
             "gradient_parameter_count": len(gradient_names),
             "gradient_adapter_only": True,
+            "ema_float_tensors": len(ema.shadow),
+            "ema_static_integer_buffers": len(ema.static),
         },
         "loss_probe": {name: float(value.float().cpu()) for name, value in parts.items()},
         "runtime": {
