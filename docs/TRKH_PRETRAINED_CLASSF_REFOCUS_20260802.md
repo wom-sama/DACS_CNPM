@@ -33,9 +33,13 @@
   point estimates and false-positive boundary, but its 1,152-dimensional
   readout hits the fixed solver limit in three folds and fails the unchanged
   bootstrap harm guard.
-- Open B25 only to resolve that numerical question: reuse the frozen B24
-  descriptors and exact objective/gate, changing only `max_iter 2000 -> 10000`.
-  It reads no images, validation or test and cannot relax a threshold.
+- Close B25 after the solver-only resolution: all folds converge, no argmax
+  changes, and the unchanged bootstrap guard still fails. ConvNeXt remains
+  useful mechanism evidence but is not authorized as a teacher.
+- Open B26: retain B9 bit-exact and add one shared 64-dimensional decoder in
+  which five persistent class queries read frozen patch tokens after blocks
+  3/7/11. This is sample-specific, multi-depth and one-way; the primary ViT
+  never attends back to the queries.
 
 ### Objection and decision state
 
@@ -60,7 +64,8 @@ Update rows in place; do not append chronology. States move `OPEN -> LOCKED -> C
 | `B22-01` | `CLOSED_FAIL` | B21's useful spatial representation may be hidden by a single long-tail classifier, but another signed residual could again buy precision by losing C1 recall. | Frozen spatial B21 has macro/C1 F1 `0.846775/0.674033`. Non-negative bias-only reaches `0.850331/0.691489`; logits-only reaches `0.797839/0.541935`; the 390-parameter feature/logit expert reaches `0.816621/0.584980`, with C1 FP `83` and `2->1=41`. The feature arm fits its binary objective (`0.465207 -> 0.226587`) but expands rather than separates the C1 region. | Exact B22 never retunes. Another post-pooling head on the same final representation is closed. Reopen only with new pre-pooling/local evidence and a matched ordinary-backbone control. |
 | `B23-01` | `CLOSED_FAIL` | B21 may have failed because it restarted raw DINO, moved the full primary model at the same time as a zero-init adapter, and stopped before meaningful cosine decay. | B23 removed all three confounds: it strict-loaded B9, froze all B9/head parameters, trained only `170,880` adapters and completed the matched six-epoch cosine. B9 macro/C1 F1 `0.876324/0.701149` fell to `0.870704/0.687679`; C1 TP `122 -> 120`, restricted FP `68 -> 71`, and `2 -> 1` `41 -> 45`. Only 18 validation argmaxes changed and 13 were correct-to-wrong. | Do not tune B23 LR/width/loss/epochs or repeat a uniform all-patch ConvPass. A successor needs sample-specific regional evidence or a materially different local teacher, with its signal measured before training. |
 | `B24-01` | `CLOSED_FAIL` | A locally biased DINOv3 teacher may contain complementary maturity cues that uniform adapters cannot create, but trying multiple backbones/fusions after seeing results would be a sweep. | ConvNeXt-only is worse than raw DINO, while standardized fusion raises macro/C1 F1 `0.802076/0.517520 -> 0.818554/0.542021`, retains C1 TP `288 -> 287`, and reduces restricted FP `317 -> 268`. Macro delta CI is positive, but pair-AUROC lower CI is `-0.005649` versus the `-0.004` guard; fusion folds 1/3/4 hit `2000` iterations. | No new backbone, feature interface or gate change. B25 may change only the solver ceiling to establish the same objective's converged result; B24 itself never promotes. |
-| `B25-01` | `LOCKED` | The B24 point gain may be a partially optimized readout artifact rather than stable complementary representation evidence. | Reuse exact B13/B24 arrays and B24 gate; keep balanced multinomial LBFGS, standardization, `C=1`, tolerance `1e-8`, folds and 5,000 bootstrap draws. Change only maximum iterations `2000 -> 10000`. | All five folds must converge and the unchanged B24 gate must pass. Failure closes the exact ConvNeXt-T teacher route; no validation/test/full-train permission. |
+| `B25-01` | `CLOSED_FAIL` | The B24 point gain may be a partially optimized readout artifact rather than stable complementary representation evidence. | Solver-only B25 converges in `1735/2110/1971/2053/2044` iterations. Scores move by at most `0.001093` but zero argmax changes; metrics and bootstrap intervals remain identical, so the pair-AUROC lower CI still fails. | Exact ConvNeXt-T teacher route is closed. Its descriptive FP reduction may inform the problem statement, but cannot supervise or select a successor. |
+| `B26-01` | `LOCKED` | Uniform local mixing fails, final-token selection is deployment-closed, and old no-pretrain deep prompts suppressed C1 recall; a pretrained successor must add regional evidence without perturbing B9. | Five 64-D persistent queries use a shared cross-attention/FFN to read frozen B9 patch tokens after blocks `3/7/11`. Information is one-way, the B9 path/head is bit-exact, the output residual is bounded to `±0.5`, and only `58,753` parameters train. Twelve epochs use official-inspired SGD `0.005`, two-epoch warmup and a matched cosine horizon, with explicit C1-margin retention and rival hard-negative terms. | Require C1 F1 `+0.005`, macro `>=-0.002`, accuracy `>=-0.005`, C1 TP `>=98%`, restricted FP `>=5%` lower, no `2->1` increase, and active nonuniform attention. Pass authorizes one mean-token capacity control; failure closes exact B26 without tuning. Test stays sealed. |
 | `KD-01` | `GUARD` | B19 proves that raw-DINO relation distillation itself improves SwiftFormer. | False. Stock, control and candidate all receive the same cosine-neighbour relation loss; B19 isolates spatial atoms under that objective, not relation KD versus CE-only. The normalized relation also does not preserve photometric magnitude by construction. | Any causal KD claim requires a separately preregistered matched experiment on prospectively sealed evidence; B19 cannot be reinterpreted as that ablation. |
 | `TELEM-01` | `LOCKED` | Final factor norms and scalar loss curves are enough to diagnose optimization if a successor fails. | Rejected. They prove activation and fit behaviour but cannot distinguish backbone absorption from branch starvation. | B21 records per-role gradient and update/parameter norms plus adapter residual ratios by epoch. Gradient-conflict telemetry is required only when an auxiliary objective exists; B21 deliberately has none. |
 | `LR-01` | `CLOSED` | Exact float equality is safe when a mathematically identical endpoint is produced through multiplication and division. | Rejected by the B18 real-fold counterexample. Endpoint values must be returned explicitly, while interior points retain the original formula; tests must exercise every locked fold horizon. | Permanent scheduler implementation rule. |
@@ -294,13 +299,45 @@ ceiling, so the exact screen cannot promote despite its useful point evidence.
 - Result: `runs/b24_dinov3_convnext_train_oof_9433474_r1/summary.json`
 - Summary SHA256: `9de8cd82ccd0a8fb7be7a3e53bc6533c1f0707efe9866bff35db33666d6c5c7e`
 
-## Locked numerical resolution: B25
+## Closed numerical resolution: B25
 
 B25 changes no representation, sample, fold, preprocessing, objective,
 regularization or gate. It reuses the exact retained B13 DINO and B24 ConvNeXt
 descriptors and raises only LBFGS `max_iter` from `2000` to `10000`. This is the
 sole authorized numerical resolution of B24. It does not read any image split;
 validation/test/full training remain forbidden.
+
+B25 converged all fusion folds in `1735/2110/1971/2053/2044` iterations.
+Relative to B24, decision scores move by at most `0.001093` and no argmax
+changes. Therefore every point metric and bootstrap interval is unchanged;
+the sole remaining failure is still the predeclared pair-AUROC harm guard.
+
+- Result: `runs/b25_b24_fusion_readout_df613bc_r1/summary.json`
+- Summary SHA256: `96b7f929188c69c4f25177ba7becfd4269af86a231e3f02d5f9cbe33d551d95f`
+
+## Locked screen: B26 one-way multi-depth evidence queries
+
+B26 uses the class-query idea from Prompt-CAM while correcting the historical
+TRKH failure mode: query tokens can read patch evidence, but the frozen B9
+tokens never attend to queries and therefore cannot drift. FFVT motivates
+multi-depth patch evidence; the recent SubViT result further supports allocating
+extra capacity only to sample-specific discriminative regions rather than
+uniformly refining all tokens
+([Prompt-CAM](https://openaccess.thecvf.com/content/CVPR2025/papers/Chowdhury_Prompt-CAM_Making_Vision_Transformers_Interpretable_for_Fine-Grained_Analysis_CVPR_2025_paper.pdf),
+[FFVT](https://arxiv.org/abs/2107.02341),
+[SubViT](https://arxiv.org/abs/2607.09086)).
+
+The fixed decoder carries five persistent 64-D class queries through one
+shared four-head cross-attention and FFN, reading the frozen patch streams after
+blocks `3`, `7` and `11`. A zero-initialized shared scalar head makes B26 exactly
+B9 at step zero; `0.5*tanh(score)` bounds every class-logit residual. The decoder
+adds `58,753` parameters (`0.272%` of B9) and exposes class-to-patch maps for XAI.
+Training is twelve full TRAIN epochs with SGD `0.005`, momentum `0.9`, weight
+decay `0.001`, two-epoch warmup and the same twelve-epoch cosine horizon. B9 is
+always frozen/eval. LDAM-Focal is augmented by a weight-`1.0` labelled-C1
+margin-retention hinge, weight-`0.10` rival hard-negative hinge and weight-`0.10`
+KL trust region. The design-exposed validation is opened once after exact B9
+replay; test remains sealed.
 
 ## PRMR R1 closure
 
