@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 import copy
+import random
 from pathlib import Path
 
+import numpy as np
 import pytest
 import torch
 from torch import nn
 
 from trkh.tools.run_dinov3_convpass_b21_train_fold import (
     ModelEMA,
+    WORKERS,
+    _seed_worker,
     classification_metrics,
     logical_absolute_path,
     parameter_role,
@@ -136,6 +140,17 @@ def test_parser_exposes_no_epoch_or_validation_override() -> None:
     assert parsed.preflight_artifact is None
     assert not hasattr(parsed, "epochs")
     assert not hasattr(parsed, "validation")
+
+
+def test_two_loader_workers_have_reproducible_python_and_numpy_rng() -> None:
+    assert WORKERS == 2
+    torch.manual_seed(1234)
+    _seed_worker(0)
+    first = (random.random(), float(np.random.random()))
+    torch.manual_seed(1234)
+    _seed_worker(0)
+    second = (random.random(), float(np.random.random()))
+    assert first == second
 
 
 def test_logical_absolute_path_does_not_resolve_format_symlink(tmp_path: Path) -> None:

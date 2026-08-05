@@ -76,7 +76,7 @@ EPOCHS = 5
 BATCH_SIZE = 16
 EVAL_BATCH_SIZE = 32
 ACCUMULATION_STEPS = 3
-WORKERS = 0
+WORKERS = 2
 TASK_LR = 1.5e-4
 BACKBONE_LR_SCALE = 0.1
 WEIGHT_DECAY = 0.05
@@ -189,6 +189,12 @@ def _seed_all(seed: int) -> None:
     torch.manual_seed(int(seed))
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(int(seed))
+
+
+def _seed_worker(_worker_id: int) -> None:
+    worker_seed = int(torch.initial_seed() % (2**32))
+    random.seed(worker_seed)
+    np.random.seed(worker_seed)
 
 
 def _configure_determinism() -> None:
@@ -567,6 +573,10 @@ def _train_arm(
         batch_sampler=sampler,
         num_workers=WORKERS,
         pin_memory=True,
+        worker_init_fn=_seed_worker,
+        generator=torch.Generator(device="cpu").manual_seed(SEED),
+        persistent_workers=WORKERS > 0,
+        prefetch_factor=2 if WORKERS > 0 else None,
     )
     held_loader = DataLoader(
         held_dataset,
@@ -574,6 +584,10 @@ def _train_arm(
         shuffle=False,
         num_workers=WORKERS,
         pin_memory=True,
+        worker_init_fn=_seed_worker,
+        generator=torch.Generator(device="cpu").manual_seed(SEED + 1),
+        persistent_workers=False,
+        prefetch_factor=2 if WORKERS > 0 else None,
     )
     fit_counts = np.bincount(np.asarray(fit_labels), minlength=5).astype(int).tolist()
     criterion = LDAMFocalLoss(
@@ -656,6 +670,19 @@ def _train_arm(
             loss_sum += float(loss.detach().float().item()) * batch_size
             sample_count += batch_size
             if (batch_index + 1) % 100 == 0 or batch_index + 1 == len(train_loader):
+                _atomic_json(
+                    output_dir / "progress.json",
+                    {
+                        "protocol_id": PROTOCOL_ID,
+                        "mode": mode,
+                        "epoch": epoch + 1,
+                        "epochs": EPOCHS,
+                        "batch": batch_index + 1,
+                        "batches": len(train_loader),
+                        "loss": float(loss.detach().float()),
+                        "wall_seconds": time.monotonic() - started,
+                    },
+                )
                 print(
                     f"{mode} epoch={epoch + 1}/{EPOCHS} "
                     f"batch={batch_index + 1}/{len(train_loader)} "
@@ -960,6 +987,8 @@ def run_training(args: argparse.Namespace, output: Path) -> Dict[str, Any]:
         "batch_size": BATCH_SIZE,
         "accumulation_steps": ACCUMULATION_STEPS,
         "effective_batch_size": BATCH_SIZE * ACCUMULATION_STEPS,
+        "data_loader_workers": WORKERS,
+        "worker_seed_policy": "torch_initial_seed_to_python_and_numpy",
         "scheduler_horizon": SCHEDULER_HORIZON,
         "train": True,
         "validation": False,

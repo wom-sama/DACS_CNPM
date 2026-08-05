@@ -129,7 +129,8 @@ The only authorized Phase-B screen uses TRAIN component fold 0, direct then
 spatial, seed `20260805`, five fixed epochs, batch `16`, accumulation `3`, BF16,
 AdamW, task/adapter LR `1.5e-4`, backbone LR `1.5e-5`, weight decay `0.05`, clip
 `0.7`, two-epoch warmup on the fixed 30-epoch cosine horizon, EMA `0.995`,
-tempered class power `0.5`, and B9 LDAM-Focal/augmentation. It constructs no
+two deterministically seeded loader workers, tempered class power `0.5`, and
+B9 LDAM-Focal/augmentation. It constructs no
 validation or test dataset and selects no epoch. Spatial advances only if its
 final EMA has C1-F1 delta at least `+0.005` versus direct **or** reduces restricted
 `0/2/4 -> 1` FP by at least `5%` while retaining at least `98%` of direct C1 TP;
