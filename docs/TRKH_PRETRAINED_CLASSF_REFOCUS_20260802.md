@@ -40,6 +40,10 @@
   only the intended query decoder, but its attention stayed nearly uniform and
   moved only three validation decisions. The exact soft-query decoder therefore
   repeats global token mixing rather than selecting new regional evidence.
+- Open B27 as a TRAIN-only information screen, not a trainable model: select
+  `3/256` regions from raw DINOv3 final CLS attention, subdivide each 16x16 patch
+  into four 8x8 views, and ask whether pretrained embedding-space contrasts add
+  source-fold signal over an otherwise identical half-image-shifted route.
 
 ### Objection and decision state
 
@@ -66,6 +70,7 @@ Update rows in place; do not append chronology. States move `OPEN -> LOCKED -> C
 | `B24-01` | `CLOSED_FAIL` | A locally biased DINOv3 teacher may contain complementary maturity cues that uniform adapters cannot create, but trying multiple backbones/fusions after seeing results would be a sweep. | ConvNeXt-only is worse than raw DINO, while standardized fusion raises macro/C1 F1 `0.802076/0.517520 -> 0.818554/0.542021`, retains C1 TP `288 -> 287`, and reduces restricted FP `317 -> 268`. Macro delta CI is positive, but pair-AUROC lower CI is `-0.005649` versus the `-0.004` guard; fusion folds 1/3/4 hit `2000` iterations. | No new backbone, feature interface or gate change. B25 may change only the solver ceiling to establish the same objective's converged result; B24 itself never promotes. |
 | `B25-01` | `CLOSED_FAIL` | The B24 point gain may be a partially optimized readout artifact rather than stable complementary representation evidence. | Solver-only B25 converges in `1735/2110/1971/2053/2044` iterations. Scores move by at most `0.001093` but zero argmax changes; metrics and bootstrap intervals remain identical, so the pair-AUROC lower CI still fails. | Exact ConvNeXt-T teacher route is closed. Its descriptive FP reduction may inform the problem statement, but cannot supervise or select a successor. |
 | `B26-01` | `CLOSED_FAIL` | Uniform local mixing fails, final-token selection is deployment-closed, and old no-pretrain deep prompts suppressed C1 recall; a pretrained successor must add regional evidence without perturbing B9. | The strict-reloaded query residual is active (`p95=0.02463`) but its normalized attention entropy is `0.995904`, above the nonuniformity limit. Versus B9, macro/C1 F1 changes `0.876324/0.701149 -> 0.875392/0.697143`; C1 TP stays `122`, while restricted FP and `2->1` both rise by two. Only three argmaxes change: two correct class-2 rows become class 1 and one class-3 row is repaired. | Do not tune B26 query width, loss, LR or duration and do not run its mean-token control. A successor must route a sparse, input-dependent set of regions and add sub-patch/pixel information absent from the fixed 16x16 DINO tokens; test stays sealed. |
+| `B27-01` | `LOCKED` | B26 failed because it softly pooled existing tokens; a sparse high-resolution route may expose information lost by patch-16 compression. | Raw frozen DINO selects top `3/256` patches using the maximum final CLS-to-patch attention across heads. Each is split 2x2, bilinearly restored to patch size and passed through the same pretrained patch projection. Three fixed Haar contrasts are projected onto eight fold-fit, label-free DINO PCs. The matched control spatially shifts every selected patch by 8x8 grid cells with identical capacity/readout. | On five source-component folds require C1 F1 `+0.010`, macro `>=-0.002`, pair AUROC `+0.001`, C1 recall `>=98%`, restricted-FP rate `<=95%`, positive C1 change in 4/5 folds, and bootstrap/no-harm superiority over both raw DINO and the shifted route. Pass authorizes router/refiner design only; validation/test/full train remain forbidden. |
 | `KD-01` | `GUARD` | B19 proves that raw-DINO relation distillation itself improves SwiftFormer. | False. Stock, control and candidate all receive the same cosine-neighbour relation loss; B19 isolates spatial atoms under that objective, not relation KD versus CE-only. The normalized relation also does not preserve photometric magnitude by construction. | Any causal KD claim requires a separately preregistered matched experiment on prospectively sealed evidence; B19 cannot be reinterpreted as that ablation. |
 | `TELEM-01` | `LOCKED` | Final factor norms and scalar loss curves are enough to diagnose optimization if a successor fails. | Rejected. They prove activation and fit behaviour but cannot distinguish backbone absorption from branch starvation. | B21 records per-role gradient and update/parameter norms plus adapter residual ratios by epoch. Gradient-conflict telemetry is required only when an auxiliary objective exists; B21 deliberately has none. |
 | `LR-01` | `CLOSED` | Exact float equality is safe when a mathematically identical endpoint is produced through multiplication and division. | Rejected by the B18 real-fold counterexample. Endpoint values must be returned explicitly, while interior points retain the original formula; tests must exercise every locked fold horizon. | Permanent scheduler implementation rule. |
@@ -350,6 +355,19 @@ regional refinement.
 - Result: `runs/b26_evidence_query_b1616ea_r1/summary.json`
 - Summary SHA256: `af425cf1aab177c17008d02eacdd650eb0ce2c8489f23ee174370c0c715b3d9e`
 - Query-state SHA256: `5b7d6cbb8675879bc06950aaa06631f832e88f273aedfa026ff18e6d2547cfe4`
+
+## Locked screen: B27 sparse subpatch information
+
+B27 tests the missing-information premise before another hybrid is trained.
+It follows SubViT's central observation that patch-16 tokenization can discard
+fine detail and that random extra tokens are not sufficient, but uses a fixed
+`K=3` (`1.17%`) and an explicit same-capacity spatially dephased control rather
+than a dataset-specific sweep. The candidate reads new 8x8 pixel regions using
+the frozen DINO patch projection; it does not reweight B9 logits or reuse B26's
+soft attention decoder. Only canonical TRAIN images and the existing five
+source-component folds may be constructed. A pass is evidence to build one
+lightweight deterministic router and bounded refiner; it is not permission to
+open validation or test.
 
 ## PRMR R1 closure
 
