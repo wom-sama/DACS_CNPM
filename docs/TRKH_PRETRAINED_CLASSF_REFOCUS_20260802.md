@@ -25,10 +25,15 @@
 - Close exact `B22`: a scalar class-1 bias almost restores the direct B21
   boundary, while logits/features over-expand class 1. This rejects another
   post-pooling repair, not a pre-pooling specialist initialized from B9.
-- Open one B23 screen: strict-load the selected supervised B9 EMA, freeze its
-  entire ViT/head, and train only the multi-depth spatial ConvPass with a
-  labelled-class-1 margin-retention guard. The six-epoch cosine horizon is
-  aligned with the six-epoch screen; no LR/width/loss sweep is authorized.
+- Close exact B23 after a valid inherited-and-frozen B9 screen: despite a full
+  six-epoch cosine schedule, uniform multi-depth ConvPass reduces macro/C1 F1
+  and increases `2 -> 1`. This closes uniform all-patch local mixing, not the
+  hybrid ceiling.
+- Open B24 as a TRAIN-only representation test, not another training sweep:
+  compare retained raw DINO, frozen DINOv3-ConvNeXt-T and their standardized
+  feature fusion on the existing component folds. A pass authorizes only the
+  design of a lightweight local-teacher/distillation successor; validation and
+  test remain closed.
 
 ### Objection and decision state
 
@@ -51,7 +56,8 @@ Update rows in place; do not append chronology. States move `OPEN -> LOCKED -> C
 | `OBS-01` | `CLOSED_FAIL` | Combining Haar with log/opponent chromaticity is a materially new interaction and may be probed immediately. | Rejected. Aligned Haar lost C1 F1 `-0.061779` to its control and added `119` restricted FP; CCR reached AUROC `0.535520`, changed C1 F1 `-0.026845`, and beat both controls in only `2/5` folds. For fixed linear operators, `H(A log RGB) = A(H log RGB)`, so Haar-on-log-opponent is not an interaction. The CCR stop rule also explicitly forbids post-failure signed/magnitude and derivative-kernel sweeps. | Closed independently of label status. Reopen only for a mathematically different observable supported by a new measured precondition. |
 | `B21-01` | `CLOSED_FAIL` | A hybrid cannot beat B9 because the previous local branches already exhausted spatial evidence. | The premise is too broad, but exact B21 fails its class-1 gate. On the same fold/seed/state, spatial versus direct changes accuracy `0.867800 -> 0.880417` and macro-F1 `0.839621 -> 0.846775`, while C1 F1 falls `0.691892 -> 0.674033`, C1 TP `64 -> 61`, and `2 -> 1` rises `15 -> 17`. Adapter p95 residual is `0.032020`; gradients, updates and strict reload are valid. B21 also updated the full 21.6M primary model and stopped after five epochs with LR still `1.458e-4` on a 30-epoch horizon. | Do not rerun the exact short joint-finetune recipe or open its validation/test. A successor may strict-load a verified supervised reference, freeze/preserve its primary path, and use a screen-aligned schedule; that is a different initialization and optimization claim. |
 | `B22-01` | `CLOSED_FAIL` | B21's useful spatial representation may be hidden by a single long-tail classifier, but another signed residual could again buy precision by losing C1 recall. | Frozen spatial B21 has macro/C1 F1 `0.846775/0.674033`. Non-negative bias-only reaches `0.850331/0.691489`; logits-only reaches `0.797839/0.541935`; the 390-parameter feature/logit expert reaches `0.816621/0.584980`, with C1 FP `83` and `2->1=41`. The feature arm fits its binary objective (`0.465207 -> 0.226587`) but expands rather than separates the C1 region. | Exact B22 never retunes. Another post-pooling head on the same final representation is closed. Reopen only with new pre-pooling/local evidence and a matched ordinary-backbone control. |
-| `B23-01` | `LOCKED` | B21 may have failed because it restarted raw DINO, moved the full primary model at the same time as a zero-init adapter, and stopped before meaningful cosine decay. | B23 strict-loads B9 selected EMA `efe735...`, freezes all B9/head parameters, and trains only `170,880` spatial ConvPass parameters. The fixed loss is B9 LDAM-Focal plus `0.25` labelled-C1 margin retention and `0.10` KL trust region. Six epochs use one-epoch warmup and the same six-epoch cosine horizon. FP32 validation is design-exposed and is opened only after exact B9 confusion replay. | Candidate must gain at least `+0.005` C1 F1, retain at least `98%` B9 C1 TP, keep macro within `-0.002`, accuracy within `-0.005`, and not increase `2->1`. Passing authorizes one equal-capacity dephased control; failure closes this exact recipe without tuning. Test remains sealed. |
+| `B23-01` | `CLOSED_FAIL` | B21 may have failed because it restarted raw DINO, moved the full primary model at the same time as a zero-init adapter, and stopped before meaningful cosine decay. | B23 removed all three confounds: it strict-loaded B9, froze all B9/head parameters, trained only `170,880` adapters and completed the matched six-epoch cosine. B9 macro/C1 F1 `0.876324/0.701149` fell to `0.870704/0.687679`; C1 TP `122 -> 120`, restricted FP `68 -> 71`, and `2 -> 1` `41 -> 45`. Only 18 validation argmaxes changed and 13 were correct-to-wrong. | Do not tune B23 LR/width/loss/epochs or repeat a uniform all-patch ConvPass. A successor needs sample-specific regional evidence or a materially different local teacher, with its signal measured before training. |
+| `B24-01` | `LOCKED` | A locally biased DINOv3 teacher may contain complementary maturity cues that uniform adapters cannot create, but trying multiple backbones/fusions after seeing results would be a sweep. | One preregistered TRAIN-only screen uses official DINOv3-ConvNeXt-T final-768 features, retained raw-DINO final-384 features, the fixed component folds and balanced multinomial readout. ConvNeXt-only is a mechanism control; standardized DINO+ConvNeXt fusion is the only gated arm. | Fusion needs C1 F1 gain `>=0.010` or pair-AUROC gain `>=0.003`, macro gain `>=0.002`, bounded bootstrap harm, `>=95%` C1 recall, `<=1.10x` restricted FP rate and stable C1 F1 in at least 3/5 folds. Pass authorizes teacher/distillation design only; fail closes exact ConvNeXt-T route. No validation/test/full-train permission. |
 | `KD-01` | `GUARD` | B19 proves that raw-DINO relation distillation itself improves SwiftFormer. | False. Stock, control and candidate all receive the same cosine-neighbour relation loss; B19 isolates spatial atoms under that objective, not relation KD versus CE-only. The normalized relation also does not preserve photometric magnitude by construction. | Any causal KD claim requires a separately preregistered matched experiment on prospectively sealed evidence; B19 cannot be reinterpreted as that ablation. |
 | `TELEM-01` | `LOCKED` | Final factor norms and scalar loss curves are enough to diagnose optimization if a successor fails. | Rejected. They prove activation and fit behaviour but cannot distinguish backbone absorption from branch starvation. | B21 records per-role gradient and update/parameter norms plus adapter residual ratios by epoch. Gradient-conflict telemetry is required only when an auxiliary objective exists; B21 deliberately has none. |
 | `LR-01` | `CLOSED` | Exact float equality is safe when a mathematically identical endpoint is produced through multiplication and division. | Rejected by the B18 real-fold counterexample. Endpoint values must be returned explicitly, while interior points retain the original formula; tests must exercise every locked fold horizon. | Permanent scheduler implementation rule. |
@@ -216,7 +222,7 @@ replay. Weight hashes alone are therefore insufficient for numerical evidence.
 - Result: `runs/b22_recall_monotonic_expert_diag_695b65d_r1/summary.json`
 - Summary SHA256: `e11d0254dcb96e22635ee93b8170ff4fcc43268b6a6e4897e8cb1872399f8c72`
 
-## Locked screen: B23 supervised-B9 guarded ConvPass
+## Closed screen: B23 supervised-B9 guarded ConvPass
 
 B23 corrects two confounds rather than inventing another unrelated backbone.
 The official ConvPass recipe freezes the pretrained primary network and trains
@@ -231,12 +237,40 @@ hinge permits stronger class-1 evidence and suppression of hard negatives, but
 penalizes loss of labelled class-1 margin relative to B9. The weak KL term is a
 trust region, not output-only distillation presented as a new representation.
 
-The fixed exploratory screen is six full TRAIN epochs, BF16 training/FP32
-evaluation, batch `16`, accumulation `3`, adapter LR `1.5e-4`, one-epoch warmup
-and six-epoch cosine decay. It must replay B9's exact FP32 validation confusion
-before training, and it never opens test. A pass authorizes the equal-parameter
-dephased topology control; it does not yet establish independent generalization
-or mobile readiness.
+The fixed exploratory screen completed six full TRAIN epochs, BF16
+training/FP32 evaluation, batch `16`, accumulation `3`, adapter LR `1.5e-4`,
+one-epoch warmup and six-epoch cosine decay. It replayed B9's exact FP32
+validation confusion before training and never opened test.
+
+| FP32 design-exposed validation | Accuracy | Macro-F1 | C1 P/R/F1 | C1 TP/FP/FN | `2 -> 1` |
+|---|---:|---:|---:|---:|---:|
+| Inherited B9 | `0.912061` | `0.876324` | `0.642105/0.772152/0.701149` | `122/68/36` | `41` |
+| B23 spatial EMA | `0.908431` | `0.870704` | `0.628272/0.759494/0.687679` | `120/71/38` | `45` |
+
+The adapter is active (residual p95 `0.004726`) and strict reload is exact, but
+all class-1 advancement gates fail. Only 18 argmaxes change: 13 move from
+correct to wrong and four from wrong to correct; the dominant harms are four
+new true-class-2 predictions into class 1 and four true-class-3 predictions
+into class 4. Thus the corrected optimization does not rescue uniform local
+mixing. A descriptive scalar class-1 bias over B9 peaks at only `0.703170` C1
+F1, so calibration alone cannot reach the target either.
+
+- Result: `runs/b23_b9_guarded_convpass_5a1c310_r1/summary.json`
+- Summary SHA256: `da68b1ee75bd4dd1db674ce459bc0dd6f681d92917d6ec99740a98479c5fbcfb`
+
+## Locked screen: B24 DINOv3-ConvNeXt local-teacher signal
+
+B24 asks one bounded question before another hybrid is designed: does an
+official locally biased DINOv3 ConvNeXt-T representation add complementary
+TRAIN-only signal to the retained raw DINO-S representation? It strict-loads
+the official `27,820,128`-parameter ConvNeXt-T asset, extracts only its final
+768-dimensional descriptor using the released 224-pixel preprocessing, and
+uses the existing source-component folds. The retained DINO descriptor and OOF
+scores must replay byte-exactly. ConvNeXt-only is reported as a mechanism
+control; only the predeclared standardized 384+768 fusion is gated. This is a
+teacher oracle screen, not a mobile architecture or permission to deploy two
+backbones. A pass permits designing a single-backbone distillation/region
+student; failure closes this exact teacher route without trying S/B/L variants.
 
 ## PRMR R1 closure
 
