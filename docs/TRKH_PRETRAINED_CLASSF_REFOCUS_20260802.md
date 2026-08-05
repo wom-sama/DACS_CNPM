@@ -40,10 +40,10 @@
   only the intended query decoder, but its attention stayed nearly uniform and
   moved only three validation decisions. The exact soft-query decoder therefore
   repeats global token mixing rather than selecting new regional evidence.
-- Open B27 as a TRAIN-only information screen, not a trainable model: select
-  `3/256` regions from raw DINOv3 final CLS attention, subdivide each 16x16 patch
-  into four 8x8 views, and ask whether pretrained embedding-space contrasts add
-  source-fold signal over an otherwise identical half-image-shifted route.
+- Close B27: max-over-head CLS attention selected border patches too often and
+  the high-resolution descriptor underperformed both raw DINO and its shifted
+  control. Open B28 with exactly one change: choose the attention head whose
+  top-3 token removal most reduces the cross-fitted predicted-class margin.
 
 ### Objection and decision state
 
@@ -70,7 +70,8 @@ Update rows in place; do not append chronology. States move `OPEN -> LOCKED -> C
 | `B24-01` | `CLOSED_FAIL` | A locally biased DINOv3 teacher may contain complementary maturity cues that uniform adapters cannot create, but trying multiple backbones/fusions after seeing results would be a sweep. | ConvNeXt-only is worse than raw DINO, while standardized fusion raises macro/C1 F1 `0.802076/0.517520 -> 0.818554/0.542021`, retains C1 TP `288 -> 287`, and reduces restricted FP `317 -> 268`. Macro delta CI is positive, but pair-AUROC lower CI is `-0.005649` versus the `-0.004` guard; fusion folds 1/3/4 hit `2000` iterations. | No new backbone, feature interface or gate change. B25 may change only the solver ceiling to establish the same objective's converged result; B24 itself never promotes. |
 | `B25-01` | `CLOSED_FAIL` | The B24 point gain may be a partially optimized readout artifact rather than stable complementary representation evidence. | Solver-only B25 converges in `1735/2110/1971/2053/2044` iterations. Scores move by at most `0.001093` but zero argmax changes; metrics and bootstrap intervals remain identical, so the pair-AUROC lower CI still fails. | Exact ConvNeXt-T teacher route is closed. Its descriptive FP reduction may inform the problem statement, but cannot supervise or select a successor. |
 | `B26-01` | `CLOSED_FAIL` | Uniform local mixing fails, final-token selection is deployment-closed, and old no-pretrain deep prompts suppressed C1 recall; a pretrained successor must add regional evidence without perturbing B9. | The strict-reloaded query residual is active (`p95=0.02463`) but its normalized attention entropy is `0.995904`, above the nonuniformity limit. Versus B9, macro/C1 F1 changes `0.876324/0.701149 -> 0.875392/0.697143`; C1 TP stays `122`, while restricted FP and `2->1` both rise by two. Only three argmaxes change: two correct class-2 rows become class 1 and one class-3 row is repaired. | Do not tune B26 query width, loss, LR or duration and do not run its mean-token control. A successor must route a sparse, input-dependent set of regions and add sub-patch/pixel information absent from the fixed 16x16 DINO tokens; test stays sealed. |
-| `B27-01` | `LOCKED` | B26 failed because it softly pooled existing tokens; a sparse high-resolution route may expose information lost by patch-16 compression. | Raw frozen DINO selects top `3/256` patches using the maximum final CLS-to-patch attention across heads. Each is split 2x2, bilinearly restored to patch size and passed through the same pretrained patch projection. Three fixed Haar contrasts are projected onto eight fold-fit, label-free DINO PCs. The matched control spatially shifts every selected patch by 8x8 grid cells with identical capacity/readout. | On five source-component folds require C1 F1 `+0.010`, macro `>=-0.002`, pair AUROC `+0.001`, C1 recall `>=98%`, restricted-FP rate `<=95%`, positive C1 change in 4/5 folds, and bootstrap/no-harm superiority over both raw DINO and the shifted route. Pass authorizes router/refiner design only; validation/test/full train remain forbidden. |
+| `B27-01` | `CLOSED_FAIL` | B26 failed because it softly pooled existing tokens; a sparse high-resolution route may expose information lost by patch-16 compression. | Max-over-head attention has mean entropy `0.889948`, but `49.85%` of its selected patches fall in the outer two grid cells and the most frequent top-1 sites lie on row 0/column 0. Candidate-minus-base macro/C1 F1/pair-AUROC is `-0.003302/-0.007406/-0.001741`; restricted FP rises `317 -> 337`. The spatially shifted control is also better than the candidate by `0.004326` C1 F1. | Close the max-head route and do not sweep K, subdivision or PCA. This does not close subpatch information because the matched route test failed. One successor may replace only head aggregation with prospectively defined decision-margin degradation. |
+| `B28-01` | `LOCKED` | Feature-distance head selection from SubViT may still favor DINO outliers irrelevant to the five-class boundary; the router teacher must target the actual predicted-class margin without using the row label. | For each source-fold-held row, remove each head's top-3 tokens, rerun frozen DINO, score the degraded descriptor with that fold's retained balanced readout, and choose the head producing the largest predicted-top1-versus-runner-up margin drop. A 32-row probe changes the complete route on `81.25%` of rows, lowers border selection `66.7% -> 55.2%`, and finds positive margin degradation on `93.75%`. All other B27 equations and gates remain unchanged. | Pass authorizes one deterministic router/refiner design only. Failure closes this raw-DINO final-attention subpatch family on current evidence. No validation/test/full train. |
 | `KD-01` | `GUARD` | B19 proves that raw-DINO relation distillation itself improves SwiftFormer. | False. Stock, control and candidate all receive the same cosine-neighbour relation loss; B19 isolates spatial atoms under that objective, not relation KD versus CE-only. The normalized relation also does not preserve photometric magnitude by construction. | Any causal KD claim requires a separately preregistered matched experiment on prospectively sealed evidence; B19 cannot be reinterpreted as that ablation. |
 | `TELEM-01` | `LOCKED` | Final factor norms and scalar loss curves are enough to diagnose optimization if a successor fails. | Rejected. They prove activation and fit behaviour but cannot distinguish backbone absorption from branch starvation. | B21 records per-role gradient and update/parameter norms plus adapter residual ratios by epoch. Gradient-conflict telemetry is required only when an auxiliary objective exists; B21 deliberately has none. |
 | `LR-01` | `CLOSED` | Exact float equality is safe when a mathematically identical endpoint is produced through multiplication and division. | Rejected by the B18 real-fold counterexample. Endpoint values must be returned explicitly, while interior points retain the original formula; tests must exercise every locked fold horizon. | Permanent scheduler implementation rule. |
@@ -356,7 +357,7 @@ regional refinement.
 - Summary SHA256: `af425cf1aab177c17008d02eacdd650eb0ce2c8489f23ee174370c0c715b3d9e`
 - Query-state SHA256: `5b7d6cbb8675879bc06950aaa06631f832e88f273aedfa026ff18e6d2547cfe4`
 
-## Locked screen: B27 sparse subpatch information
+## Closed screen: B27 sparse subpatch information
 
 B27 tests the missing-information premise before another hybrid is trained.
 It follows SubViT's central observation that patch-16 tokenization can discard
@@ -368,6 +369,27 @@ soft attention decoder. Only canonical TRAIN images and the existing five
 source-component folds may be constructed. A pass is evidence to build one
 lightweight deterministic router and bounded refiner; it is not permission to
 open validation or test.
+
+The locked run failed. Candidate accuracy/macro/C1 F1 was
+`0.855158/0.798774/0.510114` versus raw DINO
+`0.858178/0.802076/0.517520`; restricted FP increased `317 -> 337` and all
+information gates failed. Only one of five folds improved C1 F1 materially.
+The dephased route reached C1 F1 `0.514440`, so extra readout capacity cannot
+explain the failure. The route changed `319` base decisions with `160`
+correct-to-wrong and `135` wrong-to-correct.
+
+- Result: `runs/b27_sparse_subpatch_train_oof_bfa1aee_r1/summary.json`
+- Summary SHA256: `22af39f72fe9e51b6a3cfd83be785131b26e0cd5afd471949cc0acdd3f3f6f99`
+
+## Locked screen: B28 margin-degradation subpatch teacher
+
+B28 keeps B27's raw DINO, `K=3`, 2x2 subdivision, pretrained patch projection,
+three embedding-space contrasts, PCA/readout, source folds, shifted control and
+promotion gate. It changes only the selector. Each held row uses its already
+retained fold-specific readout to define the predicted top-1/runner-up margin;
+labels are not inputs to head selection. The head whose token removal maximally
+reduces that margin supplies the route. This is a boundary-targeted adaptation
+of SubViT's degradation teacher, not a head/K sweep.
 
 ## PRMR R1 closure
 
