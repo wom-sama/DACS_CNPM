@@ -44,7 +44,10 @@ TRAIN_STEPS = 400
 LEARNING_RATE = 0.03
 WEIGHT_DECAY = 0.01
 POSITIVE_WEIGHT_POWER = 0.5
-EVAL_BATCH_SIZE = 64
+# BF16 kernels may change their reduction path with batch geometry.  Bind the
+# replay to the exact B21 evaluation batch so the frozen checkpoint logits are
+# an auditable continuation rather than a numerically adjacent re-evaluation.
+EVAL_BATCH_SIZE = b21.EVAL_BATCH_SIZE
 WORKERS = 2
 EXPECTED_SPATIAL_SHA256 = (
     "69b5902735be2b916ff127eed653bc128713398ae6f47db13aa99be4a491857c"
@@ -528,4 +531,3 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

@@ -11,9 +11,11 @@ from trkh.models.recall_monotonic_expert_b22 import (
     LOGITS_ONLY,
 )
 from trkh.tools.diagnose_b22_recall_monotonic_expert import (
+    EVAL_BATCH_SIZE,
     evaluate_diagnostic_gate,
     focus_log_odds,
 )
+from trkh.tools import run_dinov3_convpass_b21_train_fold as b21
 
 
 def _metrics(*, accuracy: float, macro: float, f1: float, recall: float, fp: int, two: int):
@@ -67,6 +69,10 @@ def test_focus_log_odds_matches_binary_log_probability_ratio() -> None:
     assert torch.equal(observed, expected)
 
 
+def test_b22_replay_is_bound_to_exact_b21_eval_batch_geometry() -> None:
+    assert EVAL_BATCH_SIZE == b21.EVAL_BATCH_SIZE == 32
+
+
 def test_gate_passes_only_feature_specific_recall_safe_gain() -> None:
     arms, spatial = _passing_payload()
     result = evaluate_diagnostic_gate(arms, spatial_metrics=spatial)
@@ -91,4 +97,3 @@ def test_gate_fails_closed(mutation: str) -> None:
         arms[FEATURE_LOGITS]["parameter_count"] = 391
     result = evaluate_diagnostic_gate(arms, spatial_metrics=spatial)
     assert result["passed"] is False
-
