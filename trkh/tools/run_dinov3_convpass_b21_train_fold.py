@@ -510,7 +510,11 @@ def _split_batch(batch: Any) -> tuple[Tensor, Tensor]:
 def _build_datasets(
     train_root: Path,
     assignment: Mapping[str, Any],
+    *,
+    fold: int = FOLD,
 ) -> tuple[Subset, Subset, list[str], list[int]]:
+    if int(fold) not in range(5):
+        raise ValueError("fold must be in 0..4")
     train_transform, eval_transform = build_transforms()
     train_dataset = ClassificationFolderDataset(
         train_root,
@@ -538,8 +542,8 @@ def _build_datasets(
         assignment_labels=assignment["labels"],
     )
     folds = assignment["folds"]
-    fit_positions = np.flatnonzero(folds != FOLD).tolist()
-    held_positions = np.flatnonzero(folds == FOLD).tolist()
+    fit_positions = np.flatnonzero(folds != int(fold)).tolist()
+    held_positions = np.flatnonzero(folds == int(fold)).tolist()
     fit_indices = [assignment_indices[position] for position in fit_positions]
     held_indices = [eval_assignment_indices[position] for position in held_positions]
     fit_labels = [int(assignment["labels"][position]) for position in fit_positions]
@@ -556,16 +560,25 @@ def _train_arm(
     held_paths: Sequence[str],
     fit_labels: Sequence[int],
     output_dir: Path,
+    epochs: int = EPOCHS,
+    scheduler_horizon: int = SCHEDULER_HORIZON,
+    seed: int = SEED,
+    protocol_id: str = PROTOCOL_ID,
+    checkpoint_stem: str | None = None,
 ) -> Dict[str, Any]:
+    if not 1 <= int(epochs) <= int(scheduler_horizon):
+        raise ValueError("epochs must be within the scheduler horizon")
+    if checkpoint_stem is not None and not checkpoint_stem.replace("_", "").isalnum():
+        raise ValueError("checkpoint_stem may contain only letters, numbers and '_'")
     device = torch.device("cuda")
-    _seed_all(SEED)
+    _seed_all(seed)
     sampler = TemperedClassBatchSampler(
         fit_labels,
         batch_size=BATCH_SIZE,
         num_classes=5,
         power=0.5,
         epoch_multiplier=1.0,
-        seed=SEED,
+        seed=seed,
         drop_last=False,
     )
     train_loader = DataLoader(
@@ -574,7 +587,7 @@ def _train_arm(
         num_workers=WORKERS,
         pin_memory=True,
         worker_init_fn=_seed_worker,
-        generator=torch.Generator(device="cpu").manual_seed(SEED),
+        generator=torch.Generator(device="cpu").manual_seed(seed),
         persistent_workers=WORKERS > 0,
         prefetch_factor=2 if WORKERS > 0 else None,
     )
@@ -585,7 +598,7 @@ def _train_arm(
         num_workers=WORKERS,
         pin_memory=True,
         worker_init_fn=_seed_worker,
-        generator=torch.Generator(device="cpu").manual_seed(SEED + 1),
+        generator=torch.Generator(device="cpu").manual_seed(seed + 1),
         persistent_workers=False,
         prefetch_factor=2 if WORKERS > 0 else None,
     )
@@ -620,7 +633,7 @@ def _train_arm(
         optimizer,
         warmup_epochs=WARMUP_EPOCHS,
         warmup_start_factor=0.1,
-        total_epochs=SCHEDULER_HORIZON,
+        total_epochs=scheduler_horizon,
         min_learning_rate=MIN_LR,
         decay_style="cosine",
     )
@@ -630,7 +643,7 @@ def _train_arm(
     finite_updates = True
     started = time.monotonic()
     torch.cuda.reset_peak_memory_stats()
-    for epoch in range(EPOCHS):
+    for epoch in range(epochs):
         sampler.set_epoch(epoch)
         model.train()
         before = parameter_snapshot(model)
@@ -673,10 +686,10 @@ def _train_arm(
                 _atomic_json(
                     output_dir / "progress.json",
                     {
-                        "protocol_id": PROTOCOL_ID,
+                        "protocol_id": protocol_id,
                         "mode": mode,
                         "epoch": epoch + 1,
-                        "epochs": EPOCHS,
+                        "epochs": epochs,
                         "batch": batch_index + 1,
                         "batches": len(train_loader),
                         "loss": float(loss.detach().float()),
@@ -684,7 +697,7 @@ def _train_arm(
                     },
                 )
                 print(
-                    f"{mode} epoch={epoch + 1}/{EPOCHS} "
+                    f"{mode} epoch={epoch + 1}/{epochs} "
                     f"batch={batch_index + 1}/{len(train_loader)} "
                     f"loss={float(loss.detach().float()):.5f} "
                     f"lr={optimizer.param_groups[0]['lr']:.3e}",
@@ -737,8 +750,11 @@ def _train_arm(
         }
     checkpoint: Dict[str, Any] | None = None
     first_logits = logits_matrix[: min(EVAL_BATCH_SIZE, len(logits_matrix))]
-    if mode == SPATIAL_MODE:
-        checkpoint_path = output_dir / "spatial_ema.safetensors"
+    resolved_checkpoint_stem = checkpoint_stem
+    if resolved_checkpoint_stem is None and mode == SPATIAL_MODE:
+        resolved_checkpoint_stem = "spatial_ema"
+    if resolved_checkpoint_stem is not None:
+        checkpoint_path = output_dir / f"{resolved_checkpoint_stem}.safetensors"
         cpu_state = {
             name: value.detach().cpu().contiguous().clone()
             for name, value in evaluation_model.state_dict().items()
@@ -747,8 +763,8 @@ def _train_arm(
             cpu_state,
             str(checkpoint_path),
             metadata={
-                "protocol_id": PROTOCOL_ID,
-                "mode": SPATIAL_MODE,
+                "protocol_id": protocol_id,
+                "mode": mode,
                 "research_track": "pretrained",
                 "dino_sha256": DINO_SHA256,
             },
@@ -757,7 +773,7 @@ def _train_arm(
             "path": str(checkpoint_path.resolve()),
             "sha256": sha256_file(checkpoint_path),
             "state_sha256": state_sha256(cpu_state),
-            "mode": SPATIAL_MODE,
+            "mode": mode,
         }
         del cpu_state
     result = {

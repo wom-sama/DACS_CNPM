@@ -90,6 +90,7 @@ Update rows in place; do not append chronology. States move `OPEN -> LOCKED -> C
 | `B32-01` | `CLOSED_FAIL` | OOF success may disappear on validation or remain below supervised pure B9; attaching ConvNeXt knowledge directly to B9 is not justified. | B32 validates the mechanism versus raw DINO (`+0.019766/+0.021777/+0.031702` accuracy/macro/C1 F1; `+3` TP), but reaches only `0.887455/0.837360/0.583815` versus B9 `0.912061/0.876324/0.701149`, with 18 more restricted FP. | Do not tune raw-primary B32 on validation or run its audits. Its image-only M1 residual may be screened once as a fixed feature beside B9 under source-fold TRAIN readout. |
 | `B33-01` | `CLOSED_FAIL` | B32's M1 residual may contain useful knowledge even though its raw-DINO operating point is weaker than supervised B9. | The apparent TRAIN gain did not generalize. On design-exposed validation, exact B9 / B9-only readout / B9+M1 gives C1 F1 `0.701149 / 0.705202 / 0.656716`; the candidate loses 12 C1 TP while reducing restricted FP by only one versus B9. | The source-fold readout was not end-to-end OOF because both upstream generators had seen all TRAIN rows. Do not tune B33. Any successor must cross-fit every upstream state and evaluate a fold unseen by the primary, auxiliary branch and fusion readout. |
 | `B34-01` | `CLOSED_PASS` | B33 may fail because its upstream states saw all TRAIN, or because the raw-DINO-aligned M1 residual is intrinsically misaligned with a supervised DINO primary. | On held component fold 0, primary / primary-only readout / primary+M1 gives C1 F1 `0.674033 / 0.673367 / 0.684783`. Candidate-minus-control is `+0.003291/+0.004406/+0.011416` accuracy/macro/C1 F1, restricted FP `36 -> 25`, and `2->1` `17 -> 11`; candidate also retains two more TP than the raw primary. | All seven gates pass. This permits one fresh-fold B9-like primary plus a residual trained relative to that primary. Add a prospective pair-AUROC guard because B34 candidate ranking fell `0.978987 -> 0.971702`. Validation/test remain closed. |
+| `B35-01` | `LOCKED` | B34's gain may persist when the supervised primary follows the actual B9 optimization point rather than B21's short spatial proxy. | On component fold 1, train one direct DINO primary for fixed seed-42 epoch 9 under the B9 sampler/loss/EMA/30-epoch schedule; this epoch is selected from historical B9, never from held fold 1. Reuse the fold-1 B30 coupled-KL M1, then fit matched 5-D/10-D readouts only on fit folds. | Require the B34 F1/accuracy/macro/TP/FP/`2->1` gates plus mean pair-AUROC no worse than `-0.005` versus both raw primary and calibration control. Pass permits completing cross-fitted OOF; never validation/test. |
 | `KD-01` | `GUARD` | B19 proves that raw-DINO relation distillation itself improves SwiftFormer. | False. Stock, control and candidate all receive the same cosine-neighbour relation loss; B19 isolates spatial atoms under that objective, not relation KD versus CE-only. The normalized relation also does not preserve photometric magnitude by construction. | Any causal KD claim requires a separately preregistered matched experiment on prospectively sealed evidence; B19 cannot be reinterpreted as that ablation. |
 | `TELEM-01` | `LOCKED` | Final factor norms and scalar loss curves are enough to diagnose optimization if a successor fails. | Rejected. They prove activation and fit behaviour but cannot distinguish backbone absorption from branch starvation. | B21 records per-role gradient and update/parameter norms plus adapter residual ratios by epoch. Gradient-conflict telemetry is required only when an auxiliary objective exists; B21 deliberately has none. |
 | `LR-01` | `CLOSED` | Exact float equality is safe when a mathematically identical endpoint is produced through multiplication and division. | Rejected by the B18 real-fold counterexample. Endpoint values must be returned explicitly, while interior points retain the original formula; tests must exercise every locked fold horizon. | Permanent scheduler implementation rule. |
@@ -633,6 +634,22 @@ F1/TP/FP gates and train its residual directly relative to the B9-like primary.
 - Result: `runs/b34_crossfitted_supervised_m1_7a24f0f_r1/summary.json`
 - Summary SHA256: `426008b8d2a0aa1ccd7cc32c1afdee7f2c8fbf4555946ebdb88d6ad756de8b19`
 - Score SHA256: `2a52de214bf6dd062805a0c655ec73095edfa2917968336d8cca28f9bf22efe2`
+
+## Locked strong-primary fold: B35 B9-like DINO + M1
+
+B35 fixes the next causal question before GPU training. Component fold 1 is
+held out end-to-end. The primary uses direct DINOv3-S, seed 42, B9's tempered
+`n_c^0.5` sampler, LDAM-focal objective, effective batch 48, EMA, and the same
+30-epoch cosine schedule, but stops at fixed epoch 9 because that was the
+historical B9 selection point. Fold-1 metrics cannot select an epoch. The
+preserved B30 coupled-KL M1 state was also trained without fold 1. A balanced
+5-D primary-only readout controls calibration; the 10-D primary+M1 readout is
+the sole candidate.
+
+Besides B34's F1/TP/FP gates, candidate mean pair AUROC must remain within
+`0.005` of both raw primary and calibration control. Passing permits completion
+of the cross-fitted TRAIN OOF only. It does not authorize validation, test,
+audits, finalfit, or a mobile claim.
 
 ## PRMR R1 closure
 
