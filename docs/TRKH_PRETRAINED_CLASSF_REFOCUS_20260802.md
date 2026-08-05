@@ -88,7 +88,7 @@ Update rows in place; do not append chronology. States move `OPEN -> LOCKED -> C
 | `B30-01` | `CLOSED_FAIL` | B29's fusion signal is useful, but coupled KL can transmit harmful teacher margins and its unweighted retention can sacrifice minority TP. | TMORD beats raw DINO C1 F1 by `+0.056022` but loses to coupled KL by C1/macro/accuracy `-0.032447/-0.015821/-0.013577`, loses one TP and adds seven restricted FP. Positive-gain routing covers `78.75%` of pairs with mean `1.446` under cap `2`, so it is insufficiently selective and removes useful non-target structure. | Do not tune cap, C1 weight or gate. Preserve the coupled-KL control as evidence and complete that unchanged equation on TRAIN folds 2--4. |
 | `B31-01` | `CLOSED_PASS` | Fold-0 TP loss may be fold variance rather than a coupled-KL defect; fold 1 independently reverses it and produces a large all-metric gain. | Confirmation folds 2--4 improve accuracy/macro/C1 F1 by `+0.027935/+0.031605/+0.058224`, add two TP and remove 61 restricted FP; C1 improves in 3/3 folds. Whole-component C1-gain CI is `[+0.03018,+0.08997]`. Full five-fold C1 F1 is `0.579051` versus `0.517520`. | Authorizes one train-all/matched exploratory validation of this exact raw-DINO+M1 equation. It does not authorize a B9 graft, test, train+val finalfit or presentation claim. |
 | `B32-01` | `CLOSED_FAIL` | OOF success may disappear on validation or remain below supervised pure B9; attaching ConvNeXt knowledge directly to B9 is not justified. | B32 validates the mechanism versus raw DINO (`+0.019766/+0.021777/+0.031702` accuracy/macro/C1 F1; `+3` TP), but reaches only `0.887455/0.837360/0.583815` versus B9 `0.912061/0.876324/0.701149`, with 18 more restricted FP. | Do not tune raw-primary B32 on validation or run its audits. Its image-only M1 residual may be screened once as a fixed feature beside B9 under source-fold TRAIN readout. |
-| `B33-01` | `LOCKED` | B32's M1 residual may contain useful knowledge even though its raw-DINO operating point is weaker than supervised B9. | Fixed TRAIN residual plus exact B9 logits gives source-fold C1 F1 `0.949318` versus exact B9 `0.902486`, TP `472 -> 487`, restricted FP `74 -> 42`, macro `0.955234 -> 0.976251`; B9-logit-only readout is the matched calibration control. B33 fits one full 10-D readout and evaluates the already exposed validation once. | Require C1 F1 `>=0.72`, `>=+0.005` versus exact B9 and `>=+0.010` versus B9-only readout; TP/FP no worse than B9; accuracy/macro no worse than `-0.002`. Pass opens audits, never test/finalfit. |
+| `B33-01` | `CLOSED_FAIL` | B32's M1 residual may contain useful knowledge even though its raw-DINO operating point is weaker than supervised B9. | The apparent TRAIN gain did not generalize. On design-exposed validation, exact B9 / B9-only readout / B9+M1 gives C1 F1 `0.701149 / 0.705202 / 0.656716`; the candidate loses 12 C1 TP while reducing restricted FP by only one versus B9. | The source-fold readout was not end-to-end OOF because both upstream generators had seen all TRAIN rows. Do not tune B33. Any successor must cross-fit every upstream state and evaluate a fold unseen by the primary, auxiliary branch and fusion readout. |
 | `KD-01` | `GUARD` | B19 proves that raw-DINO relation distillation itself improves SwiftFormer. | False. Stock, control and candidate all receive the same cosine-neighbour relation loss; B19 isolates spatial atoms under that objective, not relation KD versus CE-only. The normalized relation also does not preserve photometric magnitude by construction. | Any causal KD claim requires a separately preregistered matched experiment on prospectively sealed evidence; B19 cannot be reinterpreted as that ablation. |
 | `TELEM-01` | `LOCKED` | Final factor norms and scalar loss curves are enough to diagnose optimization if a successor fails. | Rejected. They prove activation and fit behaviour but cannot distinguish backbone absorption from branch starvation. | B21 records per-role gradient and update/parameter norms plus adapter residual ratios by epoch. Gradient-conflict telemetry is required only when an auxiliary objective exists; B21 deliberately has none. |
 | `LR-01` | `CLOSED` | Exact float equality is safe when a mathematically identical endpoint is produced through multiplication and division. | Rejected by the B18 real-fold counterexample. Endpoint values must be returned explicitly, while interior points retain the original formula; tests must exercise every locked fold horizon. | Permanent scheduler implementation rule. |
@@ -573,6 +573,28 @@ then consists only of the existing supervised B9 backbone, the distilled M1 and
 the saved 10-D readout. No raw DINO or ConvNeXt model is present. The retained
 B9 checkpoint is evaluated directly to obtain ordered validation logits and
 must reproduce its historical predictions exactly.
+
+B33 completed on commit `624b543` and failed every quality gate except the
+restricted-FP nonincrease check. Exact B9, the B9-logit-only calibration
+control, and B9+M1 respectively reach validation accuracy
+`0.912061 / 0.912465 / 0.902783`, macro-F1
+`0.876324 / 0.877177 / 0.861061`, and C1 P/R/F1
+`0.642105/0.772152/0.701149`, `0.648936/0.772152/0.705202`, and
+`0.621469/0.696203/0.656716`. The candidate changes C1 TP `122 -> 110` and
+restricted FP `68 -> 67`; the single-FP reduction is therefore obtained by
+sacrificing recall, not by learning the intended boundary correction.
+
+The TRAIN source-fold score (`0.949318` C1 F1) was optimistic because the
+readout split alone did not cross-fit its inputs: both B9 and the B32 M1 state
+had already trained on all TRAIN rows. This closes exact B33 and invalidates
+that screening shortcut for future fusion promotion. A valid successor needs a
+primary and auxiliary state trained without the held component, followed by a
+fusion rule fitted only on their fit-side outputs. Validation remains
+design-exposed and test remains sealed.
+
+- Result: `runs/b33_b9_m1_fusion_624b543_r1/summary.json`
+- Summary SHA256: `01d35527392338ed1eaf58967f6b3eb1d6c76b75e9e3535e7aa12f0c1500201f`
+- Validation score SHA256: `53549cfd3ce95c17e9f4abee6500294443d0f8cc50ebe17da6ebe0e64cab0d36`
 
 ## PRMR R1 closure
 
