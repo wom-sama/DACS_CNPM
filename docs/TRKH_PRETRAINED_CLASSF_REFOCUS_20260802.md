@@ -52,6 +52,10 @@
 - Lock one B30 fold-1 loss ablation. It keeps the B29 teacher, model,
   initialization, sampler and schedule; only coupled KL versus trust-margin
   residual distillation changes. No architecture/backbone sweep is open.
+- Close B30 TMORD after its valid fold-1 failure. Its coupled-KL control is new
+  positive evidence: it improves every primary metric, retains more C1 TP and
+  removes FP even though the fusion teacher's own C1 metric is worse. Complete
+  only folds 2--4 of the coupled-KL OOF; do not tune either loss.
 
 ### Objection and decision state
 
@@ -81,7 +85,8 @@ Update rows in place; do not append chronology. States move `OPEN -> LOCKED -> C
 | `B27-01` | `CLOSED_FAIL` | B26 failed because it softly pooled existing tokens; a sparse high-resolution route may expose information lost by patch-16 compression. | Max-over-head attention has mean entropy `0.889948`, but `49.85%` of its selected patches fall in the outer two grid cells and the most frequent top-1 sites lie on row 0/column 0. Candidate-minus-base macro/C1 F1/pair-AUROC is `-0.003302/-0.007406/-0.001741`; restricted FP rises `317 -> 337`. The spatially shifted control is also better than the candidate by `0.004326` C1 F1. | Close the max-head route and do not sweep K, subdivision or PCA. This does not close subpatch information because the matched route test failed. One successor may replace only head aggregation with prospectively defined decision-margin degradation. |
 | `B28-01` | `CLOSED_FAIL` | Feature-distance head selection from SubViT may still favor DINO outliers irrelevant to the five-class boundary; the router teacher must target the actual predicted-class margin without using the row label. | The full run confirms a real selector change: positive margin degradation `91.00%`, border selection `52.01% -> 39.05%`, route equality with max-head only `13.77%`. Nevertheless candidate-minus-base macro/C1 F1/pair-AUROC is `-0.001367/-0.005477/-0.000570`, restricted FP rises `317 -> 326`, and only 1/5 C1 folds improves. | Close raw-DINO final-attention plus patch-projection/Haar subpatchs on current evidence. Reopen only with a different measured local representation, not another head/K/PCA selector. |
 | `B29-01` | `CLOSED_FAIL` | B24's useful ConvNeXt complementarity should not require a 27.8M second inference backbone; a fast state-space student may learn its correction. | The fixed-fold pilot is strongly mechanism-positive: candidate-minus-control accuracy/macro/C1 F1 is `+0.020296/+0.020326/+0.028594`, restricted FP falls `69 -> 52`, and strict reload is exact. It fails only locked TP retention (`50 -> 48`). A 5,000-draw whole-component bootstrap keeps accuracy and macro lower bounds positive, while C1 F1 remains uncertain. | Do not rerun ordinary coupled KL or promote a bias tuned on fold 0. A successor may keep the exact backbone/teacher and change only the transfer/calibration equation, then confirm on TRAIN folds not used to choose that equation. Validation/test/full train remain sealed. |
-| `B30-01` | `LOCKED` | B29's fusion signal is useful, but coupled KL can transmit harmful teacher margins and its unweighted retention can sacrifice minority TP. | Fold 1 was fixed before reading its metrics. Coupled-KL control and TMORD candidate share the same official M1 state, DINO primary/fusion teacher, task loss, sampler and six-epoch schedule. TMORD transfers only positive true-vs-rival teacher margin gain (cap `2.0`) and weights C1 margin/retention `4x`. | Require C1 F1 `>=+0.005` versus base and coupled-KL, macro/accuracy deltas `>=-0.002`, no TP loss versus control, at most three added restricted FP, and an active bounded residual. Passing opens only the next unseen TRAIN fold. |
+| `B30-01` | `CLOSED_FAIL` | B29's fusion signal is useful, but coupled KL can transmit harmful teacher margins and its unweighted retention can sacrifice minority TP. | TMORD beats raw DINO C1 F1 by `+0.056022` but loses to coupled KL by C1/macro/accuracy `-0.032447/-0.015821/-0.013577`, loses one TP and adds seven restricted FP. Positive-gain routing covers `78.75%` of pairs with mean `1.446` under cap `2`, so it is insufficiently selective and removes useful non-target structure. | Do not tune cap, C1 weight or gate. Preserve the coupled-KL control as evidence and complete that unchanged equation on TRAIN folds 2--4. |
+| `B31-01` | `LOCKED` | Fold-0 TP loss may be fold variance rather than a coupled-KL defect; fold 1 independently reverses it and produces a large all-metric gain. | Partial OOF folds 0--1 changes base to coupled-KL accuracy/macro/C1 F1 `0.837646/0.782891/0.506912 -> 0.863520/0.813721/0.573604`, TP `110 -> 113`, restricted FP `122 -> 82`, pair AUROC `0.943415 -> 0.955041`. | Train only unchanged folds 2--4. On those confirmation folds require aggregate C1/macro/accuracy gains `>=+0.010/+0.005/+0.005`, no aggregate TP loss, at least ten fewer restricted FP, and C1 gain on at least two folds. Pass authorizes one matched exploratory validation run, never test/full train. |
 | `KD-01` | `GUARD` | B19 proves that raw-DINO relation distillation itself improves SwiftFormer. | False. Stock, control and candidate all receive the same cosine-neighbour relation loss; B19 isolates spatial atoms under that objective, not relation KD versus CE-only. The normalized relation also does not preserve photometric magnitude by construction. | Any causal KD claim requires a separately preregistered matched experiment on prospectively sealed evidence; B19 cannot be reinterpreted as that ablation. |
 | `TELEM-01` | `LOCKED` | Final factor norms and scalar loss curves are enough to diagnose optimization if a successor fails. | Rejected. They prove activation and fit behaviour but cannot distinguish backbone absorption from branch starvation. | B21 records per-role gradient and update/parameter norms plus adapter residual ratios by epoch. Gradient-conflict telemetry is required only when an auxiliary objective exists; B21 deliberately has none. |
 | `LR-01` | `CLOSED` | Exact float equality is safe when a mathematically identical endpoint is produced through multiplication and division. | Rejected by the B18 real-fold counterexample. Endpoint values must be returned explicitly, while interior points retain the original formula; tests must exercise every locked fold horizon. | Permanent scheduler implementation rule. |
@@ -475,6 +480,37 @@ runs a focused unit preflight inside the single command and records source/Git,
 strict reload, score and state hashes. Its gate is the `B30-01` row above.
 Regardless of outcome, validation, test and full training remain closed; a pass
 permits only one additional unseen TRAIN fold.
+
+B30 completed all `618` updates per arm and strict reload was exact. On held
+TRAIN fold 1, raw DINO / coupled KL / TMORD reached C1 F1
+`0.571429/0.659898/0.627451`, macro-F1
+`0.830518/0.865475/0.849654`, and accuracy
+`0.876033/0.902597/0.889020`. Coupled KL raises C1 TP `60 -> 65` and cuts
+restricted FP `47 -> 30`; TMORD reaches `64/37`. The TMORD residual is active
+but smaller (p95 `1.47873` versus KL `2.82174`), and its final task loss is
+higher (`0.04150` versus `0.02915`). Its routing is nearly global: `78.75%` of
+true-vs-rival pairs receive positive teacher gain and mean gain is `1.446` under
+the cap `2.0`.
+
+This rejects the exact positive-margin filter. It discarded useful non-target
+relations even though those relations let task CE produce a student better than
+the teacher's own C1 score. That mechanism is consistent with DKD's finding
+that non-target-class knowledge is a principal source of logit-distillation
+benefit. Do not tune TMORD. Its matched KL arm is retained as prospective fold-1
+evidence for the unchanged B29 equation.
+
+- Result: `runs/b30_tmord_fold1_7c77f68_r1/summary.json`
+- Summary SHA256: `0b788bc94cf5c4bab90c1e7e6b6794df52a95145d519cd49d6f3f798d3857fb2`
+
+## Locked OOF completion: B31 unchanged coupled KL
+
+B31 trains only folds 2--4 with the exact B29 candidate/B30 control equation:
+official M1 initialization, DINO primary, fold-fit DINO+ConvNeXt teacher,
+coupled KL at temperature `4`, the same task/retention weights, tempered sampler
+and complete six-epoch schedule. Folds 0--1 are loaded from their immutable
+score artifacts, not rerun. The primary promotion statistic is the aggregate of
+the previously unseen folds 2--4 under the `B31-01` gate; the five-fold OOF is
+reported secondarily. No validation/test dataset is constructed by B31.
 
 ## PRMR R1 closure
 
