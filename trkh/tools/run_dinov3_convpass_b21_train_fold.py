@@ -823,19 +823,39 @@ def run_preflight(args: argparse.Namespace, output: Path) -> Dict[str, Any]:
     git = _git_snapshot(repo)
     assignment = read_locked_assignment(args.assignment_csv)
     train_root = read_locked_train_root(args.data)
-    _, eval_transform = build_transforms()
-    dataset = ClassificationFolderDataset(
-        train_root,
-        EXPECTED_CLASS_NAMES,
-        transform=eval_transform,
-        split="train_preflight",
+    fit_dataset, held_dataset, _, fit_labels = _build_datasets(train_root, assignment)
+
+    def first_seeded_train_batch() -> tuple[Tensor, Tensor]:
+        sampler = TemperedClassBatchSampler(
+            fit_labels,
+            batch_size=BATCH_SIZE,
+            num_classes=5,
+            power=0.5,
+            seed=SEED,
+            drop_last=False,
+        )
+        loader = DataLoader(
+            fit_dataset,
+            batch_sampler=sampler,
+            num_workers=WORKERS,
+            pin_memory=True,
+            worker_init_fn=_seed_worker,
+            generator=torch.Generator(device="cpu").manual_seed(SEED),
+            persistent_workers=False,
+            prefetch_factor=2,
+        )
+        iterator = iter(loader)
+        images, labels = _split_batch(next(iterator))
+        del iterator, loader
+        return images, labels
+
+    first_images, first_labels = first_seeded_train_batch()
+    second_images, second_labels = first_seeded_train_batch()
+    loader_reproducible = bool(
+        torch.equal(first_labels, second_labels)
+        and torch.equal(first_images, second_images)
     )
-    indices = map_dataset_indices(
-        dataset,
-        data_root=train_root.parent,
-        assignment_paths=assignment["relative_paths"],
-        assignment_labels=assignment["labels"],
-    )
+    del first_images, first_labels, second_images, second_labels
     if not torch.cuda.is_available() or not torch.cuda.is_bf16_supported():
         raise B21ContractError("B21 requires a CUDA GPU with BF16 support.")
     torch.cuda.init()
@@ -919,7 +939,9 @@ def run_preflight(args: argparse.Namespace, output: Path) -> Dict[str, Any]:
         "train": False,
         "validation": False,
         "test": False,
-        "dataset_rows_mapped": len(indices),
+        "dataset_rows_mapped": len(fit_dataset) + len(held_dataset),
+        "loader_workers": WORKERS,
+        "seeded_first_batch_reproducible": loader_reproducible,
         "rng_preserved_after_construction": rng_preserved,
         "identity": identity,
         "parameter_count": sum(parameter.numel() for parameter in model.parameters()),
@@ -933,6 +955,7 @@ def run_preflight(args: argparse.Namespace, output: Path) -> Dict[str, Any]:
         "cuda_peak_allocated_bytes": int(torch.cuda.max_memory_allocated()),
         "passed": bool(
             rng_preserved
+            and loader_reproducible
             and all(identity[key] for key in ("spatial_exact_native", "direct_exact_native"))
             and first_up > 0
             and first_conv == 0
