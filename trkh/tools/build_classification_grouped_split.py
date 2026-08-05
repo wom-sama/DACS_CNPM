@@ -70,7 +70,10 @@ def parse_args() -> argparse.Namespace:
         "--near-id-window",
         type=int,
         default=3,
-        help="Same-class Image_N files with ID distance <= this value stay in the same split.",
+        help=(
+            "All Image_N files with ID distance <= this value stay in the same split, "
+            "including label transitions inside one capture sequence."
+        ),
     )
     parser.add_argument(
         "--disable-group-exact-duplicates",
@@ -182,17 +185,18 @@ def build_groups(
             for index in indices[1:]:
                 union_find.union(first, index)
 
-    by_class_number: Dict[int, List[Tuple[int, int]]] = defaultdict(list)
+    numbered_records: List[Tuple[int, int]] = []
     for index, record in enumerate(records):
         if record.image_number is not None:
-            by_class_number[record.class_id].append((int(record.image_number), index))
+            numbered_records.append((int(record.image_number), index))
     window = max(0, int(near_id_window))
     if window > 0:
-        for items in by_class_number.values():
-            items.sort(key=lambda item: item[0])
-            for (previous_number, previous_index), (number, index) in zip(items, items[1:]):
-                if number - previous_number <= window:
-                    union_find.union(previous_index, index)
+        numbered_records.sort(key=lambda item: item[0])
+        for (previous_number, previous_index), (number, index) in zip(
+            numbered_records, numbered_records[1:]
+        ):
+            if number - previous_number <= window:
+                union_find.union(previous_index, index)
 
     grouped: Dict[int, List[int]] = defaultdict(list)
     for index in range(len(records)):
@@ -493,7 +497,12 @@ def write_report_markdown(output_dir: Path, report: Dict[str, object]) -> None:
     lines.extend(
         [
             "",
-            "This split keeps same-source crops and same-class near-neighbor `Image_N` sequences in one split. It is intended for publication-grade evaluation when no more data can be collected.",
+            (
+                "This split keeps same-source crops and every near-neighbor `Image_N` "
+                "capture sequence in one split, including transitions between class "
+                "labels. It is intended for publication-grade evaluation when no more "
+                "data can be collected."
+            ),
             "",
             "## Largest Group Examples",
             "",
