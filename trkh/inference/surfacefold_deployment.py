@@ -31,6 +31,7 @@ from torch import Tensor, nn
 
 _CPU_PROVIDER = "CPUExecutionProvider"
 _STANDARD_DOMAINS = frozenset(("", "ai.onnx"))
+_FIXED_ORT_TARGET_PLATFORMS = frozenset(("arm", "amd64"))
 
 
 def _sha256_file(path: Path) -> str:
@@ -572,23 +573,47 @@ def _compare_ort_artifacts(
     }
 
 
-def convert_fixed_ort_arm(
+def convert_fixed_ort(
     onnx_path: str | Path,
     output_dir: str | Path,
     arrays: Iterable[np.ndarray],
     *,
+    target_platform: str,
     intra_op_threads: int = 1,
     inter_op_threads: int = 1,
     max_abs_error: float = 1.0e-5,
 ) -> dict[str, object]:
-    """Atomically create a type-reduced ARM Fixed-style ORT-format package."""
+    """Atomically create a type-reduced Fixed-style ORT package for one target."""
 
     tolerance = float(max_abs_error)
     if not math.isfinite(tolerance) or tolerance < 0.0:
         raise ValueError("max_abs_error must be finite and non-negative.")
+    if (
+        type(target_platform) is not str
+        or target_platform not in _FIXED_ORT_TARGET_PLATFORMS
+    ):
+        raise ValueError(
+            "target_platform must be exactly one of {'arm', 'amd64'}, "
+            f"got {target_platform!r}."
+        )
     source = Path(onnx_path).expanduser().absolute()
     source_model = _checked_model(source)
     _standard_opset17_contract(source_model)
+    source_sha256 = _sha256_file(source)
+    conversion_manifest = {
+        "optimization_style": "Fixed",
+        "target_platform": target_platform,
+        "enable_type_reduction": True,
+        "save_optimized_onnx_model": False,
+        "custom_op_library_path": None,
+        "allow_conversion_failures": False,
+    }
+    manifest_bytes = json.dumps(
+        conversion_manifest,
+        ensure_ascii=True,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
     destination = Path(output_dir).expanduser().absolute()
     if destination.exists():
         raise FileExistsError(f"ORT output directory already exists: {destination}")
@@ -601,7 +626,7 @@ def convert_fixed_ort_arm(
             output_dir=stage,
             optimization_styles=[OptimizationStyle.Fixed],
             custom_op_library_path=None,
-            target_platform="arm",
+            target_platform=target_platform,
             save_optimized_onnx_model=False,
             allow_conversion_failures=False,
             enable_type_reduction=True,
@@ -621,6 +646,8 @@ def convert_fixed_ort_arm(
             inter_op_threads=inter_op_threads,
             max_abs_error=tolerance,
         )
+        if _sha256_file(source) != source_sha256:
+            raise RuntimeError("Source ONNX changed during ORT conversion.")
         stage.replace(destination)
     except BaseException:
         shutil.rmtree(stage, ignore_errors=True)
@@ -631,17 +658,58 @@ def convert_fixed_ort_arm(
     return {
         "passed": True,
         "source_onnx_path": str(source),
+        "source_onnx_sha256": source_sha256,
         "ort_path": str(ort_path),
         "ort_sha256": _sha256_file(ort_path),
         "ort_size_bytes": int(ort_path.stat().st_size),
         "config_path": str(config_path),
         "config_sha256": _sha256_file(config_path),
+        "config_size_bytes": int(config_path.stat().st_size),
         "optimization_style": "Fixed",
-        "target_platform": "arm",
+        "target_platform": target_platform,
         "type_reduction": True,
         "providers": [_CPU_PROVIDER],
         "parity": parity,
+        "conversion_manifest": conversion_manifest,
+        "conversion_manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(),
     }
+
+
+def convert_fixed_ort_arm(
+    onnx_path: str | Path,
+    output_dir: str | Path,
+    arrays: Iterable[np.ndarray],
+    *,
+    intra_op_threads: int = 1,
+    inter_op_threads: int = 1,
+    max_abs_error: float = 1.0e-5,
+) -> dict[str, object]:
+    """Compatibility wrapper preserving the exact B17 ARM result schema."""
+
+    result = convert_fixed_ort(
+        onnx_path,
+        output_dir,
+        arrays,
+        target_platform="arm",
+        intra_op_threads=intra_op_threads,
+        inter_op_threads=inter_op_threads,
+        max_abs_error=max_abs_error,
+    )
+    legacy_keys = (
+        "passed",
+        "source_onnx_path",
+        "ort_path",
+        "ort_sha256",
+        "ort_size_bytes",
+        "config_path",
+        "config_sha256",
+        "optimization_style",
+        "target_platform",
+        "type_reduction",
+        "providers",
+        "parity",
+    )
+    return {key: result[key] for key in legacy_keys}
 
 
 def check_ort_mobile_usability(onnx_path: str | Path) -> dict[str, object]:
@@ -807,6 +875,7 @@ __all__ = [
     "benchmark_onnx_vs_ort_cpu",
     "check_ort_mobile_usability",
     "compare_pytorch_ort",
+    "convert_fixed_ort",
     "convert_fixed_ort_arm",
     "export_fixed_opset17_onnx",
     "onnx_topology_fingerprint",

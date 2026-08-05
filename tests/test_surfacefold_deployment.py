@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import copy
+import hashlib
+import json
 from pathlib import Path
 
 import numpy as np
@@ -15,6 +17,7 @@ from trkh.inference.surfacefold_deployment import (
     benchmark_onnx_vs_ort_cpu,
     check_ort_mobile_usability,
     compare_pytorch_ort,
+    convert_fixed_ort,
     convert_fixed_ort_arm,
     export_fixed_opset17_onnx,
     onnx_topology_fingerprint,
@@ -222,8 +225,117 @@ def test_fixed_arm_ort_conversion_and_reload_parity(tmp_path: Path) -> None:
     assert result["parity"]["argmax_mismatches"] == 0
     assert Path(result["ort_path"]).is_file()
     assert Path(result["config_path"]).is_file()
+    assert set(result) == {
+        "passed",
+        "source_onnx_path",
+        "ort_path",
+        "ort_sha256",
+        "ort_size_bytes",
+        "config_path",
+        "config_sha256",
+        "optimization_style",
+        "target_platform",
+        "type_reduction",
+        "providers",
+        "parity",
+    }
     with pytest.raises(FileExistsError):
         convert_fixed_ort_arm(onnx_path, output_dir, [_sample(3)])
+
+
+def test_fixed_ort_targets_share_source_and_bind_exact_conversion_manifest(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _, onnx_path = _export(tmp_path)
+    from trkh.inference import surfacefold_deployment as deployment
+
+    conversion_calls: list[dict[str, object]] = []
+    original_converter = deployment.convert_onnx_models_to_ort
+
+    def capture_conversion(*args, **kwargs):
+        conversion_calls.append(dict(kwargs))
+        return original_converter(*args, **kwargs)
+
+    monkeypatch.setattr(
+        deployment, "convert_onnx_models_to_ort", capture_conversion
+    )
+    results = {
+        target: convert_fixed_ort(
+            onnx_path,
+            tmp_path / f"{target}_package",
+            [_sample(3), _sample(4)],
+            target_platform=target,
+            intra_op_threads=1,
+            inter_op_threads=1,
+        )
+        for target in ("arm", "amd64")
+    }
+
+    source_sha256 = hashlib.sha256(onnx_path.read_bytes()).hexdigest()
+    assert {result["source_onnx_sha256"] for result in results.values()} == {
+        source_sha256
+    }
+    assert len({result["source_onnx_path"] for result in results.values()}) == 1
+    assert len({result["ort_path"] for result in results.values()}) == 2
+    assert len({result["config_path"] for result in results.values()}) == 2
+    expected_common_manifest = {
+        "optimization_style": "Fixed",
+        "enable_type_reduction": True,
+        "save_optimized_onnx_model": False,
+        "custom_op_library_path": None,
+        "allow_conversion_failures": False,
+    }
+    for target, result in results.items():
+        manifest = result["conversion_manifest"]
+        assert manifest == {**expected_common_manifest, "target_platform": target}
+        manifest_bytes = json.dumps(
+            manifest,
+            ensure_ascii=True,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        assert result["conversion_manifest_sha256"] == hashlib.sha256(
+            manifest_bytes
+        ).hexdigest()
+        assert result["target_platform"] == target
+        assert result["parity"]["passed"] is True
+        assert result["parity"]["argmax_mismatches"] == 0
+        assert result["parity"]["max_abs_error"] <= 1.0e-5
+        ort_path = Path(result["ort_path"])
+        config_path = Path(result["config_path"])
+        assert ort_path.is_file() and config_path.is_file()
+        assert result["ort_size_bytes"] == ort_path.stat().st_size > 0
+        assert result["config_size_bytes"] == config_path.stat().st_size > 0
+        assert result["ort_sha256"] == hashlib.sha256(
+            ort_path.read_bytes()
+        ).hexdigest()
+        assert result["config_sha256"] == hashlib.sha256(
+            config_path.read_bytes()
+        ).hexdigest()
+    for target, call in zip(("arm", "amd64"), conversion_calls):
+        assert call["optimization_styles"] == [deployment.OptimizationStyle.Fixed]
+        assert call["target_platform"] == target
+        assert call["enable_type_reduction"] is True
+        assert call["save_optimized_onnx_model"] is False
+        assert call["custom_op_library_path"] is None
+        assert call["allow_conversion_failures"] is False
+
+
+@pytest.mark.parametrize("target", ["ARM", "x64", "", None, True])
+def test_fixed_ort_rejects_nonexact_target_before_writing(
+    target: object, tmp_path: Path
+) -> None:
+    _, onnx_path = _export(tmp_path, f"invalid_{target!s}.onnx")
+    output_dir = tmp_path / f"invalid_target_{target!s}"
+
+    with pytest.raises(ValueError, match="exactly one"):
+        convert_fixed_ort(
+            onnx_path,
+            output_dir,
+            [_sample(3)],
+            target_platform=target,  # type: ignore[arg-type]
+        )
+    assert not output_dir.exists()
 
 
 def test_conversion_rejects_nonfinite_tolerance_before_writing(tmp_path: Path) -> None:
