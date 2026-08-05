@@ -290,7 +290,8 @@ def _preflight(args: argparse.Namespace) -> dict[str, Any]:
         "matched_initial_state": initial_hash == parity_hash,
         "step0_primary_exact": torch.equal(initial, primary.float()),
         "step1_head_gradient": head_grad > 0.0,
-        "step1_backbone_gradient_zero": stem.grad is not None and torch.count_nonzero(stem.grad) == 0,
+        "step1_backbone_gradient_zero": stem.grad is not None
+        and int(torch.count_nonzero(stem.grad)) == 0,
         "focused_tests": bool(tests["passed"]),
     }
     payload = {
