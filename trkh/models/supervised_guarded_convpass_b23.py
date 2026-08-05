@@ -141,7 +141,7 @@ def guarded_adapter_loss(
         F.log_softmax(logits / t, dim=1),
         F.softmax(teacher / t, dim=1),
         reduction="batchmean",
-    ) * (t * t)
+    ).clamp_min(0.0) * (t * t)
     total = (
         task
         + float(retention_weight) * retention

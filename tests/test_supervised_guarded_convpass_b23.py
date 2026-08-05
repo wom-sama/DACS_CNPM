@@ -90,3 +90,19 @@ def test_guard_allows_improved_margin_and_no_class1_batch() -> None:
     assert float(improved_parts["retention"]) == 0.0
     assert float(absent_parts["retention"]) == 0.0
 
+
+def test_numerical_kl_roundoff_cannot_reduce_total_loss() -> None:
+    logits = torch.tensor(
+        [[-0.7599, 0.1994, -0.4695, 0.1094, -0.1592]], dtype=torch.float32
+    )
+    zero_task = lambda values, labels: values.sum() * 0.0
+    total, parts = guarded_adapter_loss(
+        logits,
+        logits.clone(),
+        torch.tensor([0]),
+        zero_task,
+        retention_weight=0.0,
+        distillation_weight=1.0,
+    )
+    assert float(parts["distillation"]) >= 0.0
+    assert float(total) >= 0.0
