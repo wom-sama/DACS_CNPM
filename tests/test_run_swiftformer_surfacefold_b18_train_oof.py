@@ -10,34 +10,35 @@ import timm
 import torch
 from PIL import Image
 
-from trkh.tools import run_swiftformer_surfacefold_b17_train_oof as b17
+from trkh.tools import audit_swiftformer_surfacefold_b18_preflight as preflight_b18
+from trkh.tools import run_swiftformer_surfacefold_b18_train_oof as b18
 
 
 def _base_model() -> torch.nn.Module:
     model = timm.create_model(
-        b17.STUDENT_TIMM_ID,
+        b18.STUDENT_TIMM_ID,
         pretrained=False,
         num_classes=1000,
         drop_rate=0.0,
         drop_path_rate=0.0,
     )
-    b17.reset_locked_five_class_heads(model)
+    b18.reset_locked_five_class_heads(model)
     return model
 
 
 @pytest.fixture(autouse=True)
 def _reset_metric_globals() -> None:
-    b17._METRIC_BACKEND_LOADED = False
-    b17._VALID_BARRIER_TOKENS.clear()
-    b17._PENDING_BARRIER_SEALS.clear()
-    b17._ACTIVE_BARRIER_SEALS.clear()
+    b18._METRIC_BACKEND_LOADED = False
+    b18._VALID_BARRIER_TOKENS.clear()
+    b18._PENDING_BARRIER_SEALS.clear()
+    b18._ACTIVE_BARRIER_SEALS.clear()
 
 
 def _preflight_payload(git: dict[str, object], sources: dict[str, str]) -> dict[str, object]:
     payload = {
         "schema_version": 1,
-        "protocol_id": b17.PROTOCOL_ID,
-        "protocol_sha256": b17.PROTOCOL_SHA256,
+        "protocol_id": b18.PROTOCOL_ID,
+        "protocol_sha256": b18.PROTOCOL_SHA256,
         "mode": "offline_label_free_stock_first_preflight",
         "created_at_unix": 1.0,
         "git": git,
@@ -102,33 +103,33 @@ def _published_preflight(
     git: dict[str, object],
     sources: dict[str, str],
 ) -> dict[str, object]:
-    monkeypatch.setattr(b17, "_repository_root", lambda: tmp_path)
-    directory = tmp_path / "runs" / "preflight_b17_surfacefold_xs_unit"
+    monkeypatch.setattr(b18, "_repository_root", lambda: tmp_path)
+    directory = tmp_path / "runs" / "preflight_b18_surfacefold_xs_unit"
     directory.mkdir(parents=True)
     payload = _preflight_payload(git, sources)
     artifact = directory / "preflight.json"
-    artifact.write_bytes(b17._json_bytes(payload))
-    digest = b17.sha256_file(artifact)
+    artifact.write_bytes(b18._json_bytes(payload))
+    digest = b18.sha256_file(artifact)
     (directory / "preflight.sha256").write_bytes(f"{digest}\n".encode("ascii"))
     return {"artifact": str(artifact.resolve()), "sha256": digest, "payload": payload}
 
 
 def _barrier_token(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> tuple[b17.MetricBarrierToken, list[b17.FinalStateRecord]]:
+) -> tuple[b18.MetricBarrierToken, list[b18.FinalStateRecord]]:
     git = {
         "head": "a" * 40,
-        "branch": b17.EXPECTED_BRANCH,
+        "branch": b18.EXPECTED_BRANCH,
         "status": "",
         "clean": True,
         "head_is_commit": True,
     }
     sources = {"runner": "b" * 64}
     accepted = _published_preflight(tmp_path, monkeypatch, git, sources)
-    monkeypatch.setattr(b17, "_git_contract", lambda: dict(git))
-    monkeypatch.setattr(b17, "_source_hashes", lambda: dict(sources))
-    monkeypatch.setattr(b17, "ARM_PARAMETERS", {arm: 1 for arm in b17.ARMS})
-    monkeypatch.setattr(b17, "ARM_TRAINABLE_PARAMETERS", {arm: 1 for arm in b17.ARMS})
+    monkeypatch.setattr(b18, "_git_contract", lambda: dict(git))
+    monkeypatch.setattr(b18, "_source_hashes", lambda: dict(sources))
+    monkeypatch.setattr(b18, "ARM_PARAMETERS", {arm: 1 for arm in b18.ARMS})
+    monkeypatch.setattr(b18, "ARM_TRAINABLE_PARAMETERS", {arm: 1 for arm in b18.ARMS})
     output = tmp_path / "formal"
     (output / "states").mkdir(parents=True)
     args = Namespace(
@@ -137,27 +138,27 @@ def _barrier_token(
         student_weight=tmp_path / "never_open_student.safetensors",
         dino_weight=tmp_path / "never_open_dino.safetensors",
     )
-    claim = b17.claim_train_authorization_once(
+    claim = b18.claim_train_authorization_once(
         accepted_preflight=accepted,
         git=git,
         sources=sources,
         output=output,
         args=args,
     )
-    records: list[b17.FinalStateRecord] = []
-    for fold in range(b17.FOLDS):
+    records: list[b18.FinalStateRecord] = []
+    for fold in range(b18.FOLDS):
         fold_dir = output / "folds" / f"fold_{fold}"
         fold_dir.mkdir(parents=True)
         exposure = fold_dir / "exposure.npz"
         losses = fold_dir / "loss_curves.npz"
         np.savez(exposure, x=np.asarray([fold]))
         np.savez(losses, x=np.asarray([fold]))
-        for arm in b17.ARMS:
+        for arm in b18.ARMS:
             path = (output / "states" / f"fold_{fold}_{arm}.safetensors").resolve()
-            metadata = b17._metadata_for_state(fold, arm)
-            digest = b17.atomic_safetensors(path, {"weight": torch.tensor([float(fold)])}, metadata)
+            metadata = b18._metadata_for_state(fold, arm)
+            digest = b18.atomic_safetensors(path, {"weight": torch.tensor([float(fold)])}, metadata)
             records.append(
-                b17.FinalStateRecord(
+                b18.FinalStateRecord(
                     state_id=f"fold_{fold}:{arm}",
                     fold=fold,
                     arm=arm,
@@ -166,17 +167,17 @@ def _barrier_token(
                     bytes=path.stat().st_size,
                     parameter_count=1,
                     trainable_parameter_count=1,
-                    mode=b17.ARM_MODES[arm],
-                    metadata_sha256=b17._metadata_sha256(metadata),
-                    exposure_sha256=b17.sha256_file(exposure),
-                    loss_curve_sha256=b17.sha256_file(losses),
+                    mode=b18.ARM_MODES[arm],
+                    metadata_sha256=b18._metadata_sha256(metadata),
+                    exposure_sha256=b18.sha256_file(exposure),
+                    loss_curve_sha256=b18.sha256_file(losses),
                     frozen_projection_sha256="c" * 64,
                     folded_max_abs_error=0.0,
                 )
             )
     reloaded: list[str] = []
     cross_mode = []
-    token = b17.seal_metric_barrier(
+    token = b18.seal_metric_barrier(
         output,
         records,
         accepted_preflight=accepted,
@@ -184,7 +185,7 @@ def _barrier_token(
         args=args,
         git=git,
         sources=sources,
-        counters=dict(b17.ZERO_BARRIER_COUNTERS),
+        counters=dict(b18.ZERO_BARRIER_COUNTERS),
         strict_reload=lambda record: reloaded.append(record.state_id),
         cross_mode_rejection=lambda: cross_mode.append(True),
     )
@@ -206,7 +207,7 @@ def test_preflight_authorization_is_consumed_exactly_once_before_data(
         dino_weight=tmp_path / "dino.safetensors",
     )
     output = tmp_path / "runs" / "formal"
-    first = b17.claim_train_authorization_once(
+    first = b18.claim_train_authorization_once(
         accepted_preflight=accepted,
         git=git,
         sources=sources,
@@ -214,7 +215,7 @@ def test_preflight_authorization_is_consumed_exactly_once_before_data(
         args=args,
     )
     assert (
-        b17.validate_train_authorization_claim(
+        b18.validate_train_authorization_claim(
             first,
             accepted_preflight=accepted,
             git=git,
@@ -224,8 +225,8 @@ def test_preflight_authorization_is_consumed_exactly_once_before_data(
         )
         == first
     )
-    with pytest.raises(b17.B17ContractError, match="already consumed"):
-        b17.claim_train_authorization_once(
+    with pytest.raises(b18.B18ContractError, match="already consumed"):
+        b18.claim_train_authorization_once(
             accepted_preflight=accepted,
             git=git,
             sources=sources,
@@ -234,21 +235,21 @@ def test_preflight_authorization_is_consumed_exactly_once_before_data(
         )
 
 
-def test_reused_authorization_stops_run_before_any_data_access(
+def test_authorization_and_formal_rng_probe_fail_before_any_data_access(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     output = tmp_path / "formal"
     git = {
         "head": "a" * 40,
-        "branch": b17.EXPECTED_BRANCH,
+        "branch": b18.EXPECTED_BRANCH,
         "status": "",
         "clean": True,
         "head_is_commit": True,
     }
-    monkeypatch.setattr(b17, "_git_contract", lambda: git)
-    monkeypatch.setattr(b17, "_source_hashes", lambda: {"formal_runner": "b" * 64})
+    monkeypatch.setattr(b18, "_git_contract", lambda: git)
+    monkeypatch.setattr(b18, "_source_hashes", lambda: {"formal_runner": "b" * 64})
     monkeypatch.setattr(
-        b17,
+        b18,
         "validate_accepted_preflight",
         lambda *_args, **_kwargs: {
             "artifact": str(tmp_path / "preflight.json"),
@@ -256,20 +257,20 @@ def test_reused_authorization_stops_run_before_any_data_access(
             "payload": {},
         },
     )
-    monkeypatch.setattr(b17, "_validated_output", lambda _path: output)
+    monkeypatch.setattr(b18, "_validated_output", lambda _path: output)
     monkeypatch.setattr(
-        b17,
+        b18,
         "claim_train_authorization_once",
-        lambda **_kwargs: (_ for _ in ()).throw(b17.B17ContractError("already consumed")),
+        lambda **_kwargs: (_ for _ in ()).throw(b18.B18ContractError("already consumed")),
     )
     data_accessed = []
     monkeypatch.setattr(
-        b17,
+        b18,
         "_read_locked_data_root",
         lambda _path: data_accessed.append(True),
     )
     args = Namespace(
-        confirm_protocol_id=b17.PROTOCOL_ID,
+        confirm_protocol_id=b18.PROTOCOL_ID,
         data=tmp_path / "must_not_open.yaml",
         assignment_csv=tmp_path / "must_not_open.csv",
         student_weight=tmp_path / "student.safetensors",
@@ -278,29 +279,60 @@ def test_reused_authorization_stops_run_before_any_data_access(
         preflight_sha256="c" * 64,
         output_dir=output,
     )
-    with pytest.raises(b17.B17ContractError, match="already consumed"):
-        b17.run_formal(args)
+    with pytest.raises(b18.B18ContractError, match="already consumed"):
+        b18.run_formal(args)
     assert data_accessed == []
     assert (output / "failure.json").is_file()
 
+    probe_output = tmp_path / "formal_probe_failure"
+    monkeypatch.setattr(b18, "_validated_output", lambda _path: probe_output)
+    monkeypatch.setattr(
+        b18,
+        "claim_train_authorization_once",
+        lambda **_kwargs: {"path": "unused", "sha256": "d" * 64, "payload": {}},
+    )
+    monkeypatch.setattr(
+        b18,
+        "_formal_initialized_cuda_head_reset_probe",
+        lambda: (_ for _ in ()).throw(b18.B18ContractError("formal RNG probe failed")),
+    )
+    args.output_dir = probe_output
+    with pytest.raises(b18.B18ContractError, match="formal RNG probe failed"):
+        b18.run_formal(args)
+    assert data_accessed == []
+    assert (probe_output / "failure.json").is_file()
 
-def test_runner_has_no_b16_runtime_import() -> None:
-    source = Path(b17.__file__).read_text(encoding="utf-8")
+
+def test_runner_has_no_retired_runtime_or_protocol_binding() -> None:
+    source = Path(b18.__file__).read_text(encoding="utf-8")
     assert "swiftformer_surface_b16" not in source
     assert "run_swiftformer_surface_b16_train_oof" not in source
     assert "audit_swiftformer_surface_b16_preflight" not in source
+    assert "run_swiftformer_surfacefold_b17_train_oof" not in source
+    assert "audit_swiftformer_surfacefold_b17_preflight" not in source
+    assert "b17_train_authorization_claims" not in source
+    assert "swiftformer_surfacefold_b17" in source
+    assert b18.PROTOCOL_ID == "TRKH_PRETRAINED_CLASSF_B18_TARGETMATCH_SURFACEFOLD_XS_20260805"
 
 
 def test_preflight_schema_is_exact_and_train_only() -> None:
     git = {"head": "a" * 40}
     sources = {"runner": "b" * 64}
     payload = _preflight_payload(git, sources)
+    assert (b18.PROTOCOL_ID, b18.PROTOCOL_SHA256, b18.PREFLIGHT_OUTPUT_PREFIX) == (
+        preflight_b18.PROTOCOL_ID,
+        preflight_b18.PROTOCOL_SHA256,
+        preflight_b18.OUTPUT_PREFIX,
+    )
+    assert payload["permissions"] == preflight_b18.SUCCESS_PERMISSIONS
+    assert payload["authorization"] == preflight_b18.AUTHORIZATION
+    assert set(payload["checks"]) == set(preflight_b18.TOP_CHECKS)
     assert payload["isolation"] == {
         "dataset_attempts": [],
         "network_attempts": [],
         "process_attempts": [],
     }
-    b17._validate_preflight_payload(payload, git=git, sources=sources)
+    b18._validate_preflight_payload(payload, git=git, sources=sources)
     for mutation in (
         lambda row: row["permissions"].__setitem__("validation_constructed", True),
         lambda row: row["authorization"].__setitem__("deployment_status", "READY"),
@@ -310,19 +342,19 @@ def test_preflight_schema_is_exact_and_train_only() -> None:
     ):
         changed = copy.deepcopy(payload)
         mutation(changed)
-        with pytest.raises(b17.B17ContractError, match="preflight"):
-            b17._validate_preflight_payload(changed, git=git, sources=sources)
+        with pytest.raises(b18.B18ContractError, match="preflight"):
+            b18._validate_preflight_payload(changed, git=git, sources=sources)
 
 
 def test_assignment_requires_component_disjoint_class_complete_folds() -> None:
     paths, labels, groups, folds = [], [], [], []
-    for fold in range(b17.FOLDS):
-        for label in range(b17.CLASSES):
+    for fold in range(b18.FOLDS):
+        for label in range(b18.CLASSES):
             paths.append(f"train/{label}/{fold}.jpg")
             labels.append(label)
             groups.append(fold * 10 + label)
             folds.append(fold)
-    contract = b17.validate_assignment_arrays(
+    contract = b18.validate_assignment_arrays(
         paths,
         np.asarray(labels),
         np.asarray(groups),
@@ -333,7 +365,7 @@ def test_assignment_requires_component_disjoint_class_complete_folds() -> None:
     leaked = np.asarray(groups)
     leaked[-1] = leaked[0]
     with pytest.raises(ValueError, match="component-disjoint"):
-        b17.validate_assignment_arrays(
+        b18.validate_assignment_arrays(
             paths,
             np.asarray(labels),
             leaked,
@@ -344,30 +376,42 @@ def test_assignment_requires_component_disjoint_class_complete_folds() -> None:
 
 def test_augmentation_is_private_deterministic_and_shared() -> None:
     image = Image.new("RGB", (257, 193), (30, 90, 180))
-    first = torch.Generator().manual_seed(b17.AUGMENTATION_SEED_BASE)
-    second = torch.Generator().manual_seed(b17.AUGMENTATION_SEED_BASE)
-    crop1 = b17.sample_random_resized_crop(193, 257, first)
-    crop2 = b17.sample_random_resized_crop(193, 257, second)
+    first = torch.Generator().manual_seed(b18.AUGMENTATION_SEED_BASE)
+    second = torch.Generator().manual_seed(b18.AUGMENTATION_SEED_BASE)
+    crop1 = b18.sample_random_resized_crop(193, 257, first)
+    crop2 = b18.sample_random_resized_crop(193, 257, second)
     assert crop1 == crop2
-    student, teacher = b17.build_shared_train_views(image, crop1)
+    student, teacher = b18.build_shared_train_views(image, crop1)
     assert student.shape == (3, 224, 224)
     assert teacher.shape == (3, 256, 256)
     assert torch.isfinite(student).all() and torch.isfinite(teacher).all()
 
 
 def test_head_reset_and_arm_construction_are_rng_safe_and_exact() -> None:
+    cuda_evidence = b18._formal_initialized_cuda_head_reset_probe()
+    assert cuda_evidence == {
+        "cuda_initialized": True,
+        "device_count": torch.cuda.device_count(),
+        "cpu_rng_equal": True,
+        "all_cuda_rng_equal": True,
+        "reset": {
+            "seed": b18.SEED,
+            "order": ["head", "head_dist"],
+            "initializer": "timm.trunc_normal_std_0.02_bias_zero",
+        },
+    }
     torch.manual_seed(77)
-    model = timm.create_model(b17.STUDENT_TIMM_ID, pretrained=False, num_classes=1000)
+    model = timm.create_model(b18.STUDENT_TIMM_ID, pretrained=False, num_classes=1000)
     caller = torch.random.get_rng_state().clone()
-    b17.reset_locked_five_class_heads(model)
+    b18.reset_locked_five_class_heads(model)
     assert torch.equal(caller, torch.random.get_rng_state())
     duplicate = copy.deepcopy(model)
-    b17.reset_locked_five_class_heads(duplicate)
+    b18.reset_locked_five_class_heads(duplicate)
     assert torch.equal(model.head.weight, duplicate.head.weight)
-    arms = b17.build_b17_arm_models(model)
+    arms = b18.build_b18_arm_models(model)
     assert {
         name: sum(parameter.numel() for parameter in arm.parameters()) for name, arm in arms.items()
-    } == b17.ARM_PARAMETERS
+    } == b18.ARM_PARAMETERS
     control = arms["surfacefold_mean_control"]
     candidate = arms["surfacefold_spatial_candidate"]
     assert torch.equal(control.factor_p, candidate.factor_p)
@@ -382,8 +426,8 @@ def test_head_reset_and_arm_construction_are_rng_safe_and_exact() -> None:
 
 
 def test_optimizer_groups_exclude_frozen_projection_and_promote_factors() -> None:
-    candidate = b17.build_b17_arm_models(_base_model())["surfacefold_spatial_candidate"]
-    groups = b17.build_discriminative_adamw_groups(candidate)
+    candidate = b18.build_b18_arm_models(_base_model())["surfacefold_spatial_candidate"]
+    groups = b18.build_discriminative_adamw_groups(candidate)
     names = {group["name"] for group in groups}
     assert names == {
         "backbone_decay",
@@ -400,7 +444,7 @@ def test_optimizer_groups_exclude_frozen_projection_and_promote_factors() -> Non
     }
     assert not projection_ids & {id(parameter) for group in groups for parameter in group["params"]}
     task_groups = [group for group in groups if group["name"].startswith("task")]
-    assert all(group["peak_lr"] == b17.TASK_LR for group in task_groups)
+    assert all(group["peak_lr"] == b18.TASK_LR for group in task_groups)
 
 
 def test_teacher_target_and_all_arm_relation_loss_are_exact() -> None:
@@ -409,23 +453,23 @@ def test_teacher_target_and_all_arm_relation_loss_are_exact() -> None:
             values = torch.linspace(
                 -1.0,
                 1.0,
-                images.size(0) * 261 * b17.DINO_FEATURE_DIM,
+                images.size(0) * 261 * b18.DINO_FEATURE_DIM,
                 dtype=torch.float32,
             )
-            return values.reshape(images.size(0), 261, b17.DINO_FEATURE_DIM)
+            return values.reshape(images.size(0), 261, b18.DINO_FEATURE_DIM)
 
-    ledger = b17.TeacherCallLedger()
-    target = b17.teacher_relation_target(Teacher(), torch.zeros(2, 3, 256, 256), ledger)
+    ledger = b18.TeacherCallLedger()
+    target = b18.teacher_relation_target(Teacher(), torch.zeros(2, 3, 256, 256), ledger)
     assert target.shape == (2, 84)
     assert not target.requires_grad
     assert (ledger.calls, ledger.rows) == (1, 2)
-    for _arm in b17.ARMS:
+    for _arm in b18.ARMS:
         s3 = torch.randn(2, 220, 7, 7, requires_grad=True)
-        logits = torch.randn(2, b17.CLASSES, requires_grad=True)
+        logits = torch.randn(2, b18.CLASSES, requires_grad=True)
         labels = torch.tensor([0, 1])
-        weights = torch.ones(b17.CLASSES)
-        total, ce, relation = b17.exact_b17_objective(logits, s3, labels, weights, target)
-        assert torch.equal(total, ce + b17.RELATION_WEIGHT * relation)
+        weights = torch.ones(b18.CLASSES)
+        total, ce, relation = b18.exact_b18_objective(logits, s3, labels, weights, target)
+        assert torch.equal(total, ce + b18.RELATION_WEIGHT * relation)
         total.backward()
         assert torch.isfinite(total)
         assert s3.grad is not None and torch.isfinite(s3.grad).all()
@@ -439,30 +483,30 @@ def test_locked_lr_is_applied_on_optimizer_update() -> None:
             {
                 "params": [parameter],
                 "name": "task_decay",
-                "peak_lr": b17.TASK_LR,
-                "lr": b17.TASK_LR,
+                "peak_lr": b18.TASK_LR,
+                "lr": b18.TASK_LR,
             }
         ]
     )
-    stepper = b17.LockedOptimizerStepper(optimizer, steps_per_epoch=3)
+    stepper = b18.LockedOptimizerStepper(optimizer, steps_per_epoch=3)
     observed = []
     for _ in range(stepper.total_steps):
         parameter.grad = torch.ones_like(parameter)
         observed.append(stepper.step()["task_decay"])
     evidence = stepper.evidence(require_complete=True)
     assert observed[0] == 0.0
-    assert observed[2] == b17.TASK_LR
-    assert observed[-1] == pytest.approx(b17.MIN_LR, abs=1e-15)
+    assert observed[2] == b18.TASK_LR
+    assert observed[-1] == pytest.approx(b18.MIN_LR, abs=1e-15)
     assert evidence["completed_steps"] == 8 * 3
 
 
 def test_metric_barrier_binds_all_states_and_rejects_tamper(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     token, records = _barrier_token(tmp_path, monkeypatch)
-    b17._assert_metric_token(token)
+    b18._assert_metric_token(token)
     state = Path(records[0].path)
     state.write_bytes(state.read_bytes() + b"tamper")
-    with pytest.raises(b17.B17ContractError, match="barrier"):
-        b17._assert_metric_token(token)
+    with pytest.raises(b18.B18ContractError, match="barrier"):
+        b18._assert_metric_token(token)
 
 
 def test_forged_or_replayed_barrier_cannot_mint_metric_capability(
@@ -470,18 +514,18 @@ def test_forged_or_replayed_barrier_cannot_mint_metric_capability(
 ) -> None:
     token, _records = _barrier_token(tmp_path, monkeypatch)
     barrier = Path(token.path)
-    assert b17.sha256_file(barrier) == token.sha256
-    with pytest.raises(b17.B17ContractError, match="private seal proof"):
-        b17.validate_metric_barrier(barrier, token.sha256)
+    assert b18.sha256_file(barrier) == token.sha256
+    with pytest.raises(b18.B18ContractError, match="private seal proof"):
+        b18.validate_metric_barrier(barrier, token.sha256)
 
 
 def test_metric_token_requires_its_matching_active_seal_proof(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     token, _records = _barrier_token(tmp_path, monkeypatch)
-    key = b17._metric_token_key(token.sha256, token.nonce)
-    b17._ACTIVE_BARRIER_SEALS.pop(key)
-    with pytest.raises(b17.B17ContractError, match="unchanged validated B17 barrier"):
-        b17._assert_metric_token(token)
-    assert key not in b17._VALID_BARRIER_TOKENS
+    key = b18._metric_token_key(token.sha256, token.nonce)
+    b18._ACTIVE_BARRIER_SEALS.pop(key)
+    with pytest.raises(b18.B18ContractError, match="unchanged validated B18 barrier"):
+        b18._assert_metric_token(token)
+    assert key not in b18._VALID_BARRIER_TOKENS
 
 
 @pytest.mark.parametrize("binding", ["git", "source"])
@@ -489,25 +533,25 @@ def test_metric_token_rejects_and_revokes_post_seal_binding_drift(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, binding: str
 ) -> None:
     token, _records = _barrier_token(tmp_path, monkeypatch)
-    key = b17._metric_token_key(token.sha256, token.nonce)
+    key = b18._metric_token_key(token.sha256, token.nonce)
     if binding == "git":
         monkeypatch.setattr(
-            b17,
+            b18,
             "_git_contract",
             lambda: {
                 "head": "d" * 40,
-                "branch": b17.EXPECTED_BRANCH,
+                "branch": b18.EXPECTED_BRANCH,
                 "status": "",
                 "clean": True,
                 "head_is_commit": True,
             },
         )
     else:
-        monkeypatch.setattr(b17, "_source_hashes", lambda: {"runner": "e" * 64})
-    with pytest.raises(b17.B17ContractError, match="git/source bindings changed"):
-        b17._assert_metric_token(token)
-    assert key not in b17._VALID_BARRIER_TOKENS
-    assert key not in b17._ACTIVE_BARRIER_SEALS
+        monkeypatch.setattr(b18, "_source_hashes", lambda: {"runner": "e" * 64})
+    with pytest.raises(b18.B18ContractError, match="git/source bindings changed"):
+        b18._assert_metric_token(token)
+    assert key not in b18._VALID_BARRIER_TOKENS
+    assert key not in b18._ACTIVE_BARRIER_SEALS
 
 
 def _summary(
@@ -531,7 +575,7 @@ def _summary(
         "transition_1_to_2": one_to_two,
         "pairs": {"2": {"auroc": pair2}},
         "mean_pair_auroc": mean_pair,
-        "folds": [{"fold": fold, "class1_f1": fold_f1} for fold in range(b17.FOLDS)],
+        "folds": [{"fold": fold, "class1_f1": fold_f1} for fold in range(b18.FOLDS)],
     }
 
 
@@ -571,15 +615,15 @@ def _passing_gate_inputs() -> tuple[dict[str, dict[str, object]], dict[str, obje
 def test_gate_passes_exact_thresholds_and_zero_denominator_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(b17, "_assert_metric_token", lambda _token: None)
-    token = b17.MetricBarrierToken("unused", "a" * 64, "nonce")
+    monkeypatch.setattr(b18, "_assert_metric_token", lambda _token: None)
+    token = b18.MetricBarrierToken("unused", "a" * 64, "nonce")
     summaries, bootstrap = _passing_gate_inputs()
-    passed = b17.assess_b17_gate(summaries, bootstrap, token, integrity_complete=True)
+    passed = b18.assess_b18_gate(summaries, bootstrap, token, integrity_complete=True)
     assert passed["passed"] is True
     changed = copy.deepcopy(summaries)
     changed["surfacefold_mean_control"]["restricted_0_2_4_to_1"] = 0
     changed["surfacefold_mean_control"]["transition_2_to_1"] = 0
-    failed = b17.assess_b17_gate(changed, bootstrap, token, integrity_complete=True)
+    failed = b18.assess_b18_gate(changed, bootstrap, token, integrity_complete=True)
     assert failed["passed"] is False
     assert failed["denominator_valid"] == {
         "restricted_reduction_vs_control": False,
@@ -590,20 +634,20 @@ def test_gate_passes_exact_thresholds_and_zero_denominator_fails(
 def test_summary_and_component_bootstrap_after_barrier(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     token, _records = _barrier_token(tmp_path, monkeypatch)
     labels, folds, groups = [], [], []
-    for fold in range(b17.FOLDS):
+    for fold in range(b18.FOLDS):
         for group_in_fold in range(2):
             group = fold * 2 + group_in_fold
-            for label in range(b17.CLASSES):
+            for label in range(b18.CLASSES):
                 labels.append(label)
                 folds.append(fold)
                 groups.append(group)
     labels_array = np.asarray(labels, dtype=np.int64)
-    logits = np.full((len(labels), b17.CLASSES), -1.0, dtype=np.float64)
+    logits = np.full((len(labels), b18.CLASSES), -1.0, dtype=np.float64)
     logits[np.arange(len(labels)), labels_array] = 2.0
-    scores = {name: logits.copy() for name in b17.OOF_NAMES}
-    summary = b17.classification_summary(labels_array, logits, token, np.asarray(folds))
+    scores = {name: logits.copy() for name in b18.OOF_NAMES}
+    summary = b18.classification_summary(labels_array, logits, token, np.asarray(folds))
     assert summary["accuracy"] == 1.0
-    bootstrap = b17.paired_component_bootstrap(
+    bootstrap = b18.paired_component_bootstrap(
         labels_array,
         np.asarray(folds),
         np.asarray(groups),

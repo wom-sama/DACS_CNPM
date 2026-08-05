@@ -15,7 +15,7 @@ import pytest
 import timm
 import torch
 
-from trkh.tools import audit_swiftformer_surfacefold_b17_preflight as b17
+from trkh.tools import audit_swiftformer_surfacefold_b18_preflight as b18
 
 
 def _latency(onnx_ms: float = 10.0, ort_ms: float = 10.4) -> dict[str, object]:
@@ -46,10 +46,51 @@ def _latency(onnx_ms: float = 10.0, ort_ms: float = 10.4) -> dict[str, object]:
     }
 
 
+def _target(target_platform: str) -> dict[str, object]:
+    package_name = "host_native_amd64" if target_platform == "amd64" else "android_arm"
+    manifest = {
+        "optimization_style": "Fixed",
+        "target_platform": target_platform,
+        "enable_type_reduction": True,
+        "save_optimized_onnx_model": False,
+        "custom_op_library_path": None,
+        "allow_conversion_failures": False,
+    }
+    manifest_sha256 = hashlib.sha256(
+        json.dumps(
+            manifest,
+            ensure_ascii=True,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+    return {
+        "passed": True,
+        "source_onnx_sha256": "b" * 64,
+        "artifact_name": f"{package_name}.ort",
+        "ort_sha256": "c" * 64,
+        "ort_size_bytes": 10_500_000,
+        "config_sha256": "d" * 64,
+        "config_size_bytes": 1234,
+        "optimization_style": "Fixed",
+        "target_platform": target_platform,
+        "type_reduction": True,
+        "providers": ["CPUExecutionProvider"],
+        "parity": {
+            "passed": True,
+            "samples": 64,
+            "max_abs_error": 1.0e-6,
+            "argmax_mismatches": 0,
+        },
+        "conversion_manifest": manifest,
+        "conversion_manifest_sha256": manifest_sha256,
+    }
+
+
 def _deployment(*, stock: bool, topology: str = "a" * 64) -> dict[str, object]:
     return {
         "arm": "stock" if stock else "candidate",
-        "parameters": b17.STOCK_PARAMETERS,
+        "parameters": b18.STOCK_PARAMETERS,
         "onnx": {
             "sha256": "b" * 64,
             "size_bytes": 10_000_000,
@@ -71,32 +112,27 @@ def _deployment(*, stock: bool, topology: str = "a" * 64) -> dict[str, object]:
             "mean_abs_error": 5.0e-7,
             "argmax_mismatches": 0,
         },
-        "mobile": {
+        "targets": {
+            "host_native_amd64": _target("amd64"),
+            "android_arm": _target("arm"),
+        },
+        "android_arm_mobile": {
             "prebuilt_mobile_package_supported": True,
             "nnapi_or_coreml_may_help": False,
             "checker_is_structural_not_device_certification": True,
             "log": "ORT Mobile prebuilt-package compatibility\nORT Mobile NNAPI/CoreML usability heuristic\n",
         },
-        "ort": {
-            "passed": True,
-            "ort_sha256": "c" * 64,
-            "ort_size_bytes": 10_500_000,
-            "config_sha256": "d" * 64,
-            "optimization_style": "Fixed",
-            "target_platform": "arm",
-            "type_reduction": True,
-            "providers": ["CPUExecutionProvider"],
-            "parity": {
-                "passed": True,
-                "samples": 64,
-                "max_abs_error": 1.0e-6,
-                "argmax_mismatches": 0,
-            },
+        "native_amd64_latency": _latency(),
+        "arm_host_diagnostic": {
+            "status": "NOT_APPLICABLE_TARGET_MISMATCH",
+            "host_architecture": "AMD64",
+            "artifact_target": "arm",
+            "executed": False,
+            "gate": False,
         },
-        "latency": _latency(),
         "forbidden_identifiers": [],
-        "host_ratio_is_gate": stock,
-        "checks": {name: True for name in b17.DEPLOYMENT_CHECKS},
+        "native_amd64_ratio_is_gate": stock,
+        "checks": {name: True for name in b18.DEPLOYMENT_CHECKS},
         "passed": True,
     }
 
@@ -146,9 +182,9 @@ def _mechanism() -> dict[str, object]:
         }
     return {
         "counts": {
-            "stock": {"total": b17.STOCK_PARAMETERS, "trainable": b17.STOCK_TRAINABLE},
-            "control": {"total": b17.ACTIVE_PARAMETERS, "trainable": b17.ACTIVE_TRAINABLE},
-            "candidate": {"total": b17.ACTIVE_PARAMETERS, "trainable": b17.ACTIVE_TRAINABLE},
+            "stock": {"total": b18.STOCK_PARAMETERS, "trainable": b18.STOCK_TRAINABLE},
+            "control": {"total": b18.ACTIVE_PARAMETERS, "trainable": b18.ACTIVE_TRAINABLE},
+            "candidate": {"total": b18.ACTIVE_PARAMETERS, "trainable": b18.ACTIVE_TRAINABLE},
         },
         "relation_only_gradients": relation,
         "total_objective_gradients": total,
@@ -158,7 +194,7 @@ def _mechanism() -> dict[str, object]:
             "candidate": {"pre_bn": 0.0, "features": 1.0e-7, "logits": 1.0e-7},
         },
         "w0_b0_sha256": {"stock": "e" * 64, "control": "f" * 64, "candidate": "1" * 64},
-        "checks": {name: True for name in b17.MECHANISM_CHECKS},
+        "checks": {name: True for name in b18.MECHANISM_CHECKS},
         "passed": True,
     }
 
@@ -207,7 +243,7 @@ def _cuda() -> dict[str, object]:
             "arm_order": ["stock", "control", "candidate"],
             "optimizer": "AdamW_one_real_step_each",
             "gradient_clip": 0.7,
-            "synthetic_ce_weights": list(b17.SYNTHETIC_CE_WEIGHTS),
+            "synthetic_ce_weights": list(b18.SYNTHETIC_CE_WEIGHTS),
             "tf32": False,
         },
         "exposure_sha256": "2" * 64,
@@ -243,9 +279,9 @@ def _cuda() -> dict[str, object]:
             "baseline_reserved": 200_000_000,
             "peak_allocated": 600_000_000,
             "peak_reserved": 700_000_000,
-            "limit_allocated": b17.MAX_CUDA_ALLOCATED_BYTES,
+            "limit_allocated": b18.MAX_CUDA_ALLOCATED_BYTES,
         },
-        "checks": {name: True for name in b17.CUDA_CHECKS},
+        "checks": {name: True for name in b18.CUDA_CHECKS},
         "passed": True,
     }
 
@@ -258,19 +294,19 @@ def _payload() -> dict[str, object]:
             "control": _deployment(stock=False),
             "candidate": _deployment(stock=False),
         },
-        "checks": {name: True for name in b17.FOLDED_CHECKS},
+        "checks": {name: True for name in b18.FOLDED_CHECKS},
         "passed": True,
     }
-    sources = {name: "3" * 64 for name in b17._source_paths()}
-    sources.update(b17.SOURCE_LOCKS)
+    sources = {name: "3" * 64 for name in b18._source_paths()}
+    sources.update(b18.SOURCE_LOCKS)
     git = {
         "head": "4" * 40,
-        "branch": b17.EXPECTED_BRANCH,
+        "branch": b18.EXPECTED_BRANCH,
         "status": "",
         "clean": True,
         "head_is_commit": True,
     }
-    def asset(lock: b17.AssetLock) -> dict[str, object]:
+    def asset(lock: b18.AssetLock) -> dict[str, object]:
         return {
             "role": lock.role,
             "repo_id": lock.repo_id,
@@ -283,16 +319,16 @@ def _payload() -> dict[str, object]:
             "offline_cache_only": True,
         }
 
-    weights = {"student": asset(b17.STUDENT_LOCK), "teacher": asset(b17.DINO_LOCK)}
+    weights = {"student": asset(b18.STUDENT_LOCK), "teacher": asset(b18.DINO_LOCK)}
     timm_sources = {
-        "paths": {name: f"C:/site-packages/timm/{name}" for name in b17.EXPECTED_TIMM_HASHES},
-        "sha256": dict(b17.EXPECTED_TIMM_HASHES),
+        "paths": {name: f"C:/site-packages/timm/{name}" for name in b18.EXPECTED_TIMM_HASHES},
+        "sha256": dict(b18.EXPECTED_TIMM_HASHES),
     }
-    nodeids = [f"test_node_{index}" for index in range(b17.EXPECTED_FOCUSED_TEST_COUNT)]
+    nodeids = [f"test_node_{index}" for index in range(b18.EXPECTED_FOCUSED_TEST_COUNT)]
     child = {
         "schema_version": 1,
-        "guard_root": os.path.abspath(os.fspath(b17.DATASET_ROOT)),
-        "test_paths": list(b17.FOCUSED_TEST_PATHS),
+        "guard_root": os.path.abspath(os.fspath(b18.DATASET_ROOT)),
+        "test_paths": list(b18.FOCUSED_TEST_PATHS),
         "audit": {"dataset_attempts": [], "network_attempts": [], "process_attempts": []},
         "collected_nodeids": nodeids,
         "executed_nodeids": copy.deepcopy(nodeids),
@@ -301,31 +337,31 @@ def _payload() -> dict[str, object]:
     }
     payload: dict[str, object] = {
         "schema_version": 1,
-        "protocol_id": b17.PROTOCOL_ID,
-        "protocol_sha256": b17.PROTOCOL_SHA256,
+        "protocol_id": b18.PROTOCOL_ID,
+        "protocol_sha256": b18.PROTOCOL_SHA256,
         "mode": "offline_label_free_stock_first_preflight",
         "created_at_unix": 1.0,
         "git": git,
         "source_hashes": sources,
-        "runtime": dict(b17.EXPECTED_RUNTIME),
+        "runtime": dict(b18.EXPECTED_RUNTIME),
         "timm_sources": timm_sources,
-        "device": {"requested": "cuda", "resolved": "cuda:0", **b17.EXPECTED_CUDA},
+        "device": {"requested": "cuda", "resolved": "cuda:0", **b18.EXPECTED_CUDA},
         "weights": weights,
         "strict_load": {
             "caller_rng_preserved": True,
             "student": {
                 "runtime_class": "timm.models.swiftformer.SwiftFormer",
                 "stage_channels": [48, 56, 112, 220],
-                "parameters": b17.STOCK_PARAMETERS,
+                "parameters": b18.STOCK_PARAMETERS,
                 "heads": [[220, 5], [220, 5]],
                 "distilled_training": False,
                 "nonzero_dropout_or_path": [],
                 "strict_load": True,
                 "head_reset": {
-                    "seed": b17.SEED,
+                    "seed": b18.SEED,
                     "initializer": "timm_trunc_normal_0p02_head_then_head_dist",
                     "bias_zero": True,
-                    "state_sha256": b17.EXPECTED_HEAD_STATE_SHA256,
+                    "state_sha256": b18.EXPECTED_HEAD_STATE_SHA256,
                     "caller_rng_preserved": True,
                 },
                 "asset_keys": 316,
@@ -342,18 +378,18 @@ def _payload() -> dict[str, object]:
         },
         "focused_tests": {
             "python_executable": str(Path(sys.executable).resolve()),
-            "test_paths": list(b17.FOCUSED_TEST_PATHS),
+            "test_paths": list(b18.FOCUSED_TEST_PATHS),
             "bootstrap_sha256": hashlib.sha256(
-                b17._focused_test_bootstrap().encode("utf-8")
+                b18._focused_test_bootstrap().encode("utf-8")
             ).hexdigest(),
             "returncode": 0,
             "pytest_returncode": 0,
-            "passed_count": b17.EXPECTED_FOCUSED_TEST_COUNT,
+            "passed_count": b18.EXPECTED_FOCUSED_TEST_COUNT,
             "skipped": 0,
             "xfailed": 0,
             "xpassed": 0,
             "child_guard": child,
-            "stdout": f"{b17.EXPECTED_FOCUSED_TEST_COUNT} passed in 1.0s\n",
+            "stdout": f"{b18.EXPECTED_FOCUSED_TEST_COUNT} passed in 1.0s\n",
             "stderr": "",
             "passed": True,
         },
@@ -363,19 +399,19 @@ def _payload() -> dict[str, object]:
         "cuda": _cuda(),
         "isolation": {"dataset_attempts": [], "network_attempts": [], "process_attempts": []},
         "offline": {
-            "environment": dict(b17.OFFLINE_ENV),
+            "environment": dict(b18.OFFLINE_ENV),
             "cublas_workspace_config": ":4096:8",
         },
         "end_rehash": {
             "git": git,
             "source_hashes": sources,
-            "runtime": dict(b17.EXPECTED_RUNTIME),
+            "runtime": dict(b18.EXPECTED_RUNTIME),
             "timm_sources": timm_sources,
             "weights": weights,
         },
-        "permissions": dict(b17.SUCCESS_PERMISSIONS),
-        "authorization": dict(b17.AUTHORIZATION),
-        "checks": {name: True for name in b17.TOP_CHECKS},
+        "permissions": dict(b18.SUCCESS_PERMISSIONS),
+        "authorization": dict(b18.AUTHORIZATION),
+        "checks": {name: True for name in b18.TOP_CHECKS},
         "passed": True,
     }
     return payload
@@ -383,16 +419,16 @@ def _payload() -> dict[str, object]:
 
 def test_locked_sources_and_parser_have_no_data_surface() -> None:
     root = Path(__file__).resolve().parents[1]
-    assert b17._sha256(root / "docs/TRKH_PRETRAINED_CLASSF_B17_SURFACEFOLD_XS_PROTOCOL_20260805.md") == b17.PROTOCOL_SHA256
-    assert b17._sha256(root / "trkh/models/swiftformer_surfacefold_b17.py") == b17.MODEL_SHA256
-    assert b17._sha256(root / "trkh/inference/surfacefold_deployment.py") == b17.DEPLOYMENT_SHA256
-    arguments = b17._parse_args(["--output-dir", "runs/preflight_b17_surfacefold_xs_test"])
+    assert b18._sha256(root / "docs/TRKH_PRETRAINED_CLASSF_B18_TARGETMATCH_SURFACEFOLD_PROTOCOL_20260805.md") == b18.PROTOCOL_SHA256
+    assert b18._sha256(root / "trkh/models/swiftformer_surfacefold_b17.py") == b18.MODEL_SHA256
+    assert b18._sha256(root / "trkh/inference/surfacefold_deployment.py") == b18.DEPLOYMENT_SHA256
+    arguments = b18._parse_args(["--output-dir", "runs/preflight_b18_surfacefold_xs_test"])
     assert set(vars(arguments)) == {"output_dir", "student_weight", "dino_weight", "device"}
     assert all("data" not in name and "label" not in name for name in vars(arguments))
 
 
 def test_universal_source_map_is_unambiguous() -> None:
-    assert set(b17._source_paths()) == {
+    assert set(b18._source_paths()) == {
         "protocol",
         "model",
         "model_test",
@@ -407,31 +443,31 @@ def test_universal_source_map_is_unambiguous() -> None:
 
 def test_output_scope_is_fresh_direct_child(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     (tmp_path / "runs").mkdir()
-    monkeypatch.setattr(b17, "_root", lambda: tmp_path)
-    valid = tmp_path / "runs" / f"{b17.OUTPUT_PREFIX}case"
-    assert b17._validated_output(valid) == valid
+    monkeypatch.setattr(b18, "_root", lambda: tmp_path)
+    valid = tmp_path / "runs" / f"{b18.OUTPUT_PREFIX}case"
+    assert b18._validated_output(valid) == valid
     with pytest.raises(ValueError):
-        b17._validated_output(tmp_path / "elsewhere" / f"{b17.OUTPUT_PREFIX}case")
+        b18._validated_output(tmp_path / "elsewhere" / f"{b18.OUTPUT_PREFIX}case")
     valid.mkdir()
     with pytest.raises(FileExistsError):
-        b17._validated_output(valid)
+        b18._validated_output(valid)
 
 
 def test_isolation_guard_blocks_network_and_dataset() -> None:
     with pytest.raises(RuntimeError, match="isolation guard observed"):
-        with b17._isolation_guard():
+        with b18._isolation_guard():
             with pytest.raises(RuntimeError, match="blocked network"):
                 socket.getaddrinfo("example.com", 443)
     with pytest.raises(RuntimeError, match="isolation guard observed"):
-        with b17._isolation_guard():
+        with b18._isolation_guard():
             with pytest.raises(RuntimeError, match="blocked dataset"):
-                open(b17.DATASET_ROOT / "data.yaml", "rb")
+                open(b18.DATASET_ROOT / "data.yaml", "rb")
 
 
 def test_guarded_pytest_blocks_child_dataset_network_and_process(tmp_path: Path) -> None:
-    if os.environ.get("TRKH_B17_IN_GUARDED_PYTEST") == "1":
+    if os.environ.get("TRKH_B18_IN_GUARDED_PYTEST") == "1":
         with pytest.raises(RuntimeError, match="isolation guard observed"):
-            with b17._isolation_guard(deny_process=True):
+            with b18._isolation_guard(deny_process=True):
                 with pytest.raises(RuntimeError, match="blocked child process"):
                     subprocess.run([sys.executable, "-c", "pass"])
         return
@@ -442,11 +478,11 @@ def test_guarded_pytest_blocks_child_dataset_network_and_process(tmp_path: Path)
     dataset_probe.write_text(
         "import os\n"
         "def test_dataset():\n"
-        "    open(os.path.join(os.environ['TRKH_B17_CHILD_GUARD_ROOT'], 'sentinel.txt')).read()\n"
+        "    open(os.path.join(os.environ['TRKH_B18_CHILD_GUARD_ROOT'], 'sentinel.txt')).read()\n"
         ,
         encoding="utf-8",
     )
-    dataset_evidence = b17._run_guarded_pytest(
+    dataset_evidence = b18._run_guarded_pytest(
         (str(dataset_probe),), guard_root=guarded_root, pytest_root=tmp_path
     )
     assert dataset_evidence["returncode"] == 86
@@ -461,7 +497,7 @@ def test_guarded_pytest_blocks_child_dataset_network_and_process(tmp_path: Path)
         "    subprocess.run([sys.executable, '-c', 'pass'], check=True)\n",
         encoding="utf-8",
     )
-    evidence = b17._run_guarded_pytest(
+    evidence = b18._run_guarded_pytest(
         (str(process_probe),),
         guard_root=tmp_path / "unused_guard_root",
         pytest_root=tmp_path,
@@ -476,22 +512,90 @@ def test_head_reset_and_arm_builder_are_rng_safe_and_reproducible() -> None:
     first = timm.create_model("swiftformer_xs", pretrained=False, num_classes=1000)
     second = copy.deepcopy(first)
     before = torch.random.get_rng_state().clone()
-    first_evidence = b17.reset_five_class_heads(first)
-    second_evidence = b17.reset_five_class_heads(second)
+    first_evidence = b18.reset_five_class_heads(first)
+    second_evidence = b18.reset_five_class_heads(second)
     assert torch.equal(torch.random.get_rng_state(), before)
     assert first_evidence["state_sha256"] == second_evidence["state_sha256"]
-    bundle = b17.build_b17_arms(first)
+    bundle = b18.build_b18_arms(first)
     assert bundle.rng_preserved
-    assert b17._common_state_equal(bundle.control, bundle.candidate)
-    assert b17._state_storage_disjoint(bundle.control, bundle.candidate)
+    assert b18._common_state_equal(bundle.control, bundle.candidate)
+    assert b18._state_storage_disjoint(bundle.control, bundle.candidate)
     assert [int(model._surfacefold_mode_id) for _, model in bundle.items()] == [0, 1, 2]
+
+
+def test_initialized_cuda_rng_regression_and_b18_restoration(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert torch.cuda.is_available(), "B18 focused suite requires the locked CUDA host"
+    torch.cuda.init()
+    caller_cpu = torch.random.get_rng_state().clone()
+    caller_cuda = [state.clone() for state in torch.cuda.get_rng_state_all()]
+    try:
+        before = b18._rng_digest()
+        with torch.random.fork_rng(devices=[], enabled=True):
+            torch.manual_seed(b18.SEED + 991)
+        retired = b18._rng_digest()
+        assert retired["cpu"] == before["cpu"]
+        assert retired["cuda"] != before["cuda"]
+        torch.random.set_rng_state(caller_cpu)
+        torch.cuda.set_rng_state_all(caller_cuda)
+
+        student_template = timm.create_model(
+            b18.STUDENT_TIMM_ID,
+            pretrained=False,
+            num_classes=1000,
+            drop_rate=0.0,
+            drop_path_rate=0.0,
+        )
+        teacher_template = timm.create_model(
+            b18.DINO_TIMM_ID,
+            pretrained=False,
+            num_classes=0,
+            img_size=b18.DINO_IMAGE_SIZE,
+        )
+        student_state = student_template.state_dict()
+        teacher_state = teacher_template.state_dict()
+
+        def create_model(model_id: str, **kwargs):
+            del kwargs
+            if model_id == b18.STUDENT_TIMM_ID:
+                return copy.deepcopy(student_template)
+            if model_id == b18.DINO_TIMM_ID:
+                return copy.deepcopy(teacher_template)
+            raise AssertionError(model_id)
+
+        def load_file(path: str, *, device: str):
+            assert device == "cpu"
+            return student_state if path.endswith("student.safetensors") else teacher_state
+
+        monkeypatch.setattr(b18.timm, "create_model", create_model)
+        monkeypatch.setattr(b18, "load_file", load_file)
+        before_strict = b18._rng_digest()
+        student, stock, _, evidence = b18._strict_load_models(
+            Path("student.safetensors"), Path("teacher.safetensors")
+        )
+        assert evidence["caller_rng_preserved"] is True
+        assert b18._rng_digest() == before_strict
+
+        before_arms = b18._rng_digest()
+        bundle = b18.build_active_arms_after_stock(student, stock)
+        assert bundle.rng_preserved is True
+        assert b18._rng_digest() == before_arms
+
+        head_model = copy.deepcopy(student)
+        before_head = b18._rng_digest()
+        b18.reset_five_class_heads(head_model, seed=b18.SEED + 1)
+        assert b18._rng_digest() == before_head
+    finally:
+        torch.random.set_rng_state(caller_cpu)
+        torch.cuda.set_rng_state_all(caller_cuda)
 
 
 def test_relation_only_helper_proves_candidate_and_control_gradient_geometry() -> None:
     base = timm.create_model("swiftformer_xs", pretrained=False, num_classes=5)
-    bundle = b17.build_b17_arms(base)
-    candidate = b17._relation_only_gradients(bundle.candidate)
-    control = b17._relation_only_gradients(bundle.control)
+    bundle = b18.build_b18_arms(base)
+    candidate = b18._relation_only_gradients(bundle.candidate)
+    control = b18._relation_only_gradients(bundle.control)
     assert candidate["p"]["nonzero"] and candidate["d"]["nonzero"]
     assert candidate["candidate_centered_d_nonzero"]
     assert control["p"]["nonzero"] and control["d"]["nonzero"]
@@ -500,8 +604,141 @@ def test_relation_only_helper_proves_candidate_and_control_gradient_geometry() -
 
 
 def test_valid_payload_recomputes_all_nested_gates() -> None:
-    checks = b17._payload_checks(_payload())
+    checks = b18._payload_checks(_payload())
     assert checks and all(checks.values()), checks
+
+
+def test_dual_target_export_uses_one_onnx_and_native_only_latency_gate(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    sample = torch.zeros(1, 3, 224, 224).numpy()
+    arrays = tuple(sample for _ in range(64))
+    conversion_calls: list[tuple[str, str]] = []
+    benchmark_artifacts: list[str] = []
+
+    def export(model, tensor, path, **kwargs):
+        del model, tensor, kwargs
+        path.write_bytes(b"one-exported-onnx")
+        return {
+            "path": str(path),
+            "sha256": b18._sha256(path),
+            "size_bytes": path.stat().st_size,
+            "opset": 17,
+            "input_name": "x",
+            "input_shape": [1, 3, 224, 224],
+            "output_name": "logits",
+            "output_shape": [1, 5],
+            "topology_sha256": "a" * 64,
+        }
+
+    def convert(onnx_path, output_dir, samples, *, target_platform, **kwargs):
+        del samples, kwargs
+        source = Path(onnx_path)
+        manifest = {
+            "optimization_style": "Fixed",
+            "target_platform": target_platform,
+            "enable_type_reduction": True,
+            "save_optimized_onnx_model": False,
+            "custom_op_library_path": None,
+            "allow_conversion_failures": False,
+        }
+        conversion_calls.append((source.name, target_platform))
+        return {
+            "passed": True,
+            "source_onnx_path": str(source),
+            "source_onnx_sha256": b18._sha256(source),
+            "ort_path": str(Path(output_dir) / f"{source.stem}.ort"),
+            "ort_sha256": "c" * 64,
+            "ort_size_bytes": 16,
+            "config_path": str(Path(output_dir) / "ops.config"),
+            "config_sha256": "d" * 64,
+            "config_size_bytes": 8,
+            "optimization_style": "Fixed",
+            "target_platform": target_platform,
+            "type_reduction": True,
+            "providers": ["CPUExecutionProvider"],
+            "parity": {
+                "passed": True,
+                "samples": 64,
+                "max_abs_error": 1.0e-6,
+                "argmax_mismatches": 0,
+            },
+            "conversion_manifest": manifest,
+            "conversion_manifest_sha256": hashlib.sha256(
+                json.dumps(
+                    manifest,
+                    ensure_ascii=True,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ).encode("utf-8")
+            ).hexdigest(),
+        }
+
+    def benchmark(onnx_path, ort_path, sample, **kwargs):
+        del onnx_path, sample, kwargs
+        benchmark_artifacts.append(Path(ort_path).name)
+        return _latency()
+
+    monkeypatch.setattr(b18, "STOCK_PARAMETERS", 0)
+    monkeypatch.setattr(b18, "export_fixed_opset17_onnx", export)
+    monkeypatch.setattr(
+        b18,
+        "onnx_topology_fingerprint",
+        lambda path: {"sha256": "a" * 64, "descriptor": {"nodes": []}},
+    )
+    monkeypatch.setattr(
+        b18,
+        "compare_pytorch_ort",
+        lambda *args, **kwargs: {
+            "passed": True,
+            "providers": ["CPUExecutionProvider"],
+            "intra_op_threads": 4,
+            "inter_op_threads": 1,
+            "samples": 64,
+            "max_abs_error": 1.0e-6,
+            "mean_abs_error": 5.0e-7,
+            "argmax_mismatches": 0,
+            "onnx_path": "ignored",
+        },
+    )
+    monkeypatch.setattr(
+        b18,
+        "check_ort_mobile_usability",
+        lambda path: {
+            "onnx_path": str(path),
+            "prebuilt_mobile_package_supported": True,
+            "nnapi_or_coreml_may_help": False,
+            "checker_is_structural_not_device_certification": True,
+            "log": "ORT Mobile prebuilt-package compatibility\nORT Mobile NNAPI/CoreML usability heuristic\n",
+        },
+    )
+    monkeypatch.setattr(b18, "convert_fixed_ort", convert)
+    monkeypatch.setattr(b18, "benchmark_onnx_vs_ort_cpu", benchmark)
+
+    evidence = b18._portable_deployment_evidence(
+        torch.nn.Identity(),
+        "stock",
+        tmp_path,
+        arrays,
+        require_host_ratio=True,
+    )
+    assert evidence["passed"] is True
+    assert conversion_calls == [
+        ("host_native_amd64.onnx", "amd64"),
+        ("android_arm.onnx", "arm"),
+    ]
+    assert benchmark_artifacts == ["host_native_amd64.ort"]
+    assert {
+        package["source_onnx_sha256"] for package in evidence["targets"].values()
+    } == {evidence["onnx"]["sha256"]}
+    assert evidence["arm_host_diagnostic"]["gate"] is False
+
+    stock = _deployment(stock=True)
+    stock["native_amd64_latency"] = _latency(10.0, 10.6)
+    assert b18._deployment_payload_ok(stock, stock=True) is False
+    active = _deployment(stock=False)
+    active["native_amd64_latency"] = _latency(10.0, 10.6)
+    assert b18._deployment_payload_ok(active, stock=False) is True
 
 
 @pytest.mark.parametrize(
@@ -509,18 +746,21 @@ def test_valid_payload_recomputes_all_nested_gates() -> None:
     [
         (lambda p: p["permissions"].update(formal_train_permission=False), "permission_exact"),
         (lambda p: p["source_hashes"].update(protocol="0" * 64), "source_hashes_exact"),
-        (lambda p: p["stock_deployment"]["onnx"].update(size_bytes=b17.MAX_ONNX_BYTES + 1), "stock_deployment_exact"),
-        (lambda p: p["stock_deployment"]["latency"]["ort_to_onnx_ratio"].update(p95=1.2), "stock_deployment_exact"),
-        (lambda p: p["stock_deployment"]["latency"]["arms"]["ort"]["trials_ms"][0].pop(), "stock_deployment_exact"),
-        (lambda p: p["stock_deployment"]["latency"]["arms"]["ort"]["trials_ms"][0].__setitem__(0, True), "stock_deployment_exact"),
-        (lambda p: p["stock_deployment"]["latency"].update(execution_mode="ORT_PARALLEL"), "stock_deployment_exact"),
-        (lambda p: p["stock_deployment"]["latency"].update(order_rule="forged"), "stock_deployment_exact"),
-        (lambda p: p["stock_deployment"]["mobile"].update(log="checker ran"), "stock_deployment_exact"),
+        (lambda p: p["stock_deployment"]["onnx"].update(size_bytes=b18.MAX_ONNX_BYTES + 1), "stock_deployment_exact"),
+        (lambda p: p["stock_deployment"]["native_amd64_latency"]["ort_to_onnx_ratio"].update(p95=1.2), "stock_deployment_exact"),
+        (lambda p: p["stock_deployment"]["native_amd64_latency"]["arms"]["ort"]["trials_ms"][0].pop(), "stock_deployment_exact"),
+        (lambda p: p["stock_deployment"]["native_amd64_latency"]["arms"]["ort"]["trials_ms"][0].__setitem__(0, True), "stock_deployment_exact"),
+        (lambda p: p["stock_deployment"]["native_amd64_latency"].update(execution_mode="ORT_PARALLEL"), "stock_deployment_exact"),
+        (lambda p: p["stock_deployment"]["native_amd64_latency"].update(order_rule="forged"), "stock_deployment_exact"),
+        (lambda p: p["stock_deployment"]["android_arm_mobile"].update(log="checker ran"), "stock_deployment_exact"),
+        (lambda p: p["stock_deployment"]["targets"]["android_arm"].update(source_onnx_sha256="0" * 64), "stock_deployment_exact"),
+        (lambda p: p["stock_deployment"]["targets"]["host_native_amd64"].update(target_platform="arm"), "stock_deployment_exact"),
+        (lambda p: p["stock_deployment"]["arm_host_diagnostic"].update(gate=True), "stock_deployment_exact"),
         (lambda p: p["mechanism"]["float64_oracle_max_abs"].update(candidate=1.0e-4), "mechanism_exact"),
         (lambda p: p["mechanism"]["relation_only_gradients"]["candidate"]["p"].update(nonzero=False), "mechanism_exact"),
         (lambda p: p["mechanism"]["total_objective_gradients"]["stock"].update(s3_gradient_nonzero=False), "mechanism_exact"),
         (lambda p: p["folded_deployment"]["arms"]["candidate"].update(topology_sha256="9" * 64), "folded_deployment_exact"),
-        (lambda p: p["cuda"]["memory"].update(peak_allocated=b17.MAX_CUDA_ALLOCATED_BYTES + 1), "cuda_exact"),
+        (lambda p: p["cuda"]["memory"].update(peak_allocated=b18.MAX_CUDA_ALLOCATED_BYTES + 1), "cuda_exact"),
         (lambda p: p["cuda"].update(losses={}), "cuda_exact"),
         (lambda p: p["cuda"]["gradients"]["candidate"]["roles"]["p"].update(nonzero=False), "cuda_exact"),
         (lambda p: p["cuda"].update(optimizer_states={}), "cuda_exact"),
@@ -539,53 +779,53 @@ def test_valid_payload_recomputes_all_nested_gates() -> None:
 def test_payload_rejects_bypass_mutations(mutation, failed_check: str) -> None:
     payload = _payload()
     mutation(payload)
-    assert b17._payload_checks(payload)[failed_check] is False
+    assert b18._payload_checks(payload)[failed_check] is False
 
 
 def test_payload_rejects_boolean_numeric_spoof() -> None:
     payload = _payload()
     payload["stock_deployment"]["onnx"]["size_bytes"] = True
-    assert b17._payload_checks(payload)["stock_deployment_exact"] is False
+    assert b18._payload_checks(payload)["stock_deployment_exact"] is False
 
 
 def test_atomic_publish_is_canonical_hashed_and_non_overwriting(tmp_path: Path) -> None:
     destination = tmp_path / "artifact"
-    result = b17._publish(destination, "preflight.json", {"z": 1, "a": True})
+    result = b18._publish(destination, "preflight.json", {"z": 1, "a": True})
     raw = (destination / "preflight.json").read_bytes()
-    assert raw == b17._canonical_bytes({"z": 1, "a": True})
+    assert raw == b18._canonical_bytes({"z": 1, "a": True})
     assert hashlib.sha256(raw).hexdigest() == result["sha256"]
     assert (destination / "preflight.sha256").read_text() == f"{result['sha256']}\n"
     with pytest.raises(FileExistsError):
-        b17._publish(destination, "preflight.json", {})
+        b18._publish(destination, "preflight.json", {})
 
 
 def test_stock_gate_failure_attaches_full_raw_timing_evidence(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     evidence = _deployment(stock=True)
-    evidence["latency"] = _latency(10.0, 14.0)
-    evidence["checks"]["host_format_ratio"] = False
+    evidence["native_amd64_latency"] = _latency(10.0, 14.0)
+    evidence["checks"]["native_amd64_host_format_ratio"] = False
     evidence["passed"] = False
 
     class Stock:
         def fold_to_deploy(self):
             return object()
 
-    monkeypatch.setattr(b17, "_synthetic_arrays", lambda: (object(),))
+    monkeypatch.setattr(b18, "_synthetic_arrays", lambda: (object(),))
     monkeypatch.setattr(
-        b17,
+        b18,
         "_portable_deployment_evidence",
         lambda *args, **kwargs: copy.deepcopy(evidence),
     )
     with pytest.raises(RuntimeError, match="stock deployment gate failed") as caught:
-        b17._stock_deployment_contract(Stock())
-    attached = caught.value.b17_gate_evidence
+        b18._stock_deployment_contract(Stock())
+    attached = caught.value.b18_gate_evidence
     assert attached["gate"] == "stock_deployment_first"
-    assert attached["evidence"]["latency"]["arms"]["onnx"]["trials_ms"]
-    assert len(attached["evidence"]["latency"]["arms"]["ort"]["trials_ms"]) == 5
+    assert attached["evidence"]["native_amd64_latency"]["arms"]["onnx"]["trials_ms"]
+    assert len(attached["evidence"]["native_amd64_latency"]["arms"]["ort"]["trials_ms"]) == 5
     assert all(
         len(row) == 100
-        for row in attached["evidence"]["latency"]["arms"]["ort"]["trials_ms"]
+        for row in attached["evidence"]["native_amd64_latency"]["arms"]["ort"]["trials_ms"]
     )
 
 
@@ -594,22 +834,22 @@ def test_failure_artifact_atomically_hashes_attached_gate_evidence(
 ) -> None:
     gate_evidence = {
         "gate": "stock_deployment_first",
-        "evidence": {"latency": _latency(10.0, 14.0), "passed": False},
+        "evidence": {"native_amd64_latency": _latency(10.0, 14.0), "passed": False},
     }
     failure_root = tmp_path / "failed"
-    monkeypatch.setattr(b17, "_failure_path", lambda requested: failure_root)
+    monkeypatch.setattr(b18, "_failure_path", lambda requested: failure_root)
     error = RuntimeError("closed")
-    error.b17_gate_evidence = gate_evidence
+    error.b18_gate_evidence = gate_evidence
     try:
         raise error
     except RuntimeError as caught:
-        result = b17._write_failure(tmp_path / "requested", "stock", caught)
+        result = b18._write_failure(tmp_path / "requested", "stock", caught)
     payload = json.loads((failure_root / "failure.json").read_text(encoding="utf-8"))
     assert payload["gate_evidence"] == gate_evidence
     assert payload["gate_evidence_sha256"] == hashlib.sha256(
-        b17._canonical_bytes(gate_evidence)
+        b18._canonical_bytes(gate_evidence)
     ).hexdigest()
-    assert payload["permissions"] == b17.NO_ACCESS_PERMISSIONS
+    assert payload["permissions"] == b18.NO_ACCESS_PERMISSIONS
     assert payload["passed"] is False
     assert result["sha256"] == hashlib.sha256(
         (failure_root / "failure.json").read_bytes()
@@ -618,7 +858,7 @@ def test_failure_artifact_atomically_hashes_attached_gate_evidence(
 
 def test_duplicate_json_keys_are_rejected() -> None:
     with pytest.raises(ValueError, match="duplicate JSON key"):
-        json.loads('{"x":1,"x":2}', object_pairs_hook=b17._no_duplicate_keys)
+        json.loads('{"x":1,"x":2}', object_pairs_hook=b18._no_duplicate_keys)
 
 
 def test_build_preflight_is_stock_first_and_candidate_never_runs_after_stock_failure(
@@ -631,39 +871,39 @@ def test_build_preflight_is_stock_first_and_candidate_never_runs_after_stock_fai
     def isolation():
         yield {"dataset_attempts": [], "network_attempts": []}
 
-    git = {"head": "a" * 40, "branch": b17.EXPECTED_BRANCH, "status": "", "clean": True, "head_is_commit": True}
-    monkeypatch.setattr(b17, "_validated_output", lambda value: output)
-    monkeypatch.setattr(b17, "_offline_environment", lambda: {"environment": b17.OFFLINE_ENV, "cublas_workspace_config": ":4096:8"})
-    monkeypatch.setattr(b17, "_isolation_guard", isolation)
-    monkeypatch.setattr(b17, "_git_contract", lambda: git)
-    monkeypatch.setattr(b17, "_source_hashes", lambda: {**{name: "1" * 64 for name in b17._source_paths()}, **b17.SOURCE_LOCKS})
-    monkeypatch.setattr(b17, "_runtime_contract", lambda: dict(b17.EXPECTED_RUNTIME))
-    monkeypatch.setattr(b17, "_timm_contract", lambda: {"paths": {}, "sha256": b17.EXPECTED_TIMM_HASHES})
-    monkeypatch.setattr(b17, "_device_contract", lambda value: (object(), {"requested": "cuda"}))
-    monkeypatch.setattr(b17, "_resolve_asset", lambda lock, path: (tmp_path / lock.filename, {"offline_cache_only": True}))
-    monkeypatch.setattr(b17, "_focused_tests", lambda: {"passed": True})
-    monkeypatch.setattr(b17, "_strict_load_models", lambda a, c: (object(), object(), object(), {"student": {"strict_load": True}, "teacher": {"strict_load": True}}))
+    git = {"head": "a" * 40, "branch": b18.EXPECTED_BRANCH, "status": "", "clean": True, "head_is_commit": True}
+    monkeypatch.setattr(b18, "_validated_output", lambda value: output)
+    monkeypatch.setattr(b18, "_offline_environment", lambda: {"environment": b18.OFFLINE_ENV, "cublas_workspace_config": ":4096:8"})
+    monkeypatch.setattr(b18, "_isolation_guard", isolation)
+    monkeypatch.setattr(b18, "_git_contract", lambda: git)
+    monkeypatch.setattr(b18, "_source_hashes", lambda: {**{name: "1" * 64 for name in b18._source_paths()}, **b18.SOURCE_LOCKS})
+    monkeypatch.setattr(b18, "_runtime_contract", lambda: dict(b18.EXPECTED_RUNTIME))
+    monkeypatch.setattr(b18, "_timm_contract", lambda: {"paths": {}, "sha256": b18.EXPECTED_TIMM_HASHES})
+    monkeypatch.setattr(b18, "_device_contract", lambda value: (object(), {"requested": "cuda"}))
+    monkeypatch.setattr(b18, "_resolve_asset", lambda lock, path: (tmp_path / lock.filename, {"offline_cache_only": True}))
+    monkeypatch.setattr(b18, "_focused_tests", lambda: {"passed": True})
+    monkeypatch.setattr(b18, "_strict_load_models", lambda a, c: (object(), object(), object(), {"student": {"strict_load": True}, "teacher": {"strict_load": True}}))
 
     def stock(model):
         del model
         order.append("stock")
         raise RuntimeError("stock closed")
 
-    monkeypatch.setattr(b17, "_stock_deployment_contract", stock)
+    monkeypatch.setattr(b18, "_stock_deployment_contract", stock)
     monkeypatch.setattr(
-        b17,
+        b18,
         "build_active_arms_after_stock",
         lambda base, stock: order.append("construct_active"),
     )
-    monkeypatch.setattr(b17, "_mechanism_contract", lambda bundle: order.append("mechanism"))
-    monkeypatch.setattr(b17, "_write_failure", lambda *args: {"artifact": "failure"})
+    monkeypatch.setattr(b18, "_mechanism_contract", lambda bundle: order.append("mechanism"))
+    monkeypatch.setattr(b18, "_write_failure", lambda *args: {"artifact": "failure"})
     args = argparse.Namespace(output_dir=output, student_weight=None, dino_weight=None, device="cuda")
     with pytest.raises(RuntimeError, match="stock closed"):
-        b17.build_preflight(args)
+        b18.build_preflight(args)
     assert order == ["stock"]
 
 
 def test_main_turns_keyboard_interrupt_into_nonzero_failure(monkeypatch: pytest.MonkeyPatch, capsys) -> None:
-    monkeypatch.setattr(b17, "build_preflight", lambda args: (_ for _ in ()).throw(KeyboardInterrupt()))
-    assert b17.main(["--output-dir", "runs/preflight_b17_surfacefold_xs_interrupt"]) == 1
+    monkeypatch.setattr(b18, "build_preflight", lambda args: (_ for _ in ()).throw(KeyboardInterrupt()))
+    assert b18.main(["--output-dir", "runs/preflight_b18_surfacefold_xs_interrupt"]) == 1
     assert '"passed": false' in capsys.readouterr().err
