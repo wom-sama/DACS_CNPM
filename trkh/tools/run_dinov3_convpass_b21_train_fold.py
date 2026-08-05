@@ -103,6 +103,18 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def logical_absolute_path(path: Path) -> Path:
+    """Return an absolute path without resolving a format-bearing symlink."""
+
+    logical = Path(path).expanduser()
+    if not logical.is_absolute():
+        logical = Path.cwd() / logical
+    logical = Path(os.path.abspath(os.fspath(logical)))
+    if not logical.is_file():
+        raise FileNotFoundError(logical)
+    return logical
+
+
 def state_sha256(state: Mapping[str, Tensor], *, exclude_adapters: bool = False) -> str:
     digest = hashlib.sha256()
     for name in sorted(state):
@@ -938,7 +950,7 @@ def run_training(args: argparse.Namespace, output: Path) -> Dict[str, Any]:
         "data_yaml_sha256": EXPECTED_DATA_SHA256,
         "assignment_csv": str(Path(args.assignment_csv).resolve()),
         "assignment_csv_sha256": EXPECTED_ASSIGNMENT_SHA256,
-        "dino_weight": str(Path(args.dino_weight).resolve()),
+        "dino_weight": str(logical_absolute_path(args.dino_weight)),
         "dino_weight_sha256": DINO_SHA256,
         "fold": FOLD,
         "fit_rows": len(fit_dataset),
@@ -1039,7 +1051,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
     args.data = Path(args.data).expanduser().resolve(strict=True)
     args.assignment_csv = Path(args.assignment_csv).expanduser().resolve(strict=True)
-    args.dino_weight = Path(args.dino_weight).expanduser().resolve(strict=True)
+    # Keep the logical `.safetensors` snapshot path. Resolving its symlink to
+    # the extensionless Hugging Face blob would select the torch.load parser.
+    args.dino_weight = logical_absolute_path(args.dino_weight)
     if not args.preflight_only:
         if args.preflight_artifact is None:
             raise B21ContractError("Formal TRAIN requires --preflight-artifact.")

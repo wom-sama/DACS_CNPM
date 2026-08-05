@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+from pathlib import Path
 
 import pytest
 import torch
@@ -9,6 +10,7 @@ from torch import nn
 from trkh.tools.run_dinov3_convpass_b21_train_fold import (
     ModelEMA,
     classification_metrics,
+    logical_absolute_path,
     parameter_role,
     parse_args,
     promotion_gate,
@@ -134,3 +136,19 @@ def test_parser_exposes_no_epoch_or_validation_override() -> None:
     assert parsed.preflight_artifact is None
     assert not hasattr(parsed, "epochs")
     assert not hasattr(parsed, "validation")
+
+
+def test_logical_absolute_path_does_not_resolve_format_symlink(tmp_path: Path) -> None:
+    target = tmp_path / "extensionless_blob"
+    target.write_bytes(b"weights")
+    logical = tmp_path / "model.safetensors"
+    try:
+        logical.symlink_to(target)
+    except OSError:
+        pytest.skip("Symlink creation is unavailable on this Windows account.")
+
+    observed = logical_absolute_path(logical)
+
+    assert observed.name == "model.safetensors"
+    assert observed.resolve() == target.resolve()
+    logical_absolute_path,
