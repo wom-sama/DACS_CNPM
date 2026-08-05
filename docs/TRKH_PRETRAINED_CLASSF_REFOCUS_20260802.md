@@ -36,10 +36,10 @@
 - Close B25 after the solver-only resolution: all folds converge, no argmax
   changes, and the unchanged bootstrap guard still fails. ConvNeXt remains
   useful mechanism evidence but is not authorized as a teacher.
-- Open B26: retain B9 bit-exact and add one shared 64-dimensional decoder in
-  which five persistent class queries read frozen patch tokens after blocks
-  3/7/11. This is sample-specific, multi-depth and one-way; the primary ViT
-  never attends back to the queries.
+- Close B26 after its one locked run. It preserved B9 numerically and trained
+  only the intended query decoder, but its attention stayed nearly uniform and
+  moved only three validation decisions. The exact soft-query decoder therefore
+  repeats global token mixing rather than selecting new regional evidence.
 
 ### Objection and decision state
 
@@ -65,7 +65,7 @@ Update rows in place; do not append chronology. States move `OPEN -> LOCKED -> C
 | `B23-01` | `CLOSED_FAIL` | B21 may have failed because it restarted raw DINO, moved the full primary model at the same time as a zero-init adapter, and stopped before meaningful cosine decay. | B23 removed all three confounds: it strict-loaded B9, froze all B9/head parameters, trained only `170,880` adapters and completed the matched six-epoch cosine. B9 macro/C1 F1 `0.876324/0.701149` fell to `0.870704/0.687679`; C1 TP `122 -> 120`, restricted FP `68 -> 71`, and `2 -> 1` `41 -> 45`. Only 18 validation argmaxes changed and 13 were correct-to-wrong. | Do not tune B23 LR/width/loss/epochs or repeat a uniform all-patch ConvPass. A successor needs sample-specific regional evidence or a materially different local teacher, with its signal measured before training. |
 | `B24-01` | `CLOSED_FAIL` | A locally biased DINOv3 teacher may contain complementary maturity cues that uniform adapters cannot create, but trying multiple backbones/fusions after seeing results would be a sweep. | ConvNeXt-only is worse than raw DINO, while standardized fusion raises macro/C1 F1 `0.802076/0.517520 -> 0.818554/0.542021`, retains C1 TP `288 -> 287`, and reduces restricted FP `317 -> 268`. Macro delta CI is positive, but pair-AUROC lower CI is `-0.005649` versus the `-0.004` guard; fusion folds 1/3/4 hit `2000` iterations. | No new backbone, feature interface or gate change. B25 may change only the solver ceiling to establish the same objective's converged result; B24 itself never promotes. |
 | `B25-01` | `CLOSED_FAIL` | The B24 point gain may be a partially optimized readout artifact rather than stable complementary representation evidence. | Solver-only B25 converges in `1735/2110/1971/2053/2044` iterations. Scores move by at most `0.001093` but zero argmax changes; metrics and bootstrap intervals remain identical, so the pair-AUROC lower CI still fails. | Exact ConvNeXt-T teacher route is closed. Its descriptive FP reduction may inform the problem statement, but cannot supervise or select a successor. |
-| `B26-01` | `LOCKED` | Uniform local mixing fails, final-token selection is deployment-closed, and old no-pretrain deep prompts suppressed C1 recall; a pretrained successor must add regional evidence without perturbing B9. | Five 64-D persistent queries use a shared cross-attention/FFN to read frozen B9 patch tokens after blocks `3/7/11`. Information is one-way, the B9 path/head is bit-exact, the output residual is bounded to `±0.5`, and only `58,753` parameters train. Twelve epochs use official-inspired SGD `0.005`, two-epoch warmup and a matched cosine horizon, with explicit C1-margin retention and rival hard-negative terms. | Require C1 F1 `+0.005`, macro `>=-0.002`, accuracy `>=-0.005`, C1 TP `>=98%`, restricted FP `>=5%` lower, no `2->1` increase, and active nonuniform attention. Pass authorizes one mean-token capacity control; failure closes exact B26 without tuning. Test stays sealed. |
+| `B26-01` | `CLOSED_FAIL` | Uniform local mixing fails, final-token selection is deployment-closed, and old no-pretrain deep prompts suppressed C1 recall; a pretrained successor must add regional evidence without perturbing B9. | The strict-reloaded query residual is active (`p95=0.02463`) but its normalized attention entropy is `0.995904`, above the nonuniformity limit. Versus B9, macro/C1 F1 changes `0.876324/0.701149 -> 0.875392/0.697143`; C1 TP stays `122`, while restricted FP and `2->1` both rise by two. Only three argmaxes change: two correct class-2 rows become class 1 and one class-3 row is repaired. | Do not tune B26 query width, loss, LR or duration and do not run its mean-token control. A successor must route a sparse, input-dependent set of regions and add sub-patch/pixel information absent from the fixed 16x16 DINO tokens; test stays sealed. |
 | `KD-01` | `GUARD` | B19 proves that raw-DINO relation distillation itself improves SwiftFormer. | False. Stock, control and candidate all receive the same cosine-neighbour relation loss; B19 isolates spatial atoms under that objective, not relation KD versus CE-only. The normalized relation also does not preserve photometric magnitude by construction. | Any causal KD claim requires a separately preregistered matched experiment on prospectively sealed evidence; B19 cannot be reinterpreted as that ablation. |
 | `TELEM-01` | `LOCKED` | Final factor norms and scalar loss curves are enough to diagnose optimization if a successor fails. | Rejected. They prove activation and fit behaviour but cannot distinguish backbone absorption from branch starvation. | B21 records per-role gradient and update/parameter norms plus adapter residual ratios by epoch. Gradient-conflict telemetry is required only when an auxiliary objective exists; B21 deliberately has none. |
 | `LR-01` | `CLOSED` | Exact float equality is safe when a mathematically identical endpoint is produced through multiplication and division. | Rejected by the B18 real-fold counterexample. Endpoint values must be returned explicitly, while interior points retain the original formula; tests must exercise every locked fold horizon. | Permanent scheduler implementation rule. |
@@ -315,7 +315,7 @@ the sole remaining failure is still the predeclared pair-AUROC harm guard.
 - Result: `runs/b25_b24_fusion_readout_df613bc_r1/summary.json`
 - Summary SHA256: `96b7f929188c69c4f25177ba7becfd4269af86a231e3f02d5f9cbe33d551d95f`
 
-## Locked screen: B26 one-way multi-depth evidence queries
+## Closed screen: B26 one-way multi-depth evidence queries
 
 B26 uses the class-query idea from Prompt-CAM while correcting the historical
 TRKH failure mode: query tokens can read patch evidence, but the frozen B9
@@ -327,7 +327,7 @@ uniformly refining all tokens
 [FFVT](https://arxiv.org/abs/2107.02341),
 [SubViT](https://arxiv.org/abs/2607.09086)).
 
-The fixed decoder carries five persistent 64-D class queries through one
+The fixed decoder carried five persistent 64-D class queries through one
 shared four-head cross-attention and FFN, reading the frozen patch streams after
 blocks `3`, `7` and `11`. A zero-initialized shared scalar head makes B26 exactly
 B9 at step zero; `0.5*tanh(score)` bounds every class-logit residual. The decoder
@@ -337,7 +337,19 @@ decay `0.001`, two-epoch warmup and the same twelve-epoch cosine horizon. B9 is
 always frozen/eval. LDAM-Focal is augmented by a weight-`1.0` labelled-C1
 margin-retention hinge, weight-`0.10` rival hard-negative hinge and weight-`0.10`
 KL trust region. The design-exposed validation is opened once after exact B9
-replay; test remains sealed.
+replay; test remained sealed. The run finished all `3108` optimizer updates and
+strict reload was exact (`max_abs=0`). The residual was active
+(`p50/p95/max=0.01203/0.02463/0.03041`), but attention collapsed toward uniform
+over patches (normalized entropy `0.995904`, std `0.000847`). B26 kept all `122`
+class-1 true positives but added two class-2 false positives into class 1;
+accuracy/macro/C1 F1 became `0.911658/0.875392/0.697143` versus B9
+`0.912061/0.876324/0.701149`. It changed only three decisions, so the exact
+decoder is closed as a weak global-boundary residual, not as a limit on sparse
+regional refinement.
+
+- Result: `runs/b26_evidence_query_b1616ea_r1/summary.json`
+- Summary SHA256: `af425cf1aab177c17008d02eacdd650eb0ce2c8489f23ee174370c0c715b3d9e`
+- Query-state SHA256: `5b7d6cbb8675879bc06950aaa06631f832e88f273aedfa026ff18e6d2547cfe4`
 
 ## PRMR R1 closure
 
