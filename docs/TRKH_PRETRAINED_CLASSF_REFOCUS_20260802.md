@@ -1,8 +1,10 @@
-# TRKH pretrained class_f: refocus decision (2026-08-02)
+# TRKH pretrained class_f: refocus decision (updated 2026-08-05)
 
 ## Decision
 
-- Keep `class_f` immutable and keep the test split sealed.
+- Keep `class_f` immutable, accept its labels as the user-authoritative real-world
+  ground truth, and keep the test split sealed. Similar-looking cross-class
+  samples are a representation challenge, not a relabelling task.
 - Close PRMR R1 as **diagnostic-positive but not promotable**.
 - Do not reuse the two-backbone A0 hybrid.
 - Close class-conditioned group exposure and PR-SPR-V3 after their matched failures.
@@ -12,7 +14,13 @@
 - Close exact B16 SwiftSurface-XS at its label-free deployment preflight. The candidate's relative overhead passed, but the locked absolute host-latency gate failed for the stock backbone itself and QDQ INT8 was slower than FP32. No TRAIN/data/metric evidence was opened, so this is an engineering-protocol closure rather than evidence that the spatial hypothesis is weak.
 - Close exact B18 after its single TRAIN authorization on commit `9bb1232`. Its preflight passed, but fold 0 stopped after all eight epochs because the LR evidence gate compared a one-ULP warmup endpoint with `==`; no fold state, OOF metric, validation or test result was produced. A B19 protocol-only successor may change only bit-exact LR endpoints and real-fold scheduler tests.
 - Close exact B19 after its valid single TRAIN-only OOF screen on commit `b39f4d0`. The scheduler correction, all 15 states, metric barrier and integrity contracts passed, but the active spatial factor did not beat its matched mean-surface control and widened `2 -> 1`; validation and test remain sealed.
-- Keep B20 `NOT_OPENED`. Haar plus log/opponent chromaticity is not a new observable: it is a prohibited kernel/magnitude neighbour of two already failed families. No descriptor probe, GPU/model train, validation or test opens until the blinded DATA-01 review determines that the disputed labels are image-visible.
+- Keep B20 `NOT_OPENED`. Haar plus log/opponent chromaticity is not a new
+  observable: it is a prohibited kernel/magnitude neighbour of two already
+  failed families. This closure no longer depends on a label review.
+- Open only `B21-DINO-ConvPass-A0`: the same DINOv3-S primary path as B9 with
+  deterministic `384 -> 8 -> dense 3x3 -> 384` bypasses parallel to MHSA and
+  MLP in all 12 EVA blocks. Its first screen is one fixed TRAIN component fold,
+  direct versus spatial, with no validation/test access or hyperparameter sweep.
 
 ### Objection and decision state
 
@@ -20,7 +28,7 @@ Update rows in place; do not append chronology. States move `OPEN -> LOCKED -> C
 
 | ID | State | Objection / exact scope | Decision and evidence anchor | Exit or reopen condition |
 |---|---|---|---|---|
-| `DATA-01` | `LOCKED` | Dataset problems are either absent or already understood. | No class-map/loader or exact-SHA cross-label bug; the real unresolved issue is boundary supervision/provenance: `120` TRAIN pHash-radius-3 cross-label pairs, six RGB-near-identical pairs and `264/497` relabelled class-1 rows. B19 stock/control/candidate are all only `4/18` correct on the P1 queue. | Two independent reviewers must assign classes from label/model/history-hidden RGB packets, followed by adjudication for P1/P2. If image-only agreement fails, require immutable fruit/session/time provenance, a material measurement or new source-safe data. No automatic relabel/raw edit. |
+| `DATA-01` | `CLOSED_BY_SCOPE` | Similar-looking cross-class samples imply that canonical labels should be reviewed or changed. | Rejected by project scope. The `class_f` labels are authoritative and no loader/class-map bug was found. pHash/component evidence is retained only to build source-safe folds and describe hard visual boundaries; it is not evidence against the labels. | Permanent for this project unless the user explicitly supplies a replacement canonical dataset. No human-review, relabel or automatic-edit gate. |
 | `HYB-CAUSE-01` | `CLOSED` | V2/V3 lose only because class_f is noisy. | Rejected for V2/V3: matched arms share the same data, while V2 actively widens `2->1` and V3 loses recall across stable, relabelled, mixed and near cohorts. This does not claim every hybrid must fail. | Reopen only for a materially different matched hybrid whose branch adds measured pre-pooling information. |
 | `V2-01` | `CLOSED_FAIL` | More CNN depth or tuning can rescue V2. | Branch is active, not collapsed; duplicated absolute colour plus a free `64->384` projection overrides DINO semantics (`C1 F1 0.633609`, `2->1=52` versus B2 `38`). | New constrained evidence source, capacity-matched control and pre-pooling integration; no same-recipe tuning. |
 | `V3-01` | `CLOSED_FAIL` | The classifier direction was wrong. | Direction finite differences pass; the zero-init 160-parameter branch is starved by a moving 21.6M backbone (`p95=7.37e-5`, zero argmax correction). | A successor must inherit/freeze a verified teacher and prove non-collapse before metrics. |
@@ -31,10 +39,11 @@ Update rows in place; do not append chronology. States move `OPEN -> LOCKED -> C
 | `B16-01` | `CLOSED_FAIL` | A hybrid should be rescued by another unconstrained branch/backbone sweep, or raw pretraining alone proves the design. | Rejected as a sweep, then tested once as locked B16. Commit `f203a3c` passed strict weights, synthetic mechanism, CUDA fit, ONNX, size and full QDQ coverage, but failed the absolute 12 ms host p95 gate: FP32 stock/control/candidate `12.928/13.387/13.327` ms and INT8 QDQ `31.450/31.045/31.553` ms. Candidate p95 ratios `1.031x/1.003x` did pass the `1.10x` relative gate. No dataset, TRAIN, validation, test or architecture metric was opened. Diagnostic SHA256 `09942f6944ca96a0434a521e3d95da3109b212d2116c3f8ead1dba22d91a2956`. | Exact B16 remains closed; do not relax 12 ms after seeing it or infer representation quality. A successor requires a prospectively locked backend/device contract that first qualifies its stock baseline, while retaining the same causal controls if the spatial hypothesis is tested. |
 | `B17-01` | `CLOSED_FAIL` | A lightweight hybrid should add measured local-direction information where its auxiliary objective can directly train the new mechanism, rather than append another free late branch. | Architecture/code review passed, but the first formal run on `954655c` failed at `strict_load`: CUDA had already been initialized by the device contract, while `torch.manual_seed(20260805)` ran inside `fork_rng(devices=[])`, which restored CPU RNG but not CUDA RNG. A direct probe reproduced `CPU preserved=true, CUDA preserved=false`; `fork_rng(devices=[0])` preserved both. Failure artifact SHA256 is `ad1ded2a42808cf0fd39843b07efe0f197471b8e7ff90fe449a486ac2e672848`. No control/candidate, deployment metric, dataset, TRAIN, validation or test was opened. | Exact B17 never reopens. A separately committed B18 may change only full-device RNG isolation and target-matched host packaging/measurement; architecture, causal controls, data protocol and statistical gates remain fixed. |
 | `B18-01` | `CLOSED_FAIL` | Passing synthetic scheduler tests proves the exact real-fold LR evidence gate. | Rejected. B18 preflight passed with SHA256 `b32697dd4911f38ae2fb3ab42bc7aeb635ec92e9ad21a288aa02c763ad73dfda`, then the one-use TRAIN run stopped after fold-0 training because `3e-5 * 201 / 201` produced `2.9999999999999997e-5`; exact dictionary equality rejected the one-ULP difference (`3.388e-21`). Failure SHA256 is `75370288a392497b045a977924b0fdf8c3dc168a3849863ca69024c75afbc8ed`; validation/test are false and no fold state/OOF metric exists. | Exact B18 never reruns. B19 may only return literal `peak_lr/MIN_LR` at the two endpoints and test all locked update counts `202/206/212/207/210`; no architecture, data, loss, optimizer, schedule shape or gate change. |
-| `B19-01` | `CLOSED_FAIL` | An active, directly supervised, foldable spatial factor is sufficient to improve the class-1 boundary. | Rejected by a valid TRAIN-only screen. Candidate C1 F1 was `0.632939` versus control `0.630553`, delta `+0.002386 [-0.009669,+0.014988]`; pair-2 AUROC delta was `-0.000533`, `2->1` rose `80->84`, and restricted FP rose `131->135`. Active-minus-delta-off C1 F1 was real (`+0.043440 [+0.019285,+0.069964]`), so this is target/quality failure, not branch collapse. | Exact B19 never reruns or retunes. After DATA-01 unlock, a successor still requires a separate TRAIN-only precondition that proves an equation-distinct surface observable against matched controls before any model training. |
-| `OBS-01` | `LOCKED` | Combining Haar with log/opponent chromaticity is a materially new interaction and may be probed immediately. | Rejected. Aligned Haar lost C1 F1 `-0.061779` to its control and added `119` restricted FP; CCR reached AUROC `0.535520`, changed C1 F1 `-0.026845`, and beat both controls in only `2/5` folds. For fixed linear operators, `H(A log RGB) = A(H log RGB)`, so Haar-on-log-opponent is not an interaction. The CCR stop rule also explicitly forbids post-failure signed/magnitude and derivative-kernel sweeps. | Only after DATA-01 unlock may a review-motivated, equation-distinct material factor enter one preregistered CPU/no-model information audit with component-only, equal-dimension and spatial-dephase controls. Failure ends the descriptor/architecture line. |
+| `B19-01` | `CLOSED_FAIL` | An active, directly supervised, foldable spatial factor is sufficient to improve the class-1 boundary. | Rejected by a valid TRAIN-only screen. Candidate C1 F1 was `0.632939` versus control `0.630553`, delta `+0.002386 [-0.009669,+0.014988]`; pair-2 AUROC delta was `-0.000533`, `2->1` rose `80->84`, and restricted FP rose `131->135`. Active-minus-delta-off C1 F1 was real (`+0.043440 [+0.019285,+0.069964]`), so this is target/quality failure, not branch collapse. | Exact B19 never reruns or retunes. A successor must change the target and placement equation, use a matched primary backbone/control, and pass a bounded TRAIN-only screen. |
+| `OBS-01` | `CLOSED_FAIL` | Combining Haar with log/opponent chromaticity is a materially new interaction and may be probed immediately. | Rejected. Aligned Haar lost C1 F1 `-0.061779` to its control and added `119` restricted FP; CCR reached AUROC `0.535520`, changed C1 F1 `-0.026845`, and beat both controls in only `2/5` folds. For fixed linear operators, `H(A log RGB) = A(H log RGB)`, so Haar-on-log-opponent is not an interaction. The CCR stop rule also explicitly forbids post-failure signed/magnitude and derivative-kernel sweeps. | Closed independently of label status. Reopen only for a mathematically different observable supported by a new measured precondition. |
+| `B21-01` | `LOCKED` | A hybrid cannot beat B9 because the previous local branches already exhausted spatial evidence. | Not established. V2/V3 fuse only near the final block; B12 is a frozen readout; B19 changes a SwiftFormer downsample and learns an 84-edge cosine target. None tests local residuals recurrently integrated through all DINO depths. B21 adds 24 zero-up ConvPass-style paths to the same DINO backbone and adds no KD target. | Run exactly one five-epoch fold-0 TRAIN-only direct/spatial screen. Promote to fixed five-fold OOF plus dephased control only if the preregistered quality, transition, branch-activity and finite-update gates pass. |
 | `KD-01` | `GUARD` | B19 proves that raw-DINO relation distillation itself improves SwiftFormer. | False. Stock, control and candidate all receive the same cosine-neighbour relation loss; B19 isolates spatial atoms under that objective, not relation KD versus CE-only. The normalized relation also does not preserve photometric magnitude by construction. | Any causal KD claim requires a separately preregistered matched experiment on prospectively sealed evidence; B19 cannot be reinterpreted as that ablation. |
-| `TELEM-01` | `LOCKED` | Final factor norms and scalar CE/relation curves are enough to diagnose optimization if a successor fails. | Rejected. They prove activation and fit behaviour but cannot measure per-role update scale or CE-versus-relation gradient conflict. | Any successor must preregister per-role gradient/update norms and CE/relation gradient cosine by epoch without modifying B19 artifacts. |
+| `TELEM-01` | `LOCKED` | Final factor norms and scalar loss curves are enough to diagnose optimization if a successor fails. | Rejected. They prove activation and fit behaviour but cannot distinguish backbone absorption from branch starvation. | B21 records per-role gradient and update/parameter norms plus adapter residual ratios by epoch. Gradient-conflict telemetry is required only when an auxiliary objective exists; B21 deliberately has none. |
 | `LR-01` | `CLOSED` | Exact float equality is safe when a mathematically identical endpoint is produced through multiplication and division. | Rejected by the B18 real-fold counterexample. Endpoint values must be returned explicitly, while interior points retain the original formula; tests must exercise every locked fold horizon. | Permanent scheduler implementation rule. |
 | `RNG-01` | `CLOSED` | CPU-only RNG tests are sufficient for a CUDA training protocol. | Rejected. `torch.manual_seed` seeds CUDA as well as CPU; a CPU-only test left CUDA uninitialized and therefore missed the leak caused by `fork_rng(devices=[])`. | Every successor must initialize the exact GPU first, snapshot every CUDA generator, exercise construction/head reset, and prove bit-exact restoration. |
 | `DEPLOY-01` | `LOCKED` | Host ORT QDQ latency is a valid proxy for mobile efficiency and quantization must be faster. | Not established. B16 remains closed under its original 12 ms rule. For a successor whose factors fold into an exactly stock-topology graph, one prospectively locked TRAIN-only causal screen may follow stock-only source/ONNX/ORT-format/mobile-checker/host qualification; it must remain `DEVICE_PENDING`. This exception evaluates representation without pretending the Windows host is an Android proxy. | Before validation, promotion or any mobile-ready claim, freeze a physical Android ARM64/SoC/API/ORT-AAR/power/thermal contract, qualify stock first on CPU and XNNPACK, lock one backend and its application-derived absolute budget, then require candidate p95 at most `1.03x` stock. No backend/threshold choice may use candidate results. |
@@ -46,17 +55,17 @@ Update rows in place; do not append chronology. States move `OPEN -> LOCKED -> C
 - Canonical contract: 12,019 images; train/val/test `8278/2479/1262`; no declared `source_image` or `leakage_group` crosses a split.
 - Train has `8278` rows but only `5361` leakage groups. Validation has `2479/2471`; test has `1262/1262`. Repeated views are therefore concentrated in train.
 - The current tempered sampler operates on rows. Under its quota, one class-2 group can be replayed about 54 times per epoch and one class-3 group about 41 times.
-- Class 1 is `738/12019 = 6.14%`; `116/497` class-1 train rows belong to groups containing another label. This proves an ambiguity/provenance risk, not that those labels are wrong.
+- Class 1 is `738/12019 = 6.14%`; `116/497` class-1 train rows belong to components containing another label. This quantifies a difficult visual boundary and source dependence; the canonical labels remain correct by project definition.
 - The best exact B9 full-val export is accuracy `0.912061`, macro-F1 `0.876324`, class-1 P/R/F1 `0.642105/0.772152/0.701149`. Its class-1 false positives are `2->1: 41`, `0->1: 21`, `4->1: 6`.
 - The valid B14 TRAIN-only result is iFormer-S accuracy/macro-F1/C1-F1/pair-AUROC `0.847065/0.789602/0.492933/0.940750` versus locked DINO `0.858178/0.802076/0.517520/0.946103`. The paired 95% intervals are macro `[-0.030516,+0.007787]`, C1 `[-0.067381,+0.017714]` and AUROC `[-0.014060,+0.003169]`; the exact pooled-320 route is closed. Evidence: `runs/pretrained_iformer_s_classf_b14_frozen_transfer_c797a6f_r1/summary.json`.
 - B15 stopped before TRAIN because the aligned DINO ONNX graph measured `75.324 ms` p95 versus `67.500 ms` for uniform pooling (`1.115911x`); its graph added only `8,987` bytes, so the rejection is an observed tail-latency cost rather than a parameter-count failure. No claim about class-1 representation quality is permitted from this preflight.
-- Class 1 is not one uniform failure cohort. B9 recall is `0.852` on recently relabeled class-1 samples but only `0.688` on the stable cohort. Frozen-DINO embeddings also place stable class 1 near class-0 false positives and relabeled class 1 near class-2 false positives. Do not globally oversample class 1 or auto-relabel it.
+- Class 1 is not one uniform visual cohort. B9 recall is `0.852` on samples whose historical records changed and only `0.688` on the stable-history cohort. Frozen-DINO embeddings place the latter near class-0 false positives and the former near class-2 false positives. This motivates better representation; it does not authorize relabelling.
 - The two false-positive streams mirror those cohorts photometrically: B9 `0 -> 1` errors have red-minus-green mean `-0.0005` versus stable class 1 `+0.0017`; `2 -> 1` errors are `+0.0248` versus relabelled class 1 `+0.0150`. Brightening raises `0 -> 1` from `21` to `128`, while dimming raises `2 -> 1` from `41` to `72`. This supports illumination-normalized local fruit-surface evidence, not a provenance flag at inference.
 - Exact-file integrity is good, but the declared grouping is not session/crop safe. It reports no cross-split group or SHA-exact overlap, yet adjacent IDs from the same source form 1,115 same-label train/val pairs; 193 have crop pHash distance `<=8` versus zero in a random control, and B9 is correct on all 196 val rows with such a same-label train neighbour. Conversely, train contains 105 declared groups mixing class 1 with another label, affecting `116/497` class-1 rows; `88/497` have a cross-label crop within pHash `<=8`. `_source_family` currently treats consecutive frames such as `Image_10383` and `Image_10384` as different families. Current validation is therefore suitable for matched exploratory ablation, not a clean generalization claim. The older `docs/dataset_leak_audit_5class` describes 13,088 rows and is stale for the current 12,019-image corpus; do not cite it.
-- The stricter TRAIN-only mechanism audit separates real supervision conflict from provenance suspicion. There is no class-map/loader failure and no exact-SHA cross-label duplicate, but `120` luminance-pHash-radius-3 pairs cross labels, including `55` involving class 1. Of `30` pHash-identical cross-label pairs, six are also near-identical in RGB (`SSIM >= 0.95`, `MAE <= 0.01`); B9 gives the same prediction to `27/30`, and every pair has at least one error. Class 1 also has strong policy churn: `264/497` final rows were relabelled and `247/497` previously carried class 2. These are human-review evidence, never automatic relabel evidence. Numeric adjacency is not a temporal target: among `159` cross-label adjacent-ID pairs, label direction is balanced (`81` increasing, `78` decreasing), and manifest `source` equals the crop box index for all `8278` train rows rather than a fruit/track ID. Sequence/ordinal label propagation is therefore forbidden until immutable fruit-track/session/time metadata and double-blind consensus exist.
+- The stricter TRAIN-only mechanism audit found no class-map/loader failure and no exact-SHA cross-label duplicate. It did find `120` luminance-pHash-radius-3 pairs crossing classes, including `55` involving class 1; this is retained as evidence that texture/chroma and multi-depth context must separate visually near samples. Historical label-change fields and numeric adjacency are not training targets or permission to question canonical ground truth.
 - The historical A0 hybrid has no canonical-class_f comparison. Its only yolo_f smoke trained `691,841/29,524,375` parameters, collapsed DINO patch geometry into global mean/std, and ended with an effective gate near `2.4e-5`.
 - The valid B19 TRAIN-only candidate reached accuracy/macro-F1/C1-F1 `0.903721/0.856104/0.632939`. Its spatial gain over the matched mean control was inconclusive, while active-versus-delta-off added `47` C1 true positives but also added `45` and removed only one non-C1 false positive into C1. The mechanism broadens the class-1 region rather than separating its boundary.
-- B19 confirms a separate data ceiling: candidate C1 recall is `0.719697` on pure union components but `0.446352` on mixed components; aggregate accuracy is `0.949206` versus `0.714464`. All three active arms classify only `4/18` blinded-priority P1 class-1 rows correctly. These cohort facts do not excuse the candidate-control failure, but they bound what architecture alone can repair.
+- B19 exposes a representation ceiling for its own target: candidate C1 recall is `0.719697` on single-class components but `0.446352` on cross-class components; aggregate accuracy is `0.949206` versus `0.714464`. These facts do not excuse the matched failure and make a stronger same-DINO integration path worth testing.
 
 ## Closed experiment: B19 bit-exact SurfaceFold-XS
 
@@ -71,7 +80,7 @@ The one-use B19 run completed all five component folds, 15 final states and 5,00
 
 Candidate beat control on C1 F1 in four folds, but the aggregate delta was only `+0.002386` with interval `[-0.009669,+0.014988]`; macro-F1 delta was `-0.000253 [-0.003689,+0.003212]`, mean pair-AUROC delta `-0.000045 [-0.000762,+0.000690]`, and pair-2 AUROC delta `-0.000533`. Versus its own delta-off checkpoint, candidate C1 F1 increased `+0.043440 [+0.019285,+0.069964]`, but this came from `+47` TP together with a net `+44` FP into C1. The factor is active and causally used; its learned direction repeats the historical recall-for-precision failure.
 
-The post-hoc locked-cohort diagnosis is descriptive, never a selection gate. Relative to control, candidate gains five C1 TP and loses none inside mixed components, but loses two net TP on pure components; it gains four net TP on relabelled C1 while losing one on stable C1. Near-cross-label endpoints remain near chance (`0.505155` accuracy, C1 recall `0.229167`), and stock/control/candidate are identical at `4/18` on P1. Therefore B19 contains both a technical target mismatch and a genuine provenance/label ceiling. Before B19 metrics were opened, the only admissible quality-failure contingency was fixed as a small TRAIN-only photometric-observable precondition; no B19 width/rank/loss/LR/epoch retry is allowed.
+The post-hoc locked-cohort diagnosis is descriptive, never a selection gate. Relative to control, candidate gains five C1 TP and loses none inside cross-class components, but loses two net TP on single-class components. Near-cross-label endpoints remain near chance (`0.505155` accuracy, C1 recall `0.229167`). Therefore B19 contains a technical target/placement mismatch: its normalized 84-edge teacher target discards magnitude, chroma and class direction. No B19 width/rank/loss/LR/epoch retry is allowed.
 
 Authoritative artifacts:
 
@@ -79,6 +88,55 @@ Authoritative artifacts:
 - Gate SHA256 `1e15775ae56fc7a14e7ad099221b8eaf3d7a0f8e7214889beadbbeb16b44de97`; metrics SHA256 `fa0f5f06adaa15f9d09c99242aa5f698f950db5a9847aa98a5845042d82d316e`
 - Bootstrap SHA256 `437c42fa4bb1ea748416184900058d5848c4082eb90ea898ef52f007b404f38b`; OOF SHA256 `5ea1c6a26005dd3bc28b3d026f2b7b10765527f2a3f57555271d07cc61bac0c7`
 - Metric-barrier SHA256 `17a32f4d7c960580234fdebb96edc6025d23c06edbf4e9dee52453f2e83e2f2b`; closure tag `trkh-pretrained-b19-closed-b39f4d0`
+
+## Locked next screen: B21 DINOv3 multi-depth spatial bypass
+
+B21 keeps the exact DINOv3-S/16 primary architecture, verified pretrained
+asset, 256-pixel preprocessing, B9 sampler/loss and discriminative LR split.
+It adds a ConvPass-inspired bottleneck parallel to both MHSA and MLP in all 12
+EVA blocks:
+
+`u = x + DP1(gamma1 Attn(LN1(x))) + A_attn(LN1(x))`
+
+`y = u + DP2(gamma2 MLP(LN2(u))) + A_mlp(LN2(u))`
+
+Each `A` is `384 -> 8 -> QuickGELU -> dense 3x3 -> QuickGELU -> 384`.
+The dense convolution starts as a center identity and the up projection starts
+at exact zero. Scale is locked once at `1.0`, the official implementation
+default and the median of its released task configs. Adapter dropout and an
+extra DropPath are deliberately removed: B21 is a deterministic TRKH variant,
+not a claim of exact ConvPass reproduction, and direct/spatial arms must consume
+the same native EVA RNG sequence. The design follows the official evidence that
+parallel full MHSA+MLP placement is stronger than sequential or attention-only
+placement ([ConvPass paper](https://arxiv.org/abs/2207.07039),
+[official code](https://github.com/JieShibo/PETL-ViT/blob/main/convpass/vtab/convpass.py)).
+
+The 24 adapters add exactly `170,880` parameters (`0.7915%` of the 21,588,869
+parameter five-class DINO-S), not the paper's ViT-B percentage. Five DINO prefix
+tokens pass independently through the same 3x3 center response; the 256 patch
+tokens use the true `16x16` grid. A confirmatory `dephased` arm retains identical
+weights/operators but applies a fixed patch permutation before each 3x3 and its
+inverse afterwards, destroying only neighbourhood topology.
+
+Static and real-backbone preflight pass: construction preserves CPU and
+initialized-CUDA RNG, direct and spatial logits are bit-exact native DINO at
+step zero (`max_abs=0`), the first backward reaches every up projection while
+leaving Conv/down at zero as expected, and the second update reaches Conv/down.
+Observed CUDA peak for the one-image two-step probe is `440.6 MiB`; total model
+parameters are `21,759,749`.
+
+The only authorized Phase-B screen uses TRAIN component fold 0, direct then
+spatial, seed `20260805`, five fixed epochs, batch `16`, accumulation `3`, BF16,
+AdamW, task/adapter LR `1.5e-4`, backbone LR `1.5e-5`, weight decay `0.05`, clip
+`0.7`, two-epoch warmup on the fixed 30-epoch cosine horizon, EMA `0.995`,
+tempered class power `0.5`, and B9 LDAM-Focal/augmentation. It constructs no
+validation or test dataset and selects no epoch. Spatial advances only if its
+final EMA has C1-F1 delta at least `+0.005` versus direct **or** reduces restricted
+`0/2/4 -> 1` FP by at least `5%` while retaining at least `98%` of direct C1 TP;
+macro-F1 delta must be at least `-0.002`, `2 -> 1` cannot increase, adapter
+residual p95 must lie in `[1e-4,0.1)`, and all updates/telemetry must be finite.
+A pass authorizes fixed five-fold TRAIN OOF with the dephased control, not
+validation or test.
 
 ## PRMR R1 closure
 
@@ -208,9 +266,9 @@ XCNorm recovers 12 class-1 true positives relative to Conv, but creates 12 new f
 
 The paired failure isolates a technical cause that data quality alone cannot explain: both arms saw the same rows and schedule, yet Conv achieved a lower pairwise training loss in every final fold/epoch and XCNorm supplied no AUROC gain. Final post-norm DINO tokens have already been globally contextualized and normalized; a local operator applied there cannot recover missing pixel evidence, and immediate average pooling reduces it to a small decision-boundary shift. This also explains why the light pure ViT can outperform the Hybrid despite having no explicit CNN branch.
 
-Dataset quality remains a separate ceiling. Train support is `[1987,497,1326,2080,2388]`; class 1 is the minority, `330/497` class-1 rows carry a train-review flag, `264/497` were relabelled, `247/497` originated from class 2, and `233/497` lie in a mixed-label source component. Across train, `8278` rows collapse to only `3117` conservative source/pHash components, of which `145` mix labels and contain `1604` samples. These facts require source-safe evaluation and human review; they do not justify changing labels automatically or blaming A0's matched loss on the dataset.
+Boundary structure remains a separate modeling constraint. Train support is `[1987,497,1326,2080,2388]`; class 1 is the minority and `233/497` class-1 rows lie in a cross-class source component. Across train, `8278` rows collapse to `3117` conservative source/pHash components, of which `145` contain multiple classes and `1604` samples. Historical review/change fields describe dataset construction only. These facts require source-safe evaluation and stronger discrimination, not another label audit, and they do not excuse A0's matched loss.
 
-The independent TRAIN-only cohort audit found no class-order or loader/manifest label-map bug. Instead, `23/25` frozen-B9 class-1 false negatives and `66/77` false positives into class 1 occur inside mixed-label components; class-1 F1 is `0.975791` on pure components, `0.825147` on mixed components and `0.596154` on the cross-label near-crop cohort. Eighteen class-1 rows are both near-crop and source-adjacent to another label, and B9, Conv A0 and XCNorm A0 all classify only `7/18` correctly. This is the smallest high-value double-blind review cohort; pHash was computed from luminance only, so it is a review priority rather than evidence for automatic relabelling. Source `0` supplies `93.01%` of train and `96.18%` of class 1, which is insufficient evidence for a source router or a domain-robustness claim.
+The independent TRAIN-only cohort audit found no class-order or loader/manifest label-map bug. Instead, `23/25` frozen-B9 class-1 false negatives and `66/77` false positives into class 1 occur inside cross-class components; class-1 F1 is `0.975791` on single-class components, `0.825147` on cross-class components and `0.596154` on the near-crop cohort. Eighteen class-1 rows are both near-crop and source-adjacent to another class, and B9, Conv A0 and XCNorm A0 all classify only `7/18` correctly. This is a hard-representation cohort for reporting, not a review queue. Source `0` supplies `93.01%` of train and `96.18%` of class 1, which is insufficient evidence for a source router or a domain-robustness claim.
 
 The only admissible A1 changes placement: feed the same capacity-matched Conv/XCNorm bottleneck from the normalized input of the final attention block, add its bounded patch residual in parallel with final MHSA, and let the frozen final MLP plus final norm integrate it. The backbone/head remain strict-loaded B9 and frozen. A1 uses 5,000 fixed-seed bootstrap draws that resample whole union groups within folds. XCNorm must have mean pair-AUROC delta versus Conv at least `+0.0002`, lower bootstrap bound above zero, at least four of five fold wins and no pair below `-0.0001`; class-1 F1 versus B9 must improve at least `+0.005` with lower bound above zero; macro-F1 non-inferiority lower bound must be at least `-0.002`; class-1 TP retention must be at least `98%`; every `0/2/3/4 -> 1` count must be no higher than both B9 and Conv; total non-class-1 FP into class 1 must fall at least `10%` versus B9 and its rate delta versus Conv must have bootstrap upper bound at most zero. Structural gates also lock exact branch-off, `3,672` parameters, matched initialization/response scale, residual caps and finite complete updates. Failure closes XCNorm rather than starting another width/cap/learning-rate/placement sweep.
 
@@ -339,18 +397,13 @@ was used.
 - Plan SHA256 `bdf80119bea015bfe222f2664c810374dfa77e31fe8cedd5c77e2cf4abaa0bda`
 - Execution result SHA256 `978433fdbb1b95882c4eb78c16520436cdb5a507ccc7ffa07ad7326d51e33285`: `runs/cleanup_pretrained_tier_d_20260805/cleanup_result.json`
 
-## TRAIN-only blinded boundary review queue
+## Retired non-gating boundary-review packet
 
-The remaining data question is now a bounded human-review task, not an excuse for architecture sweeps. A sealed queue contains the 18 class-1 rows that are simultaneously endpoints of a cross-label `pHash<=3` relation and an adjacent-ID relation, plus six RGB-near-identical cross-label pairs (`pHash=0`, global SSIM at least `0.95`, RGB MAE at most `0.01`). B9 is correct on only `7/18` priority class-1 rows, but its predictions are hidden from the contact sheet to prevent reviewer anchoring. Two independent blinded reviewers and adjudication are required; no automatic relabeling is permitted.
-
-The original contact sheet hid model output but still displayed the current label and grouped related P1 images. It is superseded for decision-making by `runs/classf_blind_review_packet_20260805_r1`. The new packet verifies the locked data YAML, integrity manifest, P1/P2 CSVs and source summary; then it globally shuffles `54` unique P1 images as singletons and retains only the six necessary P2 A/B pairs. Each reviewer receives the same `66` TRAIN images in an independent order/orientation at a metadata-stripped 640-pixel review resolution. Current assignment, source path, relabel history and model output are absent from reviewer-visible files.
-
-- Review directory: `runs/classf_train_boundary_review_priority_20260802`
-- Priority-P1 CSV SHA256 `6103ee946fb48147499fb167e23a8407614c04cf85d49b57c4e1d9e3cad20b46`
-- Priority-P2 CSV SHA256 `7987a7c639df84e494c4603eca10712c1d510775c88ee8078aff3fba91aec56d`
-- Contact-sheet SHA256 `c8bd6a05d984bb0f078185b48c5d16b02e5e369ff1a10e12946d75595bc324d7`; review-summary SHA256 `7cb6efe68c2677bcd3a37e69937d9d27331eec2ce56051b1162e58c61fe88609`.
-- Strict blind-packet summary SHA256 `710804b7bcdae0294417527a9471ed10c3d638941fd3e75d09339408e22fb9c0`; sealed mapping SHA256 `168a4ee6367fb4fc865b885181ac868451d41d12d79f4f4564e3fc0308272d05`.
-- Send only `reviewer_1` to reviewer 1 and only `reviewer_2` to reviewer 2. Keep `ADMIN_DO_NOT_SHARE` sealed until both answer files are locked. Empty answer files mean DATA-01 remains `LOCKED` and authorize no training.
+The previously prepared blinded packet is retained as historical diagnostic
+evidence only. Do not send it to reviewers, do not use it to challenge or edit
+`class_f`, and do not gate architecture work on it. Its pHash/component records
+remain useful solely for source-safe TRAIN folds and cohort reporting. Canonical
+labels are user-authoritative real-world ground truth.
 
 ## Process corrections
 
