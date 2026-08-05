@@ -52,13 +52,29 @@ The focused suite must exercise the exact assignment-derived update counts in
 fold order: `202, 206, 212, 207, 210`. For both inherited peak rates `3e-5` and
 `3e-4`, it must run every scheduled optimizer step and prove:
 
+- the formal runner derives exactly that five-value horizon tuple from the
+  locked fold vector, batch size and accumulation before any optimizer step;
+- the actual four-group map is exactly `backbone_decay/backbone_no_decay` at
+  `3e-5` and `task_decay/task_no_decay` at `3e-4`; both the returned LR map and
+  every optimizer-group `lr` have the required IEEE-754 bytes at every update;
 - first, warmup-last and final dictionaries exist exactly once;
-- their values are bit-equal to `0.0`, `peak_lr` and `1e-6` respectively;
+- their values are bit-equal to positive `0.0`, `peak_lr` and `1e-6`
+  respectively; dictionary equality and `math.isclose` are insufficient;
 - completed steps equal `8 * steps_per_epoch`;
 - the first decay value is below the peak and every subsequent decay value is
   non-increasing, finite and at least `MIN_LR`;
-- the previous B18 fold-0 expression is reproduced as unequal to `3e-5`, so the
-  regression test cannot pass without exercising the actual failure mode.
+- an independent copy of the B18 formula is bit-compared with B19 at every
+  non-endpoint update across all ten horizon/rate schedules; the complete
+  old-versus-new difference set is exactly backbone peak at fold 0 update 201,
+  fold 2 update 211 and fold 3 update 206, and no other point;
+- the previous B18 fold-0 expression is reproduced as unequal to `3e-5`; a
+  negative-zero first endpoint and `nextafter(1e-6,+infinity)` final endpoint
+  are each injected and the production evidence validator rejects both.
+
+Across the ten unique schedules, only those three of `16,592` LR values may
+change. Across three arms and the two backbone groups, that is exactly 18 of
+`99,552` actual group-LR writes. The bitwise interior comparison is the guard
+against replacing the inherited schedule with a merely monotone alternative.
 
 Synthetic tests with only two warmup steps are insufficient. Any change to an
 interior LR value, peak rate, epoch count, accumulation, fold assignment, loss,
