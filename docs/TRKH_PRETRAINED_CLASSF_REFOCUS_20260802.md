@@ -91,7 +91,8 @@ Update rows in place; do not append chronology. States move `OPEN -> LOCKED -> C
 | `B33-01` | `CLOSED_FAIL` | B32's M1 residual may contain useful knowledge even though its raw-DINO operating point is weaker than supervised B9. | The apparent TRAIN gain did not generalize. On design-exposed validation, exact B9 / B9-only readout / B9+M1 gives C1 F1 `0.701149 / 0.705202 / 0.656716`; the candidate loses 12 C1 TP while reducing restricted FP by only one versus B9. | The source-fold readout was not end-to-end OOF because both upstream generators had seen all TRAIN rows. Do not tune B33. Any successor must cross-fit every upstream state and evaluate a fold unseen by the primary, auxiliary branch and fusion readout. |
 | `B34-01` | `CLOSED_PASS` | B33 may fail because its upstream states saw all TRAIN, or because the raw-DINO-aligned M1 residual is intrinsically misaligned with a supervised DINO primary. | On held component fold 0, primary / primary-only readout / primary+M1 gives C1 F1 `0.674033 / 0.673367 / 0.684783`. Candidate-minus-control is `+0.003291/+0.004406/+0.011416` accuracy/macro/C1 F1, restricted FP `36 -> 25`, and `2->1` `17 -> 11`; candidate also retains two more TP than the raw primary. | All seven gates pass. This permits one fresh-fold B9-like primary plus a residual trained relative to that primary. Add a prospective pair-AUROC guard because B34 candidate ranking fell `0.978987 -> 0.971702`. Validation/test remain closed. |
 | `B35-01` | `CLOSED_FAIL` | B34's gain may persist when the supervised primary follows the actual B9 optimization point rather than B21's short spatial proxy. | On held component fold 1, raw primary / primary-only readout / primary+M1 gives C1 F1 `0.778947 / 0.769231 / 0.753927`. Fusion versus raw loses two TP, adds two restricted FP, and lowers accuracy/macro/pair-AUROC by `-0.004132/-0.006919/-0.008350`; seven of nine gates fail. | Do not scale or gate the current raw-DINO-aligned linear M1 graft. This closes that score interface, not EfficientViM/SSM or a residual trained prospectively in a strong-primary score space. Validation/test remain closed. |
-| `B36-01` | `LOCKED` | B9 may sacrifice pretrained geometry because its random five-class head and DINO backbone move together from the first warm-up batch. | Reuse B35's exact fold-1 primary as the control. Candidate changes only the existing two-epoch LR warm-up to head-only, then opens the full DINO backbone for epochs 3--9 under the unchanged B9 sampler/loss/EMA/schedule. Compare clean, dim and bright held-TRAIN conditions. | Require clean C1 `+0.005`, robust mean and bright C1 `+0.010`, macro/accuracy/pair/TP/FP safety, no bright `0->1` growth, and no loss of class-1 bright feature cosine. Pass requires a fresh-fold confirmation; never validation/test. |
+| `B36-01` | `CLOSED_FAIL` | B9 may sacrifice pretrained geometry because its random five-class head and DINO backbone move together from the first warm-up batch. | Head-first improves dim/bright C1 by `+0.029520/+0.011516`, robust mean by `+0.020518`, and clean pair-AUROC by `+0.002518`, but clean accuracy/macro/C1 fall by `-0.005903/-0.006175/-0.008114`; TP is unchanged and restricted FP rises by two. Four clean gates fail. | Close the exact two-epoch head-only schedule. The robustness/ranking gain does not authorize retrospective calibration on fold 1, but it keeps representation/classifier separation open. Validation/test remain closed. |
+| `B37-01` | `LOCKED` | The local timm head uses only average patch tokens although DINOv3's official linear evaluator concatenates CLS and average patch tokens. | Strict-load B35, freeze it, fit fixed balanced readouts on fold-1-excluded TRAIN: patch-only, official `[CLS, mean(patch)]`, and a same-width Sattolo row-deranged CLS control. Compare the native head and all readouts on clean/dim/bright held TRAIN. | Require C1 `+0.005` versus native, patch-only and deranged controls; native macro/accuracy/pair/TP/FP safety; robust-mean and bright C1 `+0.005`; no bright `0->1` growth. A pass permits one zero-init inherited dual head on a fresh TRAIN fold only. |
 | `KD-01` | `GUARD` | B19 proves that raw-DINO relation distillation itself improves SwiftFormer. | False. Stock, control and candidate all receive the same cosine-neighbour relation loss; B19 isolates spatial atoms under that objective, not relation KD versus CE-only. The normalized relation also does not preserve photometric magnitude by construction. | Any causal KD claim requires a separately preregistered matched experiment on prospectively sealed evidence; B19 cannot be reinterpreted as that ablation. |
 | `TELEM-01` | `LOCKED` | Final factor norms and scalar loss curves are enough to diagnose optimization if a successor fails. | Rejected. They prove activation and fit behaviour but cannot distinguish backbone absorption from branch starvation. | B21 records per-role gradient and update/parameter norms plus adapter residual ratios by epoch. Gradient-conflict telemetry is required only when an auxiliary objective exists; B21 deliberately has none. |
 | `LR-01` | `CLOSED` | Exact float equality is safe when a mathematically identical endpoint is produced through multiplication and division. | Rejected by the B18 real-fold counterexample. Endpoint values must be returned explicitly, while interior points retain the original formula; tests must exercise every locked fold horizon. | Permanent scheduler implementation rule. |
@@ -708,6 +709,63 @@ label-bearing maturity signals, while global exposure is the nuisance. Any later
 local/global branch must add conditional evidence and be able to stay silent;
 cross-architecture feature copying without alignment or persistent CNN guidance
 can suppress the ViT's global representation ([CSKD, ICCV 2023](https://openaccess.thecvf.com/content/ICCV2023/html/Zhao_Cumulative_Spatial_Knowledge_Distillation_for_Vision_Transformers_ICCV_2023_paper.html)).
+
+B36 completed on commit `caf04b0` without constructing validation or test.
+
+| Held TRAIN fold 1 | Accuracy | Macro-F1 | C1 P/R/F1 | C1 TP | Restricted FP | Mean pair AUROC |
+|---|---:|---:|---:|---:|---:|---:|
+| B35 immediate-finetune control, clean | `0.942149` | `0.915462` | `0.840909/0.725490/0.778947` | `74` | `14` | `0.984642` |
+| B36 head-first candidate, clean | `0.936246` | `0.909288` | `0.822222/0.725490/0.770833` | `74` | `16` | `0.987161` |
+| Control / candidate, dim C1 F1 |  |  | `0.734300 / 0.763819` |  |  |  |
+| Control / candidate, bright C1 F1 |  |  | `0.595041 / 0.606557` |  |  |  |
+
+The result separates geometry from the decision point. Head-first adaptation
+improves lighting robustness, class-1 feature cosine and clean pair ranking, but
+does not improve clean recall and converts the ranking gain into two additional
+restricted false positives. Four preregistered clean gates fail. Do not tune a
+threshold or add a calibration stage after seeing this fold. This closes only
+the exact two-epoch freeze schedule; it does not show that LP-FT or decoupled
+classifier learning is generally ineffective.
+
+- Summary SHA256 `8cab8b7242b6f99e8a4b04e91693583759422307911f8a653858eeebc1547d8c`:
+  `runs/b36_headfirst_dino_fold1_caf04b0_20260806_114018/summary.json`
+- Score SHA256 `24b567789085eb9ed12c2010c320cdcb410c22a5bede8edfa24a456e506bb15e`;
+  checkpoint SHA256 `084e26d1b538d1e43aef1e597f216c3af9f5e3328d8e4a67e831f314c8df8d02`.
+
+## Locked representation screen: B37 official CLS + average patch
+
+The next change is smaller and more foundational than another hybrid. The local
+DINOv3-S instance has five prefix tokens but timm's `global_pool=avg` head uses
+only the mean of the 256 patch tokens. Meta's official linear-evaluation code
+instead concatenates class token(s) from the selected block(s) with the final
+average patch token. The implementation is explicit in
+[`create_linear_input`](https://github.com/facebookresearch/dinov3/blob/main/dinov3/eval/linear.py):
+CLS carries the global self-distillation path while patch tokens retain dense
+spatial evidence. B37 tests the omitted output before inventing a new branch.
+
+A descriptive five-fold probe on the untouched DINO cache already changed
+accuracy/macro/C1 F1 by `+0.003624/+0.004879/+0.012957`, added nine C1 TP and
+removed two restricted FP when CLS was concatenated with patch mean. Two fits
+reached their iteration ceiling, so those numbers are motivation only, not a
+promotion result. B37 therefore strict-loads the strong B35 checkpoint and uses
+one converged fixed solver. Its same-width negative control row-deranges CLS
+within fit and held partitions independently, retains identical feature width,
+and has no fixed rows. Registers are deliberately excluded because the official
+interface does not concatenate them.
+
+Passing all locked clean and lighting gates authorizes only a fresh-fold
+end-to-end head initialized to preserve B35 logits exactly: zero CLS weights,
+inherited patch weights and inherited bias. The head adds `384*5 = 1,920`
+parameters and MACs per image, with no second backbone and negligible deployment
+cost. Validation and test remain closed.
+
+Two newer directions remain queued behind this interface test rather than being
+mixed into it. If class-1 confusion persists, the 2026 Confusion-Aware Spectral
+Regularizer supplies a differentiable, EMA-stabilized confusion objective aimed
+at worst-class error ([CAR, CVPR 2026](https://arxiv.org/abs/2603.16732)). If a
+future multi-expert/student fusion is reopened, its knowledge transfer must be
+sample-trust-gated because indiscriminate collaboration can propagate and
+consolidate errors ([TCL, CVPR 2026](https://openaccess.thecvf.com/content/CVPR2026/html/Zhou_Trust-calibrated_Collaborative_Learning_for_Long-Tailed_Visual_Recognition_CVPR_2026_paper.html)).
 
 ## PRMR R1 closure
 
