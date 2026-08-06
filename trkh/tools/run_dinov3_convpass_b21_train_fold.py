@@ -378,6 +378,20 @@ def parameter_role(name: str) -> str:
     return "backbone"
 
 
+def set_backbone_trainable(model: nn.Module, trainable: bool) -> int:
+    """Toggle only the pretrained backbone, leaving the task head/adapters unchanged."""
+
+    changed = 0
+    for name, parameter in model.named_parameters():
+        if parameter_role(name) != "backbone":
+            continue
+        parameter.requires_grad_(bool(trainable))
+        changed += int(parameter.numel())
+    if changed <= 0:
+        raise B21ContractError("No pretrained backbone parameters were found.")
+    return changed
+
+
 def parameter_snapshot(model: nn.Module) -> Dict[str, Tensor]:
     return {
         name: parameter.detach().float().cpu().clone()
@@ -565,9 +579,13 @@ def _train_arm(
     seed: int = SEED,
     protocol_id: str = PROTOCOL_ID,
     checkpoint_stem: str | None = None,
+    backbone_freeze_epochs: int = 0,
 ) -> Dict[str, Any]:
     if not 1 <= int(epochs) <= int(scheduler_horizon):
         raise ValueError("epochs must be within the scheduler horizon")
+    freeze_epochs = int(backbone_freeze_epochs)
+    if not 0 <= freeze_epochs < int(epochs):
+        raise ValueError("backbone_freeze_epochs must be in [0, epochs)")
     if checkpoint_stem is not None and not checkpoint_stem.replace("_", "").isalnum():
         raise ValueError("checkpoint_stem may contain only letters, numbers and '_'")
     device = torch.device("cuda")
@@ -629,6 +647,9 @@ def _train_arm(
         lr=TASK_LR,
         betas=(0.9, 0.999),
     )
+    frozen_backbone_parameters = 0
+    if freeze_epochs > 0:
+        frozen_backbone_parameters = set_backbone_trainable(model, False)
     scheduler = build_warmup_decay_scheduler(
         optimizer,
         warmup_epochs=WARMUP_EPOCHS,
@@ -644,6 +665,10 @@ def _train_arm(
     started = time.monotonic()
     torch.cuda.reset_peak_memory_stats()
     for epoch in range(epochs):
+        if freeze_epochs > 0 and epoch == freeze_epochs:
+            observed = set_backbone_trainable(model, True)
+            if observed != frozen_backbone_parameters:
+                raise B21ContractError("Backbone trainability parameter count changed.")
         sampler.set_epoch(epoch)
         model.train()
         before = parameter_snapshot(model)
@@ -706,6 +731,10 @@ def _train_arm(
         epoch_rows.append(
             {
                 "epoch": epoch + 1,
+                "train_stage": (
+                    "head_only_warmup" if epoch < freeze_epochs else "full_finetune"
+                ),
+                "backbone_trainable": bool(epoch >= freeze_epochs),
                 "mean_loss": loss_sum / max(sample_count, 1),
                 "optimizer_updates_total": total_updates,
                 "learning_rates": [float(group["lr"]) for group in optimizer.param_groups],
@@ -778,6 +807,8 @@ def _train_arm(
         del cpu_state
     result = {
         "mode": mode,
+        "backbone_freeze_epochs": freeze_epochs,
+        "frozen_backbone_parameters": frozen_backbone_parameters,
         "metrics": metrics,
         "residual_ratio": residual_summary,
         "epochs": epoch_rows,

@@ -90,7 +90,8 @@ Update rows in place; do not append chronology. States move `OPEN -> LOCKED -> C
 | `B32-01` | `CLOSED_FAIL` | OOF success may disappear on validation or remain below supervised pure B9; attaching ConvNeXt knowledge directly to B9 is not justified. | B32 validates the mechanism versus raw DINO (`+0.019766/+0.021777/+0.031702` accuracy/macro/C1 F1; `+3` TP), but reaches only `0.887455/0.837360/0.583815` versus B9 `0.912061/0.876324/0.701149`, with 18 more restricted FP. | Do not tune raw-primary B32 on validation or run its audits. Its image-only M1 residual may be screened once as a fixed feature beside B9 under source-fold TRAIN readout. |
 | `B33-01` | `CLOSED_FAIL` | B32's M1 residual may contain useful knowledge even though its raw-DINO operating point is weaker than supervised B9. | The apparent TRAIN gain did not generalize. On design-exposed validation, exact B9 / B9-only readout / B9+M1 gives C1 F1 `0.701149 / 0.705202 / 0.656716`; the candidate loses 12 C1 TP while reducing restricted FP by only one versus B9. | The source-fold readout was not end-to-end OOF because both upstream generators had seen all TRAIN rows. Do not tune B33. Any successor must cross-fit every upstream state and evaluate a fold unseen by the primary, auxiliary branch and fusion readout. |
 | `B34-01` | `CLOSED_PASS` | B33 may fail because its upstream states saw all TRAIN, or because the raw-DINO-aligned M1 residual is intrinsically misaligned with a supervised DINO primary. | On held component fold 0, primary / primary-only readout / primary+M1 gives C1 F1 `0.674033 / 0.673367 / 0.684783`. Candidate-minus-control is `+0.003291/+0.004406/+0.011416` accuracy/macro/C1 F1, restricted FP `36 -> 25`, and `2->1` `17 -> 11`; candidate also retains two more TP than the raw primary. | All seven gates pass. This permits one fresh-fold B9-like primary plus a residual trained relative to that primary. Add a prospective pair-AUROC guard because B34 candidate ranking fell `0.978987 -> 0.971702`. Validation/test remain closed. |
-| `B35-01` | `LOCKED` | B34's gain may persist when the supervised primary follows the actual B9 optimization point rather than B21's short spatial proxy. | On component fold 1, train one direct DINO primary for fixed seed-42 epoch 9 under the B9 sampler/loss/EMA/30-epoch schedule; this epoch is selected from historical B9, never from held fold 1. Reuse the fold-1 B30 coupled-KL M1, then fit matched 5-D/10-D readouts only on fit folds. | Require the B34 F1/accuracy/macro/TP/FP/`2->1` gates plus mean pair-AUROC no worse than `-0.005` versus both raw primary and calibration control. Pass permits completing cross-fitted OOF; never validation/test. |
+| `B35-01` | `CLOSED_FAIL` | B34's gain may persist when the supervised primary follows the actual B9 optimization point rather than B21's short spatial proxy. | On held component fold 1, raw primary / primary-only readout / primary+M1 gives C1 F1 `0.778947 / 0.769231 / 0.753927`. Fusion versus raw loses two TP, adds two restricted FP, and lowers accuracy/macro/pair-AUROC by `-0.004132/-0.006919/-0.008350`; seven of nine gates fail. | Do not scale or gate the current raw-DINO-aligned linear M1 graft. This closes that score interface, not EfficientViM/SSM or a residual trained prospectively in a strong-primary score space. Validation/test remain closed. |
+| `B36-01` | `LOCKED` | B9 may sacrifice pretrained geometry because its random five-class head and DINO backbone move together from the first warm-up batch. | Reuse B35's exact fold-1 primary as the control. Candidate changes only the existing two-epoch LR warm-up to head-only, then opens the full DINO backbone for epochs 3--9 under the unchanged B9 sampler/loss/EMA/schedule. Compare clean, dim and bright held-TRAIN conditions. | Require clean C1 `+0.005`, robust mean and bright C1 `+0.010`, macro/accuracy/pair/TP/FP safety, no bright `0->1` growth, and no loss of class-1 bright feature cosine. Pass requires a fresh-fold confirmation; never validation/test. |
 | `KD-01` | `GUARD` | B19 proves that raw-DINO relation distillation itself improves SwiftFormer. | False. Stock, control and candidate all receive the same cosine-neighbour relation loss; B19 isolates spatial atoms under that objective, not relation KD versus CE-only. The normalized relation also does not preserve photometric magnitude by construction. | Any causal KD claim requires a separately preregistered matched experiment on prospectively sealed evidence; B19 cannot be reinterpreted as that ablation. |
 | `TELEM-01` | `LOCKED` | Final factor norms and scalar loss curves are enough to diagnose optimization if a successor fails. | Rejected. They prove activation and fit behaviour but cannot distinguish backbone absorption from branch starvation. | B21 records per-role gradient and update/parameter norms plus adapter residual ratios by epoch. Gradient-conflict telemetry is required only when an auxiliary objective exists; B21 deliberately has none. |
 | `LR-01` | `CLOSED` | Exact float equality is safe when a mathematically identical endpoint is produced through multiplication and division. | Rejected by the B18 real-fold counterexample. Endpoint values must be returned explicitly, while interior points retain the original formula; tests must exercise every locked fold horizon. | Permanent scheduler implementation rule. |
@@ -635,7 +636,7 @@ F1/TP/FP gates and train its residual directly relative to the B9-like primary.
 - Summary SHA256: `426008b8d2a0aa1ccd7cc32c1afdee7f2c8fbf4555946ebdb88d6ad756de8b19`
 - Score SHA256: `2a52de214bf6dd062805a0c655ec73095edfa2917968336d8cca28f9bf22efe2`
 
-## Locked strong-primary fold: B35 B9-like DINO + M1
+## Closed strong-primary fold: B35 B9-like DINO + M1
 
 B35 fixes the next causal question before GPU training. Component fold 1 is
 held out end-to-end. The primary uses direct DINOv3-S, seed 42, B9's tempered
@@ -650,6 +651,63 @@ Besides B34's F1/TP/FP gates, candidate mean pair AUROC must remain within
 `0.005` of both raw primary and calibration control. Passing permits completion
 of the cross-fitted TRAIN OOF only. It does not authorize validation, test,
 audits, finalfit, or a mobile claim.
+
+B35 completed on commit `a761642` without constructing validation or test.
+
+| Held component fold 1 | Accuracy | Macro-F1 | C1 P/R/F1 | C1 TP | Restricted FP (`0/2/4 -> 1`) | Mean pair AUROC |
+|---|---:|---:|---:|---:|---:|---:|
+| B9-like raw primary | `0.942149` | `0.915462` | `0.840909/0.725490/0.778947` | `74` | `14` (`8/5/1`) | `0.984642` |
+| Primary-only readout | `0.940968` | `0.913292` | `0.806452/0.735294/0.769231` | `75` | `18` (`13/4/1`) | `0.984226` |
+| Primary + raw-DINO-aligned M1 | `0.938017` | `0.908543` | `0.808989/0.705882/0.753927` | `72` | `16` (`11/4/1`) | `0.976292` |
+
+Fusion changes 37 raw-primary decisions: 14 repairs, 21 harms and two
+wrong-to-wrong moves. It removes seven true-C1 decisions and creates five, and
+adds three non-C1 false positives into C1 overall. Repairs concentrate at lower
+primary margins, but a retrospective low-margin gate cannot improve raw-primary
+C1 F1 at any fixed quantile; the best remains `0.778947`. The correctness oracle
+reaches `0.818653`, so complementary decisions exist, but the current M1 scores
+do not expose a source-safe trust signal that realizes them. The technical
+failure is score-space/target mismatch: B30's M1 learned corrections relative
+to raw DINO, while B35's supervised primary already moved the boundary and is
+substantially stronger. It is not evidence that state-space or mobile local/global
+models are intrinsically weaker than ViT.
+
+- Summary SHA256 `5c5e295b295085632137da23e501aea9a48ebf3d043f9eb3e78fd7a63af74e88`:
+  `runs/b35_crossfitted_b9_m1_a761642_r2/summary.json`
+- Score SHA256 `1f913b15974a92417bda39cdb58ea5aec3b76a3d096dd4ce84fc010a93dcd9e0`;
+  primary checkpoint SHA256 `b29bc28f5e59e5690dd3e99bba93b7de7edf5023fa834bdb76a12821ff50e548`.
+
+## Locked adaptation screen: B36 head-first DINO
+
+B36 isolates one foundation-level optimization defect before designing another
+hybrid. DINOv3's official model card recommends frozen features as the default
+and warns that downstream fine-tuning can amplify label bias. Kumar et al. show
+that moving a good pretrained representation while a random head is still being
+learned can distort features; linear-probe-then-fine-tune mitigates this. Long-tail
+work also shows that representation and classifier balancing need not be forced
+through the same stage. These sources motivate the schedule, but do not count as
+TRKH evidence: [DINOv3 model card](https://github.com/facebookresearch/dinov3/blob/main/MODEL_CARD.md),
+[LP-FT, ICLR 2022](https://arxiv.org/abs/2202.10054), and
+[decoupled long-tail recognition, ICLR 2020](https://openreview.net/pdf?id=r1gRTCVFvB).
+
+The retained B35 raw primary is the matched control, avoiding another 9-epoch
+control run. Candidate uses the same initial state, fold 1, seed 42, augmentation,
+tempered `n_c^0.5` exposure, LDAM-focal, effective batch 48, optimizer, EMA and
+30-epoch cosine horizon. During epochs 1--2 only the random task head receives
+updates; at the existing warm-up boundary the complete pretrained backbone opens
+for epochs 3--9. Thus total batches and optimizer steps stay matched. Fold 1 is
+design-exposed by B35, so even a pass is only a resource-efficient paired screen;
+a fresh component fold must confirm it.
+
+Clean metrics alone are insufficient because B9's clean gain over B0 coincides
+with a much larger bright class-1 collapse: clean-to-worst C1 drop is `0.168711`
+for B9 versus `0.087947` for B0, and bright `0->1` is `128` versus `81`. B36
+therefore evaluates the exact clean/dim/bright transformations on held TRAIN.
+It does not train illumination invariance blindly: mango colour and texture are
+label-bearing maturity signals, while global exposure is the nuisance. Any later
+local/global branch must add conditional evidence and be able to stay silent;
+cross-architecture feature copying without alignment or persistent CNN guidance
+can suppress the ViT's global representation ([CSKD, ICCV 2023](https://openaccess.thecvf.com/content/ICCV2023/html/Zhao_Cumulative_Spatial_Knowledge_Distillation_for_Vision_Transformers_ICCV_2023_paper.html)).
 
 ## PRMR R1 closure
 

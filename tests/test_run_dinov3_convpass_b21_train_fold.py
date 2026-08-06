@@ -18,6 +18,7 @@ from trkh.tools.run_dinov3_convpass_b21_train_fold import (
     parameter_role,
     parse_args,
     promotion_gate,
+    set_backbone_trainable,
     state_sha256,
 )
 
@@ -92,6 +93,32 @@ def test_parameter_roles_keep_adapter_and_head_out_of_backbone_lr() -> None:
     assert parameter_role("backbone.blocks.11.adapter_mlp.conv.weight") == "adapter"
     assert parameter_role("backbone.head.weight") == "head"
     assert parameter_role("backbone.blocks.0.attn.qkv.weight") == "backbone"
+
+
+def test_head_first_toggle_changes_only_pretrained_backbone() -> None:
+    class TinyWrappedClassifier(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.backbone = nn.Module()
+            self.backbone.blocks = nn.ModuleList([nn.Linear(3, 3)])
+            self.backbone.head = nn.Linear(3, 5)
+            self.backbone.blocks[0].adapter_attn = nn.Linear(3, 3)
+
+    model = TinyWrappedClassifier()
+    changed = set_backbone_trainable(model, False)
+
+    assert changed == sum(
+        parameter.numel()
+        for name, parameter in model.named_parameters()
+        if parameter_role(name) == "backbone"
+    )
+    for name, parameter in model.named_parameters():
+        assert parameter.requires_grad is (parameter_role(name) != "backbone")
+
+    assert set_backbone_trainable(model, True) == changed
+    for name, parameter in model.named_parameters():
+        if parameter_role(name) == "backbone":
+            assert parameter.requires_grad is True
 
 
 def test_state_hash_is_order_independent_and_content_sensitive() -> None:
