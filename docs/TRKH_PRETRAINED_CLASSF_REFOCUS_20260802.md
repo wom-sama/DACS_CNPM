@@ -94,7 +94,7 @@ Update rows in place; do not append chronology. States move `OPEN -> LOCKED -> C
 | `B36-01` | `CLOSED_FAIL` | B9 may sacrifice pretrained geometry because its random five-class head and DINO backbone move together from the first warm-up batch. | Head-first improves dim/bright C1 by `+0.029520/+0.011516`, robust mean by `+0.020518`, and clean pair-AUROC by `+0.002518`, but clean accuracy/macro/C1 fall by `-0.005903/-0.006175/-0.008114`; TP is unchanged and restricted FP rises by two. Four clean gates fail. | Close the exact two-epoch head-only schedule. The robustness/ranking gain does not authorize retrospective calibration on fold 1, but it keeps representation/classifier separation open. Validation/test remain closed. |
 | `B37-01` | `CLOSED_FAIL` | The local timm head uses only average patch tokens although DINOv3's official linear evaluator concatenates CLS and average patch tokens. | Aligned CLS beats the same-width deranged control by `+0.029513` C1 F1, but official CLS+patch loses to patch-only/native by `-0.006519/-0.024045`; versus native it adds three TP but ten restricted FP, loses `-0.008392` pair-AUROC, and bright C1 drops `-0.035041` with seven extra `0->1`. Nine gates fail. | Do not implement the simple dual head. Raw-DINO CLS complementarity does not survive as a safe add-on after strong patch-head supervision. This closes concatenation, not confusion-aware training or multi-depth evidence. Validation/test remain closed. |
 | `B38-01` | `CLOSED_FAIL` | Clean BiCAR produced the desired infinitesimal directions but only two validation decision changes; PRMR exposed useful lighting signal but its clean-correct eligibility filter reduced bright `0/2/4->1` FP by only `5%`. | Exact fold-2 warm-up replay passed. Relit BiCAR cuts bright `0->1` by `56` (`-59.57%`) and raises bright/robust-mean C1 F1 by `+0.128185/+0.064093`, but clean C1 falls `-0.007200` with one lost TP and dim C1 is unchanged. Three locked gates fail. | Close the exact shared full-matrix relit BiCAR. Its realized correction concentrates on bright `0->1` while dim `1<->2` does not improve; the final EMA alone does not identify a causal singular vector. A successor must separate nuisance polarity/pair and prove clean-gradient compatibility; no weight/margin/epoch sweep on fold 2. Validation/test remain closed. |
-| `B39-01` | `LOCKED` | B38 may contain a useful robust direction that its shared five-class matrix and raw endpoint expose too strongly. | On fresh TRAIN component fold 3, keep the clean DINO control fixed; train one raw candidate with separate bright `0<->1` and dim `1<->2` 2x2 BiCAR EMAs mixed equally, then gate only a preregistered `0.5/0.5` control/candidate EMA weight midpoint. Raw candidate is mechanism evidence, not the deployable endpoint. | Preflight must pass exact state/RNG/oracle checks, task and clean-C1 gradient compatibility, pair balance, and midpoint identity. The midpoint must gain clean C1 `>=0.005`, lose no clean TP or add restricted FP, meet accuracy/macro/pair noninferiority, gain dim/bright/mean robust C1 `>=0.010/0.015/0.015`, and reduce bright `0->1 >=10%`. Otherwise close B39 without tuning. Validation/test remain closed. |
+| `B39-01` | `CLOSED_FAIL` | B38 may contain a useful robust direction that its shared five-class matrix and raw endpoint expose too strongly. | The committed one-batch TRAIN-only preflight rejected pairwise BiCAR before training. Exact state/RNG/midpoint and clean-C1 compatibility pass, but weighted auxiliary/task gradient ratios are `0.3382/0.2854` for backbone/head versus the locked maximum `0.15`; the bright-pair oracle gives exactly zero gradient to the `1->0` direction. | Do not train or rescale B39. For a 2x2 off-diagonal matrix `[[0,a],[b,0]]`, spectral norm is `max(|a|,|b|)`, so pair splitting does not guarantee bidirectional pressure. A successor requires an explicitly monotone two-direction pair functional and a separately locked mechanical scale; fold-3 held metrics, validation and test remain unopened. |
 | `KD-01` | `GUARD` | B19 proves that raw-DINO relation distillation itself improves SwiftFormer. | False. Stock, control and candidate all receive the same cosine-neighbour relation loss; B19 isolates spatial atoms under that objective, not relation KD versus CE-only. The normalized relation also does not preserve photometric magnitude by construction. | Any causal KD claim requires a separately preregistered matched experiment on prospectively sealed evidence; B19 cannot be reinterpreted as that ablation. |
 | `TELEM-01` | `LOCKED` | Final factor norms and scalar loss curves are enough to diagnose optimization if a successor fails. | Rejected. They prove activation and fit behaviour but cannot distinguish backbone absorption from branch starvation. | B21 records per-role gradient and update/parameter norms plus adapter residual ratios by epoch. Gradient-conflict telemetry is required only when an auxiliary objective exists; B21 deliberately has none. |
 | `LR-01` | `CLOSED` | Exact float equality is safe when a mathematically identical endpoint is produced through multiplication and division. | Rejected by the B18 real-fold counterexample. Endpoint values must be returned explicitly, while interior points retain the original formula; tests must exercise every locked fold horizon. | Permanent scheduler implementation rule. |
@@ -855,7 +855,7 @@ Authoritative artifacts:
   `5049d3e881041f42bcffde98517052e719579e0a3ca12ae0b81e8c94e606263d` /
   `34eabd11abbf5489a10a54aeee4eb9f8b68785579e72a1b39ee338a0b60252c6`.
 
-## Locked experiment: B39 stratified pair BiCAR with fixed midpoint
+## Closed preflight: B39 stratified pair BiCAR with fixed midpoint
 
 B39 follows the measured failure structure rather than adding another feature
 branch. Class 1 participates in two different nuisance-conditioned boundaries:
@@ -908,6 +908,31 @@ reduction `>=10%`. The raw candidate is reported to separate mechanism failure
 from interpolation failure. Both checkpoints share the pure DINO topology, so
 midpoint deployment adds zero parameters, operators or latency; physical mobile
 and INT8 audits remain mandatory only after scientific promotion.
+
+B39 stopped at its committed preflight on `dddaddd`; no training arm, held-fold
+metric, validation dataset or test dataset was constructed. State load, all-class
+batch membership, CPU/CUDA RNG restoration, finite losses, both EMA updates,
+clean-class-1 compatibility, pair balance and self-midpoint identity all pass.
+The two decisive failures are structural:
+
+- weighted auxiliary/task gradient norm is `0.338169` in the backbone and
+  `0.285357` in the head, above the locked `0.15` ceiling despite positive
+  cosines `0.243033/0.423320`;
+- for natural pair counts `(1572,399)`, the bright `0<->1` oracle produces
+  gradients `[[-0.076700,+0.076700],[0,0]]`, so the true-class-1 direction is
+  unpenalized.
+
+The second result is not a data accident. For the 2x2 off-diagonal matrix
+`[[0,a],[b,0]]`, singular values are `|a|` and `|b|`; its spectral norm is their
+maximum and therefore has zero derivative with respect to the smaller direction
+away from a tie. Frequency-symmetric left/right scaling multiplies both pair
+directions by the same product and cannot remove that max-mode behavior. Exact
+artifact
+`runs/b39_stratified_pair_preflight_dddaddd_20260809/preflight.json` has SHA256
+`ffaa1c822fdc768c91e907cd62811d335456bdbaa6c9da0068b766ade7ab5597`.
+B39 will not be rescaled or rerun. Its failure narrows the successor to a
+two-direction monotone confusion functional whose scale is locked before any
+held-fold evaluation.
 
 If a future multi-expert/student fusion is reopened, its knowledge transfer must
 be sample-trust-gated because indiscriminate collaboration can propagate and
