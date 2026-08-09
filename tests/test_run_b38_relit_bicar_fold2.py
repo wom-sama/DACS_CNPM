@@ -129,6 +129,33 @@ def test_gradient_alignment_reports_weighted_auxiliary_scale() -> None:
     assert alignment["head"]["cosine"] == pytest.approx(1.0)
 
 
+def test_gradient_alignment_keeps_task_norm_when_auxiliary_skips_head() -> None:
+    class ToyRoutedModel(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.backbone = nn.Module()
+            self.backbone.feature = nn.Linear(2, 2, bias=False)
+            self.backbone.head = nn.Linear(2, 2, bias=False)
+
+        def forward(self, values: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+            features = self.backbone.feature(values)
+            return features, self.backbone.head(features)
+
+    model = ToyRoutedModel()
+    features, output = model(torch.tensor([[1.0, -1.0]]))
+    task = output.square().sum()
+    auxiliary = features.square().sum()
+
+    alignment = gradient_alignment_by_role(model, task, auxiliary)
+
+    assert alignment["backbone"]["task_norm"] > 0.0
+    assert alignment["backbone"]["auxiliary_norm"] > 0.0
+    assert alignment["head"]["task_norm"] > 0.0
+    assert alignment["head"]["auxiliary_norm"] == 0.0
+    assert alignment["head"]["auxiliary_over_task"] == 0.0
+    assert alignment["head"]["cosine"] == 0.0
+
+
 def test_b38_matched_warmup_requires_exact_epoch_two_state() -> None:
     rows = [
         {

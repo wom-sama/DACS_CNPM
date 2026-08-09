@@ -460,14 +460,19 @@ def gradient_alignment_by_role(
         task_gradients,
         auxiliary_gradients,
     ):
-        if task_gradient is None or auxiliary_gradient is None:
-            continue
         role = parameter_role(name)
-        task = task_gradient.detach().float()
-        auxiliary = auxiliary_gradient.detach().float()
-        totals[role]["task_sq"] += float(task.square().sum().item())
-        totals[role]["auxiliary_sq"] += float(auxiliary.square().sum().item())
-        totals[role]["dot"] += float((task * auxiliary).sum().item())
+        task = task_gradient.detach().float() if task_gradient is not None else None
+        auxiliary = (
+            auxiliary_gradient.detach().float()
+            if auxiliary_gradient is not None
+            else None
+        )
+        if task is not None:
+            totals[role]["task_sq"] += float(task.square().sum().item())
+        if auxiliary is not None:
+            totals[role]["auxiliary_sq"] += float(auxiliary.square().sum().item())
+        if task is not None and auxiliary is not None:
+            totals[role]["dot"] += float((task * auxiliary).sum().item())
     result: Dict[str, Dict[str, float]] = {}
     for role, values in totals.items():
         task_norm = math.sqrt(values["task_sq"])

@@ -10,11 +10,12 @@ test are never constructed.
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, field
 import gc
 import json
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, Callable, Mapping, Sequence
 
 import torch
 from safetensors.torch import load_file
@@ -60,6 +61,25 @@ class B40ContractError(RuntimeError):
     pass
 
 
+@contextmanager
+def temporarily_isolate_auxiliary_head(model: nn.Module):
+    """Keep feature gradients but remove the auxiliary path to head parameters."""
+
+    states: list[tuple[nn.Parameter, bool]] = []
+    for name, parameter in model.named_parameters():
+        if b21.parameter_role(name) != "head":
+            continue
+        states.append((parameter, bool(parameter.requires_grad)))
+        parameter.requires_grad_(False)
+    if not states:
+        raise B40ContractError("No task-head parameters were found for isolation.")
+    try:
+        yield
+    finally:
+        for parameter, requires_grad in states:
+            parameter.requires_grad_(requires_grad)
+
+
 def _pair_result(
     logits: Tensor,
     labels: Tensor,
@@ -89,6 +109,7 @@ def _pair_result(
 @dataclass
 class StratifiedPairMeanObjective:
     class_counts: tuple[int, ...]
+    isolate_auxiliary_head: bool = False
     bright_state: ConfusionSpectralEMAState = field(
         default_factory=ConfusionSpectralEMAState
     )
@@ -148,8 +169,14 @@ class StratifiedPairMeanObjective:
                 brightness=RELIGHT_BRIGHTNESS,
                 contrast=RELIGHT_CONTRAST,
             )
-            bright_logits = model(bright_images)
-            dim_logits = model(dim_images)
+            isolation = (
+                temporarily_isolate_auxiliary_head(model)
+                if self.isolate_auxiliary_head
+                else nullcontext()
+            )
+            with isolation:
+                bright_logits = model(bright_images)
+                dim_logits = model(dim_images)
         bright_result = _pair_result(
             bright_logits,
             labels[bright_mask],
@@ -167,6 +194,7 @@ class StratifiedPairMeanObjective:
         self.active_calls += 1
         stats = {
             "active": 1.0,
+            "auxiliary_head_isolated": float(self.isolate_auxiliary_head),
             "bright_rows": float(bright_mask.sum().item()),
             "dim_rows": float(dim_mask.sum().item()),
             "bright_pair_loss": float(bright_result.loss.detach().float().cpu()),
@@ -320,12 +348,28 @@ def _gate(
     return gate
 
 
-def _run_preflight(
+def run_pair_mean_preflight(
     args: argparse.Namespace,
     output: Path,
     *,
     repo: Path,
     git: Mapping[str, Any],
+    protocol_id: str,
+    auxiliary_weight: float,
+    objective_factory: Callable[[tuple[int, ...]], StratifiedPairMeanObjective],
+    objective_contract_fn: Callable[[], dict[str, Any]],
+    source_hashes_fn: Callable[[Path], dict[str, str]],
+    contract_error: type[RuntimeError],
+    head_isolated_expected: bool,
+    task_ratio_min: float,
+    task_ratio_max: float,
+    task_cosine_min: float,
+    focus_ratio_min: float,
+    focus_ratio_max: float,
+    focus_cosine_min: float,
+    pair_ratio_min: float,
+    pair_ratio_max: float,
+    pair_cosine_min: float,
 ) -> dict[str, Any]:
     assignment = b21.read_locked_assignment(args.assignment_csv)
     train_root = b21.read_locked_train_root(b21.EXPECTED_DATA_YAML)
@@ -338,7 +382,7 @@ def _run_preflight(
     images, labels = b38._first_fit_batch(fit_dataset, fit_labels)
     label_counts = torch.bincount(labels, minlength=5)
     if not torch.cuda.is_available() or not torch.cuda.is_bf16_supported():
-        raise B40ContractError("B40 requires CUDA BF16.")
+        raise contract_error("Pair-mean preflight requires CUDA BF16.")
     device = torch.device("cuda")
     model = b21.build_arm_model(args.dino_weight, DIRECT_MODE)
     model.set_mode(DIRECT_MODE)
@@ -361,7 +405,9 @@ def _run_preflight(
         max_margin=0.3,
         scale=18.0,
     ).to(device)
-    objective = StratifiedPairMeanObjective(class_counts=class_counts)
+    objective = objective_factory(class_counts)
+    if bool(objective.isolate_auxiliary_head) != bool(head_isolated_expected):
+        raise contract_error("Pair-mean auxiliary-head routing contract changed.")
     with torch.autocast("cuda", dtype=torch.bfloat16):
         clean_logits = model(images)
         task_loss = criterion(clean_logits, labels)
@@ -385,9 +431,11 @@ def _run_preflight(
             PAIR_MIX_WEIGHT * bright_result.loss
             + PAIR_MIX_WEIGHT * dim_result.loss
         )
-        weighted_auxiliary = AUXILIARY_WEIGHT * auxiliary_loss
-        weighted_bright = AUXILIARY_WEIGHT * PAIR_MIX_WEIGHT * bright_result.loss
-        weighted_dim = AUXILIARY_WEIGHT * PAIR_MIX_WEIGHT * dim_result.loss
+        weighted_auxiliary = float(auxiliary_weight) * auxiliary_loss
+        weighted_bright = (
+            float(auxiliary_weight) * PAIR_MIX_WEIGHT * bright_result.loss
+        )
+        weighted_dim = float(auxiliary_weight) * PAIR_MIX_WEIGHT * dim_result.loss
     task_alignment = b21.gradient_alignment_by_role(
         model,
         task_loss,
@@ -407,21 +455,21 @@ def _run_preflight(
     oracle = _pair_oracle_directions()
     task_checks = b39._role_checks(
         task_alignment,
-        ratio_min=0.04,
-        ratio_max=0.16,
-        cosine_min=0.0,
+        ratio_min=task_ratio_min,
+        ratio_max=task_ratio_max,
+        cosine_min=task_cosine_min,
     )
     focus_checks = b39._role_checks(
         focus_alignment,
-        ratio_min=0.02,
-        ratio_max=0.20,
-        cosine_min=0.20,
+        ratio_min=focus_ratio_min,
+        ratio_max=focus_ratio_max,
+        cosine_min=focus_cosine_min,
     )
     pair_checks = b39._role_checks(
         pair_alignment,
-        ratio_min=0.50,
-        ratio_max=2.0,
-        cosine_min=-0.50,
+        ratio_min=pair_ratio_min,
+        ratio_max=pair_ratio_max,
+        cosine_min=pair_cosine_min,
     )
     directional_values = torch.cat(
         (
@@ -429,6 +477,31 @@ def _run_preflight(
             dim_result.directional_confusions.detach().float(),
         )
     )
+    task_head = task_alignment["head"]
+    focus_head = focus_alignment["head"]
+    pair_head = pair_alignment["head"]
+    task_head_check = task_checks["head"]
+    focus_head_check = focus_checks["head"]
+    pair_head_check = pair_checks["head"]
+    if head_isolated_expected:
+        task_head_check = bool(
+            task_head["task_norm"] > 0.0
+            and task_head["auxiliary_norm"] == 0.0
+            and task_head["auxiliary_over_task"] == 0.0
+            and task_head["cosine"] == 0.0
+        )
+        focus_head_check = bool(
+            focus_head["task_norm"] > 0.0
+            and focus_head["auxiliary_norm"] == 0.0
+            and focus_head["auxiliary_over_task"] == 0.0
+            and focus_head["cosine"] == 0.0
+        )
+        pair_head_check = bool(
+            pair_head["task_norm"] == 0.0
+            and pair_head["auxiliary_norm"] == 0.0
+            and pair_head["auxiliary_over_task"] == 0.0
+            and pair_head["cosine"] == 0.0
+        )
     checks = {
         "mature_state_exact": state_match,
         "all_classes_in_batch": bool((label_counts > 0).all().item()),
@@ -449,12 +522,15 @@ def _run_preflight(
             objective.bright_state.updates == 1 and objective.dim_state.updates == 1
         ),
         "pair_oracle_directions": bool(oracle["passed"]),
+        "auxiliary_head_routing_exact": bool(
+            objective.isolate_auxiliary_head == head_isolated_expected
+        ),
         "backbone_task_scale": task_checks["backbone"],
-        "head_task_scale": task_checks["head"],
+        "head_task_scale_or_isolation": task_head_check,
         "backbone_focus_compatibility": focus_checks["backbone"],
-        "head_focus_compatibility": focus_checks["head"],
+        "head_focus_compatibility_or_isolation": focus_head_check,
         "backbone_pair_balance": pair_checks["backbone"],
-        "head_pair_balance": pair_checks["head"],
+        "head_pair_balance_or_isolation": pair_head_check,
         "midpoint_identity": midpoint_identity,
         "midpoint_nonfloat_states_match": (
             identity_stats["copied_different_non_float"] == 0
@@ -462,9 +538,9 @@ def _run_preflight(
     }
     payload = {
         "schema_version": 1,
-        "protocol_id": PROTOCOL_ID,
+        "protocol_id": protocol_id,
         "git": dict(git),
-        "source_hashes": _source_hashes(repo),
+        "source_hashes": source_hashes_fn(repo),
         "train": False,
         "validation": False,
         "test": False,
@@ -477,7 +553,7 @@ def _run_preflight(
             "sha256": b21.sha256_file(args.mature_checkpoint),
             "expected_sha256": B38_CONTROL_CHECKPOINT_SHA256,
         },
-        "objective": _objective_contract(),
+        "objective": objective_contract_fn(),
         "losses": {
             "task": float(task_loss.detach().float().cpu()),
             "focus_task": float(focus_task_loss.detach().float().cpu()),
@@ -505,8 +581,42 @@ def _run_preflight(
     gc.collect()
     torch.cuda.empty_cache()
     if not payload["passed"]:
-        raise B40ContractError(f"B40 preflight failed: {checks}")
+        raise contract_error(f"Pair-mean preflight failed: {checks}")
     return payload
+
+
+def _run_preflight(
+    args: argparse.Namespace,
+    output: Path,
+    *,
+    repo: Path,
+    git: Mapping[str, Any],
+) -> dict[str, Any]:
+    return run_pair_mean_preflight(
+        args,
+        output,
+        repo=repo,
+        git=git,
+        protocol_id=PROTOCOL_ID,
+        auxiliary_weight=AUXILIARY_WEIGHT,
+        objective_factory=lambda counts: StratifiedPairMeanObjective(
+            class_counts=counts,
+            isolate_auxiliary_head=False,
+        ),
+        objective_contract_fn=_objective_contract,
+        source_hashes_fn=_source_hashes,
+        contract_error=B40ContractError,
+        head_isolated_expected=False,
+        task_ratio_min=0.04,
+        task_ratio_max=0.16,
+        task_cosine_min=0.0,
+        focus_ratio_min=0.02,
+        focus_ratio_max=0.20,
+        focus_cosine_min=0.20,
+        pair_ratio_min=0.50,
+        pair_ratio_max=2.0,
+        pair_cosine_min=-0.50,
+    )
 
 
 def _run_formal(

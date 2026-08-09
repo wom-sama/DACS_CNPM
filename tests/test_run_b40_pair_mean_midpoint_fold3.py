@@ -69,3 +69,37 @@ def test_b40_scale_is_mechanically_locked() -> None:
     assert contract["outer_weight"] == 0.15
     assert contract["pair_mix_weights"] == [0.5, 0.5]
     assert contract["frequency_weighting"] is False
+
+
+def test_auxiliary_head_isolation_preserves_feature_gradient() -> None:
+    class ToyModel(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.backbone = nn.Module()
+            self.backbone.feature = nn.Linear(3, 4)
+            self.backbone.head = nn.Linear(4, 2)
+
+        def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+            return self.backbone.head(self.backbone.feature(inputs))
+
+    model = ToyModel()
+    inputs = torch.randn(3, 3)
+    clean_loss = model(inputs).sum()
+    with b40.temporarily_isolate_auxiliary_head(model):
+        auxiliary_loss = model(inputs).square().mean()
+        assert model.backbone.head.weight.requires_grad is False
+    assert model.backbone.head.weight.requires_grad is True
+
+    clean_head = torch.autograd.grad(
+        clean_loss,
+        model.backbone.head.weight,
+        retain_graph=True,
+    )[0]
+    auxiliary_feature, auxiliary_head = torch.autograd.grad(
+        auxiliary_loss,
+        (model.backbone.feature.weight, model.backbone.head.weight),
+        allow_unused=True,
+    )
+    assert clean_head.norm() > 0
+    assert auxiliary_feature is not None and auxiliary_feature.norm() > 0
+    assert auxiliary_head is None
