@@ -373,10 +373,15 @@ def _preflight(args: argparse.Namespace, *, repo: Path, git: Mapping[str, Any]) 
         merger.materialize_state_dict(),
         midpoint_block_state,
     )
+    midpoint_replay_block = copy.deepcopy(base_block).to(device).eval().requires_grad_(False)
+    midpoint_replay_block.load_state_dict(midpoint_block_state, strict=True)
     with torch.no_grad():
         initial_output = merger(student_input, rope=rope_device)
-        midpoint_replay_error = float((initial_output - midpoint_output).abs().max())
+        checkpoint_output = midpoint_replay_block(student_input, rope=rope_device)
+        midpoint_replay_error = float((initial_output - checkpoint_output).abs().max())
+        midpoint_context_error = float((initial_output - midpoint_output).abs().max())
         initial_loss = float(F.mse_loss(initial_output.float(), target.float()))
+    del midpoint_replay_block, checkpoint_output
     if not math_is_finite_positive(initial_loss):
         raise B43ContractError(f"Initial activation loss is invalid: {initial_loss}")
 
@@ -477,6 +482,7 @@ def _preflight(args: argparse.Namespace, *, repo: Path, git: Mapping[str, Any]) 
         "replay": {
             "midpoint_state_max_abs": midpoint_state_error,
             "midpoint_function_max_abs": midpoint_replay_error,
+            "midpoint_hooked_context_max_abs_diagnostic": midpoint_context_error,
             "materialized_function_max_abs": materialized_replay_error,
         },
         "resources": {
