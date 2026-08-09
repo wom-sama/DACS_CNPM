@@ -97,6 +97,8 @@ Update rows in place; do not append chronology. States move `OPEN -> LOCKED -> C
 | `B39-01` | `CLOSED_FAIL` | B38 may contain a useful robust direction that its shared five-class matrix and raw endpoint expose too strongly. | The committed one-batch TRAIN-only preflight rejected pairwise BiCAR before training. Exact state/RNG/midpoint and clean-C1 compatibility pass, but weighted auxiliary/task gradient ratios are `0.3382/0.2854` for backbone/head versus the locked maximum `0.15`; the bright-pair oracle gives exactly zero gradient to the `1->0` direction. | Do not train or rescale B39. For a 2x2 off-diagonal matrix `[[0,a],[b,0]]`, spectral norm is `max(|a|,|b|)`, so pair splitting does not guarantee bidirectional pressure. A successor requires an explicitly monotone two-direction pair functional and a separately locked mechanical scale; fold-3 held metrics, validation and test remain unopened. |
 | `B40-01` | `CLOSED_FAIL` | B39 failed because its 2x2 spectral max can ignore one direction and its inherited coefficient dominates the clean task; this does not reject nuisance/pair stratification itself. | The pair mean repairs directionality: all unequal oracle/real pair checks pass and all four directional entries are positive. Preflight still rejects the joint route: auxiliary/task ratios are `0.03884/0.02254` in backbone/head versus minimum `0.04`, and the head has full-task cosine `-0.05155`; head clean-C1 ratio is `0.01620 < 0.02`. | Do not rescale or train B40. Its backbone gradients are compatible with full task/C1 (`cos=0.2011/0.4033`) while only the classifier conflicts. One successor may route the unchanged pair mean through the representation but stop auxiliary gradients to the head, with a mechanically derived coefficient and an exact zero-head-gradient gate. Held fold 3, validation and test remain unopened. |
 | `B41-01` | `CLOSED_FAIL` | B40's pair functional is direction-correct, but sending it into the classifier head introduces the only measured full-task conflict. | Backbone-only auxiliary routing passes every preregistered gradient gate and the raw robust endpoint is active: bright C1 rises `+0.051901` and bright `0->1` falls `95 -> 64`. The fixed weight midpoint, however, gives clean/dim/bright C1 deltas `-0.006984/+0.011100/-0.003650`, adds two clean restricted FP and reduces bright `0->1` by only `2.11%`; six gates fail. | Close the exact arithmetic weight midpoint, not the routed pair objective. Do not tune interpolation on fold 3. A fixed 50/50 logit interpolation is descriptive evidence of endpoint complementarity, not a deployable candidate: it improves clean/dim/bright C1 by `+0.003543/+0.005521/+0.031515` but requires two models. Any successor must preserve a single inference graph and preregister a non-arithmetic consolidation rule on a fresh TRAIN fold. Validation/test remain closed. |
+| `B42-01` | `CLOSED_FAIL` | B41's midpoint may fail because dominant control/robust task-vector entries disagree in sign, which TIES-Merging was designed to resolve. | Relative to the exact common initialization, endpoint task-vector cosine is `0.973391`. Raw sign conflict is `7.15%`, but after the paper's fixed top-20% trim only `0.00707%` of all entries conflict and they hold just `0.0330%` of retained magnitude mass. Fixed TIES is `1.644/1.649` L2 from the endpoints versus endpoint separation `0.727`. | Do not evaluate or tune TIES on fold 3. Its intended sign-conflict mechanism is effectively absent; the operation would mainly trim useful common movement. Proceed only to a data-dependent function-space consolidation that uses one checkpoint, fixed TRAIN-only calibration and a fresh component fold. Validation/test remain closed. |
+| `B43-01` | `OPEN` | The endpoint complementarity exists in output space, while data-free arithmetic and sign-aware parameter merging cannot preserve it. | Adapt progressive layer-wise distillation to the same-initialization DINO blocks: control teaches clean views; the routed endpoint teaches an equal number of fixed dim/bright views. Learn elementwise task-vector coefficients block by block, then materialize one ordinary DINO checkpoint. | First implement a metric-free activation-replay preflight. Freeze paper-derived `16` shots per class/source, Adam `0.01`, `10` layer epochs and two-model coefficient initialization `0.5`; no grid search. Only a passing source/state/RNG/replay/loss-reduction/memory preflight permits one matched fold-4 screen under B41's unchanged metric gates. |
 | `KD-01` | `GUARD` | B19 proves that raw-DINO relation distillation itself improves SwiftFormer. | False. Stock, control and candidate all receive the same cosine-neighbour relation loss; B19 isolates spatial atoms under that objective, not relation KD versus CE-only. The normalized relation also does not preserve photometric magnitude by construction. | Any causal KD claim requires a separately preregistered matched experiment on prospectively sealed evidence; B19 cannot be reinterpreted as that ablation. |
 | `TELEM-01` | `LOCKED` | Final factor norms and scalar loss curves are enough to diagnose optimization if a successor fails. | Rejected. They prove activation and fit behaviour but cannot distinguish backbone absorption from branch starvation. | B21 records per-role gradient and update/parameter norms plus adapter residual ratios by epoch. Gradient-conflict telemetry is required only when an auxiliary objective exists; B21 deliberately has none. |
 | `LR-01` | `CLOSED` | Exact float equality is safe when a mathematically identical endpoint is produced through multiplication and division. | Rejected by the B18 real-fold counterexample. Endpoint values must be returned explicitly, while interior points retain the original formula; tests must exercise every locked fold horizon. | Permanent scheduler implementation rule. |
@@ -1115,6 +1117,46 @@ locked score archive has SHA256
 The raw and midpoint checkpoint SHA256 values are respectively
 `24c36e4208994f17f9ba147e16d7d2b1cd8aa9f8a1ee458cdef0d3dbc945e761` and
 `cd9354c55589956e2c2f05719c6dfe056f2d8ded6e907d3a03d0acb1c901ebea`.
+
+## B42 closure and B43 direction: function space, not another soup
+
+TIES-Merging addresses redundant task-vector changes and sign interference by
+trimming low-magnitude entries, electing a sign and merging only aligned values
+([Yadav et al., NeurIPS 2023](https://proceedings.neurips.cc/paper_files/paper/2023/hash/1644c9af28ab7916874f6fd6228a9bcf-Abstract-Conference.html)).
+The paper's no-validation recipe fixes top-`20%` retention and `lambda=1`; those
+values were audited without loading labels, logits or any held metric.
+
+Against B41's exact common initialization, the full control/robust task-vector
+cosine is `0.973391`. Although `7.149%` of raw floating entries disagree in sign,
+almost all are removed by magnitude trimming: only `0.00707%` of all retained
+positions conflict, containing `0.0330%` of retained magnitude mass. The fixed
+TIES vector retains about `82.9%` of each endpoint's L2 movement but lies
+`1.644/1.649` from the two endpoints, while the endpoints are only `0.727`
+apart. Its displacement relative to the arithmetic midpoint projects
+`-0.01686` onto the robust contrast direction. TIES would therefore behave
+mainly as aggressive trimming, not as a repair for B41's failure. No TIES
+checkpoint or score was created, and keep fraction/lambda were not swept.
+
+The parameter-only artifact
+`runs/b42_ties_geometry_d66704a_20260809/geometry.json` has SHA256
+`e594daadc5b03d4a35b55440773cba9d53055f1d8d935473dca930b255b42017`.
+Validation and test remain unopened.
+
+The next direction is data-dependent because recent theory shows that
+data-agnostic merging can have arbitrarily poor worst-case behavior. ProDistill
+instead matches expert activations progressively by layer and materializes one
+model after training
+([Xu et al., ICML 2025](https://proceedings.mlr.press/v267/xu25r.html)). B43 is
+an adaptation, not a claim of reproducing that paper: clean views are assigned
+to B41's control teacher and an equal number of deterministic dim/bright views
+to its routed robust teacher. The calibration set comes only from the fit side
+of fresh TRAIN fold 4. The paper's demonstrated low-data setting fixes `16`
+shots per class/source; its rapid-convergence analysis motivates `10` epochs,
+and the lower official ViT learning rate `0.01` plus two-model initialization
+`0.5` are frozen before any fold-4 metric. Elementwise coefficients are learned
+only during consolidation and folded into the ordinary DINO weights, so the
+inference graph, parameter count and latency remain unchanged. A metric-free
+activation preflight must pass before this row can move from `OPEN` to `LOCKED`.
 
 ## PRMR R1 closure
 
