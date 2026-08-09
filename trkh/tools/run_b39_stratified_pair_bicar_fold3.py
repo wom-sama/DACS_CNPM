@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 import gc
 import json
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, Callable, Mapping, Sequence
 
 import numpy as np
 import torch
@@ -248,8 +248,12 @@ def _read_preflight(
     return {"path": str(resolved), "sha256": b21.sha256_file(resolved)}
 
 
-def _fit_counts(assignment: Mapping[str, Any]) -> tuple[int, ...]:
-    fit = np.asarray(assignment["folds"]) != FOLD
+def _fit_counts(
+    assignment: Mapping[str, Any],
+    *,
+    fold: int = FOLD,
+) -> tuple[int, ...]:
+    fit = np.asarray(assignment["folds"]) != int(fold)
     return tuple(
         int(value)
         for value in np.bincount(np.asarray(assignment["labels"])[fit], minlength=5)
@@ -505,7 +509,12 @@ def _save_midpoint(
     control_checkpoint: Mapping[str, Any],
     candidate_checkpoint: Mapping[str, Any],
     output: Path,
+    *,
+    protocol_id: str = PROTOCOL_ID,
+    filename: str = "b39_midpoint_ema.safetensors",
 ) -> dict[str, Any]:
+    if Path(filename).name != filename or not filename.endswith(".safetensors"):
+        raise ValueError("midpoint filename must be a local .safetensors name")
     control_state = load_file(str(control_checkpoint["path"]), device="cpu")
     candidate_state = load_file(str(candidate_checkpoint["path"]), device="cpu")
     midpoint_state, stats = average_state_dicts(
@@ -513,13 +522,15 @@ def _save_midpoint(
         [MIDPOINT_CONTROL_WEIGHT, MIDPOINT_CANDIDATE_WEIGHT],
     )
     if stats["copied_different_non_float"] != 0:
-        raise B39ContractError("B39 endpoint states have different non-float buffers.")
-    path = output / "b39_midpoint_ema.safetensors"
+        raise B39ContractError(
+            "Pair-midpoint endpoint states have different non-float buffers."
+        )
+    path = output / filename
     save_file(
         midpoint_state,
         str(path),
         metadata={
-            "protocol_id": PROTOCOL_ID,
+            "protocol_id": protocol_id,
             "kind": "fixed_control_candidate_midpoint",
             "control_weight": str(MIDPOINT_CONTROL_WEIGHT),
             "candidate_weight": str(MIDPOINT_CANDIDATE_WEIGHT),
@@ -549,16 +560,38 @@ def _gate(
     return gate
 
 
-def _run_formal(
+def run_pair_midpoint_formal(
     args: argparse.Namespace,
     output: Path,
     *,
     repo: Path,
     git: Mapping[str, Any],
+    protocol_id: str,
+    fold: int,
+    seed: int,
+    epochs: int,
+    scheduler_horizon: int,
+    start_epoch: int,
+    auxiliary_weight: float,
+    objective_factory: Callable[[tuple[int, ...]], Any],
+    objective_contract_fn: Callable[[], dict[str, Any]],
+    source_hashes_fn: Callable[[Path], dict[str, str]],
+    preflight_reader: Callable[..., dict[str, str]],
+    gate_fn: Callable[
+        [Mapping[str, Mapping[str, Any]], Mapping[str, Mapping[str, Any]]],
+        dict[str, Any],
+    ],
+    control_checkpoint_stem: str,
+    candidate_checkpoint_stem: str,
+    midpoint_filename: str,
+    conditions: Mapping[str, tuple[float, float]],
+    interpretation_guard: str,
 ) -> dict[str, Any]:
     if args.preflight_artifact is None:
-        raise B39ContractError("Formal B39 requires --preflight-artifact.")
-    accepted_preflight = _read_preflight(
+        raise B39ContractError(
+            "Formal pair-midpoint screen requires --preflight-artifact."
+        )
+    accepted_preflight = preflight_reader(
         args.preflight_artifact,
         repo=repo,
         git=git,
@@ -568,9 +601,9 @@ def _run_formal(
     train_fit, train_held, held_paths, fit_labels = b21._build_datasets(
         train_root,
         assignment,
-        fold=FOLD,
+        fold=fold,
     )
-    class_counts = _fit_counts(assignment)
+    class_counts = _fit_counts(assignment, fold=fold)
     control_training = b21._train_arm(
         mode=DIRECT_MODE,
         dino_weight=args.dino_weight,
@@ -579,14 +612,14 @@ def _run_formal(
         held_paths=held_paths,
         fit_labels=fit_labels,
         output_dir=output,
-        epochs=EPOCHS,
-        scheduler_horizon=SCHEDULER_HORIZON,
-        seed=SEED,
-        protocol_id=PROTOCOL_ID,
-        checkpoint_stem="b39_control_ema",
-        state_hash_epochs=(START_EPOCH - 1,),
+        epochs=epochs,
+        scheduler_horizon=scheduler_horizon,
+        seed=seed,
+        protocol_id=protocol_id,
+        checkpoint_stem=control_checkpoint_stem,
+        state_hash_epochs=(start_epoch - 1,),
     )
-    objective = StratifiedPairBiCARObjective(class_counts=class_counts)
+    objective = objective_factory(class_counts)
     candidate_training = b21._train_arm(
         mode=DIRECT_MODE,
         dino_weight=args.dino_weight,
@@ -595,19 +628,20 @@ def _run_formal(
         held_paths=held_paths,
         fit_labels=fit_labels,
         output_dir=output,
-        epochs=EPOCHS,
-        scheduler_horizon=SCHEDULER_HORIZON,
-        seed=SEED,
-        protocol_id=PROTOCOL_ID,
-        checkpoint_stem="b39_stratified_pair_ema",
+        epochs=epochs,
+        scheduler_horizon=scheduler_horizon,
+        seed=seed,
+        protocol_id=protocol_id,
+        checkpoint_stem=candidate_checkpoint_stem,
         auxiliary_loss_fn=objective,
-        auxiliary_loss_weight=AUXILIARY_WEIGHT,
-        state_hash_epochs=(START_EPOCH - 1,),
+        auxiliary_loss_weight=auxiliary_weight,
+        state_hash_epochs=(start_epoch - 1,),
     )
     warmup_replay = b38._matched_warmup(control_training, candidate_training)
     if not warmup_replay["passed"]:
         raise B39ContractError(
-            f"B39 control/candidate warm-up diverged: {warmup_replay['checks']}"
+            "Pair-midpoint control/candidate warm-up diverged: "
+            f"{warmup_replay['checks']}"
         )
     control_checkpoint = control_training["checkpoint"]
     candidate_checkpoint = candidate_training["checkpoint"]
@@ -615,11 +649,13 @@ def _run_formal(
         candidate_checkpoint,
         Mapping,
     ):
-        raise B39ContractError("B39 checkpoints were not saved.")
+        raise B39ContractError("Pair-midpoint checkpoints were not saved.")
     midpoint_checkpoint = _save_midpoint(
         control_checkpoint,
         candidate_checkpoint,
         output,
+        protocol_id=protocol_id,
+        filename=midpoint_filename,
     )
     datasets = {
         name: b36._held_subset(
@@ -627,9 +663,9 @@ def _run_formal(
             assignment,
             brightness=brightness,
             contrast=contrast,
-            fold=FOLD,
+            fold=fold,
         )
-        for name, (brightness, contrast) in CONDITIONS.items()
+        for name, (brightness, contrast) in conditions.items()
     }
     control_metrics, _control_features, control_logits = b36._evaluate_checkpoint(
         dino_weight=args.dino_weight,
@@ -657,7 +693,7 @@ def _run_formal(
         labels,
         np.asarray(control_training["held_labels"], dtype=np.int64),
     ):
-        raise B39ContractError("Control/candidate held label order changed.")
+        raise B39ContractError("Pair-midpoint held label order changed.")
     control_replay = float(
         np.max(
             np.abs(
@@ -676,12 +712,13 @@ def _run_formal(
     )
     if control_replay != 0.0 or raw_replay != 0.0:
         raise B39ContractError(
-            f"B39 clean replay changed: control={control_replay}, raw={raw_replay}"
+            "Pair-midpoint clean replay changed: "
+            f"control={control_replay}, raw={raw_replay}"
         )
-    gate = _gate(control_metrics, midpoint_metrics)
+    gate = gate_fn(control_metrics, midpoint_metrics)
     score_path = output / "held_condition_scores.npz"
     arrays: dict[str, np.ndarray] = {"labels": labels}
-    for condition in CONDITIONS:
+    for condition in conditions:
         arrays[f"control_{condition}"] = control_logits[condition].numpy()
         arrays[f"raw_candidate_{condition}"] = raw_logits[condition].numpy()
         arrays[f"midpoint_{condition}"] = midpoint_logits[condition].numpy()
@@ -689,15 +726,15 @@ def _run_formal(
     bright_ema = objective.bright_state.ema_confusion
     dim_ema = objective.dim_state.ema_confusion
     if bright_ema is None or dim_ema is None or objective.active_calls <= 0:
-        raise B39ContractError("B39 pair objective never became active.")
+        raise B39ContractError("Pair-midpoint objective never became active.")
     summary = {
         "schema_version": 1,
-        "protocol_id": PROTOCOL_ID,
+        "protocol_id": protocol_id,
         "git": dict(git),
-        "source_hashes": _source_hashes(repo),
+        "source_hashes": source_hashes_fn(repo),
         "accepted_preflight": accepted_preflight,
         "dataset": {
-            "fold": FOLD,
+            "fold": fold,
             "fit_rows": len(train_fit),
             "held_rows": len(train_held),
             "fit_class_counts": class_counts,
@@ -706,12 +743,12 @@ def _run_formal(
             "test_split_used": False,
         },
         "schedule": {
-            "seed": SEED,
-            "epochs": EPOCHS,
-            "scheduler_horizon": SCHEDULER_HORIZON,
+            "seed": seed,
+            "epochs": epochs,
+            "scheduler_horizon": scheduler_horizon,
             "warmup_replay": warmup_replay,
         },
-        "objective": _objective_contract(),
+        "objective": objective_contract_fn(),
         "control_training": b21._sanitize_arm_result(control_training),
         "raw_candidate_training": b21._sanitize_arm_result(candidate_training),
         "midpoint_checkpoint": midpoint_checkpoint,
@@ -733,13 +770,47 @@ def _run_formal(
         },
         "scores_sha256": b21.sha256_file(score_path),
         "gate": gate,
-        "interpretation_guard": (
-            "Fresh TRAIN component fold 3 only. The fixed midpoint is the gated "
-            "endpoint; raw candidate is mechanism evidence. Validation/test stay closed."
-        ),
+        "interpretation_guard": interpretation_guard,
     }
     b21._atomic_json(output / "summary.json", summary)
     return summary
+
+
+def _run_formal(
+    args: argparse.Namespace,
+    output: Path,
+    *,
+    repo: Path,
+    git: Mapping[str, Any],
+) -> dict[str, Any]:
+    return run_pair_midpoint_formal(
+        args,
+        output,
+        repo=repo,
+        git=git,
+        protocol_id=PROTOCOL_ID,
+        fold=FOLD,
+        seed=SEED,
+        epochs=EPOCHS,
+        scheduler_horizon=SCHEDULER_HORIZON,
+        start_epoch=START_EPOCH,
+        auxiliary_weight=AUXILIARY_WEIGHT,
+        objective_factory=lambda counts: StratifiedPairBiCARObjective(
+            class_counts=counts
+        ),
+        objective_contract_fn=_objective_contract,
+        source_hashes_fn=_source_hashes,
+        preflight_reader=_read_preflight,
+        gate_fn=_gate,
+        control_checkpoint_stem="b39_control_ema",
+        candidate_checkpoint_stem="b39_stratified_pair_ema",
+        midpoint_filename="b39_midpoint_ema.safetensors",
+        conditions=CONDITIONS,
+        interpretation_guard=(
+            "Fresh TRAIN component fold 3 only. The fixed midpoint is the gated "
+            "endpoint; raw candidate is mechanism evidence. Validation/test stay closed."
+        ),
+    )
 
 
 def main(argv: Sequence[str] | None = None) -> int:
