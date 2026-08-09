@@ -93,7 +93,8 @@ Update rows in place; do not append chronology. States move `OPEN -> LOCKED -> C
 | `B35-01` | `CLOSED_FAIL` | B34's gain may persist when the supervised primary follows the actual B9 optimization point rather than B21's short spatial proxy. | On held component fold 1, raw primary / primary-only readout / primary+M1 gives C1 F1 `0.778947 / 0.769231 / 0.753927`. Fusion versus raw loses two TP, adds two restricted FP, and lowers accuracy/macro/pair-AUROC by `-0.004132/-0.006919/-0.008350`; seven of nine gates fail. | Do not scale or gate the current raw-DINO-aligned linear M1 graft. This closes that score interface, not EfficientViM/SSM or a residual trained prospectively in a strong-primary score space. Validation/test remain closed. |
 | `B36-01` | `CLOSED_FAIL` | B9 may sacrifice pretrained geometry because its random five-class head and DINO backbone move together from the first warm-up batch. | Head-first improves dim/bright C1 by `+0.029520/+0.011516`, robust mean by `+0.020518`, and clean pair-AUROC by `+0.002518`, but clean accuracy/macro/C1 fall by `-0.005903/-0.006175/-0.008114`; TP is unchanged and restricted FP rises by two. Four clean gates fail. | Close the exact two-epoch head-only schedule. The robustness/ranking gain does not authorize retrospective calibration on fold 1, but it keeps representation/classifier separation open. Validation/test remain closed. |
 | `B37-01` | `CLOSED_FAIL` | The local timm head uses only average patch tokens although DINOv3's official linear evaluator concatenates CLS and average patch tokens. | Aligned CLS beats the same-width deranged control by `+0.029513` C1 F1, but official CLS+patch loses to patch-only/native by `-0.006519/-0.024045`; versus native it adds three TP but ten restricted FP, loses `-0.008392` pair-AUROC, and bright C1 drops `-0.035041` with seven extra `0->1`. Nine gates fail. | Do not implement the simple dual head. Raw-DINO CLS complementarity does not survive as a safe add-on after strong patch-head supervision. This closes concatenation, not confusion-aware training or multi-depth evidence. Validation/test remain closed. |
-| `B38-01` | `CLOSED_FAIL` | Clean BiCAR produced the desired infinitesimal directions but only two validation decision changes; PRMR exposed useful lighting signal but its clean-correct eligibility filter reduced bright `0/2/4->1` FP by only `5%`. | Exact fold-2 warm-up replay passed. Relit BiCAR cuts bright `0->1` by `56` (`-59.57%`) and raises bright/robust-mean C1 F1 by `+0.128185/+0.064093`, but clean C1 falls `-0.007200` with one lost TP and dim C1 is unchanged. Three locked gates fail. | Close the exact shared full-matrix relit BiCAR. The dense bright `0<->1` mode dominates the common spectral objective while dim `1<->2` does not improve. A successor must separate nuisance polarity/pair and prove clean-gradient compatibility; no weight/margin/epoch sweep on fold 2. Validation/test remain closed. |
+| `B38-01` | `CLOSED_FAIL` | Clean BiCAR produced the desired infinitesimal directions but only two validation decision changes; PRMR exposed useful lighting signal but its clean-correct eligibility filter reduced bright `0/2/4->1` FP by only `5%`. | Exact fold-2 warm-up replay passed. Relit BiCAR cuts bright `0->1` by `56` (`-59.57%`) and raises bright/robust-mean C1 F1 by `+0.128185/+0.064093`, but clean C1 falls `-0.007200` with one lost TP and dim C1 is unchanged. Three locked gates fail. | Close the exact shared full-matrix relit BiCAR. Its realized correction concentrates on bright `0->1` while dim `1<->2` does not improve; the final EMA alone does not identify a causal singular vector. A successor must separate nuisance polarity/pair and prove clean-gradient compatibility; no weight/margin/epoch sweep on fold 2. Validation/test remain closed. |
+| `B39-01` | `LOCKED` | B38 may contain a useful robust direction that its shared five-class matrix and raw endpoint expose too strongly. | On fresh TRAIN component fold 3, keep the clean DINO control fixed; train one raw candidate with separate bright `0<->1` and dim `1<->2` 2x2 BiCAR EMAs mixed equally, then gate only a preregistered `0.5/0.5` control/candidate EMA weight midpoint. Raw candidate is mechanism evidence, not the deployable endpoint. | Preflight must pass exact state/RNG/oracle checks, task and clean-C1 gradient compatibility, pair balance, and midpoint identity. The midpoint must gain clean C1 `>=0.005`, lose no clean TP or add restricted FP, meet accuracy/macro/pair noninferiority, gain dim/bright/mean robust C1 `>=0.010/0.015/0.015`, and reduce bright `0->1 >=10%`. Otherwise close B39 without tuning. Validation/test remain closed. |
 | `KD-01` | `GUARD` | B19 proves that raw-DINO relation distillation itself improves SwiftFormer. | False. Stock, control and candidate all receive the same cosine-neighbour relation loss; B19 isolates spatial atoms under that objective, not relation KD versus CE-only. The normalized relation also does not preserve photometric magnitude by construction. | Any causal KD claim requires a separately preregistered matched experiment on prospectively sealed evidence; B19 cannot be reinterpreted as that ablation. |
 | `TELEM-01` | `LOCKED` | Final factor norms and scalar loss curves are enough to diagnose optimization if a successor fails. | Rejected. They prove activation and fit behaviour but cannot distinguish backbone absorption from branch starvation. | B21 records per-role gradient and update/parameter norms plus adapter residual ratios by epoch. Gradient-conflict telemetry is required only when an auxiliary objective exists; B21 deliberately has none. |
 | `LR-01` | `CLOSED` | Exact float equality is safe when a mathematically identical endpoint is produced through multiplication and division. | Rejected by the B18 real-fold counterexample. Endpoint values must be returned explicitly, while interior points retain the original formula; tests must exercise every locked fold horizon. | Permanent scheduler implementation rule. |
@@ -836,10 +837,10 @@ gradient conflict at the coarse role level nor an 8-GB resource limit.
 Clean accuracy is identical (`0.919132`), macro-F1 changes only `-0.000767`,
 and pair-AUROC changes `+0.000150`; nevertheless clean C1 gain, TP retention and
 dim gain fail their preregistered gates. Bright `2 -> 1` also rises `8 -> 13`
-while `0 -> 1` collapses. A single spectral norm over a common EMA therefore
-optimizes the dominant bright `0<->1` singular mode instead of allocating
-useful pressure to both nuisance/pair modes. This is positive mechanism evidence
-for stratification, not permission to relax the failed clean/dim gates.
+while `0 -> 1` collapses. The realized endpoint correction is therefore heavily
+concentrated on bright `0->1`; the final common EMA alone does not establish that
+one singular vector caused this outcome. This is positive mechanism evidence for
+pair/polarity stratification, not permission to relax the failed clean/dim gates.
 
 Authoritative artifacts:
 
@@ -853,6 +854,60 @@ Authoritative artifacts:
 - Control/candidate checkpoint SHA256
   `5049d3e881041f42bcffde98517052e719579e0a3ca12ae0b81e8c94e606263d` /
   `34eabd11abbf5489a10a54aeee4eb9f8b68785579e72a1b39ee338a0b60252c6`.
+
+## Locked experiment: B39 stratified pair BiCAR with fixed midpoint
+
+B39 follows the measured failure structure rather than adding another feature
+branch. Class 1 participates in two different nuisance-conditioned boundaries:
+bright relighting exposes `0<->1`, while dim relighting exposes `1<->2`. The raw
+candidate therefore maintains two detached-history 2x2 confusion EMAs and mixes
+their losses equally:
+
+```text
+L_raw = L_task + 0.5 * (0.5 * BiCAR_bright(0,1) + 0.5 * BiCAR_dim(1,2))
+theta_gate = 0.5 * EMA(theta_control) + 0.5 * EMA(theta_raw)
+```
+
+The brightness, contrast, margin, smoothing, EMA momentum, auxiliary start,
+optimizer, seed and nine-epoch/30-horizon schedule are unchanged from B38. This
+is not a hyperparameter search. Both arms start again from the same local DINOv3
+weights on TRAIN rows excluding component fold 3. Validation and test datasets
+are never constructed. The tempered-class batch contract guarantees that both
+classes of each pair occur in every auxiliary update.
+
+The fixed midpoint is motivated by a separate fold-2 TRAIN-only diagnostic, not
+selected on fold 3. Relative to the stored B38 control, an actual `0.5/0.5`
+weight-space midpoint changed clean accuracy/macro/C1 F1 by
+`+0.001315/+0.001237/+0.000753`, dim C1 by `+0.006110`, bright C1 by
+`+0.043217`, and bright `0->1` by `-21`, while still losing one clean C1 TP.
+Artifact `runs/b38_midpoint_soup_diagnostic_fold2_a4160ae_20260809/summary.json`
+has SHA256
+`070823d5291b9e26d73c477960d202e2b40890874115e06007078d3ada8ca948`;
+its corrected score archive has SHA256
+`d67db450d575835b2436796795808d9eef6ef67df9b57124046711058ed21971`.
+This supports a linear-connectivity hypothesis but does not pass B39's gate.
+Weight averaging can improve accuracy/robustness without adding inference cost,
+as established by [Model Soups](https://proceedings.mlr.press/v162/wortsman22a.html)
+and robust fine-tuning interpolation in
+[WiSE-FT](https://openaccess.thecvf.com/content/CVPR2022/html/Wortsman_Robust_Fine-Tuning_of_Zero-Shot_Models_CVPR_2022_paper.html).
+
+Preflight uses the exact B38 control checkpoint only as a mature gradient probe;
+formal training does not initialize from it. It must prove its state hash, CPU
+and CUDA RNG restoration, correct bidirectional pair gradients, finite losses,
+one update per pair EMA, and bit-identical self-midpoint. For both backbone and
+head, weighted auxiliary/task norm ratio must be `[0.01,0.15]` with cosine
+`>=-0.25`; against clean class-1 task loss it must be `[0.005,0.25]` with cosine
+`>=0`; and dim/bright gradient norm ratio must be `[0.25,4]` with cosine
+`>=-0.5`. These are falsification checks, not optimization targets.
+
+The gated endpoint is only the fixed midpoint. It must meet every `B39-01` row
+gate: clean C1 F1 `>=+0.005`; clean macro/accuracy/pair-AUROC deltas
+`>=-0.002/-0.002/-0.003`; no clean C1 TP loss; no restricted-FP increase; dim,
+bright and their mean C1 gains `>=+0.010/+0.015/+0.015`; and bright `0->1`
+reduction `>=10%`. The raw candidate is reported to separate mechanism failure
+from interpolation failure. Both checkpoints share the pure DINO topology, so
+midpoint deployment adds zero parameters, operators or latency; physical mobile
+and INT8 audits remain mandatory only after scientific promotion.
 
 If a future multi-expert/student fusion is reopened, its knowledge transfer must
 be sample-trust-gated because indiscriminate collaboration can propagate and
