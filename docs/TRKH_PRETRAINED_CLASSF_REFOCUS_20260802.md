@@ -98,7 +98,7 @@ Update rows in place; do not append chronology. States move `OPEN -> LOCKED -> C
 | `B40-01` | `CLOSED_FAIL` | B39 failed because its 2x2 spectral max can ignore one direction and its inherited coefficient dominates the clean task; this does not reject nuisance/pair stratification itself. | The pair mean repairs directionality: all unequal oracle/real pair checks pass and all four directional entries are positive. Preflight still rejects the joint route: auxiliary/task ratios are `0.03884/0.02254` in backbone/head versus minimum `0.04`, and the head has full-task cosine `-0.05155`; head clean-C1 ratio is `0.01620 < 0.02`. | Do not rescale or train B40. Its backbone gradients are compatible with full task/C1 (`cos=0.2011/0.4033`) while only the classifier conflicts. One successor may route the unchanged pair mean through the representation but stop auxiliary gradients to the head, with a mechanically derived coefficient and an exact zero-head-gradient gate. Held fold 3, validation and test remain unopened. |
 | `B41-01` | `CLOSED_FAIL` | B40's pair functional is direction-correct, but sending it into the classifier head introduces the only measured full-task conflict. | Backbone-only auxiliary routing passes every preregistered gradient gate and the raw robust endpoint is active: bright C1 rises `+0.051901` and bright `0->1` falls `95 -> 64`. The fixed weight midpoint, however, gives clean/dim/bright C1 deltas `-0.006984/+0.011100/-0.003650`, adds two clean restricted FP and reduces bright `0->1` by only `2.11%`; six gates fail. | Close the exact arithmetic weight midpoint, not the routed pair objective. Do not tune interpolation on fold 3. A fixed 50/50 logit interpolation is descriptive evidence of endpoint complementarity, not a deployable candidate: it improves clean/dim/bright C1 by `+0.003543/+0.005521/+0.031515` but requires two models. Any successor must preserve a single inference graph and preregister a non-arithmetic consolidation rule on a fresh TRAIN fold. Validation/test remain closed. |
 | `B42-01` | `CLOSED_FAIL` | B41's midpoint may fail because dominant control/robust task-vector entries disagree in sign, which TIES-Merging was designed to resolve. | Relative to the exact common initialization, endpoint task-vector cosine is `0.973391`. Raw sign conflict is `7.15%`, but after the paper's fixed top-20% trim only `0.00707%` of all entries conflict and they hold just `0.0330%` of retained magnitude mass. Fixed TIES is `1.644/1.649` L2 from the endpoints versus endpoint separation `0.727`. | Do not evaluate or tune TIES on fold 3. Its intended sign-conflict mechanism is effectively absent; the operation would mainly trim useful common movement. Proceed only to a data-dependent function-space consolidation that uses one checkpoint, fixed TRAIN-only calibration and a fresh component fold. Validation/test remain closed. |
-| `B43-01` | `LOCKED` | The endpoint complementarity exists in output space, while data-free arithmetic and sign-aware parameter merging cannot preserve it. | The repaired metric-free block-11 preflight passes exact materialization/RNG/source gates and reduces activation MSE to `0.8143x` at `0.380 GiB` peak VRAM. The formal screen adapts progressive layer-wise distillation to the same-initialization DINO blocks: control teaches clean views; the routed endpoint teaches an equal number of fixed dim/bright views. | Run exactly one fresh fold-4 screen: retrain matched B41 endpoints, use `16` shots per class/source, Adam `0.01`, `10` epochs per block, elementwise coefficient initialization `0.5`, and materialize one ordinary checkpoint. B41's metric gates remain unchanged; no grid, validation or test. |
+| `B43-01` | `CLOSED_FAIL` | The endpoint complementarity exists in output space, while data-free arithmetic and sign-aware parameter merging cannot preserve it. | The repaired preflight and all 12 formal activation-mechanics gates pass, but the materialized fold-4 model loses clean C1 F1 `-0.005936` and one clean TP. Robust mean improves `+0.013984`, narrowly below the locked `+0.015`; dim/bright improve `+0.011204/+0.016764` and bright `0->1` falls `83 -> 69`. | Close exact progressive elementwise activation-MSE consolidation. Do not sweep shots/LR/epochs/coefficients or select a head on fold 4. The next hypothesis must preserve clean classifier-aligned margins explicitly while learning the robust correction; validation/test remain closed. |
 | `KD-01` | `GUARD` | B19 proves that raw-DINO relation distillation itself improves SwiftFormer. | False. Stock, control and candidate all receive the same cosine-neighbour relation loss; B19 isolates spatial atoms under that objective, not relation KD versus CE-only. The normalized relation also does not preserve photometric magnitude by construction. | Any causal KD claim requires a separately preregistered matched experiment on prospectively sealed evidence; B19 cannot be reinterpreted as that ablation. |
 | `TELEM-01` | `LOCKED` | Final factor norms and scalar loss curves are enough to diagnose optimization if a successor fails. | Rejected. They prove activation and fit behaviour but cannot distinguish backbone absorption from branch starvation. | B21 records per-role gradient and update/parameter norms plus adapter residual ratios by epoch. Gradient-conflict telemetry is required only when an auxiliary objective exists; B21 deliberately has none. |
 | `LR-01` | `CLOSED` | Exact float equality is safe when a mathematically identical endpoint is produced through multiplication and division. | Rejected by the B18 real-fold counterexample. Endpoint values must be returned explicitly, while interior points retain the original formula; tests must exercise every locked fold horizon. | Permanent scheduler implementation rule. |
@@ -1202,6 +1202,51 @@ save/load and is evaluated once on held TRAIN fold 4 under B41's unchanged
 clean/dim/bright class-1, macro, accuracy, pair-AUROC, TP/FP and `0->1` gates.
 Failure closes exact B43; no coefficient/LR/shot/epoch/head interpolation sweep
 is allowed. Validation and test remain closed.
+
+## B43 closure: activation replay is not boundary preservation
+
+The single formal fold-4 run on commit `e3117e9` completed two matched
+nine-epoch endpoints, exact two-epoch warm-up replay, all twelve progressive
+blocks and one held-TRAIN evaluation. Validation and test were never
+constructed. Every block reduced calibration activation MSE (final/initial
+`0.9141--0.9788`), every midpoint/materialized replay gate passed, and peak
+CUDA allocation was only `0.5192 GiB`. The output is one ordinary DINO state;
+there is no ensemble or inference-cost increase.
+
+| Fold-4 arm/condition | Clean C1/macro | Dim C1/macro | Bright C1/macro | Clean TP/FP | Bright `0->1` |
+|---|---:|---:|---:|---:|---:|
+| Control | `0.700000/0.897583` | `0.655462/0.879040` | `0.553633/0.845393` | `77/36` | `83` |
+| Raw routed endpoint | `0.691244/0.895679` | `0.663830/0.880292` | `0.572491/0.856977` | `75/35` | `61` |
+| B43 progressive | `0.694064/0.896368` | `0.666667/0.881600` | `0.570397/0.852923` | `76/36` | `69` |
+
+Against control, B43 keeps accuracy exactly unchanged and clean macro-F1 within
+the `-0.002` allowance, improves clean pair AUROC by `+0.000538`, and reduces
+bright `0->1` by `14` (`16.87%`). It nevertheless loses clean C1 F1 by
+`-0.005936` and one TP. Robust-mean C1 improves `+0.013984`, just below the
+locked `+0.015`; therefore clean gain, clean TP and robust-mean gates fail.
+Relative to the raw routed endpoint, consolidation recovers only one clean TP
+while giving back eight bright `0->1` errors. This is a mechanism failure, not
+an optimization crash: per-element coefficient means remain approximately
+`0.5`, while extrema span about `-0.374` to `1.352`, and all layer losses fall.
+
+The result localizes the remaining technical limit. Generic token-level MSE can
+match both teacher activations while moving a few examples across the
+classifier's class-1 boundary; improved clean pair ranking is insufficient to
+preserve the operating point. B43 is closed without a head choice, coefficient
+clip, shot/LR/epoch change or fold-4 sweep. A successor must be equation-distinct
+and preregister a classifier-aligned clean-margin preservation constraint plus
+the robust correction on fresh TRAIN evidence; it must not merely rerun
+ProDistill with another scalar setting.
+
+Authoritative artifacts:
+
+- Summary SHA256 `506d712f43fc0497cb8d3a979f5d96d047228bd22d4804afefeddb8e5cc8e09e`:
+  `runs/b43_progressive_function_merge_fold4_e3117e9_20260809/summary.json`
+- Scores SHA256 `936b41d77340617ad1e036a8bf255385b92ca400b63dcc17d903c7f94024254a`.
+- Candidate checkpoint SHA256
+  `591ce063086982f89433b062a0d62dbb78905b1d2a92ebae7b8e07a53476a126`;
+  state SHA256
+  `3f555145717540ed2d1bb7bacb71aa82d7e5e60aacbf5e2f59451cfe29f43f01`.
 
 ## PRMR R1 closure
 
