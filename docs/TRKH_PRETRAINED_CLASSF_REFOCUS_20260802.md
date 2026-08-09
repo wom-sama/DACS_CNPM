@@ -1158,6 +1158,23 @@ only during consolidation and folded into the ordinary DINO weights, so the
 inference graph, parameter count and latency remain unchanged. A metric-free
 activation preflight must pass before this row can move from `OPEN` to `LOCKED`.
 
+The mechanics preflight is deliberately smaller than the formal calibration
+and cannot estimate model quality. It uses exactly two deterministic eval views
+per class from B41's fit side (ten clean control-teacher views and the same ten
+base images split into five fixed dim/five fixed bright robust-teacher views),
+trains only block 11 coefficients for 25 Adam steps at `0.01`, and never calls
+the classifier metric path. It passes only if: every class/source/polarity count
+and source-fold exclusion is exact; the initial `0.5/0.5` state and function
+replay the saved arithmetic midpoint within `1e-5`; final activation MSE is at
+most `0.90x` its initial value; finite coefficients move by at least `1e-6`;
+the materialized ordinary block replays the functional block within `1e-5`;
+CPU/CUDA RNG states are unchanged; and peak CUDA allocation is at most `4 GiB`.
+No checkpoint is emitted. Passing authorizes implementation of the already
+frozen all-12-block, 16-shot-per-class/source fold-4 screen; it does not itself
+lock or promote B43. A failed scientific/mechanism gate closes B43, while a
+demonstrated implementation defect may be repaired without changing these
+thresholds.
+
 ## PRMR R1 closure
 
 Matched five-epoch probe, seed 42, effective batch 48, test closed:
