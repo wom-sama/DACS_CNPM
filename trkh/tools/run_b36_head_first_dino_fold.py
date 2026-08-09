@@ -99,6 +99,7 @@ def _held_subset(
     *,
     brightness: float,
     contrast: float,
+    fold: int = FOLD,
 ) -> Subset:
     dataset = ClassificationFolderDataset(
         train_root,
@@ -112,7 +113,9 @@ def _held_subset(
         assignment_paths=assignment["relative_paths"],
         assignment_labels=assignment["labels"],
     )
-    held = np.flatnonzero(np.asarray(assignment["folds"]) == FOLD)
+    if int(fold) not in range(5):
+        raise ValueError("fold must be in 0..4")
+    held = np.flatnonzero(np.asarray(assignment["folds"]) == int(fold))
     return Subset(dataset, [mapped[int(index)] for index in held])
 
 

@@ -93,6 +93,7 @@ Update rows in place; do not append chronology. States move `OPEN -> LOCKED -> C
 | `B35-01` | `CLOSED_FAIL` | B34's gain may persist when the supervised primary follows the actual B9 optimization point rather than B21's short spatial proxy. | On held component fold 1, raw primary / primary-only readout / primary+M1 gives C1 F1 `0.778947 / 0.769231 / 0.753927`. Fusion versus raw loses two TP, adds two restricted FP, and lowers accuracy/macro/pair-AUROC by `-0.004132/-0.006919/-0.008350`; seven of nine gates fail. | Do not scale or gate the current raw-DINO-aligned linear M1 graft. This closes that score interface, not EfficientViM/SSM or a residual trained prospectively in a strong-primary score space. Validation/test remain closed. |
 | `B36-01` | `CLOSED_FAIL` | B9 may sacrifice pretrained geometry because its random five-class head and DINO backbone move together from the first warm-up batch. | Head-first improves dim/bright C1 by `+0.029520/+0.011516`, robust mean by `+0.020518`, and clean pair-AUROC by `+0.002518`, but clean accuracy/macro/C1 fall by `-0.005903/-0.006175/-0.008114`; TP is unchanged and restricted FP rises by two. Four clean gates fail. | Close the exact two-epoch head-only schedule. The robustness/ranking gain does not authorize retrospective calibration on fold 1, but it keeps representation/classifier separation open. Validation/test remain closed. |
 | `B37-01` | `CLOSED_FAIL` | The local timm head uses only average patch tokens although DINOv3's official linear evaluator concatenates CLS and average patch tokens. | Aligned CLS beats the same-width deranged control by `+0.029513` C1 F1, but official CLS+patch loses to patch-only/native by `-0.006519/-0.024045`; versus native it adds three TP but ten restricted FP, loses `-0.008392` pair-AUROC, and bright C1 drops `-0.035041` with seven extra `0->1`. Nine gates fail. | Do not implement the simple dual head. Raw-DINO CLS complementarity does not survive as a safe add-on after strong patch-head supervision. This closes concatenation, not confusion-aware training or multi-depth evidence. Validation/test remain closed. |
+| `B38-01` | `LOCKED` | Clean BiCAR produced the desired infinitesimal directions but only two validation decision changes; PRMR exposed useful lighting signal but its clean-correct eligibility filter reduced bright `0/2/4->1` FP by only `5%`. | Fresh fold-2 DINO control versus nuisance-conditioned BiCAR: from epoch 3, apply the existing bidirectional CAR matrix to one luminance-only relit view while LDAM-Focal remains on clean images. Auxiliary RNG is isolated, RGB differences are retained until clipping, and gradient scale/cosine are recorded by role. | Require clean C1 `+0.005`, clean macro/accuracy/pair noninferiority, TP nonloss, FP nonincrease, dim/bright/mean C1 `+0.010/+0.015/+0.015`, and bright `0->1` reduction `>=10%`. Only unchanged TRAIN-fold confirmation may follow; validation/test remain closed. |
 | `KD-01` | `GUARD` | B19 proves that raw-DINO relation distillation itself improves SwiftFormer. | False. Stock, control and candidate all receive the same cosine-neighbour relation loss; B19 isolates spatial atoms under that objective, not relation KD versus CE-only. The normalized relation also does not preserve photometric magnitude by construction. | Any causal KD claim requires a separately preregistered matched experiment on prospectively sealed evidence; B19 cannot be reinterpreted as that ablation. |
 | `TELEM-01` | `LOCKED` | Final factor norms and scalar loss curves are enough to diagnose optimization if a successor fails. | Rejected. They prove activation and fit behaviour but cannot distinguish backbone absorption from branch starvation. | B21 records per-role gradient and update/parameter norms plus adapter residual ratios by epoch. Gradient-conflict telemetry is required only when an auxiliary objective exists; B21 deliberately has none. |
 | `LR-01` | `CLOSED` | Exact float equality is safe when a mathematically identical endpoint is produced through multiplication and division. | Rejected by the B18 real-fold counterexample. Endpoint values must be returned explicitly, while interior points retain the original formula; tests must exercise every locked fold horizon. | Permanent scheduler implementation rule. |
@@ -778,12 +779,48 @@ dual head.
   `runs/b37_cls_patch_fold1_4d2076e_20260806_122011/summary.json`
 - Score SHA256 `59e61ddeebcbdb835b5d1376bcc671090ab8879fb02db624ec4b655162598879`.
 
-Two newer directions remain queued behind this interface test rather than being
-mixed into it. If class-1 confusion persists, the 2026 Confusion-Aware Spectral
-Regularizer supplies a differentiable, EMA-stabilized confusion objective aimed
-at worst-class error ([CAR, CVPR 2026](https://arxiv.org/abs/2603.16732)). If a
-future multi-expert/student fusion is reopened, its knowledge transfer must be
-sample-trust-gated because indiscriminate collaboration can propagate and
+## Locked experiment: B38 nuisance-conditioned BiCAR
+
+The image-formation split is explicit. Maturity colour, texture, damage
+morphology and shape remain label-bearing. Global exposure/contrast are treated
+as nuisance; hue and saturation are not changed. The relighting operator alters
+luminance and reconstructs RGB with the same luma delta, preserving RGB channel
+differences until clipping. This avoids turning generic colour invariance into
+target deletion, a conflict also highlighted by colour-constancy work where the
+choice of illuminant-dependent versus invariant views changes the task itself
+([CLCC, CVPR 2021](https://openaccess.thecvf.com/content/CVPR2021/html/Lo_CLCC_Contrastive_Learning_for_Color_Constancy_CVPR_2021_paper.html)).
+
+For relit logits `z'`, differentiable confusion `C_t`, dataset-frequency
+weights `Lambda`, and detached-history EMA `C_hat`, the candidate uses:
+
+```text
+L = LDAM-Focal(z_clean, y) + 0.5 * ||Lambda * C_hat(z', y) * Lambda||_2
+C_hat_t = 0.5*C_hat_(t-1) + 0.5*C_t
+```
+
+The margin/smoothing/relighting values remain the prior locked
+`gamma/r0/brightness/contrast = 0.1/0.2/0.25/0.10`; there is no parameter sweep.
+The equation differs from failed clean BiCAR because the confusion matrix is
+estimated where B35 actually develops dense bright `0->1` errors, and differs
+from PRMR because incorrect and low-margin clean rows are not excluded. This is
+a nuisance-conditioned extension of the accepted CAR surrogate
+([CAR, CVPR 2026](https://openaccess.thecvf.com/content/CVPR2026/html/Zhu_Confusion-Aware_Spectral_Regularizer_for_Long-Tailed_Recognition_CVPR_2026_paper.html)); robust-confusion theory independently supports regularizing confusion under
+perturbation rather than clean logits alone
+([Confusional Spectral Regularization](https://openreview.net/forum?id=lW0ZndAimF)).
+
+Both arms start from the same local DINOv3-S/16 weights, seed `42`, tempered
+sampler, LDAM-Focal, EMA, nine epochs and 30-epoch cosine horizon on TRAIN rows
+excluding component fold 2. B38 changes no inference operator or parameter, so
+its eventual mobile latency/size is exactly the pure DINO control topology. The
+auxiliary begins at epoch 3; its seeded CUDA/CPU RNG fork prevents the extra
+forward from changing the control's future stochastic path. Preflight must prove
+the two class-1 confusion gradient directions, exact mature-state load, finite
+head/backbone gradients, auxiliary/task ratio `[0.01,0.75]`, cosine `>=-0.25`,
+and RNG restoration before either formal arm runs. Formal gates are the locked
+`B38-01` row above. No validation or test access is authorized.
+
+If a future multi-expert/student fusion is reopened, its knowledge transfer must
+be sample-trust-gated because indiscriminate collaboration can propagate and
 consolidate errors ([TCL, CVPR 2026](https://openaccess.thecvf.com/content/CVPR2026/html/Zhou_Trust-calibrated_Collaborative_Learning_for_Long-Tailed_Visual_Recognition_CVPR_2026_paper.html)).
 
 ## PRMR R1 closure

@@ -82,6 +82,7 @@ from trkh.training.confusion_spectral import (
     ConfusionSpectralEMAState,
     confusion_aware_spectral_regularizer,
 )
+from trkh.training.relighting import balanced_polarities, relight_luminance
 from trkh.training.losses import (
     BalancedSoftmaxFocalLoss,
     FocalCrossEntropyLoss,
@@ -18147,48 +18148,19 @@ def _sample_pairwise_relighting_images(
     """
     if images.ndim != 4 or images.size(1) != 3:
         raise ValueError("pairwise relighting expects normalized RGB tensor (B, 3, H, W).")
-    rgb = _denormalize_classification_images(images)
-    batch_size = int(rgb.size(0))
+    batch_size = int(images.size(0))
     if batch_size == 0:
         return images.clone()
-    device = rgb.device
-    dtype = rgb.dtype
-    brightness_delta = float(brightness)
-    contrast_delta = float(contrast)
-    if not 0.0 <= brightness_delta <= 0.95:
-        raise ValueError("pairwise relighting brightness must be in [0, 0.95].")
-    if not 0.0 <= contrast_delta <= 0.95:
-        raise ValueError("pairwise relighting contrast must be in [0, 0.95].")
-
-    pair_count = batch_size // 2
-    polarity = torch.cat(
-        [
-            -torch.ones(pair_count, device=device, dtype=dtype),
-            torch.ones(pair_count, device=device, dtype=dtype),
-        ],
-        dim=0,
+    polarity = balanced_polarities(
+        batch_size,
+        device=images.device,
+        dtype=images.dtype,
     )
-    if batch_size % 2:
-        # Randomize the unmatched polarity. Always assigning it to bright would
-        # bias PRMR because probability sampling frequently selects odd counts.
-        extra_polarity = torch.where(
-            torch.rand((), device=device) < 0.5,
-            rgb.new_tensor(-1.0),
-            rgb.new_tensor(1.0),
-        ).reshape(1)
-        polarity = torch.cat([polarity, extra_polarity], dim=0)
-    if batch_size > 1:
-        polarity = polarity.index_select(0, torch.randperm(batch_size, device=device))
-    polarity = polarity.view(batch_size, 1, 1, 1)
-
-    luma = 0.299 * rgb[:, 0:1] + 0.587 * rgb[:, 1:2] + 0.114 * rgb[:, 2:3]
-    luma_mean = luma.mean(dim=(2, 3), keepdim=True)
-    contrast_factor = 1.0 + polarity * contrast_delta
-    brightness_factor = 1.0 + polarity * brightness_delta
-    relit_luma = ((luma - luma_mean) * contrast_factor + luma_mean) * brightness_factor
-    relit_rgb = rgb + (relit_luma - luma)
-    return _normalize_classification_images(relit_rgb.clamp(0.0, 1.0)).to(
-        dtype=images.dtype
+    return relight_luminance(
+        images,
+        polarity,
+        brightness=brightness,
+        contrast=contrast,
     )
 
 

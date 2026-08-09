@@ -12,7 +12,7 @@ import random
 import subprocess
 import time
 from pathlib import Path
-from typing import Any, Dict, Iterable, Mapping, Sequence
+from typing import Any, Callable, Dict, Iterable, Mapping, Sequence
 
 os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
@@ -426,6 +426,62 @@ def gradient_norm_by_role(model: nn.Module) -> Dict[str, float]:
     return {role: math.sqrt(value) for role, value in totals.items()}
 
 
+def gradient_alignment_by_role(
+    model: nn.Module,
+    task_loss: Tensor,
+    auxiliary_loss: Tensor,
+) -> Dict[str, Dict[str, float]]:
+    """Measure task/auxiliary gradient scale and conflict without filling ``.grad``."""
+
+    named_parameters = [
+        (name, parameter)
+        for name, parameter in model.named_parameters()
+        if parameter.requires_grad
+    ]
+    parameters = [parameter for _, parameter in named_parameters]
+    task_gradients = torch.autograd.grad(
+        task_loss,
+        parameters,
+        retain_graph=True,
+        allow_unused=True,
+    )
+    auxiliary_gradients = torch.autograd.grad(
+        auxiliary_loss,
+        parameters,
+        retain_graph=True,
+        allow_unused=True,
+    )
+    totals = {
+        role: {"task_sq": 0.0, "auxiliary_sq": 0.0, "dot": 0.0}
+        for role in ("backbone", "head", "adapter")
+    }
+    for (name, _parameter), task_gradient, auxiliary_gradient in zip(
+        named_parameters,
+        task_gradients,
+        auxiliary_gradients,
+    ):
+        if task_gradient is None or auxiliary_gradient is None:
+            continue
+        role = parameter_role(name)
+        task = task_gradient.detach().float()
+        auxiliary = auxiliary_gradient.detach().float()
+        totals[role]["task_sq"] += float(task.square().sum().item())
+        totals[role]["auxiliary_sq"] += float(auxiliary.square().sum().item())
+        totals[role]["dot"] += float((task * auxiliary).sum().item())
+    result: Dict[str, Dict[str, float]] = {}
+    for role, values in totals.items():
+        task_norm = math.sqrt(values["task_sq"])
+        auxiliary_norm = math.sqrt(values["auxiliary_sq"])
+        denominator = task_norm * auxiliary_norm
+        result[role] = {
+            "task_norm": task_norm,
+            "auxiliary_norm": auxiliary_norm,
+            "auxiliary_over_task": auxiliary_norm / max(task_norm, 1e-12),
+            "cosine": values["dot"] / denominator if denominator > 0.0 else 0.0,
+        }
+    return result
+
+
 def classification_metrics(labels: Sequence[int], predictions: Sequence[int]) -> Dict[str, Any]:
     true = np.asarray(labels, dtype=np.int64)
     pred = np.asarray(predictions, dtype=np.int64)
@@ -580,6 +636,13 @@ def _train_arm(
     protocol_id: str = PROTOCOL_ID,
     checkpoint_stem: str | None = None,
     backbone_freeze_epochs: int = 0,
+    auxiliary_loss_fn: Callable[
+        [nn.Module, Tensor, Tensor, Tensor, int, int],
+        tuple[Tensor, Mapping[str, float]],
+    ]
+    | None = None,
+    auxiliary_loss_weight: float = 0.0,
+    state_hash_epochs: Sequence[int] = (),
 ) -> Dict[str, Any]:
     if not 1 <= int(epochs) <= int(scheduler_horizon):
         raise ValueError("epochs must be within the scheduler horizon")
@@ -588,6 +651,14 @@ def _train_arm(
         raise ValueError("backbone_freeze_epochs must be in [0, epochs)")
     if checkpoint_stem is not None and not checkpoint_stem.replace("_", "").isalnum():
         raise ValueError("checkpoint_stem may contain only letters, numbers and '_'")
+    auxiliary_weight = float(auxiliary_loss_weight)
+    if not math.isfinite(auxiliary_weight) or auxiliary_weight < 0.0:
+        raise ValueError("auxiliary_loss_weight must be finite and non-negative")
+    if (auxiliary_loss_fn is None) != (auxiliary_weight == 0.0):
+        raise ValueError("auxiliary loss callable and positive weight must be enabled together")
+    resolved_state_hash_epochs = {int(value) for value in state_hash_epochs}
+    if any(value < 1 or value > int(epochs) for value in resolved_state_hash_epochs):
+        raise ValueError("state_hash_epochs must contain one-indexed epochs within the run")
     device = torch.device("cuda")
     _seed_all(seed)
     sampler = TemperedClassBatchSampler(
@@ -674,18 +745,47 @@ def _train_arm(
         before = parameter_snapshot(model)
         optimizer.zero_grad(set_to_none=True)
         loss_sum = 0.0
+        task_loss_sum = 0.0
+        auxiliary_loss_sum = 0.0
+        auxiliary_stats_sum: Dict[str, float] = {}
         sample_count = 0
         representative_grad = {role: 0.0 for role in ("backbone", "head", "adapter")}
+        representative_alignment: Dict[str, Dict[str, float]] = {}
         for batch_index, batch in enumerate(train_loader):
             images, labels = _split_batch(batch)
             images = images.to(device, non_blocking=True)
             labels = labels.to(device, non_blocking=True)
             with torch.autocast("cuda", dtype=torch.bfloat16):
                 logits = model(images)
-                loss = criterion(logits, labels)
+                task_loss = criterion(logits, labels)
+                auxiliary_loss = task_loss * 0.0
+                auxiliary_stats: Mapping[str, float] = {}
+                if auxiliary_loss_fn is not None:
+                    auxiliary_loss, auxiliary_stats = auxiliary_loss_fn(
+                        model,
+                        images,
+                        labels,
+                        logits,
+                        epoch,
+                        batch_index,
+                    )
+                    if auxiliary_loss.ndim != 0 or not bool(torch.isfinite(auxiliary_loss).item()):
+                        raise B21ContractError("Auxiliary loss must be a finite scalar.")
+                weighted_auxiliary_loss = auxiliary_weight * auxiliary_loss
+                loss = task_loss + weighted_auxiliary_loss
             if not bool(torch.isfinite(loss).item()):
                 finite_updates = False
                 raise B21ContractError(f"Non-finite loss: arm={mode} epoch={epoch + 1}.")
+            if (
+                auxiliary_loss_fn is not None
+                and not representative_alignment
+                and bool((auxiliary_loss.detach().float().abs() > 0.0).item())
+            ):
+                representative_alignment = gradient_alignment_by_role(
+                    model,
+                    task_loss,
+                    weighted_auxiliary_loss,
+                )
             (loss / ACCUMULATION_STEPS).backward()
             should_step = (
                 (batch_index + 1) % ACCUMULATION_STEPS == 0
@@ -706,6 +806,14 @@ def _train_arm(
                 scheduler.step(progress)
             batch_size = int(labels.numel())
             loss_sum += float(loss.detach().float().item()) * batch_size
+            task_loss_sum += float(task_loss.detach().float().item()) * batch_size
+            auxiliary_loss_sum += float(auxiliary_loss.detach().float().item()) * batch_size
+            for name, value in auxiliary_stats.items():
+                numeric = float(value)
+                if math.isfinite(numeric):
+                    auxiliary_stats_sum[name] = (
+                        auxiliary_stats_sum.get(name, 0.0) + numeric * batch_size
+                    )
             sample_count += batch_size
             if (batch_index + 1) % 100 == 0 or batch_index + 1 == len(train_loader):
                 _atomic_json(
@@ -728,18 +836,39 @@ def _train_arm(
                     f"lr={optimizer.param_groups[0]['lr']:.3e}",
                     flush=True,
                 )
+        epoch_number = epoch + 1
         epoch_rows.append(
             {
-                "epoch": epoch + 1,
+                "epoch": epoch_number,
                 "train_stage": (
                     "head_only_warmup" if epoch < freeze_epochs else "full_finetune"
                 ),
                 "backbone_trainable": bool(epoch >= freeze_epochs),
                 "mean_loss": loss_sum / max(sample_count, 1),
+                "mean_task_loss": task_loss_sum / max(sample_count, 1),
+                "mean_auxiliary_loss": auxiliary_loss_sum / max(sample_count, 1),
+                "auxiliary_loss_weight": auxiliary_weight,
+                "mean_auxiliary_stats": {
+                    name: value / max(sample_count, 1)
+                    for name, value in auxiliary_stats_sum.items()
+                },
                 "optimizer_updates_total": total_updates,
                 "learning_rates": [float(group["lr"]) for group in optimizer.param_groups],
                 "representative_preclip_gradient_norm": representative_grad,
+                "representative_task_auxiliary_gradient_alignment": (
+                    representative_alignment
+                ),
                 "update_over_parameter_norm": update_ratio_by_role(model, before),
+                "model_state_sha256": (
+                    state_sha256(model.state_dict())
+                    if epoch_number in resolved_state_hash_epochs
+                    else None
+                ),
+                "ema_state_sha256": (
+                    state_sha256(ema.module.state_dict())
+                    if epoch_number in resolved_state_hash_epochs
+                    else None
+                ),
             }
         )
         del before
@@ -808,6 +937,8 @@ def _train_arm(
     result = {
         "mode": mode,
         "backbone_freeze_epochs": freeze_epochs,
+        "auxiliary_loss_enabled": auxiliary_loss_fn is not None,
+        "auxiliary_loss_weight": auxiliary_weight,
         "frozen_backbone_parameters": frozen_backbone_parameters,
         "metrics": metrics,
         "residual_ratio": residual_summary,
