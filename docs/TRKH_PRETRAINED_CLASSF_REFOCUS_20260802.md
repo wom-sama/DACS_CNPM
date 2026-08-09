@@ -99,6 +99,8 @@ Update rows in place; do not append chronology. States move `OPEN -> LOCKED -> C
 | `B41-01` | `CLOSED_FAIL` | B40's pair functional is direction-correct, but sending it into the classifier head introduces the only measured full-task conflict. | Backbone-only auxiliary routing passes every preregistered gradient gate and the raw robust endpoint is active: bright C1 rises `+0.051901` and bright `0->1` falls `95 -> 64`. The fixed weight midpoint, however, gives clean/dim/bright C1 deltas `-0.006984/+0.011100/-0.003650`, adds two clean restricted FP and reduces bright `0->1` by only `2.11%`; six gates fail. | Close the exact arithmetic weight midpoint, not the routed pair objective. Do not tune interpolation on fold 3. A fixed 50/50 logit interpolation is descriptive evidence of endpoint complementarity, not a deployable candidate: it improves clean/dim/bright C1 by `+0.003543/+0.005521/+0.031515` but requires two models. Any successor must preserve a single inference graph and preregister a non-arithmetic consolidation rule on a fresh TRAIN fold. Validation/test remain closed. |
 | `B42-01` | `CLOSED_FAIL` | B41's midpoint may fail because dominant control/robust task-vector entries disagree in sign, which TIES-Merging was designed to resolve. | Relative to the exact common initialization, endpoint task-vector cosine is `0.973391`. Raw sign conflict is `7.15%`, but after the paper's fixed top-20% trim only `0.00707%` of all entries conflict and they hold just `0.0330%` of retained magnitude mass. Fixed TIES is `1.644/1.649` L2 from the endpoints versus endpoint separation `0.727`. | Do not evaluate or tune TIES on fold 3. Its intended sign-conflict mechanism is effectively absent; the operation would mainly trim useful common movement. Proceed only to a data-dependent function-space consolidation that uses one checkpoint, fixed TRAIN-only calibration and a fresh component fold. Validation/test remain closed. |
 | `B43-01` | `CLOSED_FAIL` | The endpoint complementarity exists in output space, while data-free arithmetic and sign-aware parameter merging cannot preserve it. | The repaired preflight and all 12 formal activation-mechanics gates pass, but the materialized fold-4 model loses clean C1 F1 `-0.005936` and one clean TP. Robust mean improves `+0.013984`, narrowly below the locked `+0.015`; dim/bright improve `+0.011204/+0.016764` and bright `0->1` falls `83 -> 69`. | Close exact progressive elementwise activation-MSE consolidation. Do not sweep shots/LR/epochs/coefficients or select a head on fold 4. The next hypothesis must preserve clean classifier-aligned margins explicitly while learning the robust correction; validation/test remain closed. |
+| `B44-01` | `CLOSED_FAIL` | A mobile conditional low-rank branch can preserve the control at gate zero and cheaply activate the robust-minus-control task vector under lighting shift. | Parameter-only SVD rejects the required compression: 48 block matrices hold `95.77%` of endpoint-delta energy, but global rank `4/16/32` retain only `33.38%/52.26%/64.42%` of matrix energy. Rank 32 already needs `2,359,296` factor parameters plus dynamic MACs. | Do not build or metric-test gated rank-4 LoRA, and do not sweep rank on fold 4. Seek a classifier-aligned functional constraint that does not carry a second diffuse backbone path. |
+| `B45-01` | `CLOSED_FAIL` | B29/B35 failed only because the canonical EfficientViM residual was aligned to raw DINO; frozen four-stage M1 features may predict the newly measured strong-primary correction. | Four-way component OOF on 160 fit-side bases rejects the precondition. A fixed 960-D four-stage Ridge gives robust correction MSE `0.003401` versus zero-residual `0.0009998` (`3.40x` worse), clean leakage MSE `0.002264`, and mean target cosine `0.0888`. | Do not train or metric-test the frozen-M1 residual and do not tune its stage/readout on these folds. This does not close a genuinely trainable SSM hybrid, but no measured correction signal currently authorizes one. |
 | `KD-01` | `GUARD` | B19 proves that raw-DINO relation distillation itself improves SwiftFormer. | False. Stock, control and candidate all receive the same cosine-neighbour relation loss; B19 isolates spatial atoms under that objective, not relation KD versus CE-only. The normalized relation also does not preserve photometric magnitude by construction. | Any causal KD claim requires a separately preregistered matched experiment on prospectively sealed evidence; B19 cannot be reinterpreted as that ablation. |
 | `TELEM-01` | `LOCKED` | Final factor norms and scalar loss curves are enough to diagnose optimization if a successor fails. | Rejected. They prove activation and fit behaviour but cannot distinguish backbone absorption from branch starvation. | B21 records per-role gradient and update/parameter norms plus adapter residual ratios by epoch. Gradient-conflict telemetry is required only when an auxiliary objective exists; B21 deliberately has none. |
 | `LR-01` | `CLOSED` | Exact float equality is safe when a mathematically identical endpoint is produced through multiplication and division. | Rejected by the B18 real-fold counterexample. Endpoint values must be returned explicitly, while interior points retain the original formula; tests must exercise every locked fold horizon. | Permanent scheduler implementation rule. |
@@ -1247,6 +1249,45 @@ Authoritative artifacts:
   `591ce063086982f89433b062a0d62dbb78905b1d2a92ebae7b8e07a53476a126`;
   state SHA256
   `3f555145717540ed2d1bb7bacb71aa82d7e5e60aacbf5e2f59451cfe29f43f01`.
+
+## B44 parameter-only closure: the correction is not mobile-low-rank
+
+A conditional task-vector branch would be attractive because gate zero can be
+control-exact and gate one can express the routed correction. TALL/Consensus
+Merging and CALM motivate localizing task-specific weights rather than carrying
+two full models
+([Wang et al., ICML 2024](https://proceedings.mlr.press/v235/wang24k.html),
+[Yan et al., ICML 2025](https://proceedings.mlr.press/v267/yan25d.html)). Before
+implementing such a branch, B44 measured the exact singular spectrum of every
+nonzero two-dimensional robust-minus-control matrix in the twelve DINO blocks.
+It used no image, label, logit or metric.
+
+The 48 matrices contain `95.77%` of total endpoint-delta squared norm, but their
+energy is diffuse. Global rank `1/4/8/16/32` retains only
+`18.67/33.38/41.88/52.26/64.42%` of matrix energy. Rank 4 is especially weak in
+blocks 3--9 (`16.64--24.82%`). Rank 32 needs `2,359,296` factor parameters and
+the matching per-image delta MACs while still discarding over one third of the
+matrix correction. Therefore the proposed lightweight gated-LoRA path fails its
+mobile precondition before architecture code or metric evaluation. Do not sweep
+rank on fold 4 or reinterpret this as evidence against all conditional routing.
+
+Parameter artifact SHA256
+`f86fd3670e8770df0ce69ec69ca300982bc834c962c4323b6f239cca6022cd5c`:
+`runs/b44_lowrank_task_vector_geometry_5d0e971_20260809/geometry.json`.
+
+B45 then tested the previously allowed B35 successor without training a model:
+can the official frozen M1's concatenated four-stage feature (`960-D`) predict
+the strong-primary routed-minus-control centered-logit correction? On 160
+deterministically balanced fold-4 fit-side bases, a fixed StandardScaler/Ridge
+`alpha=1` was cross-fitted over component folds 0--3 with clean zero-residual
+and matched dim/bright targets. OOF robust MSE is `0.003401`, versus
+`0.0009998` for predicting zero; clean leakage is `0.002264` and robust target
+cosine only `0.0888`. This source-unstable function approximation closes the
+frozen-feature M1 residual before label metrics or fine-tuning. It does not
+prove that all trainable SSM hybrids fail, but removes the only measured premise
+for spending another full run on this exact interface. Artifact SHA256
+`781c5938263fb8f21d41ee33abefcf1fade974eaf62ee2674d0593fde984baf3`:
+`runs/b45_m1_strong_primary_delta_oof_5d0e971_20260809/summary.json`.
 
 ## PRMR R1 closure
 
