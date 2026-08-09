@@ -258,7 +258,7 @@ def _shape(value: object, label: str) -> tuple[int, ...]:
     return tuple(_integer(item, f"{label}[{index}]", 1) for index, item in enumerate(parts))
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class ArtifactRecordV3:
     role: str
     logical_path: str
@@ -289,7 +289,7 @@ class ArtifactRecordV3:
         return {field: getattr(self, field) for field in ARTIFACT_FIELDS}
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class ArrayRecordV3(ArtifactRecordV3):
     dtype: str
     shape: tuple[int, ...]
@@ -326,7 +326,7 @@ class ArrayRecordV3(ArtifactRecordV3):
         return row
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class ArchiveMemberEventV3:
     event_index: int
     archive_role: str
@@ -410,7 +410,7 @@ class ArchiveMemberEventV3:
                    snapshot_digest)
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class WriteReceiptV3:
     sequence: int
     role: str
@@ -442,7 +442,7 @@ class WriteReceiptV3:
                    media)
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class FieldSpecV3:
     name: str
     kind: str
@@ -454,7 +454,7 @@ class FieldSpecV3:
     shape: tuple[int | str, ...] = ()
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class GroupSchemaV3:
     role: str
     fields: tuple[FieldSpecV3, ...]
@@ -579,7 +579,7 @@ GROUP_SCHEMAS = MappingProxyType({
 })
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class RegistrySpecV3:
     columns: tuple[str, ...]
     order_by: tuple[str, ...]
@@ -713,7 +713,7 @@ BINARY_CONTENT_BINDINGS = MappingProxyType({
 })
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class ScientificGroupPayloadV3:
     group_role: str
     records: tuple[ArtifactRecordV3 | ArrayRecordV3, ...]
