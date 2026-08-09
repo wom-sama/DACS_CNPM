@@ -43,6 +43,7 @@ class ElementwiseTaskVectorBlock(nn.Module):
         super().__init__()
         if not math.isfinite(float(coefficient_init)):
             raise ValueError("coefficient_init must be finite")
+        self.coefficient_init = float(coefficient_init)
 
         self.base_block = copy.deepcopy(base_block).eval().requires_grad_(False)
         base_state = _detached_state(self.base_block.state_dict())
@@ -58,6 +59,7 @@ class ElementwiseTaskVectorBlock(nn.Module):
         self._static_names: list[str] = []
         self.delta_a = nn.ParameterList()
         self.delta_b = nn.ParameterList()
+        self.anchor = nn.ParameterList()
         self.alpha_a = nn.ParameterList()
         self.alpha_b = nn.ParameterList()
 
@@ -96,6 +98,17 @@ class ElementwiseTaskVectorBlock(nn.Module):
             # handled by nn.Module without a parallel buffer-name registry.
             self.delta_a.append(nn.Parameter(delta_a, requires_grad=False))
             self.delta_b.append(nn.Parameter(delta_b, requires_grad=False))
+            # Center the parameterization at its initialization.  At the locked
+            # two-model init 0.5 this deliberately uses the same float32
+            # accumulation order as the saved arithmetic midpoint, avoiding a
+            # small base-plus-deltas rounding mismatch amplified by attention.
+            anchor = torch.zeros_like(base, dtype=torch.float32)
+            anchor = anchor + base.float() * (1.0 - 2.0 * float(coefficient_init))
+            anchor = anchor + a.float() * float(coefficient_init)
+            anchor = anchor + b.float() * float(coefficient_init)
+            self.anchor.append(
+                nn.Parameter(anchor.to(dtype=base.dtype), requires_grad=False)
+            )
             self.alpha_a.append(
                 nn.Parameter(torch.full_like(base, float(coefficient_init)))
             )
@@ -116,11 +129,18 @@ class ElementwiseTaskVectorBlock(nn.Module):
     def _merged_state(self) -> OrderedDict[str, Tensor]:
         state = OrderedDict(self.base_block.state_dict())
         for index, name in enumerate(self._learned_names):
-            base = state[name]
             state[name] = (
-                base
-                + self.alpha_a[index] * self.delta_a[index]
-                + self.alpha_b[index] * self.delta_b[index]
+                self.anchor[index]
+                + (
+                    self.alpha_a[index]
+                    - self.alpha_a[index].new_tensor(self.coefficient_init)
+                )
+                * self.delta_a[index]
+                + (
+                    self.alpha_b[index]
+                    - self.alpha_b[index].new_tensor(self.coefficient_init)
+                )
+                * self.delta_b[index]
             )
         return state
 

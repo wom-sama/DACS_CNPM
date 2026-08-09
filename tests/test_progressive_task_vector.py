@@ -29,11 +29,12 @@ def test_initial_function_is_exact_endpoint_midpoint() -> None:
     merger = ElementwiseTaskVectorBlock(base, endpoint_a, endpoint_b)
     inputs = torch.randn(4, 3)
 
-    expected_state = {
-        name: base.state_dict()[name] + 0.5 * (endpoint_a[name] - base.state_dict()[name])
-        + 0.5 * (endpoint_b[name] - base.state_dict()[name])
-        for name in base.state_dict()
-    }
+    expected_state = {}
+    for name, value in base.state_dict().items():
+        averaged = torch.zeros_like(value, dtype=torch.float32)
+        averaged = averaged + endpoint_a[name].float() * 0.5
+        averaged = averaged + endpoint_b[name].float() * 0.5
+        expected_state[name] = averaged.to(dtype=value.dtype)
     expected = functional_call(base, expected_state, (inputs,), strict=True)
     assert torch.equal(merger(inputs), expected)
 
