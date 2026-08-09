@@ -13,18 +13,24 @@ import copy
 import gc
 import hashlib
 import json
+import os
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 import numpy as np
 import torch
-from safetensors.torch import load_file
+from safetensors.torch import load_file, save_file
 from torch import Tensor, nn
 from torch.nn import functional as F
 
 from trkh.data.dataset import ClassificationFolderDataset
 from trkh.models.dinov3_multidepth_convpass_b21 import DIRECT_MODE
+from trkh.tools import run_b36_head_first_dino_fold as b36
+from trkh.tools import run_b38_relit_bicar_fold2 as b38
+from trkh.tools import run_b39_stratified_pair_bicar_fold3 as b39
+from trkh.tools import run_b41_backbone_routed_pair_mean_fold3 as b41
 from trkh.tools import run_dinov3_convpass_b21_train_fold as b21
+from trkh.tools.average_checkpoints import average_state_dicts
 from trkh.training.progressive_task_vector import ElementwiseTaskVectorBlock
 from trkh.training.relighting import relight_luminance
 
@@ -45,6 +51,20 @@ MAX_REPLAY_ABS = 1e-5
 MIN_COEFFICIENT_CHANGE = 1e-6
 MAX_PEAK_CUDA_BYTES = 4 * 1024**3
 
+FORMAL_FOLD = 4
+FORMAL_SEED = 42
+FORMAL_EPOCHS = 9
+FORMAL_SCHEDULER_HORIZON = 30
+FORMAL_START_EPOCH = 3
+FORMAL_BASES_PER_CLASS = 16
+FORMAL_LAYER_EPOCHS = 10
+FORMAL_CAPTURE_BATCH_SIZE = 16
+FORMAL_PER_SOURCE_BATCH_SIZE = 8
+MAX_FORMAL_LAYER_FINAL_TO_INITIAL = 1.0
+MAX_FORMAL_CUDA_BYTES = 6 * 1024**3
+FORMAL_PREFLIGHT_SHA256 = "2d9f183465ad5e7ab80b80aadf095ed54cdbac3dfc147f569c27391096eabd86"
+FORMAL_PREFLIGHT_HEAD = "db41aefd974d75af1d54244eae8fdef6442f05d0"
+
 INITIAL_PRIMARY_STATE_SHA256 = "5f8f1073f5e1394b9e8cf8aff6e03e985ca22225e2678a59dd550cafdaea34f8"
 INITIAL_FULL_STATE_SHA256 = "787bc0d96bb502159e52f43e9e87111a76419f18156fb2c60491bd591d3023fb"
 CONTROL_FILE_SHA256 = "233ee2e3ce2d309ed47ae8cb2d6bd15c1ff40a1373964e4f031239a4448769d1"
@@ -64,9 +84,10 @@ def _args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--assignment-csv", type=Path, required=True)
     parser.add_argument("--dino-weight", type=Path, required=True)
-    parser.add_argument("--control-checkpoint", type=Path, required=True)
-    parser.add_argument("--robust-checkpoint", type=Path, required=True)
-    parser.add_argument("--midpoint-checkpoint", type=Path, required=True)
+    parser.add_argument("--control-checkpoint", type=Path)
+    parser.add_argument("--robust-checkpoint", type=Path)
+    parser.add_argument("--midpoint-checkpoint", type=Path)
+    parser.add_argument("--preflight-artifact", type=Path)
     parser.add_argument("--preflight-only", action="store_true")
     return parser.parse_args(argv)
 
@@ -77,7 +98,11 @@ def _source_hashes(repo: Path) -> dict[str, str]:
         "primitive": Path("trkh/training/progressive_task_vector.py"),
         "model": Path("trkh/models/dinov3_multidepth_convpass_b21.py"),
         "model_builder": Path("trkh/tools/run_dinov3_convpass_b21_train_fold.py"),
+        "endpoint_objective": Path("trkh/tools/run_b41_backbone_routed_pair_mean_fold3.py"),
+        "endpoint_formal": Path("trkh/tools/run_b39_stratified_pair_bicar_fold3.py"),
+        "evaluator": Path("trkh/tools/run_b36_head_first_dino_fold.py"),
         "relighting": Path("trkh/training/relighting.py"),
+        "averaging": Path("trkh/tools/average_checkpoints.py"),
         "decision": Path("docs/TRKH_PRETRAINED_CLASSF_REFOCUS_20260802.md"),
         "primitive_test": Path("tests/test_progressive_task_vector.py"),
         "runner_test": Path("tests/test_run_b43_progressive_function_merge.py"),
@@ -119,6 +144,9 @@ def _select_calibration_positions(
 def _build_calibration_views(
     train_root: Path,
     assignment: Mapping[str, Any],
+    *,
+    excluded_fold: int = SOURCE_FOLD,
+    bases_per_class: int = BASES_PER_CLASS,
 ) -> tuple[Tensor, Tensor, list[dict[str, Any]]]:
     _train_transform, eval_transform = b21.build_transforms()
     dataset = ClassificationFolderDataset(
@@ -133,7 +161,11 @@ def _build_calibration_views(
         assignment_paths=assignment["relative_paths"],
         assignment_labels=np.asarray(assignment["labels"], dtype=np.int64),
     )
-    positions = _select_calibration_positions(assignment)
+    positions = _select_calibration_positions(
+        assignment,
+        excluded_fold=excluded_fold,
+        bases_per_class=bases_per_class,
+    )
     clean_rows: list[Tensor] = []
     polarities: list[float] = []
     records: list[dict[str, Any]] = []
@@ -236,6 +268,48 @@ def _capture_block_io(
         torch.cat(captured_outputs, dim=0),
         captured_rope,
     )
+
+
+def _capture_all_block_outputs(
+    model: nn.Module,
+    images: Tensor,
+    *,
+    batch_size: int,
+    device: torch.device,
+) -> list[Tensor]:
+    blocks = getattr(model, "blocks", None)
+    if not isinstance(blocks, nn.ModuleList) or len(blocks) != 12:
+        raise B43ContractError("Formal B43 requires the locked 12-block DINO graph.")
+    captured: list[list[Tensor]] = [[] for _ in blocks]
+    handles = []
+    for index, block in enumerate(blocks):
+        def hook(
+            _module: nn.Module,
+            _args: tuple[Any, ...],
+            _kwargs: dict[str, Any],
+            output: Tensor,
+            *,
+            block_index: int = index,
+        ) -> None:
+            if not torch.is_tensor(output):
+                raise B43ContractError("Unexpected EVA block output schema.")
+            captured[block_index].append(output.detach().cpu())
+
+        handles.append(block.register_forward_hook(hook, with_kwargs=True))
+    try:
+        model.eval()
+        with torch.inference_mode():
+            for start in range(0, int(images.size(0)), int(batch_size)):
+                model(images[start : start + int(batch_size)].to(device))
+    finally:
+        for handle in handles:
+            handle.remove()
+    if any(not rows for rows in captured):
+        raise B43ContractError("One or more DINO blocks produced no teacher activation.")
+    outputs = [torch.cat(rows, dim=0).contiguous() for rows in captured]
+    if any(int(value.size(0)) != int(images.size(0)) for value in outputs):
+        raise B43ContractError("Teacher activation row count changed.")
+    return outputs
 
 
 def _load_verified_state(path: Path, *, file_sha: str, state_sha: str) -> dict[str, Tensor]:
@@ -508,12 +582,569 @@ def math_is_finite_positive(value: float) -> bool:
     return bool(np.isfinite(float(value)) and float(value) > 0.0)
 
 
+def _read_formal_preflight(path: Path) -> dict[str, str]:
+    resolved = path.expanduser().resolve(strict=True)
+    payload = json.loads(resolved.read_text(encoding="utf-8"))
+    checks = {
+        "file_sha256": b21.sha256_file(resolved) == FORMAL_PREFLIGHT_SHA256,
+        "protocol": payload.get("protocol_id") == PROTOCOL_ID,
+        "passed": payload.get("passed") is True,
+        "source_commit": payload.get("git", {}).get("head") == FORMAL_PREFLIGHT_HEAD,
+        "scope": payload.get("train") is False
+        and payload.get("validation") is False
+        and payload.get("test") is False,
+        "no_metrics": payload.get("classifier_logits_or_metrics_computed") is False,
+        "no_checkpoint": payload.get("checkpoint_created") is False,
+    }
+    if not all(checks.values()):
+        raise B43ContractError(f"B43 formal preflight is not accepted: {checks}")
+    return {"path": str(resolved), "sha256": FORMAL_PREFLIGHT_SHA256}
+
+
+def _balanced_source_indices(
+    source_rows: int,
+    start: int,
+    stop: int,
+    *,
+    device: torch.device,
+) -> Tensor:
+    if not 0 <= int(start) < int(stop) <= int(source_rows):
+        raise ValueError("Invalid source-balanced batch range.")
+    clean = torch.arange(int(start), int(stop), device=device, dtype=torch.long)
+    robust = clean + int(source_rows)
+    return torch.cat((clean, robust), dim=0)
+
+
+@torch.no_grad()
+def _activation_loss(
+    merger: ElementwiseTaskVectorBlock,
+    student_input: Tensor,
+    target: Tensor,
+    *,
+    rope: Tensor | None,
+    source_rows: int,
+) -> float:
+    total = 0.0
+    count = 0
+    for start in range(0, int(source_rows), FORMAL_PER_SOURCE_BATCH_SIZE):
+        stop = min(int(source_rows), start + FORMAL_PER_SOURCE_BATCH_SIZE)
+        indices = _balanced_source_indices(
+            source_rows,
+            start,
+            stop,
+            device=student_input.device,
+        )
+        predicted = merger(student_input.index_select(0, indices), rope=rope)
+        rows = int(indices.numel())
+        total += float(
+            F.mse_loss(
+                predicted.float(),
+                target.index_select(0, indices).float(),
+            ).cpu()
+        ) * rows
+        count += rows
+    if count != int(student_input.size(0)):
+        raise B43ContractError("Formal activation-loss batching lost rows.")
+    return total / float(count)
+
+
+def _load_checkpoint_record(record: Mapping[str, Any]) -> dict[str, Tensor]:
+    path = Path(str(record["path"])).expanduser().resolve(strict=True)
+    if b21.sha256_file(path) != str(record["sha256"]):
+        raise B43ContractError(f"Fresh endpoint checkpoint file changed: {path}")
+    state = load_file(str(path), device="cpu")
+    if b21.state_sha256(state) != str(record["state_sha256"]):
+        raise B43ContractError(f"Fresh endpoint checkpoint state changed: {path}")
+    return state
+
+
+def _replace_block_state(
+    full_state: dict[str, Tensor],
+    block_index: int,
+    block_state: Mapping[str, Tensor],
+) -> None:
+    prefix = f"backbone.blocks.{int(block_index)}."
+    expected = {name[len(prefix) :] for name in full_state if name.startswith(prefix)}
+    if set(block_state) != expected:
+        raise B43ContractError(f"Materialized block {block_index} state keys changed.")
+    for name, value in block_state.items():
+        full_state[prefix + name] = value.detach().cpu().contiguous().clone()
+
+
+def _save_safetensors_atomic(path: Path, state: Mapping[str, Tensor]) -> dict[str, Any]:
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    save_file(
+        {name: value.detach().cpu().contiguous() for name, value in state.items()},
+        str(temporary),
+    )
+    os.replace(temporary, path)
+    return {
+        "mode": DIRECT_MODE,
+        "path": str(path.resolve()),
+        "sha256": b21.sha256_file(path),
+        "state_sha256": b21.state_sha256(state),
+    }
+
+
+def _progressively_consolidate(
+    *,
+    dino_weight: Path,
+    control_state: Mapping[str, Tensor],
+    robust_state: Mapping[str, Tensor],
+    clean: Tensor,
+    robust: Tensor,
+) -> tuple[dict[str, Tensor], dict[str, Any]]:
+    device = torch.device("cuda")
+    base_model = b21.build_arm_model(dino_weight, DIRECT_MODE)
+    base_model.set_mode(DIRECT_MODE)
+    if (
+        b21.state_sha256(base_model.state_dict(), exclude_adapters=True)
+        != INITIAL_PRIMARY_STATE_SHA256
+        or b21.state_sha256(base_model.state_dict()) != INITIAL_FULL_STATE_SHA256
+    ):
+        raise B43ContractError("Formal B43 common initialization changed.")
+
+    candidate_state, average_stats = average_state_dicts(
+        [control_state, robust_state],
+        [COEFFICIENT_INIT, COEFFICIENT_INIT],
+    )
+    if int(average_stats["copied_different_non_float"]) != 0:
+        raise B43ContractError("Fresh endpoints disagree in non-floating state.")
+
+    student = b21.build_arm_model(dino_weight, DIRECT_MODE)
+    student.set_mode(DIRECT_MODE)
+    student.load_state_dict(control_state, strict=True)
+    student.to(device).eval().requires_grad_(False)
+    control_targets = _capture_all_block_outputs(
+        student,
+        clean,
+        batch_size=FORMAL_CAPTURE_BATCH_SIZE,
+        device=device,
+    )
+    student.load_state_dict(robust_state, strict=True)
+    robust_targets = _capture_all_block_outputs(
+        student,
+        robust,
+        batch_size=FORMAL_CAPTURE_BATCH_SIZE,
+        device=device,
+    )
+    student.load_state_dict(candidate_state, strict=True)
+
+    all_views = torch.cat((clean, robust), dim=0).contiguous()
+    source_rows = int(clean.size(0))
+    if source_rows != int(robust.size(0)) or source_rows != 80:
+        raise B43ContractError("Formal B43 requires 80 clean and 80 robust views.")
+    teacher_target_sha256 = b21.state_sha256(
+        {
+            **{f"control.{index}": value for index, value in enumerate(control_targets)},
+            **{f"robust.{index}": value for index, value in enumerate(robust_targets)},
+        }
+    )
+    layer_records: list[dict[str, Any]] = []
+    torch.cuda.reset_peak_memory_stats()
+
+    for block_index in range(len(base_model.blocks)):
+        student_input, _old_output, rope = _capture_block_io(
+            student,
+            all_views,
+            block_index=block_index,
+            batch_size=FORMAL_CAPTURE_BATCH_SIZE,
+            device=device,
+        )
+        del _old_output
+        target = torch.cat(
+            (control_targets[block_index], robust_targets[block_index]),
+            dim=0,
+        ).contiguous()
+        student_input = student_input.to(device)
+        target = target.to(device)
+        rope_device = None if rope is None else rope.to(device)
+        merger = ElementwiseTaskVectorBlock(
+            base_model.blocks[block_index],
+            _block_state(control_state, block_index),
+            _block_state(robust_state, block_index),
+            coefficient_init=COEFFICIENT_INIT,
+        ).to(device)
+        merger.base_block.eval()
+
+        initial_state_error = _max_state_abs(
+            merger.materialize_state_dict(),
+            _block_state(candidate_state, block_index),
+        )
+        initial_loss = _activation_loss(
+            merger,
+            student_input,
+            target,
+            rope=rope_device,
+            source_rows=source_rows,
+        )
+        optimizer = torch.optim.Adam(
+            merger.coefficient_parameters(),
+            lr=LEARNING_RATE,
+        )
+        epoch_losses: list[float] = []
+        for _epoch in range(FORMAL_LAYER_EPOCHS):
+            total = 0.0
+            count = 0
+            for start in range(0, source_rows, FORMAL_PER_SOURCE_BATCH_SIZE):
+                stop = min(source_rows, start + FORMAL_PER_SOURCE_BATCH_SIZE)
+                indices = _balanced_source_indices(
+                    source_rows,
+                    start,
+                    stop,
+                    device=device,
+                )
+                optimizer.zero_grad(set_to_none=True)
+                predicted = merger(
+                    student_input.index_select(0, indices),
+                    rope=rope_device,
+                )
+                loss = F.mse_loss(
+                    predicted.float(),
+                    target.index_select(0, indices).float(),
+                )
+                if not bool(torch.isfinite(loss).item()):
+                    raise B43ContractError(
+                        f"Non-finite B43 loss at block {block_index}."
+                    )
+                loss.backward()
+                optimizer.step()
+                rows = int(indices.numel())
+                total += float(loss.detach().cpu()) * rows
+                count += rows
+            epoch_losses.append(total / float(count))
+
+        final_loss = _activation_loss(
+            merger,
+            student_input,
+            target,
+            rope=rope_device,
+            source_rows=source_rows,
+        )
+        materialized = merger.materialize_state_dict()
+        replay_block = copy.deepcopy(base_model.blocks[block_index]).to(device).eval()
+        replay_block.requires_grad_(False)
+        replay_block.load_state_dict(materialized, strict=True)
+        replay_indices = _balanced_source_indices(
+            source_rows,
+            0,
+            FORMAL_PER_SOURCE_BATCH_SIZE,
+            device=device,
+        )
+        with torch.no_grad():
+            functional_output = merger(
+                student_input.index_select(0, replay_indices),
+                rope=rope_device,
+            )
+            replay_output = replay_block(
+                student_input.index_select(0, replay_indices),
+                rope=rope_device,
+            )
+        replay_error = float((functional_output - replay_output).abs().max())
+        coefficient_summary = merger.coefficient_summary()
+        coefficients_finite = all(
+            np.isfinite(float(coefficient_summary[endpoint][field]))
+            for endpoint in ("endpoint_a", "endpoint_b")
+            for field in ("mean", "min", "max")
+        )
+        checks = {
+            "initial_midpoint_state": initial_state_error <= MAX_REPLAY_ABS,
+            "finite_positive_initial_loss": math_is_finite_positive(initial_loss),
+            "loss_nonincrease": np.isfinite(final_loss)
+            and final_loss <= initial_loss * MAX_FORMAL_LAYER_FINAL_TO_INITIAL,
+            "coefficients_finite": coefficients_finite,
+            "materialized_replay": replay_error <= MAX_REPLAY_ABS,
+        }
+        if not all(checks.values()):
+            raise B43ContractError(
+                f"B43 block {block_index} mechanics failed: {checks}"
+            )
+        _replace_block_state(candidate_state, block_index, materialized)
+        student.blocks[block_index].load_state_dict(materialized, strict=True)
+        layer_records.append(
+            {
+                "block_index": block_index,
+                "checks": checks,
+                "initial_loss": initial_loss,
+                "epoch_losses": epoch_losses,
+                "final_loss": final_loss,
+                "final_to_initial": final_loss / initial_loss,
+                "initial_state_max_abs": initial_state_error,
+                "materialized_replay_max_abs": replay_error,
+                "coefficient_summary": coefficient_summary,
+            }
+        )
+        del (
+            optimizer,
+            merger,
+            replay_block,
+            materialized,
+            student_input,
+            target,
+            functional_output,
+            replay_output,
+        )
+        gc.collect()
+        torch.cuda.empty_cache()
+
+    student_state_sha256 = b21.state_sha256(student.state_dict())
+    candidate_state_sha256 = b21.state_sha256(candidate_state)
+    if student_state_sha256 != candidate_state_sha256:
+        raise B43ContractError("Materialized candidate/student states differ.")
+    torch.cuda.synchronize()
+    peak_cuda_bytes = int(torch.cuda.max_memory_allocated())
+    if peak_cuda_bytes > MAX_FORMAL_CUDA_BYTES:
+        raise B43ContractError(
+            f"B43 consolidation exceeded VRAM contract: {peak_cuda_bytes}."
+        )
+    telemetry = {
+        "method": "progressive_elementwise_task_vector_activation_matching",
+        "initial_non_block_state": "fixed_arithmetic_midpoint",
+        "block_order": list(range(12)),
+        "coefficient_init": COEFFICIENT_INIT,
+        "optimizer": "Adam",
+        "learning_rate": LEARNING_RATE,
+        "layer_epochs": FORMAL_LAYER_EPOCHS,
+        "per_source_batch_size": FORMAL_PER_SOURCE_BATCH_SIZE,
+        "teacher_target_sha256": teacher_target_sha256,
+        "average_stats": average_stats,
+        "layers": layer_records,
+        "all_layers_passed": all(
+            all(record["checks"].values()) for record in layer_records
+        ),
+        "peak_cuda_bytes": peak_cuda_bytes,
+        "peak_cuda_gib": peak_cuda_bytes / float(1024**3),
+        "maximum_cuda_bytes": MAX_FORMAL_CUDA_BYTES,
+        "candidate_state_sha256": candidate_state_sha256,
+    }
+    del student, base_model, control_targets, robust_targets, all_views
+    gc.collect()
+    torch.cuda.empty_cache()
+    return candidate_state, telemetry
+
+
+def _formal(
+    args: argparse.Namespace,
+    output: Path,
+    *,
+    repo: Path,
+    git: Mapping[str, Any],
+) -> dict[str, Any]:
+    if args.preflight_artifact is None:
+        raise B43ContractError("Formal B43 requires --preflight-artifact.")
+    accepted_preflight = _read_formal_preflight(args.preflight_artifact)
+    assignment = b21.read_locked_assignment(args.assignment_csv)
+    train_root = b21.read_locked_train_root(b21.EXPECTED_DATA_YAML)
+    train_fit, train_held, held_paths, fit_labels = b21._build_datasets(
+        train_root,
+        assignment,
+        fold=FORMAL_FOLD,
+    )
+    class_counts = b39._fit_counts(assignment, fold=FORMAL_FOLD)
+    control_training = b21._train_arm(
+        mode=DIRECT_MODE,
+        dino_weight=args.dino_weight,
+        fit_dataset=train_fit,
+        held_dataset=train_held,
+        held_paths=held_paths,
+        fit_labels=fit_labels,
+        output_dir=output,
+        epochs=FORMAL_EPOCHS,
+        scheduler_horizon=FORMAL_SCHEDULER_HORIZON,
+        seed=FORMAL_SEED,
+        protocol_id=PROTOCOL_ID,
+        checkpoint_stem="b43_control_ema",
+        state_hash_epochs=(FORMAL_START_EPOCH - 1,),
+    )
+    objective = b41._objective_factory(class_counts)
+    robust_training = b21._train_arm(
+        mode=DIRECT_MODE,
+        dino_weight=args.dino_weight,
+        fit_dataset=train_fit,
+        held_dataset=train_held,
+        held_paths=held_paths,
+        fit_labels=fit_labels,
+        output_dir=output,
+        epochs=FORMAL_EPOCHS,
+        scheduler_horizon=FORMAL_SCHEDULER_HORIZON,
+        seed=FORMAL_SEED,
+        protocol_id=PROTOCOL_ID,
+        checkpoint_stem="b43_backbone_routed_pair_mean_ema",
+        auxiliary_loss_fn=objective,
+        auxiliary_loss_weight=b41.AUXILIARY_WEIGHT,
+        state_hash_epochs=(FORMAL_START_EPOCH - 1,),
+    )
+    warmup_replay = b38._matched_warmup(control_training, robust_training)
+    if not warmup_replay["passed"]:
+        raise B43ContractError(
+            f"B43 fresh endpoints diverged before auxiliary start: {warmup_replay}"
+        )
+    control_record = control_training.get("checkpoint")
+    robust_record = robust_training.get("checkpoint")
+    if not isinstance(control_record, Mapping) or not isinstance(robust_record, Mapping):
+        raise B43ContractError("B43 fresh endpoint checkpoint is missing.")
+    control_state = _load_checkpoint_record(control_record)
+    robust_state = _load_checkpoint_record(robust_record)
+
+    clean, robust, calibration_records = _build_calibration_views(
+        train_root,
+        assignment,
+        excluded_fold=FORMAL_FOLD,
+        bases_per_class=FORMAL_BASES_PER_CLASS,
+    )
+    candidate_state, consolidation = _progressively_consolidate(
+        dino_weight=args.dino_weight,
+        control_state=control_state,
+        robust_state=robust_state,
+        clean=clean,
+        robust=robust,
+    )
+    candidate_record = _save_safetensors_atomic(
+        output / "b43_progressive_ema.safetensors",
+        candidate_state,
+    )
+
+    datasets = {
+        name: b36._held_subset(
+            train_root,
+            assignment,
+            brightness=brightness,
+            contrast=contrast,
+            fold=FORMAL_FOLD,
+        )
+        for name, (brightness, contrast) in b41.CONDITIONS.items()
+    }
+    control_metrics, _control_features, control_logits = b36._evaluate_checkpoint(
+        dino_weight=args.dino_weight,
+        checkpoint=Path(str(control_record["path"])),
+        expected_state_sha256=str(control_record["state_sha256"]),
+        datasets=datasets,
+        seed_offset=900,
+    )
+    robust_metrics, _robust_features, robust_logits = b36._evaluate_checkpoint(
+        dino_weight=args.dino_weight,
+        checkpoint=Path(str(robust_record["path"])),
+        expected_state_sha256=str(robust_record["state_sha256"]),
+        datasets=datasets,
+        seed_offset=1000,
+    )
+    candidate_metrics, _candidate_features, candidate_logits = b36._evaluate_checkpoint(
+        dino_weight=args.dino_weight,
+        checkpoint=Path(str(candidate_record["path"])),
+        expected_state_sha256=str(candidate_record["state_sha256"]),
+        datasets=datasets,
+        seed_offset=1100,
+    )
+    labels = np.asarray(control_training["held_labels"], dtype=np.int64)
+    if not np.array_equal(labels, np.asarray(robust_training["held_labels"], dtype=np.int64)):
+        raise B43ContractError("B43 fresh endpoint held-label order changed.")
+    control_replay = float(
+        np.max(
+            np.abs(
+                control_logits["clean"].numpy()
+                - np.asarray(control_training["held_logits"], dtype=np.float32)
+            )
+        )
+    )
+    robust_replay = float(
+        np.max(
+            np.abs(
+                robust_logits["clean"].numpy()
+                - np.asarray(robust_training["held_logits"], dtype=np.float32)
+            )
+        )
+    )
+    if control_replay != 0.0 or robust_replay != 0.0:
+        raise B43ContractError(
+            f"B43 endpoint clean replay changed: {control_replay}, {robust_replay}"
+        )
+    gate = b41._gate(control_metrics, candidate_metrics)
+    gate["next_permission"] = (
+        "replicate_progressive_function_merge_on_remaining_train_folds"
+        if gate["passed"]
+        else "close_exact_b43_progressive_function_merge"
+    )
+    score_path = output / "held_condition_scores.npz"
+    arrays: dict[str, np.ndarray] = {"labels": labels}
+    for condition in b41.CONDITIONS:
+        arrays[f"control_{condition}"] = control_logits[condition].numpy()
+        arrays[f"raw_robust_{condition}"] = robust_logits[condition].numpy()
+        arrays[f"progressive_{condition}"] = candidate_logits[condition].numpy()
+    b36._atomic_npz(score_path, **arrays)
+    bright_ema = objective.bright_state.ema_confusion
+    dim_ema = objective.dim_state.ema_confusion
+    if bright_ema is None or dim_ema is None or objective.active_calls <= 0:
+        raise B43ContractError("B43 robust endpoint objective never became active.")
+
+    summary = {
+        "schema_version": 1,
+        "protocol_id": PROTOCOL_ID,
+        "git": dict(git),
+        "source_hashes": _source_hashes(repo),
+        "accepted_preflight": accepted_preflight,
+        "dataset": {
+            "fold": FORMAL_FOLD,
+            "fit_rows": len(train_fit),
+            "held_rows": len(train_held),
+            "fit_class_counts": class_counts,
+            "train_split_used": True,
+            "validation_split_used": False,
+            "test_split_used": False,
+        },
+        "endpoint_schedule": {
+            "seed": FORMAL_SEED,
+            "epochs": FORMAL_EPOCHS,
+            "scheduler_horizon": FORMAL_SCHEDULER_HORIZON,
+            "warmup_replay": warmup_replay,
+            "objective": b41._objective_contract(),
+        },
+        "control_training": b21._sanitize_arm_result(control_training),
+        "raw_robust_training": b21._sanitize_arm_result(robust_training),
+        "calibration": {
+            "labels_used_for_balancing_only": True,
+            "classification_loss_or_metric_used": False,
+            "bases_per_class_per_source": FORMAL_BASES_PER_CLASS,
+            "control_views": int(clean.size(0)),
+            "robust_views": int(robust.size(0)),
+            "dim_views": sum(row["robust_view"] == "dim" for row in calibration_records),
+            "bright_views": sum(
+                row["robust_view"] == "bright" for row in calibration_records
+            ),
+            "excluded_fold": FORMAL_FOLD,
+            "records": calibration_records,
+        },
+        "consolidation": consolidation,
+        "candidate_checkpoint": candidate_record,
+        "auxiliary_state": {
+            "active_calls": objective.active_calls,
+            "bright_updates": objective.bright_state.updates,
+            "dim_updates": objective.dim_state.updates,
+            "bright_ema_confusion": bright_ema.detach().float().cpu().tolist(),
+            "dim_ema_confusion": dim_ema.detach().float().cpu().tolist(),
+        },
+        "metrics": {
+            "control": control_metrics,
+            "raw_robust": robust_metrics,
+            "progressive": candidate_metrics,
+        },
+        "strict_replay_max_abs": {
+            "control": control_replay,
+            "raw_robust": robust_replay,
+        },
+        "scores_sha256": b21.sha256_file(score_path),
+        "gate": gate,
+        "interpretation_guard": (
+            "Fresh held TRAIN component fold 4 only. Progressive calibration uses "
+            "fit-side eval views and activation MSE, never held labels or classifier "
+            "metrics. Validation/test remain closed."
+        ),
+    }
+    b21._atomic_json(output / "summary.json", summary)
+    return summary
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = _args(argv)
-    if not args.preflight_only:
-        raise B43ContractError(
-            "Only the metric-free B43 preflight is implemented; formal fold 4 is not authorized."
-        )
     args.assignment_csv = args.assignment_csv.expanduser().resolve(strict=True)
     args.dino_weight = b21.logical_absolute_path(args.dino_weight)
     if b21.sha256_file(args.dino_weight) != b21.DINO_SHA256:
@@ -525,11 +1156,29 @@ def main(argv: Sequence[str] | None = None) -> int:
     git = b21._git_snapshot(repo)
     b21._configure_determinism()
     output.mkdir(parents=True, exist_ok=False)
-    payload = _preflight(args, repo=repo, git=git)
-    artifact = output / "preflight.json"
-    b21._atomic_json(artifact, payload)
-    print(json.dumps({"passed": payload["passed"], "checks": payload["checks"]}, indent=2))
-    return 0 if payload["passed"] else 2
+    if args.preflight_only:
+        checkpoint_args = (
+            args.control_checkpoint,
+            args.robust_checkpoint,
+            args.midpoint_checkpoint,
+        )
+        if any(path is None for path in checkpoint_args):
+            raise B43ContractError(
+                "Preflight requires control, robust, and midpoint checkpoints."
+            )
+        payload = _preflight(args, repo=repo, git=git)
+        artifact = output / "preflight.json"
+        b21._atomic_json(artifact, payload)
+        print(
+            json.dumps(
+                {"passed": payload["passed"], "checks": payload["checks"]},
+                indent=2,
+            )
+        )
+        return 0 if payload["passed"] else 2
+    summary = _formal(args, output, repo=repo, git=git)
+    print(json.dumps(summary["gate"], indent=2))
+    return 0 if summary["gate"]["passed"] else 2
 
 
 if __name__ == "__main__":

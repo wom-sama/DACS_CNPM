@@ -59,9 +59,9 @@ class _ToyBlock(nn.Module):
 
 
 class _ToyModel(nn.Module):
-    def __init__(self) -> None:
+    def __init__(self, block_count: int = 2) -> None:
         super().__init__()
-        self.blocks = nn.ModuleList([_ToyBlock(), _ToyBlock()])
+        self.blocks = nn.ModuleList([_ToyBlock() for _ in range(block_count)])
         self.register_buffer("rope", torch.ones(1, 2))
 
     def forward(self, value: torch.Tensor) -> torch.Tensor:
@@ -97,3 +97,43 @@ def test_block_state_and_rng_helpers_are_strict() -> None:
     torch.rand(1)
     changed = b43._rng_snapshot()
     assert not b43._same_rng(before, changed)
+
+
+def test_formal_balanced_indices_and_block_replacement() -> None:
+    indices = b43._balanced_source_indices(
+        80,
+        8,
+        16,
+        device=torch.device("cpu"),
+    )
+    assert indices.tolist() == list(range(8, 16)) + list(range(88, 96))
+    with pytest.raises(ValueError, match="range"):
+        b43._balanced_source_indices(80, 16, 8, device=torch.device("cpu"))
+
+    state = {
+        "backbone.blocks.0.weight": torch.tensor([1.0]),
+        "backbone.blocks.0.bias": torch.tensor([2.0]),
+        "backbone.blocks.1.weight": torch.tensor([3.0]),
+    }
+    b43._replace_block_state(
+        state,
+        0,
+        {"weight": torch.tensor([4.0]), "bias": torch.tensor([5.0])},
+    )
+    assert state["backbone.blocks.0.weight"].item() == 4.0
+    assert state["backbone.blocks.0.bias"].item() == 5.0
+    assert state["backbone.blocks.1.weight"].item() == 3.0
+
+
+def test_capture_all_formal_block_outputs() -> None:
+    model = _ToyModel(block_count=12)
+    images = torch.arange(14, dtype=torch.float32).reshape(7, 2)
+    outputs = b43._capture_all_block_outputs(
+        model,
+        images,
+        batch_size=3,
+        device=torch.device("cpu"),
+    )
+    assert len(outputs) == 12
+    for index, output in enumerate(outputs, start=1):
+        assert torch.equal(output, images + float(index))
