@@ -95,7 +95,7 @@ Update rows in place; do not append chronology. States move `OPEN -> LOCKED -> C
 | `B37-01` | `CLOSED_FAIL` | The local timm head uses only average patch tokens although DINOv3's official linear evaluator concatenates CLS and average patch tokens. | Aligned CLS beats the same-width deranged control by `+0.029513` C1 F1, but official CLS+patch loses to patch-only/native by `-0.006519/-0.024045`; versus native it adds three TP but ten restricted FP, loses `-0.008392` pair-AUROC, and bright C1 drops `-0.035041` with seven extra `0->1`. Nine gates fail. | Do not implement the simple dual head. Raw-DINO CLS complementarity does not survive as a safe add-on after strong patch-head supervision. This closes concatenation, not confusion-aware training or multi-depth evidence. Validation/test remain closed. |
 | `B38-01` | `CLOSED_FAIL` | Clean BiCAR produced the desired infinitesimal directions but only two validation decision changes; PRMR exposed useful lighting signal but its clean-correct eligibility filter reduced bright `0/2/4->1` FP by only `5%`. | Exact fold-2 warm-up replay passed. Relit BiCAR cuts bright `0->1` by `56` (`-59.57%`) and raises bright/robust-mean C1 F1 by `+0.128185/+0.064093`, but clean C1 falls `-0.007200` with one lost TP and dim C1 is unchanged. Three locked gates fail. | Close the exact shared full-matrix relit BiCAR. Its realized correction concentrates on bright `0->1` while dim `1<->2` does not improve; the final EMA alone does not identify a causal singular vector. A successor must separate nuisance polarity/pair and prove clean-gradient compatibility; no weight/margin/epoch sweep on fold 2. Validation/test remain closed. |
 | `B39-01` | `CLOSED_FAIL` | B38 may contain a useful robust direction that its shared five-class matrix and raw endpoint expose too strongly. | The committed one-batch TRAIN-only preflight rejected pairwise BiCAR before training. Exact state/RNG/midpoint and clean-C1 compatibility pass, but weighted auxiliary/task gradient ratios are `0.3382/0.2854` for backbone/head versus the locked maximum `0.15`; the bright-pair oracle gives exactly zero gradient to the `1->0` direction. | Do not train or rescale B39. For a 2x2 off-diagonal matrix `[[0,a],[b,0]]`, spectral norm is `max(|a|,|b|)`, so pair splitting does not guarantee bidirectional pressure. A successor requires an explicitly monotone two-direction pair functional and a separately locked mechanical scale; fold-3 held metrics, validation and test remain unopened. |
-| `B40-01` | `LOCKED` | B39 failed because its 2x2 spectral max can ignore one direction and its inherited coefficient dominates the clean task; this does not reject nuisance/pair stratification itself. | Replace each pair spectral norm with the arithmetic mean of its two class-conditional off-diagonal EMA entries. Mix bright `0<->1` and dim `1<->2` equally; set the outer coefficient once to `0.15 = 0.5 * 0.30` from B39's measured mechanical scale; gate only the fixed `0.5/0.5` EMA weight midpoint on still-unseen TRAIN component fold 3. | Preflight must prove both unequal oracle directions, task ratio `[0.04,0.16]` with cosine `>=0`, clean-C1 ratio `[0.02,0.20]` with cosine `>=0.20`, pair balance `[0.50,2.0]`, exact state/RNG/midpoint and positive directional confusion. If it passes, run exactly one matched screen under B39's unchanged endpoint gates; otherwise close without rescaling. Validation/test remain closed. |
+| `B40-01` | `CLOSED_FAIL` | B39 failed because its 2x2 spectral max can ignore one direction and its inherited coefficient dominates the clean task; this does not reject nuisance/pair stratification itself. | The pair mean repairs directionality: all unequal oracle/real pair checks pass and all four directional entries are positive. Preflight still rejects the joint route: auxiliary/task ratios are `0.03884/0.02254` in backbone/head versus minimum `0.04`, and the head has full-task cosine `-0.05155`; head clean-C1 ratio is `0.01620 < 0.02`. | Do not rescale or train B40. Its backbone gradients are compatible with full task/C1 (`cos=0.2011/0.4033`) while only the classifier conflicts. One successor may route the unchanged pair mean through the representation but stop auxiliary gradients to the head, with a mechanically derived coefficient and an exact zero-head-gradient gate. Held fold 3, validation and test remain unopened. |
 | `KD-01` | `GUARD` | B19 proves that raw-DINO relation distillation itself improves SwiftFormer. | False. Stock, control and candidate all receive the same cosine-neighbour relation loss; B19 isolates spatial atoms under that objective, not relation KD versus CE-only. The normalized relation also does not preserve photometric magnitude by construction. | Any causal KD claim requires a separately preregistered matched experiment on prospectively sealed evidence; B19 cannot be reinterpreted as that ablation. |
 | `TELEM-01` | `LOCKED` | Final factor norms and scalar loss curves are enough to diagnose optimization if a successor fails. | Rejected. They prove activation and fit behaviour but cannot distinguish backbone absorption from branch starvation. | B21 records per-role gradient and update/parameter norms plus adapter residual ratios by epoch. Gradient-conflict telemetry is required only when an auxiliary objective exists; B21 deliberately has none. |
 | `LR-01` | `CLOSED` | Exact float equality is safe when a mathematically identical endpoint is produced through multiplication and division. | Rejected by the B18 real-fold counterexample. Endpoint values must be returned explicitly, while interior points retain the original formula; tests must exercise every locked fold horizon. | Permanent scheduler implementation rule. |
@@ -935,7 +935,7 @@ B39 will not be rescaled or rerun. Its failure narrows the successor to a
 two-direction monotone confusion functional whose scale is locked before any
 held-fold evaluation.
 
-## Locked experiment: B40 bidirectional pair-confusion mean
+## Closed preflight: B40 bidirectional pair-confusion mean
 
 B40 changes the failed B39 auxiliary functional, not the model architecture,
 data, endpoint interpolation or robustness conditions. For a relit two-class
@@ -990,6 +990,33 @@ bright and mean robust C1 `>=+0.010/+0.015/+0.015`; bright `0->1` reduction
 `>=10%`. Raw candidate remains mechanism evidence. The midpoint adds no
 inference parameter, operator or latency; mobile/INT8 claims remain forbidden
 until scientific promotion and physical-device audits.
+
+B40 stopped on clean commit `b9afb4f` before either training arm. The proposed
+functional resolves B39's mathematical defect: all six unequal-error oracle
+checks pass with minimum/maximum row-gradient ratio `0.220148`, and actual
+bright/dim directional EMA entries are all positive
+(`0.171875/0.229818/0.164714/0.205566`). State, class coverage, RNG restoration,
+EMA updates, midpoint identity and bright/dim balance also pass.
+
+The failure localizes to gradient routing. Weighted auxiliary/task ratios are
+`0.038844` backbone and `0.022544` head, below the locked `0.04` floor. More
+importantly, the same auxiliary is compatible with the full clean task in the
+backbone (`cos=+0.201112`) but conflicts in the classifier head
+(`cos=-0.051550`). Against clean class-1 loss, backbone/head cosines are both
+positive (`+0.403319/+0.264046`), although the head ratio is only `0.016201`.
+Thus increasing B40's scalar would strengthen a measured full-task head
+conflict; it is not an authorized repair.
+
+Exact artifact
+`runs/b40_pair_mean_preflight_b9afb4f_20260809/preflight.json` has SHA256
+`6f4f64d0f284f17f2bded5dba63529d395496f62a9be6a7394f906dbc1555480`.
+It reports `train=false`, `validation=false`, `test=false`; no held-fold score
+exists. B40 is closed without a rerun. The only evidence-supported continuation
+is representation-only auxiliary routing: preserve the classifier as a clean
+task endpoint while allowing the compatible robust gradient through its fixed
+weights into the backbone. This is distinct from gradient surgery because no
+task/auxiliary vector is projected or altered; the auxiliary simply has no head
+parameter path.
 
 If a future multi-expert/student fusion is reopened, its knowledge transfer must
 be sample-trust-gated because indiscriminate collaboration can propagate and
