@@ -96,7 +96,7 @@ Update rows in place; do not append chronology. States move `OPEN -> LOCKED -> C
 | `B38-01` | `CLOSED_FAIL` | Clean BiCAR produced the desired infinitesimal directions but only two validation decision changes; PRMR exposed useful lighting signal but its clean-correct eligibility filter reduced bright `0/2/4->1` FP by only `5%`. | Exact fold-2 warm-up replay passed. Relit BiCAR cuts bright `0->1` by `56` (`-59.57%`) and raises bright/robust-mean C1 F1 by `+0.128185/+0.064093`, but clean C1 falls `-0.007200` with one lost TP and dim C1 is unchanged. Three locked gates fail. | Close the exact shared full-matrix relit BiCAR. Its realized correction concentrates on bright `0->1` while dim `1<->2` does not improve; the final EMA alone does not identify a causal singular vector. A successor must separate nuisance polarity/pair and prove clean-gradient compatibility; no weight/margin/epoch sweep on fold 2. Validation/test remain closed. |
 | `B39-01` | `CLOSED_FAIL` | B38 may contain a useful robust direction that its shared five-class matrix and raw endpoint expose too strongly. | The committed one-batch TRAIN-only preflight rejected pairwise BiCAR before training. Exact state/RNG/midpoint and clean-C1 compatibility pass, but weighted auxiliary/task gradient ratios are `0.3382/0.2854` for backbone/head versus the locked maximum `0.15`; the bright-pair oracle gives exactly zero gradient to the `1->0` direction. | Do not train or rescale B39. For a 2x2 off-diagonal matrix `[[0,a],[b,0]]`, spectral norm is `max(|a|,|b|)`, so pair splitting does not guarantee bidirectional pressure. A successor requires an explicitly monotone two-direction pair functional and a separately locked mechanical scale; fold-3 held metrics, validation and test remain unopened. |
 | `B40-01` | `CLOSED_FAIL` | B39 failed because its 2x2 spectral max can ignore one direction and its inherited coefficient dominates the clean task; this does not reject nuisance/pair stratification itself. | The pair mean repairs directionality: all unequal oracle/real pair checks pass and all four directional entries are positive. Preflight still rejects the joint route: auxiliary/task ratios are `0.03884/0.02254` in backbone/head versus minimum `0.04`, and the head has full-task cosine `-0.05155`; head clean-C1 ratio is `0.01620 < 0.02`. | Do not rescale or train B40. Its backbone gradients are compatible with full task/C1 (`cos=0.2011/0.4033`) while only the classifier conflicts. One successor may route the unchanged pair mean through the representation but stop auxiliary gradients to the head, with a mechanically derived coefficient and an exact zero-head-gradient gate. Held fold 3, validation and test remain unopened. |
-| `B41-01` | `LOCKED` | B40's pair functional is direction-correct, but sending it into the classifier head introduces the only measured full-task conflict. | During auxiliary relit forwards only, hold current head parameters constant while retaining gradient through their fixed weights into the backbone; clean task forwards still update both backbone and head. Use `0.20`, the one-time rounded mechanical value `0.15*(0.05/0.0388435)`, and retain B40's two pair EMAs plus fixed midpoint. This is routing, not gradient projection. | Preflight requires exact nonzero clean-task/zero auxiliary head gradients; backbone task ratio `[0.04,0.10]`, cosine `>=0.15`; clean-C1 ratio `[0.02,0.10]`, cosine `>=0.30`; pair ratio `[0.50,2.0]`, cosine `>=0`; all B40 oracle/state/RNG/midpoint gates. If it passes, run one matched fold-3 screen under unchanged endpoint gates; otherwise close without rerouting/rescaling. Validation/test remain closed. |
+| `B41-01` | `CLOSED_FAIL` | B40's pair functional is direction-correct, but sending it into the classifier head introduces the only measured full-task conflict. | Backbone-only auxiliary routing passes every preregistered gradient gate and the raw robust endpoint is active: bright C1 rises `+0.051901` and bright `0->1` falls `95 -> 64`. The fixed weight midpoint, however, gives clean/dim/bright C1 deltas `-0.006984/+0.011100/-0.003650`, adds two clean restricted FP and reduces bright `0->1` by only `2.11%`; six gates fail. | Close the exact arithmetic weight midpoint, not the routed pair objective. Do not tune interpolation on fold 3. A fixed 50/50 logit interpolation is descriptive evidence of endpoint complementarity, not a deployable candidate: it improves clean/dim/bright C1 by `+0.003543/+0.005521/+0.031515` but requires two models. Any successor must preserve a single inference graph and preregister a non-arithmetic consolidation rule on a fresh TRAIN fold. Validation/test remain closed. |
 | `KD-01` | `GUARD` | B19 proves that raw-DINO relation distillation itself improves SwiftFormer. | False. Stock, control and candidate all receive the same cosine-neighbour relation loss; B19 isolates spatial atoms under that objective, not relation KD versus CE-only. The normalized relation also does not preserve photometric magnitude by construction. | Any causal KD claim requires a separately preregistered matched experiment on prospectively sealed evidence; B19 cannot be reinterpreted as that ablation. |
 | `TELEM-01` | `LOCKED` | Final factor norms and scalar loss curves are enough to diagnose optimization if a successor fails. | Rejected. They prove activation and fit behaviour but cannot distinguish backbone absorption from branch starvation. | B21 records per-role gradient and update/parameter norms plus adapter residual ratios by epoch. Gradient-conflict telemetry is required only when an auxiliary objective exists; B21 deliberately has none. |
 | `LR-01` | `CLOSED` | Exact float equality is safe when a mathematically identical endpoint is produced through multiplication and division. | Rejected by the B18 real-fold counterexample. Endpoint values must be returned explicitly, while interior points retain the original formula; tests must exercise every locked fold horizon. | Permanent scheduler implementation rule. |
@@ -1066,6 +1066,55 @@ promotion unless all scientific gates first pass.
 If a future multi-expert/student fusion is reopened, its knowledge transfer must
 be sample-trust-gated because indiscriminate collaboration can propagate and
 consolidate errors ([TCL, CVPR 2026](https://openaccess.thecvf.com/content/CVPR2026/html/Zhou_Trust-calibrated_Collaborative_Learning_for_Long-Tailed_Visual_Recognition_CVPR_2026_paper.html)).
+
+## B41 closure: routing works, arithmetic weight averaging does not
+
+The committed TRAIN-only preflight passed every locked check. At auxiliary
+weight `0.20`, backbone task/auxiliary ratio and cosine are
+`0.051614/+0.201446`; the clean-class-1 values are
+`0.029729/+0.400781`; dim/bright auxiliary ratio and cosine are
+`1.212253/+0.122463`. Clean-task head norm remains nonzero while every
+auxiliary head norm is exactly zero. The accepted preflight is
+`runs/b41_backbone_routed_preflight_fbea170_20260809/preflight.json`, SHA256
+`2b5b06dea14343ea1225f51a849de8993034045927cf362e432adf7fd8b0a43f`.
+
+The matched fold-3 run completed all `1242` updates per arm with exact warm-up
+and checkpoint replay. Control versus raw routed endpoint is:
+
+| Condition | Control C1 F1 | Raw C1 F1 | Raw delta | Key confusion change |
+|---|---:|---:|---:|---|
+| clean | `0.736842` | `0.727273` | `-0.009569` | TP `77 -> 76`, restricted FP `34 -> 35` |
+| dim | `0.663900` | `0.677686` | `+0.013786` | TP `80 -> 82`; `0->1` `8 -> 5` |
+| bright | `0.501818` | `0.553719` | `+0.051901` | restricted FP `108 -> 77`; `0->1` `95 -> 64` |
+
+This proves that the routed objective learns the intended lighting correction,
+but the raw endpoint pays a small clean cost. The prospectively gated fixed
+weight midpoint fails: clean accuracy/macro/C1/pair deltas are
+`-0.000604/-0.002037/-0.006984/-0.000754`, clean TP is unchanged but restricted
+FP rises by two, and dim/bright/mean-robust C1 deltas are
+`+0.011100/-0.003650/+0.003725`. Bright `0->1` falls only `95 -> 93`; six of ten
+gates fail. Therefore no validation, test, XAI, mobile or INT8 promotion is
+authorized.
+
+A read-only, fixed `0.5/0.5` logit interpolation was computed only to localize
+the failure; no coefficient was swept and no model was promoted. It yields
+clean/dim/bright C1 `0.740385/0.669421/0.533333`, with clean restricted FP `33`
+and bright `0->1=76`. Thus the endpoints are complementary in prediction space,
+whereas elementwise weight averaging destroys part of the robust direction.
+This two-checkpoint result is not mobile-deployable and may not be reported as a
+B41 pass. A successor must test one equation-distinct, single-checkpoint merge
+on a fresh TRAIN fold and must first establish that parameter sign conflict is
+large enough to motivate it; ordinary model soup on this fold remains closed.
+
+Formal artifact
+`runs/b41_backbone_routed_pair_mean_fold3_fbea170_20260809/summary.json` has
+SHA256
+`8f8bdaa170755ef9ed2761fb56ceca16dd18b97dabfda8d8c1d1722e19ed03b8`; its
+locked score archive has SHA256
+`6c4488406fdbc9f42a2157bd3ed23ebd2450c1dc4f12ea46736004d303fa59ee`.
+The raw and midpoint checkpoint SHA256 values are respectively
+`24c36e4208994f17f9ba147e16d7d2b1cd8aa9f8a1ee458cdef0d3dbc945e761` and
+`cd9354c55589956e2c2f05719c6dfe056f2d8ded6e907d3a03d0acb1c901ebea`.
 
 ## PRMR R1 closure
 
