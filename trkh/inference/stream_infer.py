@@ -51,9 +51,45 @@ def parse_args() -> argparse.Namespace:
 
 def prepare_transform(checkpoint, override_image_size: Optional[int] = None):
     image_size = int(override_image_size or checkpoint["model_config"]["image_size"])
+    augmentation_config = checkpoint.get("augmentation_config", {})
+    if not isinstance(augmentation_config, dict):
+        augmentation_config = {}
     return build_eval_transform(
         image_size=image_size,
-        resize_mode=checkpoint.get("augmentation_config", {}).get("resize_mode", "pad"),
+        resize_mode=augmentation_config.get("resize_mode", "pad"),
+        illumination_normalization=bool(augmentation_config.get("illumination_normalization", False)),
+        illumination_normalization_strength=float(
+            augmentation_config.get("illumination_normalization_strength", 0.0) or 0.0
+        ),
+        foreground_crop_mode=str(augmentation_config.get("foreground_crop_mode", "none") or "none"),
+        foreground_crop_margin_ratio=float(augmentation_config.get("foreground_crop_margin_ratio", 0.08) or 0.08),
+        foreground_crop_min_mask_area_ratio=float(
+            augmentation_config.get("foreground_crop_min_mask_area_ratio", 0.03) or 0.03
+        ),
+        foreground_crop_max_mask_area_ratio=float(
+            augmentation_config.get("foreground_crop_max_mask_area_ratio", 0.92) or 0.92
+        ),
+        foreground_crop_max_crop_area_ratio=float(
+            augmentation_config.get("foreground_crop_max_crop_area_ratio", 0.98) or 0.98
+        ),
+        background_suppression_mode=str(augmentation_config.get("background_suppression_mode", "none") or "none"),
+        background_suppression_margin=float(augmentation_config.get("background_suppression_margin", 0.08) or 0.08),
+        background_suppression_blur_radius=float(augmentation_config.get("background_suppression_blur_radius", 7.0) or 7.0),
+        surface_detail_amplification_mode=str(
+            augmentation_config.get("surface_detail_amplification_mode", "none") or "none"
+        ),
+        surface_detail_amplification_strength=float(
+            augmentation_config.get("surface_detail_amplification_strength", 0.0) or 0.0
+        ),
+        surface_detail_amplification_blur_radius=float(
+            augmentation_config.get("surface_detail_amplification_blur_radius", 1.25) or 1.25
+        ),
+        surface_detail_amplification_foreground_weight=float(
+            augmentation_config.get("surface_detail_amplification_foreground_weight", 0.85) or 0.85
+        ),
+        eval_surface_detail_amplification=bool(
+            augmentation_config.get("eval_surface_detail_amplification", False)
+        ),
     )
 
 
@@ -322,6 +358,48 @@ def draw_prediction_overlay(
         )
 
 
+def build_classification_prediction_result(
+    logits: torch.Tensor,
+    class_names: List[str],
+    top_k: int = 0,
+    confidence_threshold: Optional[float] = None,
+) -> Dict[str, object]:
+    logits = logits.detach().cpu().to(torch.float32).reshape(-1)
+    if logits.numel() <= 0:
+        raise ValueError("Classification logits must contain at least one class.")
+    if len(class_names) != int(logits.numel()):
+        raise ValueError(
+            "Classification class_names/logits mismatch: "
+            f"{len(class_names)} names for {int(logits.numel())} logits."
+        )
+
+    probabilities = torch.softmax(logits, dim=-1)
+    class_count = int(probabilities.numel())
+    display_count = int(top_k) if int(top_k) > 0 else min(5, class_count)
+    top_probabilities, top_indices = torch.topk(
+        probabilities,
+        k=max(1, min(display_count, class_count)),
+    )
+    predictions = [
+        {
+            "class_index": int(class_index.item()),
+            "class_name": str(class_names[int(class_index.item())]),
+            "probability": float(probability.item()),
+        }
+        for probability, class_index in zip(top_probabilities, top_indices)
+    ]
+    accepted_predictions = [
+        prediction
+        for prediction in predictions
+        if confidence_threshold is None
+        or float(prediction["probability"]) >= float(confidence_threshold)
+    ]
+    return {
+        "predictions": accepted_predictions or predictions[:1],
+        "top_prediction": predictions[0] if predictions else None,
+    }
+
+
 class StreamSmoother:
     def __init__(self, mode: str, alpha: float, window_size: int) -> None:
         self.mode = str(mode)
@@ -377,6 +455,22 @@ class StreamSmoother:
                     else self.alpha * objectness_logits + (1.0 - self.alpha) * self.ema_objectness_logits
                 )
         return voted_probabilities.clamp(min=1e-8).log(), self.ema_boxes, self.ema_objectness_logits
+
+    def smooth_class_logits(self, logits: torch.Tensor) -> torch.Tensor:
+        logits = logits.detach().cpu().to(torch.float32)
+        if self.mode == "none":
+            return logits
+        if self.mode == "ema":
+            if self.ema_logits is None:
+                self.ema_logits = logits
+            else:
+                self.ema_logits = self.alpha * logits + (1.0 - self.alpha) * self.ema_logits
+            return self.ema_logits
+
+        probabilities = torch.softmax(logits, dim=-1)
+        self.vote_history.append(probabilities)
+        voted_probabilities = torch.stack(list(self.vote_history), dim=0).mean(dim=0)
+        return voted_probabilities.clamp(min=1e-8).log()
 
 
 def post_process_detections(
@@ -490,47 +584,60 @@ def main() -> None:
                 logits = outputs["logits"][0]
                 boxes = outputs.get("boxes")
                 if boxes is None:
-                    raise RuntimeError("Stream infer moi yeu cau model detection co output boxes.")
-                objectness_logits = outputs.get("objectness_logits")
-                smoothed_logits, smoothed_boxes, smoothed_objectness_logits = smoother.smooth_query_outputs(
-                    logits,
-                    boxes[0],
-                    objectness_logits[0] if objectness_logits is not None else None,
-                )
-                raw_detections = post_process_detections(
-                    logits=smoothed_logits.unsqueeze(0),
-                    boxes=smoothed_boxes.unsqueeze(0),
-                    objectness_logits=(
-                        smoothed_objectness_logits.unsqueeze(0)
-                        if smoothed_objectness_logits is not None
-                        else None
-                    ),
-                    conf_threshold=confidence_threshold,
-                    max_detections=max_detections,
-                    nms_iou_threshold=args.nms_iou_threshold,
-                )[0]
-                detections: List[Dict[str, object]] = []
-                for detection in raw_detections:
-                    bbox_payload = invert_bbox_from_transform_meta(detection["box"], meta)
-                    detections.append(
-                        {
-                            "query_index": int(detection["query_index"]),
-                            "class_index": int(detection["class_index"]),
-                            "class_name": str(checkpoint["class_names"][int(detection["class_index"])]),
-                            "probability": float(detection["probability"]),
-                            "bbox": bbox_payload,
-                        }
+                    smoothed_logits = smoother.smooth_class_logits(logits)
+                    last_prediction_result = build_classification_prediction_result(
+                        logits=smoothed_logits,
+                        class_names=list(checkpoint["class_names"]),
+                        top_k=args.top_k,
+                        confidence_threshold=confidence_threshold,
                     )
-                last_prediction_result = {
-                    "detections": detections,
-                    "num_detections": len(detections),
-                }
-                drift_prediction = detections[0] if detections else None
-                drift_event = drift_monitor.update(
-                    None if drift_prediction is None else int(drift_prediction.get("class_index", -1))
-                )
-                if drift_event is not None:
-                    print(drift_event, flush=True)
+                    drift_prediction = last_prediction_result.get("top_prediction")
+                    drift_event = drift_monitor.update(
+                        None if drift_prediction is None else int(drift_prediction.get("class_index", -1))
+                    )
+                    if drift_event is not None:
+                        print(drift_event, flush=True)
+                else:
+                    objectness_logits = outputs.get("objectness_logits")
+                    smoothed_logits, smoothed_boxes, smoothed_objectness_logits = smoother.smooth_query_outputs(
+                        logits,
+                        boxes[0],
+                        objectness_logits[0] if objectness_logits is not None else None,
+                    )
+                    raw_detections = post_process_detections(
+                        logits=smoothed_logits.unsqueeze(0),
+                        boxes=smoothed_boxes.unsqueeze(0),
+                        objectness_logits=(
+                            smoothed_objectness_logits.unsqueeze(0)
+                            if smoothed_objectness_logits is not None
+                            else None
+                        ),
+                        conf_threshold=confidence_threshold,
+                        max_detections=max_detections,
+                        nms_iou_threshold=args.nms_iou_threshold,
+                    )[0]
+                    detections: List[Dict[str, object]] = []
+                    for detection in raw_detections:
+                        bbox_payload = invert_bbox_from_transform_meta(detection["box"], meta)
+                        detections.append(
+                            {
+                                "query_index": int(detection["query_index"]),
+                                "class_index": int(detection["class_index"]),
+                                "class_name": str(checkpoint["class_names"][int(detection["class_index"])]),
+                                "probability": float(detection["probability"]),
+                                "bbox": bbox_payload,
+                            }
+                        )
+                    last_prediction_result = {
+                        "detections": detections,
+                        "num_detections": len(detections),
+                    }
+                    drift_prediction = detections[0] if detections else None
+                    drift_event = drift_monitor.update(
+                        None if drift_prediction is None else int(drift_prediction.get("class_index", -1))
+                    )
+                    if drift_event is not None:
+                        print(drift_event, flush=True)
 
             detections = list(last_prediction_result.get("detections", []))
             for detection in detections:
@@ -550,6 +657,14 @@ def main() -> None:
                 draw_prediction_overlay(
                     frame_bgr,
                     overlay_detections,
+                    fps=smoothed_fps,
+                    classify_every=args.classify_every,
+                    smoothing_mode=args.temporal_smoothing,
+                )
+            elif last_prediction_result.get("predictions"):
+                draw_prediction_overlay(
+                    frame_bgr,
+                    list(last_prediction_result.get("predictions", [])),
                     fps=smoothed_fps,
                     classify_every=args.classify_every,
                     smoothing_mode=args.temporal_smoothing,

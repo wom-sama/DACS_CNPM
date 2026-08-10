@@ -1,11 +1,17 @@
 from __future__ import annotations
 
+import matplotlib
+
+# Audit/evaluation commands must remain headless on Windows and CI hosts.
+matplotlib.use("Agg")
+
 import argparse
+import csv
 import math
 import time
 from itertools import islice
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
 import torch
 import torch.nn.functional as F
@@ -18,8 +24,19 @@ try:
 except Exception:  # pragma: no cover - optional compiled torchvision op
     _torchvision_batched_nms = None
 
-from trkh.core.config import default_data_yaml, load_data_spec, to_serializable
-from trkh.data.dataset import MangoYOLOCropDataset, build_eval_transform, build_train_collate_fn
+from trkh.core.config import (
+    IMAGENET_MEAN,
+    IMAGENET_STD,
+    default_data_yaml,
+    load_data_spec,
+    to_serializable,
+)
+from trkh.data.dataset import (
+    ClassificationFolderDataset,
+    MangoYOLOCropDataset,
+    build_eval_transform,
+    build_train_collate_fn,
+)
 from trkh.training.debug_and_optimization import TestTimeAugmentation
 from trkh.inference.inference import resolve_confidence_threshold
 from trkh.training.loss import HybridDetectionClassificationLoss, box_iou_from_xywh, generalized_iou
@@ -33,11 +50,14 @@ from trkh.evaluation.metrics import (
     plot_per_class_metrics,
     plot_pr_curve,
 )
+from trkh.evaluation.input_normalization import checkpoint_input_normalization
 from trkh.models.model import (
     build_model_from_checkpoint,
+    classification_logits_from_features,
     extract_bbox_from_model_output,
     extract_detection_from_model_output,
     extract_head_input_from_features,
+    source_context_fused_logits_from_features,
 )
 from trkh.core.utils import (
     autocast_context,
@@ -69,6 +89,23 @@ DETECTION_SCORE_MODES = (
 )
 
 
+def _checkpoint_data_path_mismatch(
+    checkpoint: Dict[str, object],
+    requested_data_yaml: Path,
+) -> Optional[Dict[str, str]]:
+    checkpoint_data_yaml = str(checkpoint.get("data_yaml", "") or "").strip()
+    if not checkpoint_data_yaml:
+        return None
+    checkpoint_path = Path(checkpoint_data_yaml).expanduser().resolve(strict=False)
+    requested_path = Path(requested_data_yaml).expanduser().resolve(strict=False)
+    if checkpoint_path == requested_path:
+        return None
+    return {
+        "checkpoint_data_yaml": str(checkpoint_path),
+        "requested_data_yaml": str(requested_path),
+    }
+
+
 def resolve_crop_to_primary_object(
     checkpoint: Dict[str, object],
     *,
@@ -84,6 +121,19 @@ def resolve_crop_to_primary_object(
     data_summary = checkpoint.get("data_summary", {})
     if isinstance(data_summary, dict) and "crop_to_primary_object" in data_summary:
         return bool(data_summary["crop_to_primary_object"])
+    return True
+
+
+def resolve_classification_object_crops(
+    checkpoint: Dict[str, object],
+    *,
+    disable_classification_object_crops: bool = False,
+) -> bool:
+    if disable_classification_object_crops:
+        return False
+    data_summary = checkpoint.get("data_summary", {})
+    if isinstance(data_summary, dict) and "classification_object_crops" in data_summary:
+        return bool(data_summary["classification_object_crops"])
     return True
 
 
@@ -104,6 +154,11 @@ def _move_targets_to_device(targets, device: torch.device):
 
 
 def _stack_image_masks_from_targets(targets) -> Optional[torch.Tensor]:
+    if isinstance(targets, dict):
+        image_mask = targets.get("image_mask")
+        if torch.is_tensor(image_mask):
+            return image_mask.to(dtype=torch.bool)
+        return None
     if not _is_detection_targets(targets):
         return None
     masks = []
@@ -115,6 +170,322 @@ def _stack_image_masks_from_targets(targets) -> Optional[torch.Tensor]:
     if not masks:
         return None
     return torch.stack(masks, dim=0)
+
+
+def _dataset_sample_paths(dataset) -> List[str]:
+    sample_paths_fn = getattr(dataset, "sample_paths", None)
+    if callable(sample_paths_fn):
+        return [str(path) for path in sample_paths_fn()]
+    samples = getattr(dataset, "samples", None)
+    if samples is None:
+        return []
+    paths: List[str] = []
+    for sample in samples:
+        image_path = getattr(sample, "image_path", None)
+        paths.append("" if image_path is None else str(image_path))
+    return paths
+
+
+def _dataset_sample_metadata(dataset) -> List[Dict[str, object]]:
+    samples = getattr(dataset, "samples", None)
+    if samples is None:
+        return []
+    metadata_rows: List[Dict[str, object]] = []
+    for sample in samples:
+        row: Dict[str, object] = {}
+        image_path = getattr(sample, "image_path", None)
+        label_path = getattr(sample, "label_path", None)
+        if image_path is not None:
+            image_path = Path(image_path)
+            row["source_stem"] = image_path.stem
+        if label_path is not None:
+            label_path = Path(label_path)
+            row["label_path"] = str(label_path)
+            row.setdefault("source_stem", label_path.stem)
+        if hasattr(sample, "primary_object_index"):
+            row["object_index"] = int(getattr(sample, "primary_object_index"))
+        if hasattr(sample, "primary_label"):
+            row["primary_label"] = int(getattr(sample, "primary_label"))
+        objects = getattr(sample, "objects", None)
+        primary_object_index = row.get("object_index")
+        if objects is not None and primary_object_index is not None:
+            for obj in objects:
+                if int(getattr(obj, "object_index", -1)) != int(primary_object_index):
+                    continue
+                bbox = getattr(obj, "bbox", None)
+                if bbox is not None:
+                    for axis_index, value in enumerate(bbox):
+                        row[f"bbox_{axis_index}"] = float(value)
+                break
+        metadata_rows.append(row)
+    return metadata_rows
+
+
+def _build_prediction_records(
+    *,
+    targets: torch.Tensor,
+    predictions: torch.Tensor,
+    probabilities: torch.Tensor,
+    class_names: Sequence[str],
+    sample_paths: Sequence[str],
+    sample_metadata: Optional[Sequence[Mapping[str, object]]] = None,
+    abstention_probabilities: Optional[torch.Tensor] = None,
+) -> List[Dict[str, object]]:
+    targets = targets.detach().cpu().to(dtype=torch.long).view(-1)
+    predictions = predictions.detach().cpu().to(dtype=torch.long).view(-1)
+    probabilities = probabilities.detach().cpu().to(dtype=torch.float32)
+    class_count = len(class_names)
+    record_count = min(int(targets.numel()), int(predictions.numel()), int(probabilities.shape[0]))
+    if sample_paths:
+        record_count = min(record_count, len(sample_paths))
+    if sample_metadata:
+        record_count = min(record_count, len(sample_metadata))
+    if abstention_probabilities is not None:
+        abstention_probabilities = (
+            abstention_probabilities.detach().cpu().to(dtype=torch.float32).view(-1)
+        )
+        record_count = min(record_count, int(abstention_probabilities.numel()))
+
+    records: List[Dict[str, object]] = []
+    for sample_index in range(record_count):
+        target_index = int(targets[sample_index].item())
+        prediction_index = int(predictions[sample_index].item())
+        row_probabilities = probabilities[sample_index]
+        top_k = max(1, min(5, class_count, int(row_probabilities.numel())))
+        top_values, top_indices = torch.topk(row_probabilities, k=top_k)
+        record: Dict[str, object] = {
+            "sample_index": int(sample_index),
+            "image_path": str(sample_paths[sample_index]) if sample_paths else "",
+            "target_index": target_index,
+            "target_name": str(class_names[target_index]) if 0 <= target_index < class_count else "",
+            "prediction_index": prediction_index,
+            "prediction_name": str(class_names[prediction_index]) if 0 <= prediction_index < class_count else "",
+            "confidence": float(row_probabilities[prediction_index].item())
+            if 0 <= prediction_index < int(row_probabilities.numel())
+            else 0.0,
+            "correct": int(target_index == prediction_index),
+        }
+        if sample_metadata:
+            for key, value in dict(sample_metadata[sample_index]).items():
+                if key not in record:
+                    record[str(key)] = value
+        if abstention_probabilities is not None:
+            record["abstention_probability"] = float(
+                abstention_probabilities[sample_index].item()
+            )
+        for rank, (score, class_index) in enumerate(zip(top_values.tolist(), top_indices.tolist()), start=1):
+            class_index = int(class_index)
+            record[f"top{rank}_index"] = class_index
+            record[f"top{rank}_name"] = str(class_names[class_index]) if 0 <= class_index < class_count else ""
+            record[f"top{rank}_probability"] = float(score)
+        for class_index, class_name in enumerate(class_names):
+            if class_index < int(row_probabilities.numel()):
+                record[f"prob_{class_index}_{class_name}"] = float(row_probabilities[class_index].item())
+        records.append(record)
+    return records
+
+
+def _classification_metric_summary(
+    targets: torch.Tensor,
+    predictions: torch.Tensor,
+    class_names: Sequence[str],
+) -> Dict[str, float]:
+    metrics = build_metrics(
+        targets=targets.to(dtype=torch.long).view(-1),
+        predictions=predictions.to(dtype=torch.long).view(-1),
+        class_names=class_names,
+    )
+    return {
+        "accuracy": float(metrics.get("accuracy", 0.0)),
+        "macro_precision": float(metrics.get("macro_precision", 0.0)),
+        "macro_recall": float(metrics.get("macro_recall", 0.0)),
+        "macro_f1": float(metrics.get("macro_f1", 0.0)),
+    }
+
+
+def _bootstrap_ci_from_labels(
+    targets: torch.Tensor,
+    predictions: torch.Tensor,
+    class_names: Sequence[str],
+    *,
+    seed: int = 42,
+    n_bootstrap: int = 1000,
+) -> Dict[str, List[float]]:
+    targets = targets.to(dtype=torch.long).view(-1).cpu()
+    predictions = predictions.to(dtype=torch.long).view(-1).cpu()
+    if int(targets.numel()) < 2 or int(predictions.numel()) < 2:
+        return {}
+
+    sample_count = min(int(targets.numel()), int(predictions.numel()))
+    targets = targets[:sample_count]
+    predictions = predictions[:sample_count]
+    generator = torch.Generator(device="cpu")
+    generator.manual_seed(int(seed))
+    values: Dict[str, List[float]] = {
+        "accuracy": [],
+        "macro_precision": [],
+        "macro_recall": [],
+        "macro_f1": [],
+    }
+    for _ in range(max(1, int(n_bootstrap))):
+        indices = torch.randint(0, sample_count, (sample_count,), generator=generator)
+        sampled = _classification_metric_summary(
+            targets=targets[indices],
+            predictions=predictions[indices],
+            class_names=class_names,
+        )
+        for key in values:
+            values[key].append(float(sampled[key]))
+
+    intervals: Dict[str, List[float]] = {}
+    for key, metric_values in values.items():
+        tensor = torch.tensor(metric_values, dtype=torch.float32)
+        intervals[key] = [
+            float(torch.quantile(tensor, 0.025).item()),
+            float(torch.quantile(tensor, 0.975).item()),
+        ]
+    return intervals
+
+
+def _comparison_class_names_for_data_spec(
+    data_spec,
+    split: str,
+    fallback_class_names: Sequence[str],
+) -> List[str]:
+    fallback = [str(name) for name in fallback_class_names]
+    if getattr(data_spec, "data_format", "yolo") != "classification_folder":
+        return fallback
+    split_dir = data_spec.split_images_dir(split)
+    if not split_dir.exists():
+        return fallback
+    folder_class_names = [
+        path.name
+        for path in sorted(split_dir.iterdir(), key=lambda item: item.name)
+        if path.is_dir()
+    ]
+    if len(folder_class_names) == len(fallback) and set(folder_class_names) == set(fallback):
+        return folder_class_names
+    return fallback
+
+
+def _record_class_name(
+    record: Dict[str, object],
+    *,
+    name_key: str,
+    index_key: str,
+    class_names: Sequence[str],
+) -> str:
+    value = record.get(name_key, "")
+    if isinstance(value, str) and value:
+        return value
+    try:
+        index = int(record.get(index_key, -1))
+    except (TypeError, ValueError):
+        index = -1
+    if 0 <= index < len(class_names):
+        return str(class_names[index])
+    return ""
+
+
+def _build_baseline_comparison_prediction_rows(
+    prediction_records: Sequence[Dict[str, object]],
+    *,
+    class_names: Sequence[str],
+    comparison_class_names: Sequence[str],
+) -> List[Dict[str, object]]:
+    class_to_index = {str(name): index for index, name in enumerate(comparison_class_names)}
+    rows: List[Dict[str, object]] = []
+    for record in prediction_records:
+        if not isinstance(record, dict):
+            continue
+        true_name = _record_class_name(
+            record,
+            name_key="target_name",
+            index_key="target_index",
+            class_names=class_names,
+        )
+        pred_name = _record_class_name(
+            record,
+            name_key="prediction_name",
+            index_key="prediction_index",
+            class_names=class_names,
+        )
+        if true_name not in class_to_index or pred_name not in class_to_index:
+            continue
+        rows.append(
+            {
+                "path": str(record.get("image_path", "")),
+                "y_true": int(class_to_index[true_name]),
+                "y_pred": int(class_to_index[pred_name]),
+                "true_name": true_name,
+                "pred_name": pred_name,
+            }
+        )
+    rows.sort(key=lambda item: str(item.get("path", "")))
+    return rows
+
+
+def _build_baseline_comparison_summary(
+    *,
+    rows: Sequence[Dict[str, object]],
+    comparison_class_names: Sequence[str],
+    metrics: Dict[str, object],
+    model: nn.Module,
+    checkpoint: Dict[str, object],
+    paper_name: str,
+    family: str,
+    seed: int,
+) -> Dict[str, object]:
+    targets = torch.tensor([int(row["y_true"]) for row in rows], dtype=torch.long)
+    predictions = torch.tensor([int(row["y_pred"]) for row in rows], dtype=torch.long)
+    metric_summary = _classification_metric_summary(
+        targets=targets,
+        predictions=predictions,
+        class_names=comparison_class_names,
+    ) if len(rows) else {
+        "accuracy": 0.0,
+        "macro_precision": 0.0,
+        "macro_recall": 0.0,
+        "macro_f1": 0.0,
+    }
+    timing = metrics.get("timing", {})
+    eval_loop_seconds = float(timing.get("eval_loop_seconds", 0.0)) if isinstance(timing, dict) else 0.0
+    model_config = checkpoint.get("model_config", {})
+    model_name = ""
+    research_track = "legacy_unspecified"
+    pretrained = False
+    if isinstance(model_config, dict):
+        model_name = str(model_config.get("model_type", "")).strip()
+        research_track = str(
+            model_config.get("research_track", "legacy_unspecified")
+        ).strip()
+        pretrained = bool(model_config.get("pretrained", False)) or (
+            research_track == "pretrained"
+        )
+    if not model_name:
+        model_name = str(checkpoint.get("model_type", "") or model.__class__.__name__)
+    best_epoch = checkpoint.get("best_epoch", checkpoint.get("epoch", ""))
+    return {
+        "paper_name": str(paper_name),
+        "family": str(family),
+        "backend": "trkh",
+        "model": model_name,
+        "pretrained": bool(pretrained),
+        "research_track": research_track,
+        "test_size": int(len(rows)),
+        "test_loss": float(metrics.get("loss", 0.0)),
+        "metrics": metric_summary,
+        "ci95": _bootstrap_ci_from_labels(
+            targets=targets,
+            predictions=predictions,
+            class_names=comparison_class_names,
+            seed=seed,
+        ) if len(rows) else {},
+        "params": int(sum(parameter.numel() for parameter in model.parameters())),
+        "inference_time_ms_per_image": float(eval_loop_seconds / max(1, len(rows)) * 1000.0),
+        "best_epoch": best_epoch,
+        "classes": [str(name) for name in comparison_class_names],
+    }
 
 
 def _pairwise_iou_xywh(boxes1: torch.Tensor, boxes2: torch.Tensor) -> torch.Tensor:
@@ -768,6 +1139,10 @@ def evaluate_model(
     adaptive_min_detections: int = 1,
     require_foreground_argmax: bool = False,
     detection_score_mode: str = "foreground",
+    collect_prediction_records: bool = False,
+    bbox_token_prior_source: str = "bbox",
+    input_mean: Sequence[float] = IMAGENET_MEAN,
+    input_std: Sequence[float] = IMAGENET_STD,
 ) -> Dict[str, object]:
     eval_start = time.perf_counter()
     model.eval()
@@ -788,6 +1163,7 @@ def evaluate_model(
     all_full_predictions = []
     all_detection_scores = []
     all_probabilities = []
+    all_abstention_probabilities = []
     all_bbox_targets = []
     all_bbox_predictions = []
     detection_records: List[Dict[str, torch.Tensor]] = []
@@ -819,10 +1195,14 @@ def evaluate_model(
             contrast_delta=tta_brightness_delta,
             saturation_delta=tta_brightness_delta,
             num_aug=4,
+            mean=input_mean,
+            std=input_std,
         )
     if max_batches is not None:
         total_batches = min(total_batches, max_batches)
         batch_iterator = islice(dataloader, total_batches)
+
+    bbox_token_prior_source = str(bbox_token_prior_source or "bbox").strip().lower()
 
     loop_start = time.perf_counter()
     with torch.inference_mode():
@@ -834,38 +1214,115 @@ def evaluate_model(
             dynamic_ncols=True,
         ) as pbar:
             for batch in pbar:
+                bbox_metadata = None
+                bbox_token_prior_metadata = None
+                source_context_images = None
+                source_context_bboxes = None
                 if len(batch) == 2 and _is_detection_targets(batch[1]):
                     images, batch_targets = batch
                     labels = None
                     target_boxes = None
+                    crop_boxes = None
                     detection_targets = _move_targets_to_device(batch_targets, device)
                     detection_mode = True
                 elif len(batch) == 3:
                     images, labels, targets = batch
-                    target_boxes = targets["bbox"]
+                    target_boxes = targets.get("bbox") if isinstance(targets, dict) else None
+                    crop_boxes = targets.get("crop_bbox") if isinstance(targets, dict) else None
+                    source_context_images = (
+                        targets.get("source_context_image")
+                        if isinstance(targets, dict)
+                        else None
+                    )
+                    source_context_bboxes = (
+                        targets.get("source_context_bbox")
+                        if isinstance(targets, dict)
+                        else None
+                    )
+                    bbox_metadata = target_boxes
                     detection_targets = None
                 elif len(batch) == 2:
                     images, labels = batch
                     target_boxes = None
+                    crop_boxes = None
                     detection_targets = None
                 else:
                     raise ValueError("Eval dataloader phai tra ve 2 hoac 3 phan tu.")
                 images = images.to(device, non_blocking=True)
                 if labels is not None:
                     labels = labels.to(device, non_blocking=True)
+                    metric_labels = labels.argmax(dim=1) if labels.ndim == 2 else labels
+                else:
+                    metric_labels = None
                 if target_boxes is not None:
                     target_boxes = target_boxes.to(device, non_blocking=True)
+                    bbox_metadata = target_boxes
+                if torch.is_tensor(crop_boxes):
+                    crop_boxes = crop_boxes.to(device, dtype=torch.float32, non_blocking=True)
+                else:
+                    crop_boxes = None
+                bbox_token_prior_metadata = (
+                    crop_boxes
+                    if bbox_token_prior_source == "crop_bbox" and torch.is_tensor(crop_boxes)
+                    else bbox_metadata
+                )
+                if torch.is_tensor(source_context_images):
+                    source_context_images = source_context_images.to(
+                        device,
+                        non_blocking=True,
+                    )
+                else:
+                    source_context_images = None
+                if torch.is_tensor(source_context_bboxes):
+                    source_context_bboxes = source_context_bboxes.to(
+                        device=device,
+                        dtype=torch.float32,
+                        non_blocking=True,
+                    )
+                else:
+                    source_context_bboxes = None
 
                 base_features = None
                 base_output = None
-                image_valid_mask = _stack_image_masks_from_targets(detection_targets)
+                image_valid_mask = _stack_image_masks_from_targets(
+                    targets if len(batch) == 3 else detection_targets
+                )
+                if image_valid_mask is not None:
+                    image_valid_mask = image_valid_mask.to(
+                        device=device,
+                        dtype=torch.bool,
+                        non_blocking=True,
+                    )
                 with autocast_context(device, amp):
-                    if hasattr(model, "forward_features") and hasattr(model, "forward_heads") and hasattr(model, "num_registers"):
-                        base_features = model.forward_features(images, image_valid_mask=image_valid_mask)
+                    if bool(getattr(model, "requires_spatial_metadata", False)):
+                        if image_valid_mask is None or bbox_metadata is None:
+                            raise RuntimeError(
+                                "This classification checkpoint requires image_valid_mask "
+                                "and bbox metadata for certified evaluation."
+                            )
+                        base_output = model(
+                            images,
+                            image_valid_mask=image_valid_mask,
+                            bbox=bbox_metadata,
+                        )
+                    elif hasattr(model, "forward_features") and hasattr(model, "forward_heads") and hasattr(model, "num_registers"):
+                        base_features = model.forward_features(
+                            images,
+                            image_valid_mask=image_valid_mask,
+                            bbox_token_prior=bbox_token_prior_metadata,
+                        )
+                        if bbox_metadata is not None:
+                            base_features["bbox"] = bbox_metadata
                         base_output = model.forward_heads(base_features)
                     elif hasattr(model, "forward_features") and hasattr(model, "head") and hasattr(model, "num_registers"):
-                        base_features = model.forward_features(images, image_valid_mask=image_valid_mask)
-                        base_output = model.head(extract_head_input_from_features(model, base_features))
+                        base_features = model.forward_features(
+                            images,
+                            image_valid_mask=image_valid_mask,
+                            bbox_token_prior=bbox_token_prior_metadata,
+                        )
+                        if bbox_metadata is not None:
+                            base_features["bbox"] = bbox_metadata
+                        base_output = classification_logits_from_features(model, base_features)
                     else:
                         base_output = model(images)
                     base_logits, pred_boxes, base_objectness_logits = extract_detection_from_model_output(base_output)
@@ -876,9 +1333,88 @@ def evaluate_model(
                     metric_objectness_logits = base_objectness_logits
                     metric_count_logits = base_count_logits
                     metric_quality_logits = base_quality_logits
+                    if (
+                        base_features is not None
+                        and torch.is_tensor(source_context_images)
+                        and torch.is_tensor(source_context_bboxes)
+                        and getattr(model, "source_context_fusion_head", None) is not None
+                    ):
+                        if hasattr(model, "forward_features") and hasattr(model, "forward_heads") and hasattr(model, "num_registers"):
+                            source_features = model.forward_features(
+                                source_context_images,
+                                bbox_token_prior=source_context_bboxes,
+                            )
+                            source_features["bbox"] = source_context_bboxes
+                            source_output = model.forward_heads(source_features)
+                        elif hasattr(model, "forward_features") and hasattr(model, "head") and hasattr(model, "num_registers"):
+                            source_features = model.forward_features(
+                                source_context_images,
+                                bbox_token_prior=source_context_bboxes,
+                            )
+                            source_features["bbox"] = source_context_bboxes
+                            source_output = classification_logits_from_features(
+                                model,
+                                source_features,
+                            )
+                        else:
+                            source_features = None
+                            source_output = None
+                        if source_features is not None and source_output is not None:
+                            source_logits, _ = extract_bbox_from_model_output(source_output)
+                            if torch.is_tensor(source_logits):
+                                fused_logits = source_context_fused_logits_from_features(
+                                    model,
+                                    base_features,
+                                    source_features,
+                                    base_logits,
+                                    source_logits,
+                                )
+                                if torch.is_tensor(fused_logits):
+                                    base_logits = fused_logits
+                                    metric_logits = fused_logits
+                                    if isinstance(base_output, dict):
+                                        base_output = dict(base_output)
+                                        base_output["logits"] = fused_logits
+                                    else:
+                                        base_output = fused_logits
 
                     if tta_runner is not None:
-                        tta_output = tta_runner.forward(model, images)
+                        def _tta_forward(augmented_images: torch.Tensor):
+                            if bool(getattr(model, "requires_spatial_metadata", False)):
+                                if image_valid_mask is None or bbox_metadata is None:
+                                    raise RuntimeError(
+                                        "Spatial metadata is required for precision-ensemble TTA."
+                                    )
+                                return model(
+                                    augmented_images,
+                                    image_valid_mask=image_valid_mask,
+                                    bbox=bbox_metadata,
+                                )
+                            if hasattr(model, "forward_features") and hasattr(model, "forward_heads") and hasattr(model, "num_registers"):
+                                aug_features = model.forward_features(
+                                    augmented_images,
+                                    image_valid_mask=image_valid_mask,
+                                    bbox_token_prior=bbox_token_prior_metadata,
+                                )
+                                if bbox_metadata is not None:
+                                    aug_features["bbox"] = bbox_metadata
+                                return model.forward_heads(aug_features)
+                            if hasattr(model, "forward_features") and hasattr(model, "head") and hasattr(model, "num_registers"):
+                                aug_features = model.forward_features(
+                                    augmented_images,
+                                    image_valid_mask=image_valid_mask,
+                                    bbox_token_prior=bbox_token_prior_metadata,
+                                )
+                                if bbox_metadata is not None:
+                                    aug_features["bbox"] = bbox_metadata
+                                return classification_logits_from_features(model, aug_features)
+                            return model(augmented_images)
+
+                        tta_output = tta_runner.forward(
+                            model,
+                            images,
+                            forward_fn=_tta_forward,
+                        )
                         metric_logits = tta_output["logits"]
                         metric_pred_boxes = tta_output.get("boxes", pred_boxes)
                         metric_objectness_logits = tta_output.get("objectness_logits", base_objectness_logits)
@@ -914,6 +1450,29 @@ def evaluate_model(
                         pbar.set_postfix(loss=f"{loss_value:.4f}")
 
                 probabilities = F.softmax(metric_logits.float(), dim=-1)
+                batch_abstention_probabilities = None
+                if (
+                    not detection_mode
+                    and base_features is not None
+                    and metric_logits.ndim == 2
+                ):
+                    abstention_logits = base_features.get("deep_abstention_logit")
+                    if (
+                        torch.is_tensor(abstention_logits)
+                        and abstention_logits.ndim == 1
+                        and abstention_logits.size(0) == metric_logits.size(0)
+                    ):
+                        joint_probabilities = F.softmax(
+                            torch.cat(
+                                (
+                                    metric_logits.float(),
+                                    abstention_logits.float().unsqueeze(1),
+                                ),
+                                dim=1,
+                            ),
+                            dim=1,
+                        )
+                        batch_abstention_probabilities = joint_probabilities[:, -1]
                 objectness_scores = (
                     torch.sigmoid(metric_objectness_logits.float())
                     if metric_objectness_logits is not None
@@ -1033,9 +1592,15 @@ def evaluate_model(
                         )
                 else:
                     predictions = probabilities.argmax(dim=1)
-                    all_targets.append(labels.detach().cpu())
+                    if metric_labels is None:
+                        raise ValueError("Classification evaluation thieu label target.")
+                    all_targets.append(metric_labels.detach().cpu())
                     all_predictions.append(predictions.detach().cpu())
                     all_probabilities.append(probabilities.detach().cpu())
+                    if batch_abstention_probabilities is not None:
+                        all_abstention_probabilities.append(
+                            batch_abstention_probabilities.detach().cpu()
+                        )
                     if metric_pred_boxes is not None and target_boxes is not None:
                         all_bbox_predictions.append(metric_pred_boxes.detach().cpu())
                         all_bbox_targets.append(target_boxes.detach().cpu())
@@ -1068,12 +1633,47 @@ def evaluate_model(
         if all_probabilities
         else torch.empty((0, len(class_names)), dtype=torch.float32)
     )
+    abstention_probabilities = (
+        torch.cat(all_abstention_probabilities).to(dtype=torch.float32)
+        if all_abstention_probabilities
+        else None
+    )
     metrics = build_metrics(
         targets=targets,
         predictions=predictions,
         class_names=class_names,
         probabilities=probabilities,
     )
+    if bool(collect_prediction_records) and not detection_mode and targets.numel() and predictions.numel():
+        metrics["prediction_records"] = _build_prediction_records(
+            targets=targets,
+            predictions=predictions,
+            probabilities=probabilities,
+            class_names=class_names,
+            sample_paths=_dataset_sample_paths(getattr(dataloader, "dataset", None)),
+            sample_metadata=_dataset_sample_metadata(getattr(dataloader, "dataset", None)),
+            abstention_probabilities=abstention_probabilities,
+        )
+    if abstention_probabilities is not None and abstention_probabilities.numel():
+        correctness = predictions.eq(targets)
+        metrics["deep_abstention"] = {
+            "count": int(abstention_probabilities.numel()),
+            "mean_probability": float(abstention_probabilities.mean().item()),
+            "max_probability": float(abstention_probabilities.max().item()),
+            "fraction_010": float(
+                (abstention_probabilities >= 0.10).float().mean().item()
+            ),
+            "mean_probability_correct": float(
+                abstention_probabilities[correctness].mean().item()
+            )
+            if bool(correctness.any())
+            else 0.0,
+            "mean_probability_incorrect": float(
+                abstention_probabilities[~correctness].mean().item()
+            )
+            if bool((~correctness).any())
+            else 0.0,
+        }
     if detection_mode and targets.numel() and full_predictions.numel():
         metrics["foreground_classification"] = {
             "accuracy": metrics["accuracy"],
@@ -1231,9 +1831,54 @@ def save_evaluation_artifacts(
     metrics: Dict[str, object],
     class_names: Sequence[str],
     output_dir: Path,
+    *,
+    comparison_summary: Optional[Dict[str, object]] = None,
+    comparison_prediction_rows: Optional[Sequence[Dict[str, object]]] = None,
 ) -> None:
     ensure_dir(output_dir)
-    json_dump(output_dir / "metrics.json", to_serializable(metrics))
+    prediction_records = metrics.get("prediction_records", [])
+    metrics_payload = dict(metrics)
+    metrics_payload.pop("prediction_records", None)
+    json_dump(
+        output_dir / ("metrics_detailed.json" if comparison_summary is not None else "metrics.json"),
+        to_serializable(metrics_payload),
+    )
+    if comparison_summary is not None:
+        json_dump(output_dir / "metrics.json", to_serializable(comparison_summary))
+    if comparison_prediction_rows is not None:
+        with (output_dir / "predictions.csv").open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(
+                handle,
+                fieldnames=["path", "y_true", "y_pred", "true_name", "pred_name"],
+            )
+            writer.writeheader()
+            for row in comparison_prediction_rows:
+                writer.writerow(
+                    {
+                        "path": row.get("path", ""),
+                        "y_true": row.get("y_true", ""),
+                        "y_pred": row.get("y_pred", ""),
+                        "true_name": row.get("true_name", ""),
+                        "pred_name": row.get("pred_name", ""),
+                    }
+                )
+    if isinstance(prediction_records, list) and prediction_records:
+        fieldnames: List[str] = []
+        for record in prediction_records:
+            if not isinstance(record, dict):
+                continue
+            for key in record.keys():
+                if key not in fieldnames:
+                    fieldnames.append(str(key))
+        predictions_path = output_dir / (
+            "predictions_detailed.csv" if comparison_prediction_rows is not None else "predictions.csv"
+        )
+        with predictions_path.open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=fieldnames)
+            writer.writeheader()
+            for record in prediction_records:
+                if isinstance(record, dict):
+                    writer.writerow({key: record.get(key, "") for key in fieldnames})
     plot_confusion_matrix(
         metrics["confusion_matrix"],
         class_names,
@@ -1285,18 +1930,42 @@ def parse_args() -> argparse.Namespace:
         help="Neu > 0, validate so class trong data.yaml truoc khi evaluate.",
     )
     parser.add_argument("--split", choices=("train", "val", "test"), default="val")
+    parser.add_argument(
+        "--allow-test-split",
+        action="store_true",
+        default=False,
+        help="Explicit final/retrospective authorization required with --split test.",
+    )
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--amp", action="store_true", default=False)
     parser.add_argument("--output-dir", type=Path, default=None)
+    parser.add_argument(
+        "--paper-name",
+        default="TRKH-ViTReg-224",
+        help="Ten hien thi trong metrics.json kieu baseline.",
+    )
+    parser.add_argument(
+        "--family",
+        default="TRKH",
+        help="Nhom model hien thi trong bang so sanh baseline.",
+    )
     parser.add_argument("--max-batches", type=int, default=0)
     parser.add_argument("--override-image-size", type=int, default=None)
+    parser.add_argument(
+        "--override-stem-pooling-mode",
+        choices=("max", "soft", "max_soft"),
+        default=None,
+        help="Diagnostic checkpoint-compatible override for CNN stem pooling.",
+    )
+    parser.add_argument("--override-stem-softpool-blend", type=float, default=None)
     parser.add_argument("--tta", action="store_true", default=False)
     parser.add_argument("--eval-tta", dest="tta", action="store_true", default=False)
     parser.add_argument("--tta-brightness-delta", type=float, default=0.08)
     parser.add_argument("--full-image-detection", action="store_true", default=False)
     parser.add_argument("--crop-to-primary-object", action="store_true", default=False)
+    parser.add_argument("--disable-classification-object-crops", action="store_true", default=False)
     parser.add_argument("--confidence-threshold", type=float, default=None)
     parser.add_argument("--disable-calibration", action="store_true", default=False)
     parser.add_argument("--detection-nms-iou-threshold", type=float, default=0.5)
@@ -1320,11 +1989,30 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--adaptive-count-margin", type=int, default=1)
     parser.add_argument("--adaptive-min-detections", type=int, default=1)
+    parser.add_argument(
+        "--bbox-token-prior-source",
+        choices=("bbox", "crop_bbox"),
+        default="bbox",
+        help="Nguon bbox cho token-level prior khi evaluate classification object crops.",
+    )
+    parser.add_argument("--patch-evidence-linear-verifier-json", type=Path, default=None)
+    parser.add_argument("--patch-evidence-linear-verifier-pair", type=str, default="0-1")
+    parser.add_argument("--patch-evidence-linear-verifier-min-pair-probability", type=float, default=0.02)
+    parser.add_argument("--patch-evidence-linear-verifier-max-pair-margin", type=float, default=0.40)
+    parser.add_argument("--patch-evidence-linear-verifier-confidence-threshold", type=float, default=0.60)
+    parser.add_argument("--patch-evidence-linear-verifier-logit-boost", type=float, default=0.01)
+    parser.add_argument(
+        "--patch-evidence-linear-verifier-protect-right-min-probability",
+        type=float,
+        default=0.0,
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
+    if args.split == "test" and not bool(args.allow_test_split):
+        raise ValueError("--split test requires explicit --allow-test-split authorization.")
     if args.adaptive_count_margin < 0:
         raise ValueError("--adaptive-count-margin phai >= 0.")
     if args.adaptive_min_detections < 0:
@@ -1338,36 +2026,158 @@ def main() -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     checkpoint = load_checkpoint(args.checkpoint, map_location="cpu")
+    data_path_mismatch = _checkpoint_data_path_mismatch(checkpoint, data_spec.data_yaml)
+    if data_path_mismatch is not None:
+        print(
+            {
+                "warning": "evaluation_data_path_differs_from_checkpoint",
+                **data_path_mismatch,
+            },
+            flush=True,
+        )
     class_names = list(checkpoint.get("class_names", data_spec.class_names))
-    if len(class_names) != data_spec.num_classes:
-        raise ValueError("So lop trong checkpoint khong khop data.yaml")
-    crop_to_primary_object = resolve_crop_to_primary_object(
-        checkpoint,
-        full_image_detection=args.full_image_detection,
-        crop_to_primary_object=args.crop_to_primary_object,
-    )
+    if [str(name) for name in class_names] != [
+        str(name) for name in data_spec.class_names
+    ]:
+        raise ValueError(
+            "Checkpoint/data class order mismatch. Refusing evaluation because "
+            f"checkpoint={class_names!r}, data={list(data_spec.class_names)!r}."
+        )
 
     model = build_model_from_checkpoint(
         checkpoint=checkpoint,
         num_classes=len(class_names),
         override_image_size=args.override_image_size,
+        override_stem_pooling_mode=args.override_stem_pooling_mode,
+        override_stem_softpool_blend=args.override_stem_softpool_blend,
     )
+    patch_evidence_linear_verifier_summary = {"enabled": False}
+    if args.patch_evidence_linear_verifier_json is not None:
+        load_verifier = getattr(model, "load_patch_evidence_linear_verifier_export", None)
+        if not callable(load_verifier):
+            raise RuntimeError("Checkpoint model does not support patch-evidence linear verifier export.")
+        patch_evidence_linear_verifier_summary = load_verifier(
+            args.patch_evidence_linear_verifier_json,
+            pair=args.patch_evidence_linear_verifier_pair,
+            min_pair_probability=args.patch_evidence_linear_verifier_min_pair_probability,
+            max_pair_margin=args.patch_evidence_linear_verifier_max_pair_margin,
+            confidence_threshold=args.patch_evidence_linear_verifier_confidence_threshold,
+            logit_boost=args.patch_evidence_linear_verifier_logit_boost,
+            protect_right_min_probability=(
+                args.patch_evidence_linear_verifier_protect_right_min_probability
+            ),
+        )
+        print(
+            {"patch_evidence_linear_verifier": patch_evidence_linear_verifier_summary},
+            flush=True,
+        )
     model.to(device)
     model.eval()
 
-    image_size = int(args.override_image_size or checkpoint.get("model_config", {}).get("image_size", 224))
-    dataset = MangoYOLOCropDataset.from_data_spec(
-        data_spec=data_spec,
-        split=args.split,
-        transform=build_eval_transform(
-            image_size=image_size,
-            resize_mode=checkpoint.get("augmentation_config", {}).get("resize_mode", "pad"),
-        ),
-        crop_margin_ratio=float(
-            checkpoint.get("augmentation_config", {}).get("crop_margin_ratio", 0.05)
-        ),
-        crop_to_primary_object=crop_to_primary_object,
+    checkpoint_model_type = str(getattr(model, "model_type", checkpoint.get("model_config", {}).get("model_type", ""))).strip().lower()
+    checkpoint_detection_mode = checkpoint_model_type in DETECTION_MODEL_TYPES
+    crop_to_primary_object = resolve_crop_to_primary_object(
+        checkpoint,
+        full_image_detection=args.full_image_detection,
+        crop_to_primary_object=args.crop_to_primary_object,
     )
+    classification_object_crops = resolve_classification_object_crops(
+        checkpoint,
+        disable_classification_object_crops=args.disable_classification_object_crops,
+    )
+
+    image_size = int(args.override_image_size or checkpoint.get("model_config", {}).get("image_size", 224))
+    augmentation_config = checkpoint.get("augmentation_config", {})
+    if not isinstance(augmentation_config, dict):
+        augmentation_config = {}
+    model_config = checkpoint.get("model_config", {})
+    if not isinstance(model_config, dict):
+        model_config = {}
+    input_mean, input_std = checkpoint_input_normalization(checkpoint)
+    source_context_feature_fusion = bool(
+        model_config.get("source_context_feature_fusion", False)
+    )
+    source_context_aux_for_eval = bool(
+        source_context_feature_fusion
+        and not checkpoint_detection_mode
+        and bool(augmentation_config.get("classification_source_context_aux", False))
+    )
+    eval_transform = build_eval_transform(
+        image_size=image_size,
+        resize_mode=augmentation_config.get("resize_mode", "pad"),
+        illumination_normalization=bool(augmentation_config.get("illumination_normalization", False)),
+        illumination_normalization_strength=float(augmentation_config.get("illumination_normalization_strength", 0.0) or 0.0),
+        foreground_crop_mode=str(augmentation_config.get("foreground_crop_mode", "none") or "none"),
+        foreground_crop_margin_ratio=float(augmentation_config.get("foreground_crop_margin_ratio", 0.08) or 0.08),
+        foreground_crop_min_mask_area_ratio=float(
+            augmentation_config.get("foreground_crop_min_mask_area_ratio", 0.03) or 0.03
+        ),
+        foreground_crop_max_mask_area_ratio=float(
+            augmentation_config.get("foreground_crop_max_mask_area_ratio", 0.92) or 0.92
+        ),
+        foreground_crop_max_crop_area_ratio=float(
+            augmentation_config.get("foreground_crop_max_crop_area_ratio", 0.98) or 0.98
+        ),
+        background_suppression_mode=str(augmentation_config.get("background_suppression_mode", "none") or "none"),
+        background_suppression_margin=float(augmentation_config.get("background_suppression_margin", 0.08) or 0.08),
+        background_suppression_blur_radius=float(augmentation_config.get("background_suppression_blur_radius", 7.0) or 7.0),
+        surface_detail_amplification_mode=str(
+            augmentation_config.get("surface_detail_amplification_mode", "none") or "none"
+        ),
+        surface_detail_amplification_strength=float(
+            augmentation_config.get("surface_detail_amplification_strength", 0.0) or 0.0
+        ),
+        surface_detail_amplification_blur_radius=float(
+            augmentation_config.get("surface_detail_amplification_blur_radius", 1.25) or 1.25
+        ),
+        surface_detail_amplification_foreground_weight=float(
+            augmentation_config.get("surface_detail_amplification_foreground_weight", 0.85) or 0.85
+        ),
+        eval_surface_detail_amplification=bool(
+            augmentation_config.get("eval_surface_detail_amplification", False)
+        ),
+        mean=input_mean,
+        std=input_std,
+    )
+    if data_spec.data_format == "classification_folder":
+        if checkpoint_detection_mode:
+            raise ValueError("format=classification_folder khong ho tro evaluate checkpoint detection.")
+        dataset = ClassificationFolderDataset.from_data_spec(
+            data_spec=data_spec,
+            split=args.split,
+            transform=eval_transform,
+            class_aware_augmentation=False,
+        )
+    else:
+        dataset = MangoYOLOCropDataset.from_data_spec(
+            data_spec=data_spec,
+            split=args.split,
+            transform=eval_transform,
+            crop_margin_ratio=float(
+                augmentation_config.get("crop_margin_ratio", 0.05)
+            ),
+            crop_to_primary_object=crop_to_primary_object,
+            classification_target=not checkpoint_detection_mode,
+            classification_object_crops=classification_object_crops,
+            classification_bbox_metadata=not checkpoint_detection_mode,
+            classification_source_context_aux=source_context_aux_for_eval,
+            classification_source_context_mode=str(
+                augmentation_config.get("classification_source_context_mode", "desaturate_blur")
+                or "desaturate_blur"
+            ),
+            classification_source_context_margin_ratio=float(
+                augmentation_config.get("classification_source_context_margin_ratio", 0.12)
+                or 0.12
+            ),
+            classification_source_context_background_alpha=float(
+                augmentation_config.get("classification_source_context_background_alpha", 0.35)
+                or 0.35
+            ),
+            classification_source_context_blur_radius=float(
+                augmentation_config.get("classification_source_context_blur_radius", 7.0)
+                or 7.0
+            ),
+        )
     dataloader_kwargs, dataloader_summary = build_safe_dataloader_kwargs(
         requested_num_workers=args.num_workers,
         requested_pin_memory=device.type == "cuda",
@@ -1403,7 +2213,7 @@ def main() -> None:
         explicit_threshold=args.confidence_threshold,
         disable_calibration=args.disable_calibration,
     )
-    if checkpoint.get("model_config", {}).get("model_type") in DETECTION_MODEL_TYPES:
+    if checkpoint_detection_mode:
         criterion = HybridDetectionClassificationLoss(
             num_classes=data_spec.num_classes,
             label_smoothing=float(checkpoint.get("train_config", {}).get("label_smoothing", 0.0)),
@@ -1446,12 +2256,47 @@ def main() -> None:
         adaptive_count_source=args.adaptive_count_source,
         adaptive_count_margin=args.adaptive_count_margin,
         adaptive_min_detections=args.adaptive_min_detections,
+        collect_prediction_records=True,
+        bbox_token_prior_source=args.bbox_token_prior_source,
+        input_mean=input_mean,
+        input_std=input_std,
     )
+    metrics["patch_evidence_linear_verifier"] = patch_evidence_linear_verifier_summary
 
     output_dir = args.output_dir
     if output_dir is None:
         output_dir = args.checkpoint.resolve().parent.parent / f"eval_{args.split}"
-    save_evaluation_artifacts(metrics, class_names, output_dir)
+    comparison_summary = None
+    comparison_prediction_rows = None
+    prediction_records = metrics.get("prediction_records", [])
+    if not checkpoint_detection_mode and isinstance(prediction_records, list) and prediction_records:
+        comparison_class_names = _comparison_class_names_for_data_spec(
+            data_spec,
+            args.split,
+            class_names,
+        )
+        comparison_prediction_rows = _build_baseline_comparison_prediction_rows(
+            prediction_records,
+            class_names=class_names,
+            comparison_class_names=comparison_class_names,
+        )
+        comparison_summary = _build_baseline_comparison_summary(
+            rows=comparison_prediction_rows,
+            comparison_class_names=comparison_class_names,
+            metrics=metrics,
+            model=model,
+            checkpoint=checkpoint,
+            paper_name=args.paper_name,
+            family=args.family,
+            seed=args.seed,
+        )
+    save_evaluation_artifacts(
+        metrics,
+        class_names,
+        output_dir,
+        comparison_summary=comparison_summary,
+        comparison_prediction_rows=comparison_prediction_rows,
+    )
 
     summary = {
         "split": args.split,
@@ -1462,6 +2307,7 @@ def main() -> None:
         "loss": metrics["loss"],
         "tta": args.tta,
         "confidence_threshold": confidence_threshold,
+        "patch_evidence_linear_verifier": patch_evidence_linear_verifier_summary,
     }
     if "bbox" in metrics:
         summary["bbox"] = metrics["bbox"]

@@ -1,0 +1,72 @@
+{
+  "schema": "trkh_saspa_f1_xai_execution_lock_v1",
+  "protocol_id": "trkh_saspa_dual_view_synthetic_a0_20260723",
+  "purpose": "Frozen-keeper diagnostic XAI on the ten already generated SaSPA F1 outputs after fidelity, blind-review, and duplicate decisions were fixed.",
+  "generation_root": "runs/audit_saspa_dual_view_synthetic_a0_20260723/f1_tiny_output_v2",
+  "checkpoint": {
+    "path": "runs/probe_v8_yolof_pairroute_teacherfocusbinary015_boundarydrop_bboxprior_120b_2e_20260701/checkpoints/best.pt",
+    "sha256": "1f49d577240c69dc63c30af70db52ec2aa9da65a17aef1c4b1c09ece6c482677",
+    "bytes": 58190990,
+    "member": "single frozen keeper"
+  },
+  "fixed_inputs": {
+    "attempt_enable_model_cpu_offload/provenance.jsonl": "8028907b731f28efbf0c9d2f1afe82f6286f5bc31357436f9e79a44770dfe823",
+    "generation_summary.json": "b5d45349b67c35f14c32dfd4ecc9ae3fb56a2428f86921e58dfb39a1235fdf88",
+    "generated_fidelity.json": "0166257aafc138126b739b32cfda9773bb26d4ae95d52d96b90430f7025f51ca",
+    "blind_review_decisions.locked.json": "35ba007a1b07e9859797a5d002d40145016c2bd8a714baf7c3bac838b62f1eaf",
+    "blind_review_unblinded.json": "c530985b0aa8f80943d03e677d2cc9a0bf64a4d5e651e68cc5d6bf2d71bf006e",
+    "duplicate_audit/duplicate_report.json": "d39ec3171e3718987ef45dbb66d4858c83f4ec040a513b9188feb7e1f963cf52"
+  },
+  "sample_policy": {
+    "count": 10,
+    "order": "lexicographic output_id from the locked provenance",
+    "labels": "target_class_index from the already fixed generation provenance",
+    "bbox": "exact bbox_xywh_normalized from the locked generation provenance, clamped only to image bounds",
+    "selection_or_filtering_after_xai": false
+  },
+  "execution": {
+    "precision": "FP32",
+    "amp": false,
+    "feature_source": "stem_last",
+    "gradcam_objective": "clean frozen-keeper top-1 logit",
+    "input_gradient_objective": "same clean frozen-keeper top-1 logit",
+    "input_gradient_reduction": "channelwise L2 magnitude normalized by finite maximum",
+    "background_gray": "replace pixels outside the locked bbox by grayscale",
+    "background_blur": "replace pixels outside the locked bbox by Gaussian blur radius 8",
+    "object_desaturation": "replace pixels inside the locked bbox by grayscale",
+    "bbox_prior": "pass the same locked normalized bbox to the keeper for clean and perturbation forwards",
+    "contact_sheet_columns": [
+      "synthetic output",
+      "stem Grad-CAM",
+      "input gradient",
+      "background blur",
+      "object desaturation"
+    ]
+  },
+  "interpretation_policy": {
+    "diagnostic_only": true,
+    "may_filter_outputs": false,
+    "may_regenerate_outputs": false,
+    "may_rank_prompts_or_seeds": false,
+    "may_tune_thresholds": false,
+    "may_authorize_a1": false,
+    "may_authorize_training": false,
+    "may_update_current_best_command": false,
+    "clean_heatmap_is_not_model_improvement_evidence": true
+  },
+  "split_boundary": {
+    "raw_dataset_modified": false,
+    "source_train_pixels_opened_by_xai": false,
+    "validation_pixels_opened_by_xai": false,
+    "test_pixels_opened_by_xai": false,
+    "validation_labels_opened_by_xai": false,
+    "test_labels_opened_by_xai": false
+  },
+  "failure_policy": {
+    "require_all_ten_cases": true,
+    "require_finite_probabilities_and_gradients": true,
+    "require_clean_forward_recheck_max_probability_error_at_most": 1e-6,
+    "preserve_partial_artifacts": true,
+    "never_relax_after_observing_xai": true
+  }
+}

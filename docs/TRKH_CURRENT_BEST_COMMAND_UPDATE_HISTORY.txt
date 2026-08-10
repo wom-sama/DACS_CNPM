@@ -1,0 +1,45 @@
+TRKH CURRENT-BEST COMMAND UPDATE HISTORY
+Tracking file created: 2026-07-15
+Source of truth: Git history of docs\TRKH_CURRENT_BEST_FULL_TRAIN_COMMANDS_20260706.txt
+
+CURRENT COUNTS
+
+- Git-tracked command-packet revisions: 3.
+- Updates after the first tracked revision: 2.
+- Selected single-model checkpoint replacements: 0.
+- Optional high-precision deployment packages added: 1.
+- Current command SHA-256:
+  36b9aa1a21b765829acf4c8321be147bd76297de4ccdb8a40e6dee8e37940faf
+
+REVISION 1 - 2026-07-11 - commit 4c2c7cb
+
+- Established the current keeper and locked raw/reload/softboost metrics.
+- Added one-command train -> full validation audits -> gated final test -> XAI.
+- Added VS Code-safe one-line preflight, ONNX/TensorRT export, and video commands.
+- Added fail-closed validation promotion and artifact-retention behavior.
+
+REVISION 2 - 2026-07-14 - commit b7023013
+
+- Keeper unchanged; recorded rejected scratch run: val macro/class-1 F1
+  0.874172/0.654639.
+- Recorded two-checkpoint precision result 0.887869/0.675676, class-1 precision
+  0.666667, but withheld deployment promotion pending backend parity.
+
+REVISION 3 - 2026-07-14 - commit ad67fad7
+
+- Keeper and full-train recipe unchanged.
+- Certified optional precision package on PyTorch FP32 and ONNX Runtime CPU;
+  ONNX max probability error 2.98e-7 with zero decision mismatch.
+- Added precision-package preflight/build/full-val/XAI commands and PyTorch video
+  fallback; blocked uncertified ONNX CUDA/TensorRT package deployment.
+
+MANDATORY RULE FOR EVERY FUTURE COMMAND UPDATE
+
+Update this file in the same commit as the current-best command packet. Record:
+date/commit, whether the selected checkpoint changed, metric improvement,
+new command/audit/deployment capability, verification result, and new command
+SHA-256. Rejected smoke/probe results do not increment this history unless they
+materially change the published command packet.
+
+The rejected Patch-Style SRM Stage A is not counted. It did not pass its
+train-only promotion gate and did not change the full-train command.

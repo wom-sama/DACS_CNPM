@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "status": "technical_failure_before_formal_summary",
+  "route": "jpeg_dl_input_quantization_a0",
+  "recorded_at_local": "2026-07-23",
+  "source_run_directory": "runs/audit_jpeg_dl_input_quantization_a0_20260721",
+  "source_git_head": "db977eb",
+  "failure": {
+    "phase": "xai_audit",
+    "exception": "RuntimeError: Setting requires_grad=True on inference tensor outside InferenceMode is not allowed.",
+    "metric_interpretation_allowed": false,
+    "promotion_allowed": false
+  },
+  "discarded_incomplete_artifacts": [
+    {
+      "path": "runs/audit_jpeg_dl_input_quantization_a0_20260721/jpeg_dl_input_layer.onnx",
+      "bytes": 17399,
+      "last_write_time": "2026-07-21T11:43:26.6237581+07:00",
+      "sha256": "290c32ae50c043a9801c94b3d304b40a4aa6cb217551eafc591f341f588b4413"
+    },
+    {
+      "path": "runs/audit_jpeg_dl_input_quantization_a0_20260721/jpeg_q_state_fold_0.pt",
+      "bytes": 15097,
+      "last_write_time": "2026-07-21T11:42:05.5994409+07:00",
+      "sha256": "c99984169dc24cbd22e0c848ed1838bd8402f28c0b1cad5d4e9493fa32f1c295"
+    }
+  ],
+  "cleanup_reason": "The locked output path must be absent before a clean formal rerun. The two files are incomplete and have no authoritative summary, manifest, predictions, or XAI outputs.",
+  "replacement_requirement": "Rerun the formal phase from a pushed commit containing the inference-tensor XAI regression fix."
+}

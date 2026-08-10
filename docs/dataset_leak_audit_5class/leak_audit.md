@@ -1,0 +1,256 @@
+# Classification Split Leak Audit
+
+- Dataset: `D:\DataAI\AIEx\newdataset\class_f\data.yaml`
+- Total images: `13088`
+
+| Check | Groups | Files |
+|---|---:|---:|
+| Exact SHA1 duplicate across splits | 0 | 0 |
+| Same source stem across splits | 0 | 0 |
+| Same average-hash bucket across splits | 144 | 343 |
+| Same-class near numeric image ID across splits | 13606 pairs | 8548 |
+
+Exact SHA1 and same source stem are hard leak signals. Average-hash overlap and near numeric image ID are soft signals: they can indicate near-duplicate/sequence leakage, but also occur when many similar mango crops were collected in a row.
+
+## Source Stem Examples
+
+- None
+
+## Exact Duplicate Examples
+
+- None
+
+## Near Numeric Image ID Examples
+
+- `Xoai_ChinGia_NgotGat_KhongVanChuyen: Image_1076 ~ Image_1077`:
+  - `train` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_1076_box000.jpg`
+  - `val` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_1077_box000.jpg`
+- `Xoai_ChinGia_NgotGat_KhongVanChuyen: Image_1076 ~ Image_1078`:
+  - `train` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_1076_box000.jpg`
+  - `val` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_1078_box000.jpg`
+- `Xoai_ChinGia_NgotGat_KhongVanChuyen: Image_1076 ~ Image_1079`:
+  - `train` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_1076_box000.jpg`
+  - `val` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_1079_box000.jpg`
+- `Xoai_ChinGia_NgotGat_KhongVanChuyen: Image_1078 ~ Image_1081`:
+  - `val` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_1078_box000.jpg`
+  - `train` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_1081_box000.jpg`
+- `Xoai_ChinGia_NgotGat_KhongVanChuyen: Image_1079 ~ Image_1081`:
+  - `val` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_1079_box000.jpg`
+  - `train` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_1081_box000.jpg`
+- `Xoai_ChinGia_NgotGat_KhongVanChuyen: Image_1079 ~ Image_1082`:
+  - `val` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_1079_box000.jpg`
+  - `train` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_1082_box000.jpg`
+- `Xoai_ChinGia_NgotGat_KhongVanChuyen: Image_1080 ~ Image_1081`:
+  - `val` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_1080_box000.jpg`
+  - `train` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_1081_box000.jpg`
+- `Xoai_ChinGia_NgotGat_KhongVanChuyen: Image_1080 ~ Image_1082`:
+  - `val` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_1080_box000.jpg`
+  - `train` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_1082_box000.jpg`
+- `Xoai_ChinGia_NgotGat_KhongVanChuyen: Image_1080 ~ Image_1083`:
+  - `val` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_1080_box000.jpg`
+  - `train` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_1083_box000.jpg`
+- `Xoai_ChinGia_NgotGat_KhongVanChuyen: Image_1084 ~ Image_1087`:
+  - `train` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_1084_box000.jpg`
+  - `val` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_1087_box000.jpg`
+- `Xoai_ChinGia_NgotGat_KhongVanChuyen: Image_1087 ~ Image_1089`:
+  - `val` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_1087_box000.jpg`
+  - `test` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\test\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_1089_box000.jpg`
+- `Xoai_ChinGia_NgotGat_KhongVanChuyen: Image_1089 ~ Image_1091`:
+  - `test` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\test\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_1089_box000.jpg`
+  - `train` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_1091_box000.jpg`
+- `Xoai_ChinGia_NgotGat_KhongVanChuyen: Image_1091 ~ Image_1092`:
+  - `train` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_1091_box000.jpg`
+  - `test` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\test\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_1092_box000.jpg`
+- `Xoai_ChinGia_NgotGat_KhongVanChuyen: Image_1091 ~ Image_1093`:
+  - `train` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_1091_box000.jpg`
+  - `test` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\test\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_1093_box000.jpg`
+- `Xoai_ChinGia_NgotGat_KhongVanChuyen: Image_1092 ~ Image_1094`:
+  - `test` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\test\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_1092_box000.jpg`
+  - `train` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_1094_box000.jpg`
+- `Xoai_ChinGia_NgotGat_KhongVanChuyen: Image_1092 ~ Image_1095`:
+  - `test` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\test\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_1092_box000.jpg`
+  - `train` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_1095_box000.jpg`
+- `Xoai_ChinGia_NgotGat_KhongVanChuyen: Image_1093 ~ Image_1094`:
+  - `test` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\test\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_1093_box000.jpg`
+  - `train` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_1094_box000.jpg`
+- `Xoai_ChinGia_NgotGat_KhongVanChuyen: Image_1093 ~ Image_1095`:
+  - `test` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\test\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_1093_box000.jpg`
+  - `train` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_1095_box000.jpg`
+- `Xoai_ChinGia_NgotGat_KhongVanChuyen: Image_1093 ~ Image_1096`:
+  - `test` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\test\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_1093_box000.jpg`
+  - `train` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_1096_box000.jpg`
+- `Xoai_ChinGia_NgotGat_KhongVanChuyen: Image_2387 ~ Image_2390`:
+  - `test` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\test\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_2387_box000.jpg`
+  - `train` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_2390_box000.jpg`
+- `Xoai_ChinGia_NgotGat_KhongVanChuyen: Image_2390 ~ Image_2391`:
+  - `train` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_2390_box000.jpg`
+  - `val` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_2391_box000.jpg`
+- `Xoai_ChinGia_NgotGat_KhongVanChuyen: Image_2391 ~ Image_2392`:
+  - `val` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_2391_box000.jpg`
+  - `train` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_2392_box000.jpg`
+- `Xoai_ChinGia_NgotGat_KhongVanChuyen: Image_2392 ~ Image_2394`:
+  - `train` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_2392_box000.jpg`
+  - `val` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_2394_box000.jpg`
+- `Xoai_ChinGia_NgotGat_KhongVanChuyen: Image_2394 ~ Image_2395`:
+  - `val` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_2394_box000.jpg`
+  - `train` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_2395_box000.jpg`
+- `Xoai_ChinGia_NgotGat_KhongVanChuyen: Image_2394 ~ Image_2396`:
+  - `val` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_2394_box000.jpg`
+  - `train` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_2396_box000.jpg`
+- `Xoai_ChinGia_NgotGat_KhongVanChuyen: Image_2394 ~ Image_2397`:
+  - `val` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_2394_box000.jpg`
+  - `train` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_2397_box000.jpg`
+- `Xoai_ChinGia_NgotGat_KhongVanChuyen: Image_2403 ~ Image_2406`:
+  - `train` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_2403_box000.jpg`
+  - `val` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_2406_box000.jpg`
+- `Xoai_ChinGia_NgotGat_KhongVanChuyen: Image_2404 ~ Image_2406`:
+  - `train` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_2404_box000.jpg`
+  - `val` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_2406_box000.jpg`
+- `Xoai_ChinGia_NgotGat_KhongVanChuyen: Image_2405 ~ Image_2406`:
+  - `train` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_2405_box000.jpg`
+  - `val` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_2406_box000.jpg`
+- `Xoai_ChinGia_NgotGat_KhongVanChuyen: Image_2405 ~ Image_2408`:
+  - `train` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_2405_box000.jpg`
+  - `test` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\test\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_2408_box000.jpg`
+
+## Average-Hash Examples
+
+- `0xffc08080e0ffffff`:
+  - `train` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_10206_box000.jpg`
+  - `train` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_10207_box000.jpg`
+  - `train` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_10208_box000.jpg`
+  - `train` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_10619_box000.jpg`
+  - `train` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_10621_box000.jpg`
+  - `train` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_10622_box000.jpg`
+  - `val` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_8469_box000.jpg`
+- `0xff0301613f3fffff`:
+  - `train` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_13965_box000.jpg`
+  - `train` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_13966_box000.jpg`
+  - `val` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_13962_box000.jpg`
+  - `val` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_13964_box000.jpg`
+  - `test` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\test\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_13963_box000.jpg`
+- `0xfffffdfcc0c100`:
+  - `train` / `Xoai_Chin_NgotThanh_DeDap` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_Chin_NgotThanh_DeDap\Image_7599_box000.jpg`
+  - `train` / `Xoai_Chin_NgotThanh_DeDap` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_Chin_NgotThanh_DeDap\Image_7609_box000.jpg`
+  - `train` / `Xoai_Chin_NgotThanh_DeDap` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_Chin_NgotThanh_DeDap\Image_7610_box000.jpg`
+  - `train` / `Xoai_Chin_NgotThanh_DeDap` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_Chin_NgotThanh_DeDap\Image_8069_box000.jpg`
+  - `val` / `Xoai_Chin_NgotThanh_DeDap` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_Chin_NgotThanh_DeDap\Image_7598_box000.jpg`
+- `0xfffffcf8c0c000`:
+  - `train` / `Xoai_Chin_NgotThanh_DeDap` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_Chin_NgotThanh_DeDap\Image_9916_box000.jpg`
+  - `train` / `Xoai_Chin_NgotThanh_DeDap` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_Chin_NgotThanh_DeDap\Image_9917_box000.jpg`
+  - `train` / `Xoai_Chin_NgotThanh_DeDap` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_Chin_NgotThanh_DeDap\Image_9918_box000.jpg`
+  - `train` / `Xoai_Chin_NgotThanh_DeDap` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_Chin_NgotThanh_DeDap\Image_9920_box000.jpg`
+  - `val` / `Xoai_Chin_NgotThanh_DeDap` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_Chin_NgotThanh_DeDap\Image_9919_box000.jpg`
+- `0x30383c3c3c3c3c`:
+  - `train` / `Xoai_Song_Chua_KhoDap` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_Song_Chua_KhoDap\Image_1236_box000.jpg`
+  - `train` / `Xoai_Song_Chua_KhoDap` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_Song_Chua_KhoDap\Image_1282_box000.jpg`
+  - `train` / `Xoai_Song_Chua_KhoDap` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_Song_Chua_KhoDap\Image_506_box000.jpg`
+  - `train` / `Xoai_Song_Chua_KhoDap` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_Song_Chua_KhoDap\Image_519_box000.jpg`
+  - `val` / `Xoai_Song_Chua_KhoDap` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_Song_Chua_KhoDap\Image_1240_box000.jpg`
+- `0x30383c3c3c3c3c18`:
+  - `train` / `Xoai_Song_Chua_KhoDap` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_Song_Chua_KhoDap\Image_15_box000.jpg`
+  - `train` / `Xoai_Song_Chua_KhoDap` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_Song_Chua_KhoDap\Image_2767_box000.jpg`
+  - `train` / `Xoai_Song_Chua_KhoDap` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_Song_Chua_KhoDap\Image_2927_box000.jpg`
+  - `val` / `Xoai_Song_ChuaNhe_CoNguyCo` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_Song_ChuaNhe_CoNguyCo\Image_2765_box000.jpg`
+  - `val` / `Xoai_Song_Chua_KhoDap` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_Song_Chua_KhoDap\Image_2926_box000.jpg`
+- `0x103838383e7e7e`:
+  - `train` / `Xoai_Chin_NgotThanh_DeDap` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_Chin_NgotThanh_DeDap\Image_10486_box000.jpg`
+  - `train` / `Xoai_Chin_NgotThanh_DeDap` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_Chin_NgotThanh_DeDap\Image_7810_box000.jpg`
+  - `test` / `Xoai_Chin_NgotThanh_DeDap` / `D:\DataAI\AIEx\newdataset\class_f\test\Xoai_Chin_NgotThanh_DeDap\Image_7676_box000.jpg`
+  - `test` / `Xoai_Chin_NgotThanh_DeDap` / `D:\DataAI\AIEx\newdataset\class_f\test\Xoai_Chin_NgotThanh_DeDap\Image_8091_box000.jpg`
+- `0x1018383c3c3c3c1c`:
+  - `train` / `Xoai_Chin_NgotThanh_DeDap` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_Chin_NgotThanh_DeDap\Image_487_box000.jpg`
+  - `train` / `Xoai_Song_ChuaNhe_CoNguyCo` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_Song_ChuaNhe_CoNguyCo\Image_488_box000.jpg`
+  - `val` / `Xoai_Song_Chua_KhoDap` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_Song_Chua_KhoDap\Image_1496_box000.jpg`
+  - `test` / `Xoai_Song_Chua_KhoDap` / `D:\DataAI\AIEx\newdataset\class_f\test\Xoai_Song_Chua_KhoDap\Image_1257_box000.jpg`
+- `0x10383c3c3c3c3c`:
+  - `train` / `Xoai_Song_Chua_KhoDap` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_Song_Chua_KhoDap\Image_1506_box000.jpg`
+  - `val` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_2726_box000.jpg`
+  - `val` / `Xoai_Song_Chua_KhoDap` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_Song_Chua_KhoDap\Image_1019_box000.jpg`
+  - `val` / `Xoai_Song_Chua_KhoDap` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_Song_Chua_KhoDap\Image_561_box000.jpg`
+- `0x1030383c3c3c3c`:
+  - `train` / `Xoai_Song_Chua_KhoDap` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_Song_Chua_KhoDap\Image_1632_box000.jpg`
+  - `train` / `Xoai_Song_Chua_KhoDap` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_Song_Chua_KhoDap\Image_1855_box000.jpg`
+  - `val` / `Xoai_Song_Chua_KhoDap` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_Song_Chua_KhoDap\Image_1159_box000.jpg`
+  - `val` / `Xoai_Song_Chua_KhoDap` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_Song_Chua_KhoDap\Image_908_box000.jpg`
+- `0x1838383c3c3c3c`:
+  - `val` / `Xoai_Song_Chua_KhoDap` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_Song_Chua_KhoDap\Image_876_box000.jpg`
+  - `val` / `Xoai_Song_Chua_KhoDap` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_Song_Chua_KhoDap\Image_935_box000.jpg`
+  - `test` / `Xoai_Song_Chua_KhoDap` / `D:\DataAI\AIEx\newdataset\class_f\test\Xoai_Song_Chua_KhoDap\Image_1027_box000.jpg`
+  - `test` / `Xoai_Song_Chua_KhoDap` / `D:\DataAI\AIEx\newdataset\class_f\test\Xoai_Song_Chua_KhoDap\Image_1232_box000.jpg`
+- `0xffc08080f0ffffff`:
+  - `train` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_10205_box000.jpg`
+  - `train` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_10618_box000.jpg`
+  - `val` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_8468_box000.jpg`
+- `0xe06161e1e5e7e7e`:
+  - `train` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_10802_box000.jpg`
+  - `train` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_10804_box000.jpg`
+  - `test` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\test\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_10803_box000.jpg`
+- `0x81838383bbbfbfff`:
+  - `train` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_12997_box000.jpg`
+  - `val` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_12994_box000.jpg`
+  - `val` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_12996_box000.jpg`
+- `0xc1e1e1f1f1f1f1ff`:
+  - `train` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_13125_box000.jpg`
+  - `val` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_13069_box000.jpg`
+  - `val` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_13124_box000.jpg`
+- `0x87878f9f9f9f9fcf`:
+  - `train` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_14005_box000.jpg`
+  - `val` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_14007_box000.jpg`
+  - `val` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_14008_box000.jpg`
+- `0xffc080f0fcffffff`:
+  - `train` / `Xoai_Chin_NgotThanh_DeDap` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_Chin_NgotThanh_DeDap\Image_10087_box000.jpg`
+  - `train` / `Xoai_Chin_NgotThanh_DeDap` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_Chin_NgotThanh_DeDap\Image_10089_box000.jpg`
+  - `val` / `Xoai_Chin_NgotThanh_DeDap` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_Chin_NgotThanh_DeDap\Image_10088_box000.jpg`
+- `0x18383c3c3c3c3c`:
+  - `train` / `Xoai_Chin_NgotThanh_DeDap` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_Chin_NgotThanh_DeDap\Image_1017_box000.jpg`
+  - `val` / `Xoai_Song_Chua_KhoDap` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_Song_Chua_KhoDap\Image_1238_box000.jpg`
+  - `val` / `Xoai_Song_Chua_KhoDap` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_Song_Chua_KhoDap\Image_1239_box000.jpg`
+- `0xfeff3e0000`:
+  - `train` / `Xoai_Chin_NgotThanh_DeDap` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_Chin_NgotThanh_DeDap\Image_3003_box000.jpg`
+  - `train` / `Xoai_Chin_NgotThanh_DeDap` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_Chin_NgotThanh_DeDap\Image_63_box000.jpg`
+  - `val` / `Xoai_Hu_KhongAnDuoc` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_Hu_KhongAnDuoc\Image_6178_box000.jpg`
+- `0x7fff3e0000`:
+  - `train` / `Xoai_Chin_NgotThanh_DeDap` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_Chin_NgotThanh_DeDap\Image_6137_box000.jpg`
+  - `val` / `Xoai_Chin_NgotThanh_DeDap` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_Chin_NgotThanh_DeDap\Image_6205_box000.jpg`
+  - `test` / `Xoai_Chin_NgotThanh_DeDap` / `D:\DataAI\AIEx\newdataset\class_f\test\Xoai_Chin_NgotThanh_DeDap\Image_6206_box000.jpg`
+- `0x81011fffffff00`:
+  - `train` / `Xoai_Chin_NgotThanh_DeDap` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_Chin_NgotThanh_DeDap\Image_7710_box000.jpg`
+  - `val` / `Xoai_Chin_NgotThanh_DeDap` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_Chin_NgotThanh_DeDap\Image_7709_box000.jpg`
+  - `val` / `Xoai_Chin_NgotThanh_DeDap` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_Chin_NgotThanh_DeDap\Image_7727_box000.jpg`
+- `0x30179ffffff00`:
+  - `train` / `Xoai_Chin_NgotThanh_DeDap` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_Chin_NgotThanh_DeDap\Image_7736_box000.jpg`
+  - `val` / `Xoai_Chin_NgotThanh_DeDap` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_Chin_NgotThanh_DeDap\Image_7772_box000.jpg`
+  - `test` / `Xoai_Chin_NgotThanh_DeDap` / `D:\DataAI\AIEx\newdataset\class_f\test\Xoai_Chin_NgotThanh_DeDap\Image_8133_box000.jpg`
+- `0x200018383c7e7e7e`:
+  - `train` / `Xoai_Chin_NgotThanh_DeDap` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_Chin_NgotThanh_DeDap\Image_7978_box000.jpg`
+  - `train` / `Xoai_Chin_NgotThanh_DeDap` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_Chin_NgotThanh_DeDap\Image_7980_box000.jpg`
+  - `val` / `Xoai_Chin_NgotThanh_DeDap` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_Chin_NgotThanh_DeDap\Image_7973_box000.jpg`
+- `0xfcfcf8f8f0c08080`:
+  - `train` / `Xoai_Chin_NgotThanh_DeDap` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_Chin_NgotThanh_DeDap\Image_8396_box000.jpg`
+  - `train` / `Xoai_Chin_NgotThanh_DeDap` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_Chin_NgotThanh_DeDap\Image_8397_box000.jpg`
+  - `val` / `Xoai_Chin_NgotThanh_DeDap` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_Chin_NgotThanh_DeDap\Image_8395_box000.jpg`
+- `0x3f0ffff0000`:
+  - `train` / `Xoai_Hu_KhongAnDuoc` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_Hu_KhongAnDuoc\Image_5458_box000.jpg`
+  - `train` / `Xoai_Hu_KhongAnDuoc` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_Hu_KhongAnDuoc\Image_5460_box000.jpg`
+  - `val` / `Xoai_Hu_KhongAnDuoc` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_Hu_KhongAnDuoc\Image_5459_box000.jpg`
+- `0x6078787878786070`:
+  - `train` / `Xoai_Song_ChuaNhe_CoNguyCo` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_Song_ChuaNhe_CoNguyCo\Image_8677_box000.jpg`
+  - `train` / `Xoai_Song_ChuaNhe_CoNguyCo` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_Song_ChuaNhe_CoNguyCo\Image_8678_box000.jpg`
+  - `test` / `Xoai_ChinGia_NgotGat_KhongVanChuyen` / `D:\DataAI\AIEx\newdataset\class_f\test\Xoai_ChinGia_NgotGat_KhongVanChuyen\Image_13754_box000.jpg`
+- `0x1038383c3c3c3c`:
+  - `train` / `Xoai_Song_Chua_KhoDap` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_Song_Chua_KhoDap\Image_1167_box000.jpg`
+  - `val` / `Xoai_Song_Chua_KhoDap` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_Song_Chua_KhoDap\Image_1134_box000.jpg`
+  - `val` / `Xoai_Song_Chua_KhoDap` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_Song_Chua_KhoDap\Image_1135_box000.jpg`
+- `0x30383c3c3c3c7c`:
+  - `train` / `Xoai_Song_Chua_KhoDap` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_Song_Chua_KhoDap\Image_1235_box000.jpg`
+  - `train` / `Xoai_Song_Chua_KhoDap` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_Song_Chua_KhoDap\Image_515_box000.jpg`
+  - `val` / `Xoai_Song_Chua_KhoDap` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_Song_Chua_KhoDap\Image_1241_box000.jpg`
+- `0x30387c3c3c3c3c18`:
+  - `train` / `Xoai_Song_Chua_KhoDap` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_Song_Chua_KhoDap\Image_16_box000.jpg`
+  - `train` / `Xoai_Song_Chua_KhoDap` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_Song_Chua_KhoDap\Image_2932_box000.jpg`
+  - `val` / `Xoai_Song_Chua_KhoDap` / `D:\DataAI\AIEx\newdataset\class_f\val\Xoai_Song_Chua_KhoDap\Image_2931_box000.jpg`
+- `0x107efcfc780000`:
+  - `train` / `Xoai_Song_Chua_KhoDap` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_Song_Chua_KhoDap\Image_2033_box000.jpg`
+  - `train` / `Xoai_Song_Chua_KhoDap` / `D:\DataAI\AIEx\newdataset\class_f\train\Xoai_Song_Chua_KhoDap\Image_458_box000.jpg`
+  - `test` / `Xoai_Song_Chua_KhoDap` / `D:\DataAI\AIEx\newdataset\class_f\test\Xoai_Song_Chua_KhoDap\Image_2043_box000.jpg`

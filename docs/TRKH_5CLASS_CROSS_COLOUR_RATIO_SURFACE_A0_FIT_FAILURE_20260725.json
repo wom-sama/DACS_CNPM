@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "protocol_id": "trkh_cross_colour_ratio_surface_a0_20260725",
+  "state": "formal_attempt_1_harness_failure_no_candidate_metric",
+  "attempt": 1,
+  "date": "2026-07-25",
+  "implementation_commit": "0289a944bb7bed67e3633e5dfa6b62418423fb0f",
+  "authorization_commit": "b24c16c74ea8a1e8cff3ad186f5fb0464525b8ae",
+  "authorization_sha256": "3ecb6a82d14980e25cd947007561294fa39cfe5419032cb3961389a30d1697b5",
+  "process_id": 23556,
+  "observed_wall_seconds": 52.8,
+  "failure_stage": "cross_colour_ratio_descriptor_extraction_after_colour_ratio_control_fits",
+  "primary_failure": {
+    "type": "RuntimeError",
+    "component": "cuBLAS deterministic matmul",
+    "message": "CUBLAS_WORKSPACE_CONFIG was not set before CUDA initialization while deterministic algorithms were enabled",
+    "candidate_code_line": "ColourDerivativeDescriptorExtractor.resize horizontal matmul"
+  },
+  "cleanup_failure": {
+    "type": "PermissionError",
+    "platform_error": "WinError 32",
+    "component": "immediate exception-path memmap unlink",
+    "message": "descriptor_float32.npy remained open through the active Python traceback"
+  },
+  "temporary_artifacts_before_post_process_cleanup": {
+    "directory": "D:\\DataAI\\AIEx\\TRKH\\runs\\.audit_cross_colour_ratio_surface_a0_20260725.formal.23556",
+    "files": [
+      {
+        "name": "descriptor_float32.npy",
+        "bytes": 168763520
+      },
+      {
+        "name": "reliability_uint8.npy",
+        "bytes": 7031936
+      }
+    ],
+    "total_bytes": 175795456
+  },
+  "cleanup_evidence": {
+    "python_or_trtexec_processes_after_failure": 0,
+    "temporary_directory_absent_after_process_exit": true,
+    "formal_output_absent": true,
+    "published_artifact_count": 0
+  },
+  "scientific_state": {
+    "plain_colour_ratio_descriptor_completed_temporary_only": true,
+    "plain_colour_ratio_control_folds_fitted_temporary_only": 5,
+    "cross_colour_ratio_descriptor_completed": false,
+    "cross_colour_ratio_head_folds_fitted": 0,
+    "candidate_state_retained": false,
+    "candidate_score_observed": false,
+    "candidate_threshold_observed": false,
+    "candidate_action_observed": false,
+    "candidate_metric_observed": false,
+    "validation_data_used": false,
+    "test_data_used": false,
+    "raw_dataset_read": false,
+    "raw_dataset_write": false
+  },
+  "recovery_scope": {
+    "set_cublas_workspace_config_before_torch_import": true,
+    "set_cublas_workspace_config_in_launcher": true,
+    "close_all_numpy_memmaps_in_finally": true,
+    "equations_changed": false,
+    "cache_changed": false,
+    "folds_changed": false,
+    "role_seeds_changed": false,
+    "epoch_orders_changed": false,
+    "model_or_optimizer_changed": false,
+    "threshold_or_gate_changed": false
+  },
+  "authorization_consumed": true,
+  "authorization_reuse_allowed": false
+}

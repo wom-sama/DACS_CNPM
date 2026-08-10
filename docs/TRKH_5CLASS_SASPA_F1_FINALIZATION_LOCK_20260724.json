@@ -1,0 +1,52 @@
+{
+  "schema": "trkh_saspa_f1_finalization_lock_v1",
+  "protocol_id": "trkh_saspa_dual_view_synthetic_a0_20260723",
+  "generation_root": "runs/audit_saspa_dual_view_synthetic_a0_20260723/f1_tiny_output_v2",
+  "fixed_artifacts": {
+    "generation_summary.json": "b5d45349b67c35f14c32dfd4ecc9ae3fb56a2428f86921e58dfb39a1235fdf88",
+    "generation_manifest.json": "e44b746560c3265be0b85a0b5d56f6acfaf9573e9644d3ffd2e937e0e5edd5e4",
+    "generation_replay.json": "93bf7a33133fae41900a41c629a0c708424c013fe5c63cba5c4428cb5364f237",
+    "generation_final_manifest.json": "ce3254ed410d54d5757ae967014e2fb65e6f8942a19805c8d6415926c382d4fe",
+    "generated_fidelity.json": "0166257aafc138126b739b32cfda9773bb26d4ae95d52d96b90430f7025f51ca",
+    "blind_review_decisions.locked.json": "35ba007a1b07e9859797a5d002d40145016c2bd8a714baf7c3bac838b62f1eaf",
+    "blind_review_unblinded.json": "c530985b0aa8f80943d03e677d2cc9a0bf64a4d5e651e68cc5d6bf2d71bf006e",
+    "duplicate_audit/duplicate_report.json": "d39ec3171e3718987ef45dbb66d4858c83f4ec040a513b9188feb7e1f963cf52",
+    "duplicate_audit/duplicate_replay.json": "6e39d5a6b2b202a8f1faee054607e2324664ebe86bb7d0104c8d6b8cb1ff9ada",
+    "duplicate_audit/duplicate_final_manifest.json": "c67645f8f69d62edb94fd2192bc0289cd98b819be9e503ace3786641ac58dce4",
+    "xai_audit/xai_summary.json": "d99474b9bb769a3ebb20faa48e5b920fd71634daeb0fc421037960ab67a4025e",
+    "xai_audit/xai_manifest.json": "c570e4c43ae71d3752f0c64020ab4e777fa889d18b43723e0a6fbd4ec62ce5a5",
+    "xai_audit/xai_replay.json": "af71f6b75acd17335c5370de209b704b82d01ac7ec0be580317fb9cd90299f3a",
+    "xai_audit/xai_final_manifest.json": "c570e4c43ae71d3752f0c64020ab4e777fa889d18b43723e0a6fbd4ec62ce5a5",
+    "f1_xai_visual_review.locked.json": "8c1dbe9adbf9e46bd51729bb0e1ed743bdb7343c659d8c576fb85127b85af180"
+  },
+  "required_stage_checks": {
+    "generation_passed": true,
+    "fidelity_passed": true,
+    "blind_review_passed": true,
+    "duplicate_audit_passed": true,
+    "xai_execution_and_replay_complete": true,
+    "xai_visual_review_complete": true
+  },
+  "decision_rule": "F1 passes only if every required stage check is true. XAI is diagnostic and can never repair a failed fidelity or blind-review gate.",
+  "expected_locked_outcome": "Rejected",
+  "closure_policy": {
+    "close_exact_saspa_configuration": true,
+    "do_not_sweep_prompt": true,
+    "do_not_sweep_seed": true,
+    "do_not_sweep_steps_or_guidance": true,
+    "do_not_relax_fidelity_thresholds": true,
+    "do_not_change_blind_limits": true,
+    "do_not_tune_synthetic_ratio": true,
+    "a1_authorized": false,
+    "training_authorized": false,
+    "full_train_authorized": false,
+    "current_best_command_update_authorized": false
+  },
+  "split_boundary": {
+    "finalizer_decodes_images": false,
+    "raw_dataset_modified": false,
+    "source_train_pixels_opened": false,
+    "validation_test_pixels_opened": false,
+    "validation_test_labels_opened": false
+  }
+}

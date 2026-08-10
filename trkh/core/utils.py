@@ -228,7 +228,31 @@ def build_optimizer_param_groups(
         no_decay_keywords = ("bias", "norm")
 
     lr_scale = float(backbone_lr_scale)
-    use_split_lr = bool(getattr(model, "is_detr_model", False)) and abs(lr_scale - 1.0) > 1e-12
+    is_detection_model = bool(getattr(model, "is_detr_model", False))
+    is_pretrained_hybrid = bool(
+        getattr(model, "is_pretrained_hybrid_model", False)
+    )
+    is_pretrained_timm_classifier = bool(
+        getattr(model, "is_pretrained_timm_classifier", False)
+    )
+    uses_timm_backbone_lr_split = bool(
+        is_pretrained_timm_classifier
+        or getattr(model, "uses_timm_backbone_lr_split", False)
+    )
+    exact_no_decay_names: set[str] = set()
+    timm_no_weight_decay = getattr(model, "no_weight_decay", None)
+    if uses_timm_backbone_lr_split and callable(timm_no_weight_decay):
+        exact_no_decay_names.update(
+            str(name) for name in timm_no_weight_decay()
+        )
+    use_split_lr = bool(
+        (
+            is_detection_model
+            or is_pretrained_hybrid
+            or uses_timm_backbone_lr_split
+        )
+        and abs(lr_scale - 1.0) > 1e-12
+    )
     grouped_params: Dict[Tuple[str, bool], List[nn.Parameter]] = {
         ("head", True): [],
         ("head", False): [],
@@ -239,9 +263,54 @@ def build_optimizer_param_groups(
     for name, parameter in model.named_parameters():
         if not parameter.requires_grad:
             continue
-        is_head = name.startswith(DETECTION_HEAD_PREFIXES) if use_split_lr else True
+        if use_split_lr and is_pretrained_hybrid:
+            # Only the externally initialized foundation backbone receives the
+            # reduced LR.  The inherited keeper, residual gate and projector
+            # stay at the experiment LR so the new branch can become useful.
+            is_head = not name.startswith(
+                "pretrained_semantic_branch.backbone."
+            )
+        elif use_split_lr and uses_timm_backbone_lr_split:
+            classifier_prefixes = tuple(
+                str(prefix)
+                for prefix in getattr(
+                    model,
+                    "pretrained_classifier_parameter_prefixes",
+                    (),
+                )
+            )
+            if not classifier_prefixes:
+                raise ValueError(
+                    "Pretrained timm classifier is missing classifier parameter prefixes."
+                )
+            task_prefixes = tuple(
+                str(prefix)
+                for prefix in getattr(
+                    model,
+                    "pretrained_task_parameter_prefixes",
+                    (),
+                )
+            )
+            is_timm_qv_lora = (
+                ".attn.qkv.q_lora." in name
+                or ".attn.qkv.v_lora." in name
+            )
+            is_head = (
+                is_timm_qv_lora
+                or name.startswith(classifier_prefixes)
+                or (bool(task_prefixes) and name.startswith(task_prefixes))
+            )
+        else:
+            is_head = name.startswith(DETECTION_HEAD_PREFIXES) if use_split_lr else True
         group_name = "head" if is_head else "backbone"
-        use_decay = not any(keyword in name for keyword in no_decay_keywords)
+        timm_shape_no_decay = (
+            uses_timm_backbone_lr_split and parameter.ndim <= 1
+        )
+        use_decay = (
+            name not in exact_no_decay_names
+            and not timm_shape_no_decay
+            and not any(keyword in name for keyword in no_decay_keywords)
+        )
         grouped_params[(group_name, use_decay)].append(parameter)
 
     param_groups: List[Dict[str, Any]] = []
@@ -583,7 +652,11 @@ def resolve_amp_dtype(device: Optional[torch.device] = None) -> torch.dtype:
                     return torch.bfloat16
             except Exception:
                 pass
-        return torch.float16
+            raise RuntimeError(
+                "BF16 AMP was explicitly requested but this CUDA device does "
+                "not support BF16; rerun with --amp-dtype fp16."
+            )
+        return torch.bfloat16
     if requested in {"fp16", "float16", "half"}:
         return torch.float16
     if requested in {"auto"}:
@@ -748,6 +821,133 @@ def plot_training_history(history_csv: Path, output_path: Path) -> None:
     plt.close(figure)
 
 
+def _metric_from_final_test(metrics: Dict[str, Any], key: str) -> Optional[float]:
+    value = metrics.get(key)
+    if isinstance(value, (int, float)) and math.isfinite(float(value)):
+        return float(value)
+    calibrated = metrics.get("calibrated")
+    if isinstance(calibrated, dict):
+        accepted_metrics = calibrated.get("accepted_metrics")
+        if isinstance(accepted_metrics, dict):
+            value = accepted_metrics.get(key)
+            if isinstance(value, (int, float)) and math.isfinite(float(value)):
+                return float(value)
+    return None
+
+
+def plot_train_val_final_test_metrics(
+    history_csv: Path,
+    final_test_metrics_json: Path,
+    output_path: Path,
+    class_names: Optional[Sequence[str]] = None,
+) -> None:
+    if not history_csv.exists():
+        return
+
+    with history_csv.open("r", newline="", encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
+    if not rows:
+        return
+
+    epochs = [int(row["epoch"]) for row in rows if row.get("epoch")]
+    if not epochs:
+        return
+
+    def series(name: str) -> List[float]:
+        return [_csv_float(row, name) for row in rows]
+
+    val_macro_f1 = series("val_macro_f1")
+    best_index = int(np.argmax(val_macro_f1)) if val_macro_f1 else len(epochs) - 1
+    best_epoch = epochs[best_index]
+    final_test_metrics: Dict[str, Any] = {}
+    if final_test_metrics_json.exists():
+        try:
+            with final_test_metrics_json.open("r", encoding="utf-8") as handle:
+                loaded = json.load(handle)
+            if isinstance(loaded, dict):
+                final_test_metrics = loaded
+        except (json.JSONDecodeError, OSError):
+            final_test_metrics = {}
+
+    figure, axes = plt.subplots(2, 2, figsize=(14, 9))
+    axes = axes.ravel()
+
+    axes[0].plot(epochs, series("train_loss"), label="train_loss", linewidth=2.0)
+    axes[0].plot(epochs, series("val_loss"), label="val_loss", linewidth=2.0)
+    axes[0].set_title("Train/Validation Loss")
+    axes[0].set_xlabel("Epoch")
+    axes[0].grid(True, linestyle="--", linewidth=0.5, alpha=0.4)
+    axes[0].legend()
+
+    metric_specs = [
+        ("val_accuracy", "test accuracy", "accuracy", "tab:blue"),
+        ("val_macro_f1", "test macro_f1", "macro_f1", "tab:green"),
+        ("val_weighted_f1", "test weighted_f1", "weighted_f1", "tab:orange"),
+    ]
+    for val_key, test_label, test_key, color in metric_specs:
+        values = series(val_key)
+        axes[1].plot(epochs, values, label=val_key, linewidth=2.0)
+        test_value = _metric_from_final_test(final_test_metrics, test_key)
+        if test_value is not None:
+            axes[1].scatter([best_epoch], [test_value], marker="*", s=150, color=color, label=test_label)
+    axes[1].axvline(best_epoch, color="black", linestyle=":", linewidth=1.2, alpha=0.6, label="best val epoch")
+    axes[1].set_title("Validation Curves + Final Test Marker")
+    axes[1].set_xlabel("Epoch")
+    axes[1].set_ylim(0.0, 1.02)
+    axes[1].grid(True, linestyle="--", linewidth=0.5, alpha=0.4)
+    axes[1].legend(fontsize=8)
+
+    class_indices = []
+    for field_name in rows[0].keys():
+        if field_name.startswith("val_class_") and field_name.endswith("_f1"):
+            index_text = field_name[len("val_class_") : -len("_f1")]
+            if index_text.isdigit():
+                class_indices.append(int(index_text))
+    class_indices = sorted(set(class_indices))
+    final_per_class = final_test_metrics.get("per_class")
+    final_class_f1 = {}
+    if isinstance(final_per_class, list):
+        for item in final_per_class:
+            if isinstance(item, dict):
+                index = item.get("class_index")
+                f1 = item.get("f1")
+                if isinstance(index, int) and isinstance(f1, (int, float)):
+                    final_class_f1[index] = float(f1)
+
+    for class_index in class_indices:
+        label = (
+            str(class_names[class_index])
+            if class_names is not None and class_index < len(class_names)
+            else f"class_{class_index}"
+        )
+        axes[2].plot(epochs, series(f"val_class_{class_index}_f1"), label=label, linewidth=1.6)
+        if class_index in final_class_f1:
+            axes[2].scatter([best_epoch], [final_class_f1[class_index]], marker="*", s=90)
+    axes[2].axvline(best_epoch, color="black", linestyle=":", linewidth=1.2, alpha=0.6)
+    axes[2].set_title("Per-Class Validation F1 + Final Test Markers")
+    axes[2].set_xlabel("Epoch")
+    axes[2].set_ylim(0.0, 1.02)
+    axes[2].grid(True, linestyle="--", linewidth=0.5, alpha=0.4)
+    axes[2].legend(fontsize=7)
+
+    axes[3].plot(epochs, series("learning_rate"), color="tab:purple", label="learning_rate", linewidth=2.0)
+    if "epoch_seconds" in rows[0]:
+        ax_right = axes[3].twinx()
+        ax_right.plot(epochs, series("epoch_seconds"), color="tab:red", alpha=0.55, label="epoch_seconds")
+        ax_right.set_ylabel("Seconds")
+    if any(_csv_float(row, "learning_rate") > 0.0 for row in rows):
+        axes[3].set_yscale("log")
+    axes[3].set_title("Learning Rate / Epoch Time")
+    axes[3].set_xlabel("Epoch")
+    axes[3].grid(True, linestyle="--", linewidth=0.5, alpha=0.4)
+    axes[3].legend(fontsize=8)
+
+    figure.tight_layout()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    figure.savefig(output_path, dpi=200, bbox_inches="tight")
+    plt.close(figure)
+
+
 def plot_all_training_metrics(history_csv: Path, output_path: Path) -> None:
     if not history_csv.exists():
         return
@@ -780,31 +980,42 @@ def plot_all_training_metrics(history_csv: Path, output_path: Path) -> None:
     if not numeric_series:
         return
 
-    columns = 3
-    rows_count = int(math.ceil(len(numeric_series) / columns))
-    figure, axes = plt.subplots(
-        rows_count,
-        columns,
-        figsize=(18, max(4.0, rows_count * 3.1)),
-        squeeze=False,
-    )
-    axes_flat = axes.ravel()
-
-    for axis, (field_name, values) in zip(axes_flat, numeric_series.items()):
-        axis.plot(epochs, values, linewidth=1.8)
-        axis.set_title(field_name)
-        axis.set_xlabel("Epoch")
-        axis.grid(True, linestyle="--", linewidth=0.5, alpha=0.4)
-        if field_name == "learning_rate" and any(value > 0.0 for value in values):
-            axis.set_yscale("log")
-
-    for axis in axes_flat[len(numeric_series):]:
-        axis.axis("off")
-
-    figure.tight_layout()
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    figure.savefig(output_path, dpi=200, bbox_inches="tight")
-    plt.close(figure)
+    columns = 3
+    max_plots_per_figure = 45
+    series_items = list(numeric_series.items())
+    for chunk_index in range(0, len(series_items), max_plots_per_figure):
+        chunk = series_items[chunk_index : chunk_index + max_plots_per_figure]
+        rows_count = int(math.ceil(len(chunk) / columns))
+        figure, axes = plt.subplots(
+            rows_count,
+            columns,
+            figsize=(18, max(4.0, rows_count * 3.1)),
+            squeeze=False,
+        )
+        axes_flat = axes.ravel()
+
+        for axis, (field_name, values) in zip(axes_flat, chunk):
+            axis.plot(epochs, values, linewidth=1.8)
+            axis.set_title(field_name)
+            axis.set_xlabel("Epoch")
+            axis.grid(True, linestyle="--", linewidth=0.5, alpha=0.4)
+            if field_name == "learning_rate" and any(value > 0.0 for value in values):
+                axis.set_yscale("log")
+
+        for axis in axes_flat[len(chunk):]:
+            axis.axis("off")
+
+        figure.tight_layout()
+        if chunk_index == 0:
+            chunk_output = output_path
+        else:
+            part_number = int(chunk_index / max_plots_per_figure) + 1
+            chunk_output = output_path.with_name(
+                f"{output_path.stem}_part{part_number:02d}{output_path.suffix}"
+            )
+        figure.savefig(chunk_output, dpi=200, bbox_inches="tight")
+        plt.close(figure)
 
 
 def plot_per_class_training_metrics(
@@ -858,6 +1069,91 @@ def plot_per_class_training_metrics(
         axis.grid(True, linestyle="--", linewidth=0.5, alpha=0.4)
         axis.legend(fontsize=8)
 
+    figure.tight_layout()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    figure.savefig(output_path, dpi=200, bbox_inches="tight")
+    plt.close(figure)
+
+
+def plot_per_class_validation_metric(
+    history_csv: Path,
+    class_names: Sequence[str],
+    output_path: Path,
+    *,
+    metric: str,
+    title: str,
+    ylabel: str,
+    target: Optional[float] = None,
+) -> None:
+    if not history_csv.exists():
+        return
+
+    with history_csv.open("r", newline="", encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
+    if not rows:
+        return
+
+    epochs = [int(row["epoch"]) for row in rows if row.get("epoch")]
+    if not epochs:
+        return
+
+    metric_key = str(metric).strip().lower()
+    field_candidates: Dict[int, List[str]] = {}
+    if class_names:
+        class_indices = list(range(len(class_names)))
+    else:
+        class_indices = []
+        for field_name in rows[0].keys():
+            if not field_name.startswith("val_class_"):
+                continue
+            pieces = field_name.split("_")
+            if len(pieces) >= 4 and pieces[2].isdigit():
+                class_indices.append(int(pieces[2]))
+        class_indices = sorted(set(class_indices))
+
+    for class_index in class_indices:
+        if metric_key in {"accuracy", "acc"}:
+            # Per-class validation accuracy for single-label classification is TP / support,
+            # which is the same quantity as recall for that class.
+            field_candidates[class_index] = [
+                f"val_class_{class_index}_accuracy",
+                f"val_class_{class_index}_recall",
+            ]
+        else:
+            field_candidates[class_index] = [f"val_class_{class_index}_{metric_key}"]
+
+    plotted = False
+    figure, axis = plt.subplots(figsize=(12, 6.5))
+    for class_index in class_indices:
+        field_name = next(
+            (candidate for candidate in field_candidates[class_index] if candidate in rows[0]),
+            None,
+        )
+        if field_name is None:
+            continue
+        values = [_csv_float(row, field_name) for row in rows]
+        if not values:
+            continue
+        label = (
+            str(class_names[class_index])
+            if class_names and class_index < len(class_names)
+            else f"class_{class_index}"
+        )
+        axis.plot(epochs, values, label=label, linewidth=2.0)
+        plotted = True
+
+    if not plotted:
+        plt.close(figure)
+        return
+
+    if target is not None:
+        axis.axhline(float(target), color="black", linestyle=":", linewidth=1.2, alpha=0.65, label=f"target {target:g}")
+    axis.set_title(title)
+    axis.set_xlabel("Epoch")
+    axis.set_ylabel(ylabel)
+    axis.set_ylim(0.0, 1.02)
+    axis.grid(True, linestyle="--", linewidth=0.5, alpha=0.4)
+    axis.legend(fontsize=8)
     figure.tight_layout()
     output_path.parent.mkdir(parents=True, exist_ok=True)
     figure.savefig(output_path, dpi=200, bbox_inches="tight")
@@ -1151,6 +1447,234 @@ def plot_dataset_overview(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     figure.savefig(output_path, dpi=200, bbox_inches="tight")
     plt.close(figure)
+
+
+def _srgb_to_lab(rgb: np.ndarray) -> np.ndarray:
+    rgb = np.asarray(rgb, dtype=np.float32)
+    rgb = np.clip(rgb, 0.0, 1.0)
+    linear = np.where(rgb <= 0.04045, rgb / 12.92, ((rgb + 0.055) / 1.055) ** 2.4)
+    matrix = np.asarray(
+        [
+            [0.4124564, 0.3575761, 0.1804375],
+            [0.2126729, 0.7151522, 0.0721750],
+            [0.0193339, 0.1191920, 0.9503041],
+        ],
+        dtype=np.float32,
+    )
+    xyz = linear @ matrix.T
+    xyz = xyz / np.asarray([0.95047, 1.0, 1.08883], dtype=np.float32)
+    threshold = 0.008856
+    f_xyz = np.where(xyz > threshold, np.cbrt(xyz), (7.787 * xyz) + (16.0 / 63.0))
+    lab = np.empty_like(f_xyz, dtype=np.float32)
+    lab[:, 0] = 116.0 * f_xyz[:, 1] - 16.0
+    lab[:, 1] = 500.0 * (f_xyz[:, 0] - f_xyz[:, 1])
+    lab[:, 2] = 200.0 * (f_xyz[:, 1] - f_xyz[:, 2])
+    return lab
+
+
+def _circular_hue_mean(hue: np.ndarray) -> float:
+    if hue.size == 0:
+        return 0.0
+    angles = np.asarray(hue, dtype=np.float32) * (2.0 * math.pi)
+    return float((math.atan2(float(np.sin(angles).mean()), float(np.cos(angles).mean())) / (2.0 * math.pi)) % 1.0)
+
+
+def plot_dataset_color_audit(
+    class_names: Sequence[str],
+    train_paths: Sequence[Path],
+    train_labels: Sequence[int],
+    val_paths: Sequence[Path],
+    val_labels: Sequence[int],
+    output_path: Path,
+    summary_path: Optional[Path] = None,
+    max_images_per_class: int = 200,
+    max_pixels_per_image: int = 2048,
+    thumbnail_size: int = 128,
+    seed: int = 42,
+) -> Dict[str, Any]:
+    from matplotlib import colors as mcolors
+    from PIL import Image
+
+    rng = np.random.default_rng(int(seed))
+    num_classes = len(class_names)
+    palette = plt.cm.tab10(np.linspace(0.0, 1.0, max(10, num_classes)))
+
+    def _sample_by_class(paths: Sequence[Path], labels: Sequence[int]) -> Dict[int, List[Path]]:
+        grouped: Dict[int, List[Path]] = {index: [] for index in range(num_classes)}
+        for path, label in zip(paths, labels):
+            label_int = int(label)
+            if 0 <= label_int < num_classes:
+                grouped[label_int].append(Path(path))
+        sampled: Dict[int, List[Path]] = {}
+        for class_index, values in grouped.items():
+            if len(values) <= max_images_per_class:
+                sampled[class_index] = list(values)
+                continue
+            indices = rng.choice(len(values), size=max_images_per_class, replace=False)
+            sampled[class_index] = [values[int(index)] for index in sorted(indices.tolist())]
+        return sampled
+
+    def _collect(paths: Sequence[Path], labels: Sequence[int]) -> Tuple[Dict[int, Dict[str, Any]], Dict[int, np.ndarray]]:
+        sampled = _sample_by_class(paths, labels)
+        split_stats: Dict[int, Dict[str, Any]] = {}
+        split_pixels: Dict[int, np.ndarray] = {}
+        for class_index in range(num_classes):
+            rgb_means: List[np.ndarray] = []
+            pixel_chunks: List[np.ndarray] = []
+            missing = 0
+            for path in sampled.get(class_index, []):
+                try:
+                    with Image.open(path) as image:
+                        image = image.convert("RGB")
+                        image.thumbnail((thumbnail_size, thumbnail_size), Image.Resampling.BILINEAR)
+                        array = np.asarray(image, dtype=np.float32) / 255.0
+                except Exception:
+                    missing += 1
+                    continue
+                pixels = array.reshape(-1, 3)
+                if pixels.shape[0] > max_pixels_per_image:
+                    indices = rng.choice(pixels.shape[0], size=max_pixels_per_image, replace=False)
+                    pixels = pixels[indices]
+                rgb_means.append(array.reshape(-1, 3).mean(axis=0))
+                pixel_chunks.append(pixels)
+            pixels_all = (
+                np.concatenate(pixel_chunks, axis=0).astype(np.float32)
+                if pixel_chunks
+                else np.zeros((0, 3), dtype=np.float32)
+            )
+            split_pixels[class_index] = pixels_all
+            if pixels_all.size:
+                hsv = mcolors.rgb_to_hsv(pixels_all)
+                lab = _srgb_to_lab(pixels_all)
+                rgb_mean = np.asarray(rgb_means, dtype=np.float32).mean(axis=0) if rgb_means else pixels_all.mean(axis=0)
+                split_stats[class_index] = {
+                    "sampled_images": len(sampled.get(class_index, [])),
+                    "missing_images": int(missing),
+                    "sampled_pixels": int(pixels_all.shape[0]),
+                    "mean_rgb": [float(value) for value in rgb_mean.tolist()],
+                    "mean_hsv": [
+                        _circular_hue_mean(hsv[:, 0]),
+                        float(hsv[:, 1].mean()),
+                        float(hsv[:, 2].mean()),
+                    ],
+                    "mean_lab": [float(value) for value in lab.mean(axis=0).tolist()],
+                    "std_lab": [float(value) for value in lab.std(axis=0).tolist()],
+                    "mean_chroma": float(np.sqrt((lab[:, 1] ** 2) + (lab[:, 2] ** 2)).mean()),
+                }
+            else:
+                split_stats[class_index] = {
+                    "sampled_images": 0,
+                    "missing_images": int(missing),
+                    "sampled_pixels": 0,
+                    "mean_rgb": [0.0, 0.0, 0.0],
+                    "mean_hsv": [0.0, 0.0, 0.0],
+                    "mean_lab": [0.0, 0.0, 0.0],
+                    "std_lab": [0.0, 0.0, 0.0],
+                    "mean_chroma": 0.0,
+                }
+        return split_stats, split_pixels
+
+    train_stats, train_pixels = _collect(train_paths, train_labels)
+    val_stats, val_pixels = _collect(val_paths, val_labels)
+
+    delta_e: Dict[int, float] = {}
+    for class_index in range(num_classes):
+        train_lab = np.asarray(train_stats[class_index]["mean_lab"], dtype=np.float32)
+        val_lab = np.asarray(val_stats[class_index]["mean_lab"], dtype=np.float32)
+        delta_e[class_index] = float(np.linalg.norm(train_lab - val_lab))
+
+    figure, axes = plt.subplots(2, 3, figsize=(18, 10))
+    axes = axes.ravel()
+    class_indices = np.arange(num_classes)
+
+    mean_rgb = np.asarray([train_stats[index]["mean_rgb"] for index in range(num_classes)], dtype=np.float32)
+    width = 0.25
+    axes[0].bar(class_indices - width, mean_rgb[:, 0], width=width, label="R", color="#d95f5f")
+    axes[0].bar(class_indices, mean_rgb[:, 1], width=width, label="G", color="#66a65c")
+    axes[0].bar(class_indices + width, mean_rgb[:, 2], width=width, label="B", color="#5f7fd9")
+    axes[0].set_title("Train Mean RGB By Class")
+    axes[0].set_xticks(class_indices)
+    axes[0].set_xticklabels(class_names, rotation=30, ha="right")
+    axes[0].set_ylim(0.0, 1.0)
+    axes[0].grid(True, axis="y", linestyle="--", linewidth=0.5, alpha=0.4)
+    axes[0].legend()
+
+    for class_index in range(num_classes):
+        pixels = train_pixels[class_index]
+        if pixels.size == 0:
+            continue
+        hsv = mcolors.rgb_to_hsv(pixels)
+        axes[1].hist(
+            hsv[:, 0],
+            bins=36,
+            range=(0.0, 1.0),
+            histtype="step",
+            density=True,
+            linewidth=1.5,
+            color=palette[class_index],
+            label=str(class_names[class_index])[:24],
+        )
+        axes[2].hist(hsv[:, 1], bins=30, range=(0.0, 1.0), alpha=0.18, density=True, color=palette[class_index])
+        axes[3].hist(hsv[:, 2], bins=30, range=(0.0, 1.0), alpha=0.18, density=True, color=palette[class_index])
+    axes[1].set_title("Train Hue Histogram")
+    axes[1].set_xlabel("Hue [0, 1]")
+    axes[1].legend(fontsize=8)
+    axes[2].set_title("Train Saturation Distribution")
+    axes[2].set_xlabel("Saturation")
+    axes[3].set_title("Train Value Distribution")
+    axes[3].set_xlabel("Value")
+    for axis in (axes[1], axes[2], axes[3]):
+        axis.grid(True, linestyle="--", linewidth=0.5, alpha=0.4)
+
+    for class_index in range(num_classes):
+        for split_name, stats, marker, alpha in (
+            ("train", train_stats, "o", 0.9),
+            ("val", val_stats, "x", 0.8),
+        ):
+            lab = np.asarray(stats[class_index]["mean_lab"], dtype=np.float32)
+            axes[4].scatter(
+                lab[1],
+                lab[2],
+                marker=marker,
+                s=90,
+                color=palette[class_index],
+                alpha=alpha,
+                label=f"{class_names[class_index][:18]} {split_name}" if split_name == "train" else None,
+            )
+            axes[4].annotate(str(class_index), (float(lab[1]), float(lab[2])), fontsize=8)
+    axes[4].set_title("Lab a*b* Class Centroids")
+    axes[4].set_xlabel("a*")
+    axes[4].set_ylabel("b*")
+    axes[4].grid(True, linestyle="--", linewidth=0.5, alpha=0.4)
+
+    axes[5].bar(class_indices, [delta_e[index] for index in range(num_classes)], color=palette[:num_classes])
+    axes[5].set_title("Train-Val Color Shift (Lab Delta)")
+    axes[5].set_xticks(class_indices)
+    axes[5].set_xticklabels(class_names, rotation=30, ha="right")
+    axes[5].grid(True, axis="y", linestyle="--", linewidth=0.5, alpha=0.4)
+
+    figure.tight_layout()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    figure.savefig(output_path, dpi=200, bbox_inches="tight")
+    plt.close(figure)
+
+    summary: Dict[str, Any] = {
+        "max_images_per_class": int(max_images_per_class),
+        "max_pixels_per_image": int(max_pixels_per_image),
+        "thumbnail_size": int(thumbnail_size),
+        "classes": {
+            str(index): {
+                "name": str(class_names[index]),
+                "train": train_stats[index],
+                "val": val_stats[index],
+                "train_val_lab_delta": float(delta_e[index]),
+            }
+            for index in range(num_classes)
+        },
+    }
+    if summary_path is not None:
+        json_dump(summary_path, summary)
+    return summary
 
 
 def summarize_token_norms(features: Dict[str, torch.Tensor]) -> Dict[str, float]:

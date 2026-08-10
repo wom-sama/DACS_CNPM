@@ -1,0 +1,46 @@
+{
+  "mode": "nsa_support_geometry_train_only_scan",
+  "date": "2026-07-24",
+  "dataset": "D:\\DataAI\\AIEx\\newdataset\\yolo_f\\data.yaml",
+  "split": "train",
+  "rows": 9215,
+  "validation_split_used": false,
+  "test_split_used": false,
+  "raw_dataset_modified": false,
+  "requested_workers": 4,
+  "effective_workers": 4,
+  "opencv_threads_per_worker": 1,
+  "elapsed_seconds": 177.8406866,
+  "minimum_extent_quantiles": {
+    "0.000": 11.0,
+    "0.001": 44.0,
+    "0.005": 74.13999938964844,
+    "0.010": 88.0,
+    "0.020": 97.0,
+    "0.050": 108.0,
+    "0.100": 117.0,
+    "0.500": 144.0
+  },
+  "count_below_extent_by_class": {
+    "8": [0, 0, 0, 0, 0],
+    "12": [0, 0, 0, 1, 0],
+    "16": [0, 0, 0, 1, 0],
+    "20": [0, 0, 0, 1, 0],
+    "24": [0, 0, 0, 1, 0],
+    "32": [0, 1, 2, 2, 1]
+  },
+  "locked_minimum_extent": 16,
+  "excluded_from_synthetic_only": [
+    {
+      "sample_index": 7373,
+      "source_stem": "image_7885",
+      "fold": 4,
+      "target": 3,
+      "support_height": 11,
+      "support_width": 204,
+      "support_pixels": 1728
+    }
+  ],
+  "classification_dataset_membership_unchanged": true,
+  "selection_basis": "train-only transformed support geometry before adapter metrics"
+}
