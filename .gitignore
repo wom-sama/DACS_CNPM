@@ -56,3 +56,6 @@ labels/
 deploy/
 robustness/
 attention_viz/
+
+# Local Kaggle dataset/upload bundles are preserved outside Git history.
+/kagle/**/*.zip

@@ -1,0 +1,1 @@
+record_id,fruit_id,source_id,session_id,capture_time,split_lock,operator_id,device_id,microphone_id,striker_id,tap_index,tap_site,wav_path,sample_rate_hz,bit_depth,duration_ms,agc_disabled,mass_g,equatorial_diameter_mm,polar_diameter_mm,temperature_c,humidity_pct,variety,current_class_label,penetrometer_n,tss_brix,acidity_ph,transport_outcome_48h,bruise_score_48h,notes
