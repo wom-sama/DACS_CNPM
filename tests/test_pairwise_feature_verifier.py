@@ -123,6 +123,62 @@ def test_fit_pair_models_supports_extra_trees_verifier() -> None:
     assert oof[(0, 1)].shape == (4, 2)
 
 
+def test_fit_pair_models_uses_source_group_disjoint_oof() -> None:
+    features = np.asarray([[float(index)] for index in range(12)], dtype=np.float32)
+    labels = np.asarray([0, 1] * 6, dtype=np.int64)
+    groups = np.asarray(
+        [source for source in ("a", "b", "c", "d", "e", "f") for _ in range(2)],
+        dtype=object,
+    )
+
+    _models, summaries, oof = _fit_pair_models(
+        features,
+        labels,
+        [(0, 1)],
+        c_value=1.0,
+        max_iter=100,
+        seed=7,
+        oof_folds=3,
+        groups=groups,
+        sample_weights=np.linspace(0.5, 1.0, num=12, dtype=np.float32),
+    )
+
+    assert summaries[0]["oof_splitter"] == "stratified_group_kfold"
+    assert summaries[0]["oof_source_groups"] == 6
+    assert summaries[0]["oof_fold_source_overlap_max"] == 0
+    assert summaries[0]["oof_folds"] == 3
+    assert summaries[0]["sample_weight_min"] == 0.5
+    assert np.isfinite(oof[(0, 1)]).all()
+
+
+def test_fit_pair_models_rejects_group_length_mismatch() -> None:
+    with pytest.raises(ValueError, match="groups must have one value per feature row"):
+        _fit_pair_models(
+            np.asarray([[0.0], [1.0]], dtype=np.float32),
+            np.asarray([0, 1], dtype=np.int64),
+            [(0, 1)],
+            c_value=1.0,
+            max_iter=100,
+            seed=7,
+            oof_folds=2,
+            groups=np.asarray(["only_one"], dtype=object),
+        )
+
+
+def test_fit_pair_models_fails_closed_when_grouped_oof_is_impossible() -> None:
+    with pytest.raises(ValueError, match="at least two source groups"):
+        _fit_pair_models(
+            np.asarray([[0.0], [0.1], [0.9], [1.0]], dtype=np.float32),
+            np.asarray([0, 0, 1, 1], dtype=np.int64),
+            [(0, 1)],
+            c_value=1.0,
+            max_iter=100,
+            seed=7,
+            oof_folds=2,
+            groups=np.asarray(["source_0", "source_0", "source_1", "source_1"]),
+        )
+
+
 def test_pair_verifier_probabilities_use_oof_for_train_pair_rows() -> None:
     features = np.zeros((4, 2), dtype=np.float32)
     labels = np.array([0, 2, 1, 4], dtype=np.int64)

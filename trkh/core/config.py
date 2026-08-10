@@ -478,6 +478,7 @@ class TrainConfig:
     balanced_epoch_sampling: bool = False
     balanced_epoch_multiplier: float = 1.0
     balanced_epoch_tolerance: float = 0.10
+    pair01_geometry_stratified_sampling: bool = False
     auto_tune_imbalance: bool = False
     imbalance_sampler_disable_threshold: float = 0.18
     save_last_checkpoint: bool = True
@@ -488,6 +489,7 @@ class TrainConfig:
     use_ldam: bool = True
     ldam_max_margin: float = 0.5
     ldam_scale: float = 30.0
+    ldam_class_count_source: str = "natural"
     classification_loss: str = "ldam_focal"
     balanced_softmax_tau: float = 1.0
     gce_q: float = 0.7

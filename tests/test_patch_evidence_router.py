@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+
+import pytest
 import torch
 
 from trkh.core.config import ModelConfig
@@ -376,6 +379,74 @@ def test_patch_evidence_linear_verifier_loads_export_default_off(tmp_path) -> No
     assert not any(
         key.startswith("patch_evidence_linear_verifier.") for key in model.state_dict()
     )
+
+
+def test_patch_evidence_linear_verifier_enforces_checkpoint_binding(tmp_path) -> None:
+    model = create_model(num_classes=5, model_config=_small_config())
+    export_path = tmp_path / "pair_verifier_model_params.json"
+    feature_dim = 94
+    expected_sha256 = "a" * 64
+    export_path.write_text(
+        json.dumps(
+            {
+                "metadata": {"base_checkpoint_sha256": expected_sha256},
+                "feature_dim": feature_dim,
+                "pairs": [
+                    {
+                        "pair": "0-1",
+                        "status": "exported",
+                        "feature_dim": feature_dim,
+                        "raw_coef": [0.0] * feature_dim,
+                        "raw_intercept": 0.0,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    summary = model.load_patch_evidence_linear_verifier_export(
+        export_path,
+        expected_base_checkpoint_sha256=expected_sha256.upper(),
+    )
+
+    assert summary["base_checkpoint_sha256"] == expected_sha256
+    with pytest.raises(ValueError, match="checkpoint SHA-256 mismatch"):
+        model.load_patch_evidence_linear_verifier_export(
+            export_path,
+            expected_base_checkpoint_sha256="b" * 64,
+        )
+
+
+def test_patch_evidence_linear_verifier_binding_fails_closed_for_legacy_export(
+    tmp_path,
+) -> None:
+    model = create_model(num_classes=5, model_config=_small_config())
+    export_path = tmp_path / "legacy_pair_verifier_model_params.json"
+    feature_dim = 94
+    export_path.write_text(
+        json.dumps(
+            {
+                "feature_dim": feature_dim,
+                "pairs": [
+                    {
+                        "pair": "0-1",
+                        "status": "exported",
+                        "feature_dim": feature_dim,
+                        "raw_coef": [0.0] * feature_dim,
+                        "raw_intercept": 0.0,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="checkpoint-binding metadata"):
+        model.load_patch_evidence_linear_verifier_export(
+            export_path,
+            expected_base_checkpoint_sha256="a" * 64,
+        )
 
 
 def test_patch_evidence_linear_verifier_training_soft_adjustment_has_gradient() -> None:

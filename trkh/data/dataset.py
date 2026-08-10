@@ -2168,6 +2168,11 @@ class ClassificationFolderDataset(Dataset):
     def bboxes(self) -> List[Tuple[float, float, float, float]]:
         return [(0.5, 0.5, 1.0, 1.0) for _ in self.samples]
 
+    def sample_bboxes(self) -> List[Tuple[float, float, float, float]]:
+        if any(sample.yolo_object is None for sample in self.samples):
+            return []
+        return [tuple(sample.yolo_object.bbox) for sample in self.samples if sample.yolo_object]
+
     def sample_paths(self) -> List[Path]:
         return [sample.image_path for sample in self.samples]
 
@@ -2922,6 +2927,9 @@ class MangoYOLOCropDataset(Dataset):
 
     def bboxes(self) -> List[Tuple[float, float, float, float]]:
         return [obj.bbox for sample in self.samples for obj in sample.objects]
+
+    def sample_bboxes(self) -> List[Tuple[float, float, float, float]]:
+        return [self._select_sample_primary_object(sample).bbox for sample in self.samples]
 
     def sample_paths(self) -> List[Path]:
         return [sample.image_path for sample in self.samples]
@@ -3894,6 +3902,8 @@ class StrictBalancedBatchSampler(Sampler[List[int]]):
         epoch_multiplier: float = 1.0,
         seed: int = 42,
         drop_last: bool = False,
+        geometry_areas: Optional[Sequence[float]] = None,
+        geometry_stratified_pair: Optional[Tuple[int, int]] = None,
     ) -> None:
         if batch_size < 1:
             raise ValueError("batch_size phai >= 1.")
@@ -3921,12 +3931,187 @@ class StrictBalancedBatchSampler(Sampler[List[int]]):
         if not self.active_classes:
             raise ValueError("StrictBalancedBatchSampler yeu cau it nhat 1 lop co sample.")
 
+        self.geometry_stratified_pair: Optional[Tuple[int, int]] = None
+        self.geometry_bin_edges: List[float] = []
+        self.geometry_target_bin_distribution: List[float] = []
+        self.geometry_class_bin_indices: Dict[int, List[List[int]]] = {}
+        self.geometry_natural_bin_counts: Dict[int, List[int]] = {}
+        self.geometry_planned_bin_exposure_counts: Dict[int, List[int]] = {}
+        if geometry_stratified_pair is not None:
+            self._configure_geometry_stratification(
+                geometry_areas=geometry_areas,
+                pair=geometry_stratified_pair,
+            )
+
         target_samples = int(math.ceil(len(self.labels) * self.epoch_multiplier))
         target_samples = max(self.batch_size, target_samples)
         if self.drop_last:
             self.num_batches = max(1, target_samples // self.batch_size)
         else:
             self.num_batches = max(1, math.ceil(target_samples / self.batch_size))
+
+        if self.geometry_stratified_pair is not None:
+            class_exposures = self.exposure_counts()
+            for class_index in self.geometry_stratified_pair:
+                self.geometry_planned_bin_exposure_counts[class_index] = (
+                    self._allocate_proportional_counts(
+                        class_exposures[class_index],
+                        self.geometry_target_bin_distribution,
+                    )
+                )
+
+    @staticmethod
+    def _allocate_proportional_counts(total: int, weights: Sequence[float]) -> List[int]:
+        total = max(0, int(total))
+        normalized = [max(0.0, float(value)) for value in weights]
+        weight_sum = float(sum(normalized))
+        if not normalized or weight_sum <= 0.0:
+            raise ValueError("Geometry stratification yeu cau target bin distribution > 0.")
+        normalized = [value / weight_sum for value in normalized]
+        raw = [float(total) * value for value in normalized]
+        counts = [int(math.floor(value)) for value in raw]
+        remainder = int(total - sum(counts))
+        order = sorted(
+            range(len(raw)),
+            key=lambda index: (raw[index] - counts[index], normalized[index], -index),
+            reverse=True,
+        )
+        for index in order[:remainder]:
+            counts[index] += 1
+        return counts
+
+    @staticmethod
+    def _low_discrepancy_bin_schedule(counts: Sequence[int]) -> List[int]:
+        planned = [max(0, int(value)) for value in counts]
+        total = int(sum(planned))
+        if total <= 0:
+            return []
+        assigned = [0 for _ in planned]
+        schedule: List[int] = []
+        for prefix_size in range(1, total + 1):
+            candidates = [
+                bin_index
+                for bin_index, count in enumerate(planned)
+                if assigned[bin_index] < count
+            ]
+            selected = max(
+                candidates,
+                key=lambda bin_index: (
+                    float(prefix_size) * float(planned[bin_index]) / float(total)
+                    - float(assigned[bin_index]),
+                    planned[bin_index] - assigned[bin_index],
+                    -bin_index,
+                ),
+            )
+            schedule.append(int(selected))
+            assigned[selected] += 1
+        if assigned != planned:
+            raise RuntimeError(
+                "Geometry low-discrepancy schedule khong khop planned bin counts."
+            )
+        return schedule
+
+    def _configure_geometry_stratification(
+        self,
+        *,
+        geometry_areas: Optional[Sequence[float]],
+        pair: Sequence[int],
+    ) -> None:
+        if geometry_areas is None:
+            raise ValueError(
+                "Geometry-stratified sampler yeu cau bbox geometry train-only cho moi sample."
+            )
+        if len(geometry_areas) != len(self.labels):
+            raise ValueError(
+                "Geometry-stratified sampler bbox/sample length mismatch: "
+                f"geometry={len(geometry_areas)} labels={len(self.labels)}."
+            )
+        parsed_pair = tuple(int(value) for value in pair)
+        if len(parsed_pair) != 2 or parsed_pair[0] == parsed_pair[1]:
+            raise ValueError("Geometry-stratified sampler yeu cau dung hai class khac nhau.")
+        if any(class_index not in self.active_classes for class_index in parsed_pair):
+            raise ValueError(
+                "Geometry-stratified sampler pair classes phai co train samples: "
+                f"pair={list(parsed_pair)} active={self.active_classes}."
+            )
+
+        parsed_areas: List[float] = []
+        invalid_indices: List[int] = []
+        for sample_index, raw_area in enumerate(geometry_areas):
+            try:
+                area = float(raw_area)
+            except (TypeError, ValueError):
+                area = float("nan")
+            if not math.isfinite(area) or area <= 0.0:
+                invalid_indices.append(int(sample_index))
+            parsed_areas.append(area)
+        if invalid_indices:
+            raise ValueError(
+                "Geometry-stratified sampler phat hien bbox area thieu/khong hop le: "
+                f"count={len(invalid_indices)} preview={invalid_indices[:5]}."
+            )
+
+        reference_class = int(parsed_pair[0])
+        reference_areas = [
+            parsed_areas[index]
+            for index in self.class_to_indices[reference_class]
+        ]
+        if len(reference_areas) < 4:
+            raise ValueError(
+                "Geometry-stratified sampler can it nhat 4 train samples o reference class."
+            )
+        lower, upper = np.quantile(
+            np.asarray(reference_areas, dtype=np.float64),
+            [0.25, 0.75],
+        ).tolist()
+        if (
+            not math.isfinite(float(lower))
+            or not math.isfinite(float(upper))
+            or float(lower) <= 0.0
+            or float(upper) <= float(lower)
+        ):
+            raise ValueError(
+                "Geometry-stratified sampler khong the fit hai bin edges phan biet "
+                "tu bbox area train-only."
+            )
+
+        def area_bin(area: float) -> int:
+            if float(area) <= float(lower):
+                return 0
+            if float(area) <= float(upper):
+                return 1
+            return 2
+
+        class_bin_indices: Dict[int, List[List[int]]] = {}
+        natural_bin_counts: Dict[int, List[int]] = {}
+        class_bin_fractions: List[List[float]] = []
+        minimum_bin_support = 4
+        for class_index in parsed_pair:
+            bins = [[] for _ in range(3)]
+            for sample_index in self.class_to_indices[int(class_index)]:
+                bins[area_bin(parsed_areas[sample_index])].append(int(sample_index))
+            counts = [len(values) for values in bins]
+            if any(count < minimum_bin_support for count in counts):
+                raise ValueError(
+                    "Geometry-stratified sampler yeu cau moi pair class co it nhat "
+                    f"{minimum_bin_support} samples trong moi bin: "
+                    f"class={class_index} counts={counts}."
+                )
+            class_bin_indices[int(class_index)] = bins
+            natural_bin_counts[int(class_index)] = counts
+            total = float(sum(counts))
+            class_bin_fractions.append([float(count) / total for count in counts])
+
+        target_distribution = [
+            float(sum(fractions[bin_index] for fractions in class_bin_fractions))
+            / float(len(class_bin_fractions))
+            for bin_index in range(3)
+        ]
+        self.geometry_stratified_pair = (int(parsed_pair[0]), int(parsed_pair[1]))
+        self.geometry_bin_edges = [float(lower), float(upper)]
+        self.geometry_target_bin_distribution = target_distribution
+        self.geometry_class_bin_indices = class_bin_indices
+        self.geometry_natural_bin_counts = natural_bin_counts
 
     def set_epoch(self, epoch: int) -> None:
         self.epoch = int(epoch)
@@ -3970,7 +4155,7 @@ class StrictBalancedBatchSampler(Sampler[List[int]]):
             if maximum > 0
             else 0.0
         )
-        return {
+        summary: Dict[str, object] = {
             "class_exposure_counts": counts,
             "min_class_exposure": int(minimum),
             "max_class_exposure": int(maximum),
@@ -3978,6 +4163,29 @@ class StrictBalancedBatchSampler(Sampler[List[int]]):
             "total_samples": int(sum(counts)),
             "num_batches": int(self.num_batches),
         }
+        if self.geometry_stratified_pair is not None:
+            summary["geometry_stratification"] = {
+                "enabled": True,
+                "source": "train_only_sample_bbox_metadata",
+                "area_measure": "normalized_bbox_width_x_height",
+                "pair_classes": [int(value) for value in self.geometry_stratified_pair],
+                "reference_class_for_bin_edges": int(self.geometry_stratified_pair[0]),
+                "bin_quantiles": [0.25, 0.75],
+                "minimum_bin_support": 4,
+                "bin_edges": [float(value) for value in self.geometry_bin_edges],
+                "target_bin_distribution": [
+                    float(value) for value in self.geometry_target_bin_distribution
+                ],
+                "natural_bin_counts": {
+                    str(class_index): [int(value) for value in counts]
+                    for class_index, counts in self.geometry_natural_bin_counts.items()
+                },
+                "planned_bin_exposure_counts": {
+                    str(class_index): [int(value) for value in counts]
+                    for class_index, counts in self.geometry_planned_bin_exposure_counts.items()
+                },
+            }
+        return summary
 
     def __iter__(self) -> Iterator[List[int]]:
         generator = torch.Generator()
@@ -3991,7 +4199,54 @@ class StrictBalancedBatchSampler(Sampler[List[int]]):
             class_pools[class_index] = shuffled
             class_positions[class_index] = 0
 
+        geometry_bin_pools: Dict[int, List[List[int]]] = {}
+        geometry_bin_positions: Dict[int, List[int]] = {}
+        geometry_bin_schedules: Dict[int, List[int]] = {}
+        geometry_schedule_positions: Dict[int, int] = {}
+        if self.geometry_stratified_pair is not None:
+            for class_index in self.geometry_stratified_pair:
+                shuffled_bins: List[List[int]] = []
+                for base_values in self.geometry_class_bin_indices[class_index]:
+                    base_indices = torch.tensor(base_values, dtype=torch.long)
+                    shuffled_bins.append(
+                        base_indices[
+                            torch.randperm(len(base_indices), generator=generator)
+                        ].tolist()
+                    )
+                geometry_bin_pools[class_index] = shuffled_bins
+                geometry_bin_positions[class_index] = [0 for _ in shuffled_bins]
+                schedule = self._low_discrepancy_bin_schedule(
+                    self.geometry_planned_bin_exposure_counts[class_index]
+                )
+                geometry_bin_schedules[class_index] = schedule
+                geometry_schedule_positions[class_index] = 0
+
         def draw_index(class_index: int) -> int:
+            if class_index in geometry_bin_schedules:
+                schedule_position = geometry_schedule_positions[class_index]
+                schedule = geometry_bin_schedules[class_index]
+                if schedule_position >= len(schedule):
+                    raise RuntimeError(
+                        "Geometry-stratified sampler vuot planned pair-bin exposure."
+                    )
+                bin_index = int(schedule[schedule_position])
+                geometry_schedule_positions[class_index] = schedule_position + 1
+                bin_position = geometry_bin_positions[class_index][bin_index]
+                pool = geometry_bin_pools[class_index][bin_index]
+                if bin_position >= len(pool):
+                    base_indices = torch.tensor(
+                        self.geometry_class_bin_indices[class_index][bin_index],
+                        dtype=torch.long,
+                    )
+                    pool = base_indices[
+                        torch.randperm(len(base_indices), generator=generator)
+                    ].tolist()
+                    geometry_bin_pools[class_index][bin_index] = pool
+                    geometry_bin_positions[class_index][bin_index] = 0
+                    bin_position = 0
+                sampled_index = int(pool[bin_position])
+                geometry_bin_positions[class_index][bin_index] = bin_position + 1
+                return sampled_index
             position = class_positions[class_index]
             pool = class_pools[class_index]
             if position >= len(pool):

@@ -11,7 +11,7 @@ import numpy as np
 import torch
 from sklearn.ensemble import ExtraTreesClassifier
 from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import StratifiedKFold, cross_val_predict
+from sklearn.model_selection import StratifiedGroupKFold, StratifiedKFold, cross_val_predict
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
@@ -275,6 +275,7 @@ def _fit_pair_models(
     seed: int,
     oof_folds: int,
     sample_weights: Optional[np.ndarray] = None,
+    groups: Optional[np.ndarray] = None,
     extra_trees_n_estimators: int = 300,
     extra_trees_min_samples_leaf: int = 5,
     extra_trees_max_depth: int = 0,
@@ -290,10 +291,21 @@ def _fit_pair_models(
                 "sample_weights must have one value per feature row: "
                 f"got {weights.shape[0]} for {np.asarray(labels).shape[0]} labels"
             )
+    source_groups = None
+    if groups is not None:
+        source_groups = np.asarray(groups, dtype=object).reshape(-1)
+        if source_groups.shape[0] != np.asarray(labels).shape[0]:
+            raise ValueError(
+                "groups must have one value per feature row: "
+                f"got {source_groups.shape[0]} for {np.asarray(labels).shape[0]} labels"
+            )
+        if any(not str(value).strip() for value in source_groups.tolist()):
+            raise ValueError("groups must not contain blank source identifiers")
     for pair in pairs:
         mask, local = _local_pair_labels(labels, pair)
         pair_features = features[mask]
         pair_weights = weights[mask] if weights is not None else None
+        pair_groups = source_groups[mask] if source_groups is not None else None
         counts = np.bincount(local, minlength=2)
         if pair_features.shape[0] == 0 or int((counts > 0).sum()) < 2:
             summaries.append(
@@ -320,10 +332,53 @@ def _fit_pair_models(
 
         oof_available = False
         oof = np.full((pair_features.shape[0], 2), np.nan, dtype=np.float32)
-        folds = max(2, min(int(oof_folds), int(counts.min())))
+        max_folds = min(int(oof_folds), int(counts.min()))
+        if pair_groups is not None:
+            class_group_counts = [
+                int(np.unique(pair_groups[local == class_index]).size)
+                for class_index in range(2)
+            ]
+            max_folds = min(
+                max_folds,
+                int(np.unique(pair_groups).size),
+                *class_group_counts,
+            )
+        folds = int(max_folds) if int(max_folds) >= 2 else 0
+        oof_splitter = "none"
+        oof_source_groups = int(np.unique(pair_groups).size) if pair_groups is not None else 0
+        oof_fold_source_overlap_max = 0
+        if pair_groups is not None and folds < 2:
+            raise ValueError(
+                "source-group OOF requires at least two source groups for each "
+                f"local class in pair {pair[0]}-{pair[1]}"
+            )
         if folds >= 2:
             try:
-                cv = StratifiedKFold(n_splits=folds, shuffle=True, random_state=int(seed))
+                if pair_groups is not None:
+                    splitter = StratifiedGroupKFold(
+                        n_splits=folds,
+                        shuffle=True,
+                        random_state=int(seed),
+                    )
+                    cv = list(splitter.split(pair_features, local, groups=pair_groups))
+                    overlaps = []
+                    for fit_indices, held_indices in cv:
+                        fit_groups = set(pair_groups[fit_indices].tolist())
+                        held_groups = set(pair_groups[held_indices].tolist())
+                        overlaps.append(len(fit_groups.intersection(held_groups)))
+                    oof_fold_source_overlap_max = max(overlaps, default=0)
+                    if oof_fold_source_overlap_max != 0:
+                        raise RuntimeError(
+                            "StratifiedGroupKFold produced overlapping source groups"
+                        )
+                    oof_splitter = "stratified_group_kfold"
+                else:
+                    cv = StratifiedKFold(
+                        n_splits=folds,
+                        shuffle=True,
+                        random_state=int(seed),
+                    )
+                    oof_splitter = "stratified_kfold"
                 oof = cross_val_predict(
                     _make_model(
                         model_type=str(model_type),
@@ -343,6 +398,8 @@ def _fit_pair_models(
                 ).astype(np.float32, copy=False)
                 oof_available = True
             except Exception:
+                if pair_groups is not None:
+                    raise
                 oof_available = False
         if oof_available:
             local_pred = oof.argmax(axis=1)
@@ -358,6 +415,9 @@ def _fit_pair_models(
                 "samples": int(pair_features.shape[0]),
                 "class_counts": counts.tolist(),
                 "oof_folds": int(folds) if oof_available else 0,
+                "oof_splitter": str(oof_splitter) if oof_available else "none",
+                "oof_source_groups": int(oof_source_groups),
+                "oof_fold_source_overlap_max": int(oof_fold_source_overlap_max),
                 "oof_local_accuracy": local_acc,
                 "sample_weight_min": float(np.min(pair_weights)) if pair_weights is not None else 1.0,
                 "sample_weight_max": float(np.max(pair_weights)) if pair_weights is not None else 1.0,

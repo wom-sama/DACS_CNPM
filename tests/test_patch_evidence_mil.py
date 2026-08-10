@@ -3,6 +3,7 @@ import torch
 
 from trkh.tools.probe_patch_evidence_mil import (
     _append_source_domain_feature,
+    _source_groups_from_paths,
     _write_pair_teacher_csv,
     build_patch_verifier_features,
     summarize_patch_evidence,
@@ -97,6 +98,24 @@ def test_append_source_domain_feature_is_optional() -> None:
     assert with_source.shape == (2, 3)
     assert np.allclose(with_source[:, :2], features)
     assert np.allclose(with_source[:, 2], 2.0)
+
+
+def test_source_groups_from_paths_keep_object_crops_from_one_image_together() -> None:
+    groups = _source_groups_from_paths(
+        [
+            r"D:\dataset\train\Image_17.JPG",
+            r"D:\dataset\train\image_17.jpg",
+            r"D:\dataset\train\Image_18.jpg",
+        ],
+        expected_rows=3,
+    )
+
+    assert groups.tolist() == ["image_17", "image_17", "image_18"]
+
+
+def test_source_groups_from_paths_fail_closed_on_missing_path() -> None:
+    with np.testing.assert_raises_regex(ValueError, "non-blank source paths"):
+        _source_groups_from_paths(["a.jpg", ""], expected_rows=2)
 
 
 def test_write_pair_teacher_csv_uses_oof_pair_probs_and_hard_other_classes(tmp_path) -> None:

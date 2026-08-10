@@ -1309,6 +1309,7 @@ def main() -> None:
             raise RuntimeError("Checkpoint model does not support patch-evidence linear verifier export.")
         patch_evidence_linear_verifier_summary = load_verifier(
             args.patch_evidence_linear_verifier_json,
+            expected_base_checkpoint_sha256=_file_sha256(args.checkpoint),
             pair=args.patch_evidence_linear_verifier_pair,
             min_pair_probability=args.patch_evidence_linear_verifier_min_pair_probability,
             max_pair_margin=args.patch_evidence_linear_verifier_max_pair_margin,

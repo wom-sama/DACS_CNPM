@@ -231,6 +231,7 @@ def plot_confusion_matrix(
     class_names: Sequence[str],
     output_path: Path,
     normalize: bool = False,
+    normalize_by: str = "true",
 ) -> None:
     matrix = torch.tensor(confusion, dtype=torch.float32)
     num_classes = len(class_names)
@@ -239,15 +240,24 @@ def plot_confusion_matrix(
             "Confusion matrix khong khop so lop hien tai: "
             f"shape={tuple(matrix.shape)}, num_classes={num_classes}"
         )
+    normalized_title = ""
     if normalize:
-        matrix = matrix / matrix.sum(dim=1, keepdim=True).clamp(min=1.0)
+        normalized_axis = str(normalize_by).strip().lower()
+        if normalized_axis == "true":
+            matrix = matrix / matrix.sum(dim=1, keepdim=True).clamp(min=1.0)
+            normalized_title = "Row-Normalized Confusion Matrix: P(Predicted | True)"
+        elif normalized_axis == "predicted":
+            matrix = matrix / matrix.sum(dim=0, keepdim=True).clamp(min=1.0)
+            normalized_title = "Column-Normalized Confusion Matrix: P(True | Predicted)"
+        else:
+            raise ValueError("normalize_by chi nhan 'true' hoac 'predicted'.")
 
     figure_size = max(8.0, 1.9 * num_classes)
     figure, axis = plt.subplots(figsize=(figure_size, figure_size - 0.8))
     image = axis.imshow(matrix.numpy(), interpolation="nearest", cmap="Blues")
     figure.colorbar(image, ax=axis)
 
-    axis.set_title("Normalized Confusion Matrix" if normalize else "Confusion Matrix")
+    axis.set_title(normalized_title if normalize else "Confusion Matrix")
     axis.set_xlabel("Predicted")
     axis.set_ylabel("True")
     axis.set_xticks(range(len(class_names)))

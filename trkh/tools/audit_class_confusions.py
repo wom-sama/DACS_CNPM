@@ -75,15 +75,20 @@ def _index_from_row(
     index_keys: Sequence[str],
     name_keys: Sequence[str],
     class_to_index: Mapping[str, int],
+    require_known_name: bool = False,
 ) -> int:
     name = _first_non_empty(row, name_keys)
     if name and name in class_to_index:
         return int(class_to_index[name])
+    if name and require_known_name:
+        raise ValueError(f"Unknown class name in prediction row: {name!r}")
     for key in index_keys:
         value = str(row.get(key, "") or "").strip()
         if value:
             return int(float(value))
-    return 0
+    raise ValueError(
+        "Prediction row is missing both a recognized class name and numeric class index."
+    )
 
 
 def _margin(row: Mapping[str, str]) -> float:
@@ -92,7 +97,32 @@ def _margin(row: Mapping[str, str]) -> float:
     return 0.0
 
 
-def _prob_key(row: Mapping[str, str], class_index: int) -> str | None:
+def _prob_key(
+    row: Mapping[str, str],
+    class_index: int,
+    class_name: str = "",
+) -> str | None:
+    normalized_name = str(class_name).strip()
+    if normalized_name:
+        semantic_matches = []
+        for key in row.keys():
+            if key == f"prob_{normalized_name}":
+                semantic_matches.append(key)
+                continue
+            parts = key.split("_", 2)
+            if len(parts) == 3 and parts[0] == "prob" and parts[1].isdigit():
+                if parts[2] == normalized_name:
+                    semantic_matches.append(key)
+        if len(semantic_matches) > 1:
+            raise ValueError(
+                f"Multiple probability columns match class {normalized_name!r}: "
+                f"{semantic_matches}"
+            )
+        if semantic_matches:
+            return semantic_matches[0]
+        # Once an authoritative semantic class name is available, an index-only
+        # fallback could silently read a probability from a different class axis.
+        return None
     prefix = f"prob_{int(class_index)}_"
     for key in row.keys():
         if key.startswith(prefix):
@@ -142,7 +172,6 @@ def main() -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     focus = int(args.focus_class_index)
-    focus_prob_key = _prob_key(rows[0], focus)
     class_names: Dict[int, str] = {}
     class_to_index: Dict[str, int] = {}
     if args.data is not None:
@@ -155,12 +184,14 @@ def main() -> None:
             index_keys=("target_index", "y_true"),
             name_keys=("target_name", "true_name"),
             class_to_index=class_to_index,
+            require_known_name=args.data is not None,
         )
         prediction_index = _index_from_row(
             row,
             index_keys=("prediction_index", "y_pred", "teacher_pred_index"),
             name_keys=("prediction_name", "pred_name", "teacher_pred_name"),
             class_to_index=class_to_index,
+            require_known_name=args.data is not None,
         )
         target_name = _first_non_empty(row, ("target_name", "true_name"))
         prediction_name = _first_non_empty(row, ("prediction_name", "pred_name", "teacher_pred_name"))
@@ -170,6 +201,7 @@ def main() -> None:
         if prediction_name:
             class_names[prediction_index] = prediction_name
             class_to_index.setdefault(prediction_name, prediction_index)
+    focus_prob_key = _prob_key(rows[0], focus, class_names.get(focus, ""))
 
     enriched: List[Dict[str, object]] = []
     confusion_counter: Counter[tuple[int, int]] = Counter()
@@ -179,12 +211,14 @@ def main() -> None:
             index_keys=("target_index", "y_true"),
             name_keys=("target_name", "true_name"),
             class_to_index=class_to_index,
+            require_known_name=args.data is not None,
         )
         prediction = _index_from_row(
             row,
             index_keys=("prediction_index", "y_pred", "teacher_pred_index"),
             name_keys=("prediction_name", "pred_name", "teacher_pred_name"),
             class_to_index=class_to_index,
+            require_known_name=args.data is not None,
         )
         correct = int(target == prediction)
         confusion_counter[(target, prediction)] += 1
@@ -298,6 +332,7 @@ def main() -> None:
         "samples": len(rows),
         "focus_class_index": focus,
         "focus_class_name": class_names.get(focus, ""),
+        "focus_probability_column": focus_prob_key,
         "focus_metrics": {
             "tp": len(focus_tp),
             "fp": len(focus_fp),

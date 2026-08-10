@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import math
 import time
@@ -38,6 +39,14 @@ from trkh.tools.probe_pairwise_feature_verifier import (
 
 
 Pair = Tuple[int, int]
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest().upper()
 
 
 def _parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
@@ -104,6 +113,15 @@ def _parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--extra-trees-min-samples-leaf", type=int, default=5)
     parser.add_argument("--extra-trees-max-depth", type=int, default=0)
     parser.add_argument("--oof-folds", type=int, default=5)
+    parser.add_argument(
+        "--oof-group-mode",
+        choices=("source_stem", "none"),
+        default="source_stem",
+        help=(
+            "Group train OOF rows by case-normalized source-image stem so object "
+            "crops from one image cannot cross fit/held folds."
+        ),
+    )
     parser.add_argument("--seed", type=int, default=42)
     return parser.parse_args(argv)
 
@@ -532,6 +550,34 @@ def _append_source_domain_feature(
         return features
     source = np.full((features.shape[0], 1), float(source_value), dtype=np.float32)
     return np.concatenate([features, source], axis=1)
+
+
+def _source_groups_from_paths(
+    paths: Sequence[str],
+    *,
+    expected_rows: int,
+) -> np.ndarray:
+    if len(paths) != int(expected_rows):
+        raise ValueError(
+            "source-group OOF requires exactly one source path per feature row: "
+            f"got {len(paths)} paths for {int(expected_rows)} rows"
+        )
+    groups: List[str] = []
+    for row_index, raw_path in enumerate(paths):
+        path_text = str(raw_path).strip()
+        if not path_text:
+            raise ValueError(
+                "source-group OOF requires non-blank source paths; "
+                f"row {row_index} is blank"
+            )
+        source_stem = Path(path_text).stem.strip().casefold()
+        if not source_stem:
+            raise ValueError(
+                "source-group OOF could not derive a source stem from "
+                f"row {row_index}: {path_text!r}"
+            )
+        groups.append(source_stem)
+    return np.asarray(groups, dtype=object)
 
 
 def _patch_logits_from_head(model: torch.nn.Module, features: Mapping[str, Tensor]) -> Tensor:
@@ -996,7 +1042,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     pairs = parse_pairs(str(args.pairs))
-    checkpoint = torch.load(Path(args.checkpoint), map_location="cpu", weights_only=False)
+    checkpoint_path = Path(args.checkpoint).resolve()
+    checkpoint_sha256 = _file_sha256(checkpoint_path)
+    checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
     if not isinstance(checkpoint, Mapping):
         raise ValueError(f"Invalid checkpoint: {args.checkpoint}")
     model = build_model_from_checkpoint(dict(checkpoint))
@@ -1092,6 +1140,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ]
     fit_label_parts = [train_labels]
     fit_weight_parts = [np.ones(train_labels.shape[0], dtype=np.float32)]
+    use_source_group_oof = str(args.oof_group_mode) == "source_stem"
+    fit_group_parts: List[np.ndarray] = []
+    if use_source_group_oof:
+        fit_group_parts.append(
+            _source_groups_from_paths(
+                list(train["paths"]),
+                expected_rows=int(train_labels.shape[0]),
+            )
+        )
     auxiliary_summaries: List[Dict[str, object]] = []
     aux_weight = max(0.0, float(args.auxiliary_train_weight))
     for aux_index, aux_item in enumerate(auxiliary_payloads, start=1):
@@ -1114,6 +1171,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             )
             fit_label_parts.append(aux_labels)
             fit_weight_parts.append(np.full(aux_labels.shape[0], aux_weight, dtype=np.float32))
+            if use_source_group_oof:
+                fit_group_parts.append(
+                    _source_groups_from_paths(
+                        list(aux_payload["paths"]),
+                        expected_rows=int(aux_labels.shape[0]),
+                    )
+                )
         auxiliary_summaries.append(
             {
                 "data": str(aux_item["data"]),
@@ -1127,6 +1191,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     train_features = np.concatenate(fit_feature_parts, axis=0).astype(np.float32, copy=False)
     fit_labels = np.concatenate(fit_label_parts, axis=0).astype(np.int64, copy=False)
     fit_weights = np.concatenate(fit_weight_parts, axis=0).astype(np.float32, copy=False)
+    fit_groups = (
+        np.concatenate(fit_group_parts, axis=0).astype(object, copy=False)
+        if use_source_group_oof
+        else None
+    )
     use_sample_weights = bool(auxiliary_payloads) and not np.allclose(fit_weights, 1.0)
     models, pair_summaries, oof_probabilities = _fit_pair_models(
         train_features,
@@ -1138,6 +1207,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         seed=int(args.seed),
         oof_folds=int(args.oof_folds),
         sample_weights=fit_weights if use_sample_weights else None,
+        groups=fit_groups,
         extra_trees_n_estimators=int(args.extra_trees_n_estimators),
         extra_trees_min_samples_leaf=int(args.extra_trees_min_samples_leaf),
         extra_trees_max_depth=int(args.extra_trees_max_depth),
@@ -1150,7 +1220,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         metadata={
             "tool": "probe_patch_evidence_mil",
             "data": str(Path(args.data).resolve()),
-            "checkpoint": str(Path(args.checkpoint).resolve()),
+            "checkpoint": str(checkpoint_path),
+            "base_checkpoint_sha256": checkpoint_sha256,
+            "base_checkpoint_size_bytes": int(checkpoint_path.stat().st_size),
+            "class_names": list(class_names),
             "pairs": [f"{int(a)}-{int(b)}" for a, b in pairs],
             "verifier_model": str(args.verifier_model),
             "logistic_c": float(args.logistic_c),
@@ -1159,6 +1232,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "spatial_evidence_features": bool(args.spatial_evidence_features),
             "spatial_interior_erode": int(args.spatial_interior_erode),
             "oof_folds": int(args.oof_folds),
+            "oof_group_mode": str(args.oof_group_mode),
+            "oof_source_groups": (
+                int(np.unique(fit_groups).size) if fit_groups is not None else 0
+            ),
             "auxiliary_train_weight": float(args.auxiliary_train_weight),
             "source_domain_feature": bool(args.source_domain_feature),
         },
@@ -1166,7 +1243,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     summary: Dict[str, object] = {
         "data": str(Path(args.data).resolve()),
-        "checkpoint": str(Path(args.checkpoint).resolve()),
+        "checkpoint": str(checkpoint_path),
+        "base_checkpoint_sha256": checkpoint_sha256,
         "output_dir": str(output_dir.resolve()),
         "class_names": list(class_names),
         "pairs": [f"{a}-{b}" for a, b in pairs],
@@ -1184,6 +1262,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "extra_trees_min_samples_leaf": int(args.extra_trees_min_samples_leaf),
             "extra_trees_max_depth": int(args.extra_trees_max_depth),
             "oof_folds": int(args.oof_folds),
+            "oof_group_mode": str(args.oof_group_mode),
+            "oof_source_groups": (
+                int(np.unique(fit_groups).size) if fit_groups is not None else 0
+            ),
             "auxiliary_train_weight": float(args.auxiliary_train_weight),
             "source_domain_feature": bool(args.source_domain_feature),
         },
@@ -1197,8 +1279,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "https://www.bmva-archive.org.uk/bmvc/2021/assets/papers/0685.pdf",
         ],
         "leakage_guard": (
-            "pair verifiers fit on train labels only; val is development diagnostic; "
-            "test is not read by default"
+            "pair verifiers fit on train labels only; source_stem mode keeps all "
+            "object crops from one source image in one OOF fold; val is development "
+            "diagnostic; test is not read by default"
         ),
     }
 

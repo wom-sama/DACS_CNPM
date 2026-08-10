@@ -735,6 +735,8 @@ param(
     [double]$LabelSmoothing = 0.02,
     [double]$LdamMaxMargin = 0.30,
     [double]$LdamScale = 18.0,
+    [ValidateSet("natural", "sampler_exposure")]
+    [string]$LdamClassCountSource = "natural",
     [string]$ClassLossMultipliers = "",
     [double]$MutualChannelLossWeight = 0.0,
     [int]$MutualChannelTopK = 8,
@@ -2368,6 +2370,7 @@ if ($PreflightOnly) {
         label_smoothing = $LabelSmoothing
         ldam_max_margin = $LdamMaxMargin
         ldam_scale = $LdamScale
+        ldam_class_count_source = $LdamClassCountSource
         mutual_channel_loss_weight = $MutualChannelLossWeight
         mutual_channel_top_k = $MutualChannelTopK
         mutual_channel_diversity_weight = $MutualChannelDiversityWeight
@@ -2539,6 +2542,7 @@ try {
         "--seesaw-compensation-power", "$SeesawCompensationPower",
         "--ldam-max-margin", "$LdamMaxMargin",
         "--ldam-scale", "$LdamScale",
+        "--ldam-class-count-source", "$LdamClassCountSource",
         "--focal-loss-gamma", "$FocalLossGamma",
         "--focal-loss-mix", "$FocalLossMix",
         "--label-smoothing", "$LabelSmoothing",
@@ -3877,6 +3881,7 @@ if ($ClassIndependentHead) {
         label_smoothing = $LabelSmoothing
         ldam_max_margin = $LdamMaxMargin
         ldam_scale = $LdamScale
+        ldam_class_count_source = $LdamClassCountSource
         mutual_channel_loss_weight = $MutualChannelLossWeight
         mutual_channel_top_k = $MutualChannelTopK
         mutual_channel_diversity_weight = $MutualChannelDiversityWeight

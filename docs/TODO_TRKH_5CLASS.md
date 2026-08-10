@@ -5288,3 +5288,30 @@
   authority until that exact pushed source receives a separate prospective
   test authorization and then a separately reviewed combined primary/replay
   execution authorization.
+
+### 2026-07-29 — Class-1 confusion audit (concise)
+
+- [x] Confirm matrix semantics `rows=true, columns=predicted`. Current best val
+  class 1 is `TP/FP/FN=121/82/30`, `P/R/F1=.5961/.8013/.6836`; `54/82` FP are
+  `0->1`, so the defect is class-1 overprediction rather than a transposed axis.
+- [x] Find a train-only geometry shortcut: `39/54` class-0-to-1 errors have
+  top-two margin `<=.10`; small class-0 bbox error is `18.6%` versus `5.4%` for
+  the middle bin (`OR=3.99`, Fisher `p=.00032`). Strict balancing repeats class
+  1 about `3.41x` and overexposes its small-bbox cohort.
+- [x] Add default-off, train-only, prefix-safe pair-0/1 geometry-stratified
+  sampling plus fail-closed telemetry/tests. A matched 120-batch attention-view
+  confirm improves class-1 F1 `.68786 -> .69164`, macro-F1 `.88498 -> .88624`,
+  and TP `119 -> 120`, but FP remains `76`; retain as research ablation, do not
+  promote or start full train.
+- [x] Refit the frozen patch verifier on the exact current checkpoint with
+  source-grouped OOF and fail-closed checkpoint SHA binding in eval/XAI. It improves F1
+  `.68555 -> .69697` and FP `81 -> 64`, but loses TP `121 -> 115`; reject for
+  deployment and do not threshold-sweep.
+- [x] Harden ordered class-name/probability-column contracts, export both
+  row-normalized recall and column-normalized precision confusion views, and
+  keep sampler-aware LDAM default-off after its matched smoke failed to improve.
+  No test-split inference or test metric was used in these decisions.
+- [x] Reject two additional matched interventions: delaying attention-view at
+  epoch 2 lowers class-1 F1 `.68023 -> .67836`; lowering LR `8e-5 -> 2e-5`
+  raises 120-batch class-1 F1 only `.68786 -> .68966` while FP worsens
+  `76 -> 77`. Neither is promoted to the full-train recipe.

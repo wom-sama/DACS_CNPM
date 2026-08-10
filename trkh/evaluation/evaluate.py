@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import math
 import time
 from itertools import islice
@@ -59,6 +60,15 @@ from trkh.core.utils import (
     summarize_token_norms,
 )
 
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 DETECTION_MODEL_TYPES = {"detr_vit_registers", "vit_registers_hybrid"}
 DETECTION_SCORE_MODES = (
     "foreground",
@@ -76,6 +86,26 @@ DETECTION_SCORE_MODES = (
     "objectness_quality",
     "class_sqrt_objectness_quality",
 )
+
+
+def _resolve_checkpoint_class_names(
+    checkpoint: Mapping[str, object],
+    data_class_names: Sequence[str],
+) -> List[str]:
+    """Resolve the class axis without permitting silent same-size remaps."""
+    expected = [str(name) for name in data_class_names]
+    raw = checkpoint.get("class_names")
+    if raw is None:
+        return expected
+    if isinstance(raw, (str, bytes)) or not isinstance(raw, Sequence):
+        raise ValueError("checkpoint class_names must be an ordered sequence")
+    actual = [str(name) for name in raw]
+    if actual != expected:
+        raise ValueError(
+            "Checkpoint/data class-name order mismatch: "
+            f"checkpoint={actual}, data={expected}"
+        )
+    return actual
 
 
 def _checkpoint_data_path_mismatch(
@@ -1867,6 +1897,13 @@ def save_evaluation_artifacts(
         output_dir / "confusion_matrix_normalized.png",
         normalize=True,
     )
+    plot_confusion_matrix(
+        metrics["confusion_matrix"],
+        class_names,
+        output_dir / "confusion_matrix_precision_normalized.png",
+        normalize=True,
+        normalize_by="predicted",
+    )
     plot_per_class_metrics(
         metrics.get("per_class", []),
         output_dir / "per_class_metrics.png",
@@ -2003,9 +2040,7 @@ def main() -> None:
             },
             flush=True,
         )
-    class_names = list(checkpoint.get("class_names", data_spec.class_names))
-    if len(class_names) != data_spec.num_classes:
-        raise ValueError("So lop trong checkpoint khong khop data.yaml")
+    class_names = _resolve_checkpoint_class_names(checkpoint, data_spec.class_names)
 
     model = build_model_from_checkpoint(
         checkpoint=checkpoint,
@@ -2021,6 +2056,7 @@ def main() -> None:
             raise RuntimeError("Checkpoint model does not support patch-evidence linear verifier export.")
         patch_evidence_linear_verifier_summary = load_verifier(
             args.patch_evidence_linear_verifier_json,
+            expected_base_checkpoint_sha256=_file_sha256(args.checkpoint),
             pair=args.patch_evidence_linear_verifier_pair,
             min_pair_probability=args.patch_evidence_linear_verifier_min_pair_probability,
             max_pair_margin=args.patch_evidence_linear_verifier_max_pair_margin,

@@ -1356,6 +1356,15 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     )
     parser.add_argument("--balanced-epoch-multiplier", type=float, default=1.0)
     parser.add_argument("--balanced-epoch-tolerance", type=float, default=0.10)
+    parser.add_argument(
+        "--pair01-geometry-stratified-sampling",
+        action="store_true",
+        default=False,
+        help=(
+            "Trong strict-balanced sampler, fit 3 bbox-area bins chi tu train va cho class 0/1 "
+            "dung cung target bin distribution; tong exposure moi class khong doi."
+        ),
+    )
     parser.add_argument("--imbalance-auto-tune", action="store_true", default=False)
     parser.add_argument("--disable-imbalance-auto-tune", action="store_true", default=False)
     parser.add_argument("--imbalance-sampler-disable-threshold", type=float, default=0.18)
@@ -1408,6 +1417,16 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--disable-ldam", action="store_true", default=False)
     parser.add_argument("--ldam-max-margin", type=float, default=0.5)
     parser.add_argument("--ldam-scale", type=float, default=30.0)
+    parser.add_argument(
+        "--ldam-class-count-source",
+        choices=("natural", "sampler_exposure"),
+        default="natural",
+        help=(
+            "Nguon class-count de tinh LDAM margin. natural giu hanh vi cu; "
+            "sampler_exposure dung exposure train thuc cua strict balanced sampler "
+            "de kiem dinh gia thuyet bu mat can bang hai lan."
+        ),
+    )
     parser.add_argument(
         "--classification-loss",
         choices=(
@@ -4904,6 +4923,10 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         raise ValueError("--balanced-epoch-multiplier phai > 0.")
     if not 0.0 <= args.balanced_epoch_tolerance <= 1.0:
         raise ValueError("--balanced-epoch-tolerance phai nam trong [0, 1].")
+    if args.pair01_geometry_stratified_sampling and args.disable_balanced_epoch_sampling:
+        raise ValueError(
+            "--pair01-geometry-stratified-sampling yeu cau strict balanced epoch sampling."
+        )
     if args.sam_rho < 0.0:
         raise ValueError("--sam-rho phai >= 0.")
     if args.ldam_max_margin < 0.0:
@@ -7058,6 +7081,9 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         balanced_epoch_sampling=not args.disable_balanced_epoch_sampling,
         balanced_epoch_multiplier=args.balanced_epoch_multiplier,
         balanced_epoch_tolerance=args.balanced_epoch_tolerance,
+        pair01_geometry_stratified_sampling=bool(
+            args.pair01_geometry_stratified_sampling
+        ),
         auto_tune_imbalance=bool(args.imbalance_auto_tune and not args.disable_imbalance_auto_tune),
         imbalance_sampler_disable_threshold=args.imbalance_sampler_disable_threshold,
         max_train_batches=args.max_train_batches,
@@ -7067,6 +7093,7 @@ def build_configs(args: argparse.Namespace) -> Tuple[ModelConfig, TrainConfig, A
         use_ldam=not args.disable_ldam,
         ldam_max_margin=args.ldam_max_margin,
         ldam_scale=args.ldam_scale,
+        ldam_class_count_source=args.ldam_class_count_source,
         classification_loss=args.classification_loss,
         balanced_softmax_tau=args.balanced_softmax_tau,
         gce_q=args.gce_q,
@@ -8312,12 +8339,52 @@ def build_weighted_sampler(
     batch_size: int,
     num_classes: int,
     epoch_multiplier: float = 2.0,
+    pair01_geometry_stratified_sampling: bool = False,
 ) -> StrictBalancedBatchSampler:
+    labels = [int(value) for value in dataset.labels()]
+    geometry_areas: Optional[List[float]] = None
+    geometry_pair: Optional[Tuple[int, int]] = None
+    if bool(pair01_geometry_stratified_sampling):
+        sample_bboxes_fn = getattr(dataset, "sample_bboxes", None)
+        sample_bboxes = list(sample_bboxes_fn()) if callable(sample_bboxes_fn) else []
+        if len(sample_bboxes) != len(labels):
+            raise ValueError(
+                "--pair01-geometry-stratified-sampling yeu cau dung mot bbox train-only "
+                "cho moi sample: "
+                f"bboxes={len(sample_bboxes)} labels={len(labels)}."
+            )
+        geometry_areas = []
+        invalid_indices: List[int] = []
+        for sample_index, bbox in enumerate(sample_bboxes):
+            if len(bbox) != 4:
+                invalid_indices.append(int(sample_index))
+                geometry_areas.append(float("nan"))
+                continue
+            values = [float(value) for value in bbox]
+            area = float(values[2] * values[3])
+            if (
+                any(not math.isfinite(value) for value in values)
+                or values[2] <= 0.0
+                or values[3] <= 0.0
+                or not math.isfinite(area)
+                or area <= 0.0
+            ):
+                invalid_indices.append(int(sample_index))
+            geometry_areas.append(area)
+        if invalid_indices:
+            raise ValueError(
+                "--pair01-geometry-stratified-sampling phat hien bbox train-only "
+                "thieu/khong hop le: "
+                f"count={len(invalid_indices)} preview={invalid_indices[:5]}."
+            )
+        geometry_pair = (0, 1)
     return StrictBalancedBatchSampler(
-        labels=dataset.labels(),
+        labels=labels,
         batch_size=batch_size,
         num_classes=num_classes,
         epoch_multiplier=epoch_multiplier,
+        geometry_areas=geometry_areas,
+        geometry_stratified_pair=geometry_pair,
     )
 
 
@@ -8386,6 +8453,9 @@ def resolve_imbalance_strategy(
         "sampler_type": "strict_balanced" if use_weighted_sampler else "random",
         "balanced_epoch_sampling": bool(train_config.balanced_epoch_sampling),
         "balanced_epoch_tolerance": float(train_config.balanced_epoch_tolerance),
+        "pair01_geometry_stratified_sampling": bool(
+            train_config.pair01_geometry_stratified_sampling
+        ),
         "weighted_sampler_power": sampler_power,
         "weighted_sampler_epoch_multiplier": sampler_epoch_multiplier,
         "use_class_weights": use_class_weights,
@@ -8395,6 +8465,73 @@ def resolve_imbalance_strategy(
         "focal_loss_gamma": focal_loss_gamma,
         "focal_loss_mix": focal_loss_mix,
         "ldam_max_margin": resolved_ldam_max_margin,
+    }
+
+
+def resolve_ldam_class_counts(
+    natural_class_counts: Sequence[int],
+    source: str = "natural",
+    sampler_exposure_summary: Optional[Dict[str, object]] = None,
+    max_margin: float = 0.0,
+) -> Tuple[List[int], Dict[str, object]]:
+    natural_counts = [max(1, int(value)) for value in natural_class_counts]
+    if not natural_counts:
+        raise ValueError("LDAM yeu cau natural class counts khong rong.")
+
+    normalized_source = str(source).strip().lower()
+    if normalized_source == "natural":
+        resolved_counts = natural_counts
+    elif normalized_source == "sampler_exposure":
+        summary = sampler_exposure_summary or {}
+        if not bool(summary.get("enabled", False)):
+            raise ValueError(
+                "--ldam-class-count-source sampler_exposure yeu cau strict balanced sampler."
+            )
+        exposure_counts = summary.get("class_exposure_counts")
+        if not isinstance(exposure_counts, (list, tuple)):
+            raise ValueError("Balanced sampler khong cung cap class_exposure_counts cho LDAM.")
+        if len(exposure_counts) != len(natural_counts):
+            raise ValueError(
+                "So class trong sampler exposure khong khop natural class counts: "
+                f"{len(exposure_counts)} != {len(natural_counts)}."
+            )
+        resolved_counts = [int(value) for value in exposure_counts]
+        if any(value <= 0 for value in resolved_counts):
+            raise ValueError("Sampler exposure counts cho LDAM phai > 0 o moi class.")
+    else:
+        raise ValueError(
+            "ldam_class_count_source chi nhan natural hoac sampler_exposure, "
+            f"got {source!r}."
+        )
+
+    def margin_vector(counts: Sequence[int], requested_max_margin: float) -> List[float]:
+        raw_margins = [1.0 / math.sqrt(math.sqrt(max(1, int(value)))) for value in counts]
+        raw_maximum = max(raw_margins)
+        scale = float(max(0.0, requested_max_margin)) / max(raw_maximum, 1e-12)
+        return [float(value * scale) for value in raw_margins]
+
+    requested_max_margin = float(max(0.0, max_margin))
+    natural_margins = margin_vector(natural_counts, requested_max_margin)
+    effective_max_margin = requested_max_margin
+    if normalized_source == "sampler_exposure" and requested_max_margin > 0.0:
+        unit_resolved_margins = margin_vector(resolved_counts, 1.0)
+        natural_mean_margin = sum(natural_margins) / len(natural_margins)
+        unit_resolved_mean = sum(unit_resolved_margins) / len(unit_resolved_margins)
+        effective_max_margin = natural_mean_margin / max(unit_resolved_mean, 1e-12)
+    resolved_margins = margin_vector(resolved_counts, effective_max_margin)
+
+    return resolved_counts, {
+        "source": normalized_source,
+        "natural_class_counts": natural_counts,
+        "resolved_class_counts": list(resolved_counts),
+        "sampler_aligned": normalized_source == "sampler_exposure",
+        "requested_max_margin": requested_max_margin,
+        "effective_max_margin": float(effective_max_margin),
+        "natural_margins": natural_margins,
+        "resolved_margins": resolved_margins,
+        "natural_mean_margin": float(sum(natural_margins) / len(natural_margins)),
+        "resolved_mean_margin": float(sum(resolved_margins) / len(resolved_margins)),
+        "mean_margin_preserved": normalized_source == "sampler_exposure",
     }
 
 
@@ -28608,6 +28745,19 @@ def main() -> None:
         class_name_mode=args.class_name_mode,
         expected_num_classes=args.expected_num_classes or None,
     )
+    if bool(train_config.pair01_geometry_stratified_sampling):
+        if detection_mode:
+            raise ValueError(
+                "--pair01-geometry-stratified-sampling chi ho tro classification training."
+            )
+        if not bool(train_config.balanced_epoch_sampling):
+            raise ValueError(
+                "--pair01-geometry-stratified-sampling yeu cau strict balanced epoch sampling."
+            )
+        if int(data_spec.num_classes) < 2:
+            raise ValueError(
+                "--pair01-geometry-stratified-sampling yeu cau dataset co class 0 va 1."
+            )
     if float(train_config.confusion_spectral_loss_weight) > 0.0:
         if detection_mode:
             raise ValueError("CAR/BiCAR chi ho tro classification-only training.")
@@ -29815,6 +29965,9 @@ def main() -> None:
             batch_size=train_config.batch_size,
             num_classes=data_spec.num_classes,
             epoch_multiplier=float(imbalance_summary["weighted_sampler_epoch_multiplier"]),
+            pair01_geometry_stratified_sampling=bool(
+                train_config.pair01_geometry_stratified_sampling
+            ),
         )
         if imbalance_summary["use_weighted_sampler"]
         else None
@@ -29824,6 +29977,7 @@ def main() -> None:
         balanced_exposure_summary = {
             "enabled": True,
             "source": "train_split_labels_only",
+            "scope": "planned_epoch_exposure",
             **train_sampler.exposure_summary(),
         }
         if (
@@ -29836,6 +29990,22 @@ def main() -> None:
                 f"tolerance={train_config.balanced_epoch_tolerance:.6f}"
             )
         print({"balanced_epoch_exposure": balanced_exposure_summary}, flush=True)
+    ldam_class_counts, ldam_class_count_summary = resolve_ldam_class_counts(
+        natural_class_counts=train_class_counts,
+        source=train_config.ldam_class_count_source,
+        sampler_exposure_summary=balanced_exposure_summary,
+        max_margin=float(imbalance_summary["ldam_max_margin"]),
+    )
+    imbalance_summary["ldam_class_count_source"] = ldam_class_count_summary["source"]
+    imbalance_summary["ldam_class_counts"] = list(ldam_class_counts)
+    imbalance_summary["ldam_sampler_aligned"] = bool(
+        ldam_class_count_summary["sampler_aligned"]
+    )
+    imbalance_summary["ldam_effective_max_margin"] = float(
+        ldam_class_count_summary["effective_max_margin"]
+    )
+    imbalance_summary["ldam_margins"] = list(ldam_class_count_summary["resolved_margins"])
+    print({"ldam_class_count_resolution": ldam_class_count_summary}, flush=True)
     dataloader_kwargs, train_dataloader_summary = build_safe_dataloader_kwargs(
         requested_num_workers=train_config.num_workers,
         requested_pin_memory=device.type == "cuda",
@@ -30322,19 +30492,27 @@ def main() -> None:
                 classification_loss_name == "ldam_gce" and train_config.use_ldam
             )
             criterion = GeneralizedCrossEntropyLoss(
-                class_counts=train_class_counts if use_gce_ldam else None,
+                class_counts=ldam_class_counts if use_gce_ldam else None,
                 weight=class_weights,
                 label_smoothing=train_config.label_smoothing,
                 q=float(train_config.gce_q),
-                max_margin=float(imbalance_summary["ldam_max_margin"]) if use_gce_ldam else 0.0,
+                max_margin=(
+                    float(imbalance_summary["ldam_effective_max_margin"])
+                    if use_gce_ldam
+                    else 0.0
+                ),
                 scale=train_config.ldam_scale if use_gce_ldam else 1.0,
             )
             eval_criterion = GeneralizedCrossEntropyLoss(
-                class_counts=train_class_counts if use_gce_ldam else None,
+                class_counts=ldam_class_counts if use_gce_ldam else None,
                 weight=class_weights,
                 label_smoothing=train_config.label_smoothing,
                 q=float(train_config.gce_q),
-                max_margin=float(imbalance_summary["ldam_max_margin"]) if use_gce_ldam else 0.0,
+                max_margin=(
+                    float(imbalance_summary["ldam_effective_max_margin"])
+                    if use_gce_ldam
+                    else 0.0
+                ),
                 scale=train_config.ldam_scale if use_gce_ldam else 1.0,
             )
         elif classification_loss_name == "ldr_kl":
@@ -30352,21 +30530,21 @@ def main() -> None:
             )
         else:
             criterion = LDAMFocalLoss(
-                class_counts=train_class_counts,
+                class_counts=ldam_class_counts,
                 weight=class_weights,
                 gamma=float(imbalance_summary["focal_loss_gamma"]),
                 focal_mix=float(imbalance_summary["focal_loss_mix"]),
                 label_smoothing=train_config.label_smoothing,
-                max_margin=float(imbalance_summary["ldam_max_margin"]),
+                max_margin=float(imbalance_summary["ldam_effective_max_margin"]),
                 scale=train_config.ldam_scale if train_config.use_ldam else 1.0,
             )
             eval_criterion = LDAMFocalLoss(
-                class_counts=train_class_counts,
+                class_counts=ldam_class_counts,
                 weight=class_weights,
                 gamma=float(imbalance_summary["focal_loss_gamma"]),
                 focal_mix=float(imbalance_summary["focal_loss_mix"]),
                 label_smoothing=train_config.label_smoothing,
-                max_margin=float(imbalance_summary["ldam_max_margin"]),
+                max_margin=float(imbalance_summary["ldam_effective_max_margin"]),
                 scale=train_config.ldam_scale if train_config.use_ldam else 1.0,
             )
         print(
@@ -30429,6 +30607,14 @@ def main() -> None:
                         else None
                     ),
                     "class_weights": bool(class_weights is not None),
+                    "ldam_class_count_source": str(
+                        imbalance_summary["ldam_class_count_source"]
+                    ),
+                    "ldam_class_counts": list(imbalance_summary["ldam_class_counts"]),
+                    "ldam_effective_max_margin": float(
+                        imbalance_summary["ldam_effective_max_margin"]
+                    ),
+                    "ldam_margins": list(imbalance_summary["ldam_margins"]),
                     "focal_loss_gamma": float(imbalance_summary["focal_loss_gamma"]),
                     "focal_loss_mix": float(imbalance_summary["focal_loss_mix"]),
                 }

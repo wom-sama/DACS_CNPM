@@ -8331,6 +8331,7 @@ class VisionTransformerWithRegisters(nn.Module):
         self,
         path: Path,
         *,
+        expected_base_checkpoint_sha256: Optional[str] = None,
         pair: str = "0-1",
         min_pair_probability: float = 0.02,
         max_pair_margin: float = 0.40,
@@ -8341,8 +8342,33 @@ class VisionTransformerWithRegisters(nn.Module):
         training_soft_logit_scale: float = 0.05,
         training_soft_gate_temperature: float = 0.05,
     ) -> Dict[str, object]:
+        export_path = Path(path)
+        expected_checkpoint_sha256 = str(
+            expected_base_checkpoint_sha256 or ""
+        ).strip().lower()
+        bound_checkpoint_sha256 = ""
+        if expected_checkpoint_sha256:
+            payload = json.loads(export_path.read_text(encoding="utf-8"))
+            metadata = payload.get("metadata")
+            if not isinstance(metadata, dict):
+                raise ValueError(
+                    "Patch-evidence verifier export is missing checkpoint-binding metadata."
+                )
+            bound_checkpoint_sha256 = str(
+                metadata.get("base_checkpoint_sha256") or ""
+            ).strip().lower()
+            if not bound_checkpoint_sha256:
+                raise ValueError(
+                    "Patch-evidence verifier export is missing base_checkpoint_sha256."
+                )
+            if bound_checkpoint_sha256 != expected_checkpoint_sha256:
+                raise ValueError(
+                    "Patch-evidence verifier checkpoint SHA-256 mismatch: "
+                    f"export={bound_checkpoint_sha256}, "
+                    f"checkpoint={expected_checkpoint_sha256}."
+                )
         verifier = PatchEvidenceLinearVerifier.from_export_path(
-            Path(path),
+            export_path,
             pair=pair,
             min_pair_probability=min_pair_probability,
             max_pair_margin=max_pair_margin,
@@ -8356,7 +8382,8 @@ class VisionTransformerWithRegisters(nn.Module):
         self.patch_evidence_linear_verifier = verifier
         return {
             "enabled": True,
-            "path": str(Path(path)),
+            "path": str(export_path),
+            "base_checkpoint_sha256": bound_checkpoint_sha256 or None,
             "pair": [int(verifier.pair[0]), int(verifier.pair[1])],
             "feature_dim": int(verifier.feature_dim),
             "top_k": int(verifier.top_k),
