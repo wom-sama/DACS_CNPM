@@ -3,6 +3,7 @@
   "status": "approved_ready",
   "created_at": "2026-08-10T00:00:00+07:00",
   "scope": "Pause local TRKH research and remove only reviewed disposable artifacts under D:/DataAI.",
+  "workspace_root": "D:/DataAI",
   "logical_bytes_planned": 37692506438,
   "logical_gib_planned": 35.10388213954866,
   "remote_proof": {
