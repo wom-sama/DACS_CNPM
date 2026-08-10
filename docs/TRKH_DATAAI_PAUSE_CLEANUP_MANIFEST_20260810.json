@@ -1,0 +1,212 @@
+{
+  "schema_version": 1,
+  "status": "approved_ready",
+  "created_at": "2026-08-10T00:00:00+07:00",
+  "scope": "Pause local TRKH research and remove only reviewed disposable artifacts under D:/DataAI.",
+  "logical_bytes_planned": 37692506438,
+  "logical_gib_planned": 35.10388213954866,
+  "remote_proof": {
+    "repository": "https://github.com/wom-sama/DACS_CNPM.git",
+    "classification_branch": {
+      "name": "classification-only-research",
+      "sha": "05854d04c2b12340bc303884d535934ef5e03f09",
+      "draft_pr": "https://github.com/wom-sama/DACS_CNPM/pull/1"
+    },
+    "pretrained_branch": {
+      "name": "research/pretrained-classf-b1",
+      "sha_before_cleanup_manifest": "890c88992242d93937d8e8fc1e53acfb16a46d9b",
+      "draft_pr": "https://github.com/wom-sama/DACS_CNPM/pull/2"
+    },
+    "quarantined_wip_branch": {
+      "name": "archive/no-pretrain-wip-20260810",
+      "sha": "590d380a98bdc25bef8dee0c303e6d80083cd646",
+      "merge_authorized": false
+    }
+  },
+  "protected_dataset_roots": [
+    "D:/DataAI/AIEx/newdataset",
+    "D:/DataAI/AIEx/dataset",
+    "D:/DataAI/AIEx/dataset.rar",
+    "D:/DataAI/AIEx/image_baseline_experiments/data",
+    "D:/DataAI/AIEx/image_baseline_experiments/build_tmp",
+    "D:/DataAI/Anh",
+    "D:/DataAI/AnhThieu",
+    "D:/DataAI/CoSo",
+    "D:/DataAI/Nhan",
+    "D:/DataAI/NhanZip",
+    "D:/DataAI/Original",
+    "D:/DataAI/Resize",
+    "D:/DataAI/Resize.rar",
+    "D:/DataAI/set2"
+  ],
+  "protected_research_assets": [
+    "D:/DataAI/AIEx/TRKH/.git",
+    "D:/DataAI/AIEx/TRKH_pretrained/.git",
+    "D:/DataAI/AIEx/TRKH/BaoCao",
+    "D:/DataAI/AIEx/TRKH/Cloud",
+    "D:/DataAI/AIEx/TRKH/kagle/TRKH_CLASSF_DEV_DATASET_20260731.zip",
+    "D:/DataAI/AIEx/TRKH/kagle/TRKH_KAGGLE_B2_T4_UPLOAD_BUNDLE_20260801_V4.zip",
+    "D:/DataAI/CAUTRUC",
+    "D:/DataAI/BaoCao",
+    "D:/DataAI/AIDT",
+    "D:/DataAI/AIEx/image_baseline_experiments/outputs",
+    "D:/DataAI/.venv",
+    "D:/DataAI/AIEx/TRKH_pretrained/runs/pretrained_assets"
+  ],
+  "compact_evidence_preserved": {
+    "candidate6_cleanroom": {
+      "status": "passed_local_cleanroom_not_kaggle_acceptance",
+      "verdict_md_sha256": "6df50c75908445d994bc4a3f7088ac854bd712de9e167c5488e5f341f028b0d9",
+      "compact_json_sha256": "547c17139e6a95f93a7710fbb7dbeccd2774370baa91e659d4b1147dafa7961f",
+      "bundle_sha256": "2063da3b2c730e3cb2227e48fd66e794f236ac2e958d8a7b06be2a46efd9e874",
+      "dataset_sha256": "c3695cf9dd44b559ce158b1ffee96533d4549c5724188f9df2f864b3d37dfadb",
+      "focused_tests": "48 passed",
+      "remaining_acceptance": "Run the unmodified notebook on Kaggle v170 NvidiaTeslaT4."
+    },
+    "candidate13225_cleanroom": {
+      "status": "rejected_pending_rebuild",
+      "verdict_md_sha256": "11e13c79fed42b19243c658a30be5ca14f814764cbd573ba4835097644648422",
+      "compact_json_sha256": "c807a1a104236f09bd0c2b28da4a8758b5751d1c84683d2a73e1c67c88fdbe7a",
+      "bundle_sha256": "13225db56860d5f57b4f4f5e8b5794ecfabe42b86df814ba885592ca823861aa",
+      "release_blockers": [
+        "child_processes_do_not_use_vendored_timm",
+        "smoke_accepts_zero_optimizer_updates"
+      ]
+    },
+    "b46_interruption": {
+      "status": "paused_unscored",
+      "progress": "direct endpoint epoch 9/9, batch 404/404",
+      "present_before_cleanup": [
+        "b46_control_ema.safetensors",
+        "b46_backbone_routed_pair_mean_ema.safetensors",
+        "progress.json"
+      ],
+      "absent_before_cleanup": [
+        "b46_pareto_margin.safetensors",
+        "held_condition_scores.npz",
+        "summary.json"
+      ],
+      "preflight_sha256": "80fd9071395cce798bd53c5fc8a04668cd5f3ee927a74eee3b454c34ef86d424",
+      "closure_commit": "890c88992242d93937d8e8fc1e53acfb16a46d9b"
+    }
+  },
+  "delete_groups": [
+    {
+      "reason": "Obsolete or superseded Kaggle cleanrooms; canonical dataset ZIP hardlink is retained.",
+      "entries": [
+        {"path": "D:/DataAI/_kaggle_cleanroom_20260731", "kind": "directory", "logical_bytes": 2053922426},
+        {"path": "D:/DataAI/_kaggle_cleanroom_candidate2_20260731", "kind": "directory", "logical_bytes": 977869182},
+        {"path": "D:/DataAI/_kaggle_cleanroom_candidate4_20260731", "kind": "directory", "logical_bytes": 2013899198},
+        {"path": "D:/DataAI/_kaggle_cleanroom_candidate5_20260731", "kind": "directory", "logical_bytes": 2544425875},
+        {"path": "D:/DataAI/_kaggle_cleanroom_candidate6_20260731", "kind": "directory", "logical_bytes": 2545515061},
+        {"path": "D:/DataAI/_kaggle_cleanroom_v2_20260731_2235", "kind": "directory", "logical_bytes": 2013703296},
+        {"path": "D:/DataAI/_kaggle_cleanroom_v2_final13225_20260731", "kind": "directory", "logical_bytes": 3265526739},
+        {"path": "D:/DataAI/AIEx/TRKH/runs/kaggle_v3_archive_mount_cleanroom_20260801", "kind": "directory", "logical_bytes": 2013950991},
+        {"path": "D:/DataAI/AIEx/TRKH/runs/kaggle_v3_expanded_mount_cleanroom_20260801", "kind": "directory", "logical_bytes": 111622964}
+      ]
+    },
+    {
+      "reason": "SaSPA was scientifically closed; these model caches and isolated environments are recreatable.",
+      "entries": [
+        {"path": "D:/DataAI/Tools/hf_cache/trkh_saspa_a0", "kind": "directory", "logical_bytes": 7688436558},
+        {"path": "D:/DataAI/Tools/hf_cache/trkh_saspa_dinov2", "kind": "directory", "logical_bytes": 88250943},
+        {"path": "D:/DataAI/Tools/venvs/trkh_saspa_a0_torch26", "kind": "directory", "logical_bytes": 5175436490},
+        {"path": "D:/DataAI/Tools/venvs/trkh_saspa_a0", "kind": "directory", "logical_bytes": 234598210}
+      ]
+    },
+    {
+      "reason": "Recreatable baseline caches/build source and obsolete standalone test environment; data and outputs are retained.",
+      "entries": [
+        {"path": "D:/DataAI/AIEx/image_baseline_experiments/.hf_cache", "kind": "directory", "logical_bytes": 1437960309},
+        {"path": "D:/DataAI/AIEx/image_baseline_experiments/.pip_cache", "kind": "directory", "logical_bytes": 384416057},
+        {"path": "D:/DataAI/AIEx/image_baseline_experiments/work", "kind": "directory", "logical_bytes": 168640966},
+        {"path": "D:/DataAI/AIEx/test/env", "kind": "directory", "logical_bytes": 2145702395}
+      ]
+    },
+    {
+      "reason": "Empty render scratch and interrupted WildCAT run with a completed counterpart.",
+      "entries": [
+        {"path": "D:/DataAI/doc_render_phieu_20260531", "kind": "directory", "logical_bytes": 0},
+        {"path": "D:/DataAI/AIEx/TRKH/runs/audit_wildcat_negative_evidence_a0_interrupted_xai_determinism_20260717", "kind": "directory", "logical_bytes": 38272137}
+      ]
+    },
+    {
+      "reason": "Stale pre-branch archive and explicitly closed incomplete B46 formal run.",
+      "entries": [
+        {"path": "D:/DataAI/AIEx/TRKH_pretrained.rar", "kind": "file", "logical_bytes": 1237326622, "sha256": "023a1f48e3adcfcc05a11870ac54289b0bba267446de1b1c43205b1d3c5bda7c"},
+        {"path": "D:/DataAI/AIEx/TRKH_pretrained/runs/b46_pareto_margin_fold0_d889e70_20260809", "kind": "directory", "logical_bytes": 174349253}
+      ]
+    },
+    {
+      "reason": "Rejected, superseded, repro, or older Kaggle bundles; canonical dataset and V4 upload bundle are retained.",
+      "entries": [
+        {"path": "D:/DataAI/AIEx/TRKH/kagle/archive", "kind": "directory", "logical_bytes": 1252819896},
+        {"path": "D:/DataAI/AIEx/TRKH/kagle/TRKH_KAGGLE_B2_T4_UPLOAD_BUNDLE_20260801.zip", "kind": "file", "logical_bytes": 86494944, "sha256": "d502efdefa03e76bcae5caff0567f372671a172d6ce350289d993a5e8f8bdb10"}
+      ]
+    },
+    {
+      "reason": "Mojibake auto-generated notes with unresolved internal citation tokens.",
+      "entries": [
+        {"path": "D:/DataAI/AIEx/TRKH/deep-research-report (9).md", "kind": "file", "logical_bytes": 35224, "sha256": "7e52cc8e2bed2e48dafc68b25dc2536318a895c866f4aa280c4fe2e817546f8a"},
+        {"path": "D:/DataAI/AIEx/TRKH/deep-research-report (10).md", "kind": "file", "logical_bytes": 22128, "sha256": "37f74b5e97b6160e657237844d66cedc13a98808b476b8328a58a52eb7c1522a"}
+      ]
+    },
+    {
+      "reason": "Unreviewed DDF/PSDF WIP is denied from the scientific branch and preserved byte-for-byte on the remote archive branch.",
+      "remote_archive_sha": "590d380a98bdc25bef8dee0c303e6d80083cd646",
+      "entries": [
+        {"path": "D:/DataAI/AIEx/TRKH/scripts/build_trkh_pair_surface_ddf_v2_machine_lock.py", "kind": "file", "logical_bytes": 668, "sha256": "81a176ea8999e70a7980433dca2ef0f09232549faf9d3dfcfe175894c524c46f"},
+        {"path": "D:/DataAI/AIEx/TRKH/scripts/issue_trkh_pair_surface_ddf_v2_single_authorization.py", "kind": "file", "logical_bytes": 689, "sha256": "3693b5343f92014ae2792730041bc8220735a5395e0621866dba5756de14b495"},
+        {"path": "D:/DataAI/AIEx/TRKH/scripts/run_trkh_pair_surface_ddf_v2_execution.py", "kind": "file", "logical_bytes": 16989, "sha256": "f53b92df488d9cab91e4b0e24934c26220fd41bdbbc6ed10c92e579948243282"},
+        {"path": "D:/DataAI/AIEx/TRKH/tests/TRKH_PAIR_SURFACE_DDF_V2_RUNTIME_TEST_MANIFEST_20260729.json", "kind": "file", "logical_bytes": 1027, "sha256": "f36f95e2654a8bf8708f418716a99b6156947864632427176a00baa2d9e4c6af"},
+        {"path": "D:/DataAI/AIEx/TRKH/tests/TRKH_PAIR_SURFACE_DDF_V2_RUNTIME_TEST_MANIFEST_20260729.sha256", "kind": "file", "logical_bytes": 127, "sha256": "2fac2f70d41948217327fa3961f3128292d06a424dc8dc8e5a431f02a2e2c527"},
+        {"path": "D:/DataAI/AIEx/TRKH/tests/TRKH_PAIR_SURFACE_DDF_V2_TEST_AUTHORITY_20260729.json", "kind": "file", "logical_bytes": 5425, "sha256": "f9911191a909305030c79a2ee6f54e177982e0bcd0b1bd5f3b3e3ac4f1cb9aa3"},
+        {"path": "D:/DataAI/AIEx/TRKH/tests/test_pair_surface_ddf_v2_execution_launcher.py", "kind": "file", "logical_bytes": 3700, "sha256": "d12650484749000084e93736c0e2aa88b96f4e18b39870732f3f07de9bda94cf"},
+        {"path": "D:/DataAI/AIEx/TRKH/tests/test_pair_surface_ddf_v2_prelock_validator.py", "kind": "file", "logical_bytes": 53103, "sha256": "0e99c5932d9694c283ec2ea91c781d710f46933ef838ba79359a833e1f3ba341"},
+        {"path": "D:/DataAI/AIEx/TRKH/trkh/tools/pair_surface_ddf_v2_prelock_validator.py", "kind": "file", "logical_bytes": 100712, "sha256": "826a668ce7e77149f5893e9459149f0972cdceea173758d67747cdde5d4eb5d7"},
+        {"path": "D:/DataAI/AIEx/TRKH/trkh/tools/pair_surface_psdf_ig1_runner.py", "kind": "file", "logical_bytes": 75319, "sha256": "8553812d4c3e7a64dda2b7d08118e67d905d675316cc4471d68de004eb2287a3"},
+        {"path": "D:/DataAI/AIEx/TRKH/trkh/tools/pair_surface_psdf_ig1_scientific.py", "kind": "file", "logical_bytes": 40221, "sha256": "82f3465a602151fd1cde4464a812a9e68f14885b0bceb08f43b19ae9c589bd6f"}
+      ]
+    }
+  ],
+  "cache_directories": {
+    "logical_bytes": 39010594,
+    "paths": [
+      "D:/DataAI/.pytest_cache",
+      "D:/DataAI/AIEx/TRKH/.pytest_cache",
+      "D:/DataAI/AIEx/TRKH/__pycache__",
+      "D:/DataAI/AIEx/TRKH/kagle/scripts/__pycache__",
+      "D:/DataAI/AIEx/TRKH/scripts/__pycache__",
+      "D:/DataAI/AIEx/TRKH/tests/__pycache__",
+      "D:/DataAI/AIEx/TRKH/trkh/__pycache__",
+      "D:/DataAI/AIEx/TRKH/trkh/core/__pycache__",
+      "D:/DataAI/AIEx/TRKH/trkh/data/__pycache__",
+      "D:/DataAI/AIEx/TRKH/trkh/evaluation/__pycache__",
+      "D:/DataAI/AIEx/TRKH/trkh/inference/__pycache__",
+      "D:/DataAI/AIEx/TRKH/trkh/models/__pycache__",
+      "D:/DataAI/AIEx/TRKH/trkh/tools/__pycache__",
+      "D:/DataAI/AIEx/TRKH/trkh/training/__pycache__",
+      "D:/DataAI/AIEx/TRKH_pretrained/.pytest_cache",
+      "D:/DataAI/AIEx/TRKH_pretrained/runs/cleanup_pretrained_tier_c_20260805/preserved_evidence/tests/__pycache__",
+      "D:/DataAI/AIEx/TRKH_pretrained/scripts/__pycache__",
+      "D:/DataAI/AIEx/TRKH_pretrained/tests/__pycache__",
+      "D:/DataAI/AIEx/TRKH_pretrained/trkh/__pycache__",
+      "D:/DataAI/AIEx/TRKH_pretrained/trkh/core/__pycache__",
+      "D:/DataAI/AIEx/TRKH_pretrained/trkh/data/__pycache__",
+      "D:/DataAI/AIEx/TRKH_pretrained/trkh/evaluation/__pycache__",
+      "D:/DataAI/AIEx/TRKH_pretrained/trkh/inference/__pycache__",
+      "D:/DataAI/AIEx/TRKH_pretrained/trkh/models/__pycache__",
+      "D:/DataAI/AIEx/TRKH_pretrained/trkh/recipes/__pycache__",
+      "D:/DataAI/AIEx/TRKH_pretrained/trkh/tools/__pycache__",
+      "D:/DataAI/AIEx/TRKH_pretrained/trkh/training/__pycache__"
+    ]
+  },
+  "execution_guards": [
+    "Every target must resolve under D:/DataAI.",
+    "Every target must exactly match this manifest; no wildcard deletion is authorized.",
+    "No target may equal or descend from a protected dataset root.",
+    "Remote branch SHAs must match before deleting quarantined WIP or stale source archives.",
+    "Deletion uses PowerShell Remove-Item with LiteralPath only."
+  ],
+  "execution_result": null
+}
