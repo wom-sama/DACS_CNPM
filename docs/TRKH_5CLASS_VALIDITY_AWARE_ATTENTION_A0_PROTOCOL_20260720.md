@@ -1,0 +1,305 @@
+# TRKH 5-Class Validity-Aware Attention A0 Protocol
+
+Date: 2026-07-20
+
+Status: prospectively locked before auditor implementation or candidate-output
+inspection. The descriptive padding census was allowed before this lock because
+it used labels and image geometry only, never candidate logits or predictions.
+
+## Question
+
+Can the existing `image_valid_mask` improve class-1 precision when it is used as
+a true Transformer key-padding mask, instead of being consumed only by token
+prior/pruning and auxiliary heads after the Transformer, while retaining valid
+wide context and class-1 recall?
+
+This is a frozen-checkpoint, train-only causal intervention. It is not a model
+promotion, validation result, training result, or permission to use test data.
+
+## Architectural Gap
+
+The immutable keeper uses a three-block CNN stem, a `16 x 16` patch grid, eight
+standard self-attention blocks, and token pruning after blocks 2 and 5. The
+dataset already emits an exact valid-pixel mask for square padding. Current code
+uses that mask to scale the handcrafted foreground prior and constructs
+`memory_key_padding_mask` only after all Transformer blocks have completed.
+`MultiHeadSelfAttention.forward` has no key-padding argument.
+
+Consequently, fully synthetic padding patches remain keys and values in the
+first attention blocks and can remain in later blocks until pruning. This route
+changes only that omission. It retains every real crop/context pixel and does
+not alter raw data, labels, bbox supervision, loss, threshold, or checkpoint.
+
+The pre-lock geometry census over all 9,215 train rows found:
+
+- `9,204/9,215` rows contain square padding;
+- mean fully invalid patch count is `60.2374/256`;
+- median fully invalid patch count is `64/256`;
+- class-wise mean counts are `[67.9155, 65.2717, 60.4417, 54.4698, 58.7178]`.
+
+These values justify an information audit but are not evidence of benefit.
+
+## Primary Sources And Frozen Provenance
+
+### Native-resolution vision
+
+Dehghani et al., *Patch n' Pack: NaViT, a Vision Transformer for any Aspect
+Ratio and Resolution*, arXiv:2307.06304, use variable-length visual token
+sequences and sequence packing rather than forcing every image through one
+fixed resized/cropped representation. This supports treating synthetic spatial
+support separately from real image content; it does not establish a TRKH gain.
+
+- Primary paper: `https://arxiv.org/abs/2307.06304`
+- Local frozen PDF:
+  `D:\DataAI\external_sources\papers\navit_patch_n_pack_arxiv2307.06304.pdf`
+- SHA-256:
+  `d4421cab93fe27a49c64120faa46822dc95a563ed70f5495b25112b35619a396`
+
+### Key-padding semantics
+
+PyTorch `MultiheadAttention` defines a Boolean `key_padding_mask` of shape
+`[N,S]`; `True` keys are ignored by attention. The A0 equation below implements
+that exact semantic in the keeper's custom QKV module. It does not import or
+copy PyTorch implementation code.
+
+- Official source tag: `pytorch/pytorch v2.6.0`, matching installed
+  `torch==2.6.0+cu124`.
+- Frozen source:
+  `D:\DataAI\external_sources\official\pytorch_v2.6.0_activation.py`
+- Source SHA-256:
+  `ed64d867e31ff52535003579077e9a14bcfadf225e6443f50e4891cb7bff4d67`
+- Frozen BSD license:
+  `D:\DataAI\external_sources\official\pytorch_v2.6.0_LICENSE`
+- License SHA-256:
+  `47a26beb94e3f6b333a3677fc85d546f1fdfd2f0b3686c26d2fb5b10e0134165`
+- Official documentation:
+  `https://docs.pytorch.org/docs/2.6/generated/torch.nn.MultiheadAttention.html`
+
+No pretrained weight or external source file enters TRKH runtime code.
+
+## Immutable TRKH Inputs
+
+- Dataset: `D:\DataAI\AIEx\newdataset\yolo_f\data.yaml`
+  - SHA-256: `716e33df24c63a9e9920f97b685199707fb84ab4c7154544f5dd9a3e00d884ef`
+- Split: train only, exactly `9,215` object rows.
+- Class counts: `[1941, 541, 1920, 2520, 2293]`.
+- Keeper:
+  `runs\probe_v8_yolof_pairroute_teacherfocusbinary015_boundarydrop_bboxprior_120b_2e_20260701\checkpoints\best.pt`
+  - SHA-256: `1f49d577240c69dc63c30af70db52ec2aa9da65a17aef1c4b1c09ece6c482677`
+- Immutable keeper probabilities, source identities, and five source-disjoint
+  folds: `runs\audit_cidt_readiness_full_train_20260714`
+  - summary SHA-256:
+    `d4891edf2963ab12385b7ce5bdc812ec3e19c5c098acd25c66eb557af541d7ad`
+  - predictions SHA-256:
+    `2e0993752d58d99ea429bfefe1e2bfe6fa949e45aea1a26cc4bdfee97d4db21c`
+  - fold counts: `[1843, 1830, 1828, 1851, 1863]`
+  - source overlap: zero.
+- Current-best command SHA-256:
+  `36b9aa1a21b765829acf4c8321be147bd76297de4ccdb8a40e6dee8e37940faf`
+- Command-history SHA-256:
+  `39bd2879ce66fddf36a953021ea1e40f8d9de6cb4334b9b825011b2b8dc98f53`
+
+Validation/test paths, pixels, labels, predictions, and metrics are forbidden.
+Raw dataset path/size/mtime identity must be unchanged before and after A0.
+
+## Fixed Roles
+
+Three prediction roles are compared under identical keeper weights, evaluation
+transform, batch order, bbox metadata, token pruning, and classifier logic:
+
+1. **Keeper control**: immutable CIDT probabilities generated by the unmodified
+   keeper under each condition.
+2. **Real-mask candidate**: the exact per-row padding mask is applied to keys in
+   every standard self-attention block.
+3. **Same-class source-deranged placebo**: each row receives a padding mask from
+   a different source in the same target class and immutable source fold.
+
+The placebo permutation uses seed `20260720`, is fixed once, and must be a true
+different-source derangement within every `(fold,target)` partition. It
+preserves class/fold mask distributions while breaking spatial alignment.
+
+No all-valid, rotated, reflected, soft, bbox, foreground, threshold, or
+layer-subset candidate is evaluated. An all-valid mask is used only for a
+small numerical-equivalence unit/preflight check and never for metric selection.
+
+## Fixed Patch Mask
+
+For input valid mask `M` with shape `[B,1,256,256]`, compute:
+
+```text
+V = adaptive_avg_pool2d(float(M), output_size=(16,16))
+K_patch = flatten(V) <= 0.05
+```
+
+This exactly matches the keeper's existing post-Transformer mask builder.
+`K_patch=True` means a fully invalid padding key. If every patch is masked, set
+the entire row false as the existing safety fallback. That fallback must occur
+zero times in the formal dataset.
+
+At each block, gather `K_patch` with the block's current `patch_indices` after
+token pruning. Prefix tokens, including class, register, branch, and any deep
+prompt tokens, are always unmasked. The full key mask is therefore:
+
+```text
+K = concat(zeros([B,prefix_count]), gather(K_patch, patch_indices))
+```
+
+## Fixed Attention Equation
+
+Only the keeper's standard `MultiHeadSelfAttention` path is permitted. Every
+block must use that class and have relative-position attention disabled.
+
+For each head:
+
+```text
+L = (Q @ transpose(K_weight)) / sqrt(head_dim)
+L[b,h,q,k] = finfo(L.dtype).min  when K[b,k] is True
+A = softmax(L, dim=-1)
+Y = projection(A @ V_weight)
+```
+
+The existing QKV/projection weights, dropout modules, residual paths, MLPs,
+prefix logic, and pruning schedule are unchanged. Models remain in evaluation
+mode. Invalid query outputs are not zeroed; excluding invalid keys/values is the
+one locked PyTorch-compatible intervention.
+
+The auditor may monkey-patch module methods only inside a scoped context manager
+and must restore every original method after each role. Model state tensors must
+hash identically before and after inference.
+
+## Conditions And Runtime
+
+- Seed: `20260720`; deterministic algorithms where supported.
+- Device: CUDA; FP32 model inputs and the checkpoint's normal inference path.
+- Batch size: `64`.
+- Requested/effective data workers: `4`, recorded explicitly.
+- Torch CPU threads: `8`.
+- Conditions, with no refitting or parameter change:
+  - `clean=(brightness 1.00, contrast 1.00)`;
+  - `lighting_dim=(0.70,0.90)`;
+  - `lighting_bright=(1.25,1.10)`;
+  - `low_contrast=(1.00,0.65)`.
+
+Only candidate and placebo are newly inferred. Keeper-control probabilities are
+read from immutable CIDT. A fixed clean preflight batch must prove raw keeper
+replay versus CIDT within `2e-6` probability and all-valid patched attention
+versus raw keeper within `2e-6` logits/probability.
+
+## Required Metrics And Mechanism Audits
+
+For all three roles and four conditions report:
+
+- accuracy, macro F1, per-class precision/recall/F1/support;
+- NLL, Brier, ECE, predicted support, and full confusion matrix;
+- corrections, harms, class-1 FN rescues, class-1 TP breaks;
+- restricted `0/2/4 -> 1` FP removals and creations;
+- clean metrics separately for all five immutable folds.
+
+For real-mask and placebo versus keeper report `delta_p1` distributions on:
+
+- true class-1 keeper TP;
+- true class-1 keeper FN;
+- restricted keeper FP into class 1;
+- remaining restricted negatives.
+
+Direction AUROC labels every true class-1 row positive and every restricted
+keeper FP negative, with candidate-minus-keeper `delta_p1` as the score. Higher
+AUC therefore means true class 1 is retained/raised relative to false-positive
+class-1 support.
+
+For every candidate block report:
+
+- mean/median/quantiles of available invalid patch keys;
+- class-query attention mass on invalid keys before and after masking;
+- invalid keys retained before each pruning point;
+- maximum post-mask invalid attention mass.
+
+Render one immutable clean XAI/mechanism sheet for sample indices
+`[1,2,3,46,0]`, the first train row of classes `0..4`. Each row contains the
+de-normalized input, valid-mask overlay, block-1 pre-mask class attention,
+post-mask class attention, and absolute change. This sheet cannot alter gates.
+
+Persist FP32 probabilities, masks/derangement, per-row transitions, layer
+telemetry, summary, and enough equations to replay all metrics and gates without
+model inference.
+
+## Automatic Pass Gate
+
+Every structural and metric check is conjunctive.
+
+### Structural and fidelity
+
+- every frozen hash is exact and external source/license files exist;
+- exactly 9,215 ordered rows and locked class/fold counts occur per condition;
+- every placebo row keeps target/fold, changes source, and all partitions are
+  true derangements;
+- patch masks are finite/Boolean, geometry census matches the pre-lock counts
+  within exact integer equality, and no all-masked fallback occurs;
+- all eight attentions are standard MHSA with relative-position mixing off;
+- control replay and all-valid equivalence each have max difference `<=2e-6`;
+- candidate and keeper are not numerically identical;
+- maximum post-mask invalid attention mass is `<=1e-7`;
+- model-state and raw-dataset identities are unchanged;
+- validation/test use and model/checkpoint writes are false;
+- persisted replay reconstructs probabilities within `1e-7`, and metrics,
+  transitions, AUROCs, telemetry aggregates, and gates within `1e-12`.
+
+### Clean real-mask candidate versus keeper
+
+- macro F1 delta `>=-0.002`;
+- class-1 F1 delta `>=+0.005`;
+- class-1 precision delta `>=+0.010`;
+- class-1 recall delta `>=-0.010`;
+- at least ten net restricted-FP removals;
+- corrections are not fewer than harms;
+- class-1 TP breaks are no more than class-1 FN rescues plus three and no more
+  than five in absolute count;
+- class-1 precision is non-worse in at least four folds;
+- class-1 F1 is non-worse in at least three folds;
+- worst-fold class-1 F1 delta `>=-0.010`;
+- real-mask direction AUROC `>=0.60`.
+
+### Alignment specificity
+
+- candidate exceeds same-class source-placebo by macro F1 `>=0.002`, class-1
+  F1 `>=0.005`, and class-1 precision `>=0.008`;
+- candidate direction AUROC exceeds placebo by `>=0.03`;
+- candidate has at least five more net restricted-FP removals than placebo;
+- candidate does not break more class-1 TP than placebo.
+
+### Lighting robustness
+
+- candidate-minus-keeper class-1 precision is nonnegative in all three shifted
+  conditions and at least `+0.005` in two;
+- worst shifted class-1 F1 delta `>=-0.010`;
+- worst shifted class-1 recall delta `>=-0.020`;
+- no shifted macro F1 delta is below `-0.005`;
+- aggregate shifted net restricted-FP removal is at least `15`;
+- candidate shifted TP breaks do not exceed FN rescues in aggregate.
+
+## Decision Rule
+
+- If any automatic gate fails, set status
+  `rejected_before_model_integration`. Do not use validation/test, integrate the
+  flag into model/trainer, run smoke/probe/full train, or update current-best
+  commands. Attention-only masking is closed; partial-convolution/stem masking
+  is not automatically closed because it is a distinct mechanism and would
+  require a new protocol.
+- If every gate passes, manually review the fixed mechanism sheet. A coherent
+  review authorizes one default-off model/trainer integration and one matched
+  train-only smoke/probe. It does not authorize full train by itself.
+- A later high-potential candidate may receive one autonomous full train only
+  after smoke/probe, full validation, robustness, and XAI gates pass. Use at
+  most 30 epochs, patience 3, and measured train/eval workers `4/2` unless a
+  fresh benchmark proves another setting faster and stable.
+- Current-best commands/history change only after a locked validation winner.
+
+## No-Nearby-Sweep Rule
+
+A failure closes this exact `0.05` validity threshold, all-eight-block key-only
+mask, same-class/fold source placebo, condition set, fold assignment, seed, and
+keeper. Do not sweep thresholds, soft masks, query masks, layer subsets,
+padding fills, class-specific masks, mask dilations, temperatures, routing
+rules, post-hoc blends, folds, or seeds. A future attention-mask route requires
+an independently sourced mechanism or new evidence, not a nearby parameter
+search.

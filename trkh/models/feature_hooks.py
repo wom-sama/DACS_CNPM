@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import torch
@@ -87,21 +87,54 @@ def resolve_attention_index(model: nn.Module, layer_index: int) -> Optional[int]
     return resolved
 
 
-def resolve_feature_hook(model: nn.Module) -> FeatureHookSpec:
-    if hasattr(model, "patch_embed") and hasattr(model.patch_embed, "proj"):
-        return FeatureHookSpec(module=model.patch_embed.proj, source="patch_embed.proj")
+def _last_conv_in_module(module: nn.Module) -> Tuple[Optional[nn.Module], Optional[str]]:
+    last_conv = None
+    last_name = None
+    for name, child in module.named_modules():
+        if isinstance(child, nn.Conv2d):
+            last_conv = child
+            last_name = name
+    return last_conv, last_name
+
+
+def resolve_feature_hook(model: nn.Module, feature_source: str = "auto") -> FeatureHookSpec:
+    feature_source = str(feature_source or "auto").strip().lower()
+    backbone = getattr(model, "frame_model", model)
+    if feature_source not in {
+        "auto",
+        "patch_embed",
+        "patch_embed.proj",
+        "stem_output",
+        "stem_last",
+        "last_conv",
+    }:
+        raise ValueError(
+            "feature_source chi ho tro auto, patch_embed, stem_output, stem_last, last_conv."
+        )
+
+    if feature_source in {"auto", "patch_embed", "patch_embed.proj"}:
+        if hasattr(backbone, "patch_embed") and hasattr(backbone.patch_embed, "proj"):
+            return FeatureHookSpec(module=backbone.patch_embed.proj, source="patch_embed.proj")
+        if feature_source in {"patch_embed", "patch_embed.proj"}:
+            raise TypeError("Khong tim thay patch_embed.proj de hook Grad-CAM.")
+
+    if feature_source in {"stem_output", "stem_last"}:
+        stem = getattr(backbone, "stem", None)
+        if stem is None:
+            raise TypeError(f"Model khong co CNN stem de hook {feature_source}.")
+        if feature_source == "stem_output":
+            return FeatureHookSpec(module=stem, source="stem.output")
+        stem_conv, stem_name = _last_conv_in_module(stem)
+        if stem_conv is None or stem_name is None:
+            raise TypeError("Khong tim thay Conv2d trong CNN stem.")
+        return FeatureHookSpec(module=stem_conv, source=f"stem.{stem_name}")
 
     if hasattr(model, "layer4"):
         layer4 = model.layer4
         if len(layer4) > 0 and hasattr(layer4[-1], "conv3"):
             return FeatureHookSpec(module=layer4[-1].conv3, source="layer4[-1].conv3")
 
-    last_conv = None
-    last_name = None
-    for name, module in model.named_modules():
-        if isinstance(module, nn.Conv2d):
-            last_conv = module
-            last_name = name
+    last_conv, last_name = _last_conv_in_module(backbone)
     if last_conv is None or last_name is None:
         raise TypeError("Khong tim thay Conv2d phu hop de trich xuat feature map.")
     return FeatureHookSpec(module=last_conv, source=last_name)
@@ -155,18 +188,32 @@ def _normalize_heatmap(heatmap: Tensor) -> np.ndarray:
     return heatmap.detach().cpu().numpy()
 
 
+def _resolve_query_indices(query_tokens: str, prefix_tokens: int) -> list[int]:
+    query_tokens = str(query_tokens or "cls").strip().lower()
+    if query_tokens == "cls":
+        return [0]
+    if query_tokens in {"register", "registers"}:
+        return list(range(1, max(1, int(prefix_tokens)))) or [0]
+    if query_tokens in {"cls_register_mean", "cls_registers", "head"}:
+        return list(range(0, max(1, int(prefix_tokens))))
+    raise ValueError("query_tokens chi ho tro cls, registers, hoac cls_register_mean.")
+
+
 def build_attention_heatmap(
     attention: Tensor,
     grid_size: Tuple[int, int],
     prefix_tokens: int,
     reduction: str,
     output_size: Tuple[int, int],
+    query_tokens: str = "cls",
 ) -> np.ndarray:
-    cls_to_patch = attention[:, 0, prefix_tokens:]
+    query_indices = _resolve_query_indices(query_tokens, prefix_tokens)
+
+    query_to_patch = attention[:, query_indices, prefix_tokens:]
     if reduction == "max":
-        patch_attention = cls_to_patch.max(dim=0).values
+        patch_attention = query_to_patch.flatten(0, 1).max(dim=0).values
     else:
-        patch_attention = cls_to_patch.mean(dim=0)
+        patch_attention = query_to_patch.mean(dim=(0, 1))
 
     heatmap = patch_attention.reshape(grid_size[0], grid_size[1]).unsqueeze(0).unsqueeze(0)
     heatmap = F.interpolate(
@@ -176,6 +223,197 @@ def build_attention_heatmap(
         align_corners=False,
     )[0, 0]
     return _normalize_heatmap(heatmap)
+
+
+def build_attention_rollout_heatmap(
+    attentions: Union[Dict[int, Tensor], Sequence[Tensor]],
+    grid_size: Tuple[int, int],
+    prefix_tokens: int,
+    output_size: Tuple[int, int],
+    query_tokens: str = "cls_register_mean",
+    start_layer: int = 0,
+) -> np.ndarray:
+    if isinstance(attentions, dict):
+        ordered = [attentions[index] for index in sorted(attentions)]
+    else:
+        ordered = list(attentions)
+    if not ordered:
+        raise ValueError("Attention rollout yeu cau it nhat mot attention map.")
+
+    start_layer = max(0, int(start_layer))
+    selected = ordered[start_layer:] or ordered
+    device = selected[0].device
+    num_tokens = int(selected[0].shape[-1])
+    rollout = torch.eye(num_tokens, device=device, dtype=selected[0].dtype)
+    for attention in selected:
+        if attention.ndim == 4:
+            attention = attention[0]
+        if attention.ndim != 3:
+            raise ValueError("Attention map phai co shape [heads, tokens, tokens] hoac [B, heads, tokens, tokens].")
+        fused = attention.mean(dim=0)
+        fused = fused + torch.eye(num_tokens, device=fused.device, dtype=fused.dtype)
+        fused = fused / fused.sum(dim=-1, keepdim=True).clamp(min=1e-8)
+        rollout = fused @ rollout
+
+    query_indices = _resolve_query_indices(query_tokens, prefix_tokens)
+
+    patch_relevance = rollout[query_indices, prefix_tokens:].mean(dim=0)
+    heatmap = patch_relevance.reshape(grid_size[0], grid_size[1]).unsqueeze(0).unsqueeze(0)
+    heatmap = F.interpolate(
+        heatmap,
+        size=(output_size[1], output_size[0]),
+        mode="bicubic",
+        align_corners=False,
+    )[0, 0]
+    return _normalize_heatmap(heatmap)
+
+
+def build_gradient_weighted_attention_rollout_heatmap(
+    attentions: Union[Dict[int, Tensor], Sequence[Tensor]],
+    grid_size: Tuple[int, int],
+    prefix_tokens: int,
+    output_size: Tuple[int, int],
+    query_tokens: str = "cls_register_mean",
+    start_layer: int = 0,
+    return_metadata: bool = False,
+) -> Union[np.ndarray, Tuple[np.ndarray, Dict[str, object]]]:
+    if isinstance(attentions, dict):
+        ordered = [attentions[index] for index in sorted(attentions)]
+    else:
+        ordered = list(attentions)
+    if not ordered:
+        raise ValueError("Gradient-weighted rollout yeu cau it nhat mot attention map.")
+
+    start_layer = max(0, int(start_layer))
+    selected = ordered[start_layer:] or ordered
+    device = selected[0].device
+    num_tokens = int(selected[0].shape[-1])
+    rollout = torch.eye(num_tokens, device=device, dtype=selected[0].dtype)
+    gradient_layer_count = 0
+    missing_gradient_layer_count = 0
+    zero_weight_fallback_layer_count = 0
+    for attention in selected:
+        if attention.ndim == 4:
+            attention_for_grad = attention[0]
+        elif attention.ndim == 3:
+            attention_for_grad = attention
+        else:
+            raise ValueError("Attention map phai co shape [heads,tokens,tokens] hoac [B,heads,tokens,tokens].")
+
+        gradient = attention.grad
+        if gradient is not None and gradient.ndim == 4:
+            gradient = gradient[0]
+        if gradient is None:
+            weighted = attention_for_grad
+            missing_gradient_layer_count += 1
+        else:
+            weighted = torch.relu(gradient) * attention_for_grad
+            if float(weighted.detach().sum().abs().item()) <= 1e-12:
+                weighted = attention_for_grad
+                zero_weight_fallback_layer_count += 1
+            else:
+                gradient_layer_count += 1
+
+        fused = weighted.mean(dim=0).clamp(min=0)
+        fused = fused + torch.eye(num_tokens, device=fused.device, dtype=fused.dtype)
+        fused = fused / fused.sum(dim=-1, keepdim=True).clamp(min=1e-8)
+        rollout = fused @ rollout
+
+    query_indices = _resolve_query_indices(query_tokens, prefix_tokens)
+    patch_relevance = rollout[query_indices, prefix_tokens:].mean(dim=0)
+    heatmap = patch_relevance.reshape(grid_size[0], grid_size[1]).unsqueeze(0).unsqueeze(0)
+    heatmap = F.interpolate(
+        heatmap,
+        size=(output_size[1], output_size[0]),
+        mode="bicubic",
+        align_corners=False,
+    )[0, 0]
+    normalized = _normalize_heatmap(heatmap)
+    if not return_metadata:
+        return normalized
+    fallback_layer_count = (
+        int(missing_gradient_layer_count) + int(zero_weight_fallback_layer_count)
+    )
+    metadata: Dict[str, object] = {
+        "selected_layer_count": int(len(selected)),
+        "gradient_layer_count": int(gradient_layer_count),
+        "fallback_layer_count": fallback_layer_count,
+        "missing_gradient_layer_count": int(missing_gradient_layer_count),
+        "zero_weight_fallback_layer_count": int(zero_weight_fallback_layer_count),
+        "all_layers_gradient_weighted": fallback_layer_count == 0,
+        "fallback_behavior": (
+            "unweighted_attention_rollout_for_missing_or_nonpositive_gradient_layers"
+        ),
+    }
+    return normalized, metadata
+
+
+def _entropy_1d(values: Tensor) -> float:
+    values = values.detach().float().clamp(min=0)
+    total = values.sum().clamp(min=1e-12)
+    probabilities = values / total
+    entropy = -(probabilities * torch.log(probabilities.clamp(min=1e-12))).sum()
+    return float((entropy / torch.log(torch.tensor(float(max(2, values.numel()))))).item())
+
+
+def summarize_register_attention(
+    attentions: Union[Dict[int, Tensor], Sequence[Tensor]],
+    prefix_tokens: int,
+    register_prefix_tokens: Optional[int] = None,
+) -> Dict[str, float]:
+    if isinstance(attentions, dict):
+        ordered = [attentions[index] for index in sorted(attentions)]
+    else:
+        ordered = list(attentions)
+    if not ordered:
+        return {}
+    attention = ordered[-1]
+    if attention.ndim == 4:
+        attention = attention[0]
+    if attention.ndim != 3:
+        return {}
+
+    prefix_tokens = int(prefix_tokens)
+    register_prefix_tokens = int(register_prefix_tokens or prefix_tokens)
+    register_prefix_tokens = max(1, min(register_prefix_tokens, prefix_tokens))
+    patch_attention = attention[:, :, prefix_tokens:]
+    if patch_attention.numel() == 0:
+        return {}
+
+    cls_patch = patch_attention[:, 0, :].mean(dim=0)
+    result: Dict[str, float] = {
+        "cls_to_patch_attention_mean": float(cls_patch.mean().item()),
+        "cls_attention_entropy": _entropy_1d(cls_patch),
+    }
+    if register_prefix_tokens > 1:
+        register_patch = patch_attention[:, 1:register_prefix_tokens, :].mean(dim=(0, 1))
+        similarity = F.cosine_similarity(
+            cls_patch.flatten().unsqueeze(0),
+            register_patch.flatten().unsqueeze(0),
+            dim=1,
+        )[0]
+        result.update(
+            {
+                "register_to_patch_attention_mean": float(register_patch.mean().item()),
+                "register_attention_entropy": _entropy_1d(register_patch),
+                "cls_register_heatmap_similarity": float(similarity.item()),
+                "register_to_cls_attention_mean": float(attention[:, 1:register_prefix_tokens, 0].mean().item()),
+                "register_to_register_attention_mean": float(
+                    attention[:, 1:register_prefix_tokens, 1:register_prefix_tokens].mean().item()
+                ),
+            }
+        )
+    else:
+        result.update(
+            {
+                "register_to_patch_attention_mean": 0.0,
+                "register_attention_entropy": 0.0,
+                "cls_register_heatmap_similarity": 0.0,
+                "register_to_cls_attention_mean": 0.0,
+                "register_to_register_attention_mean": 0.0,
+            }
+        )
+    return result
 
 
 def build_featuremap_heatmap(

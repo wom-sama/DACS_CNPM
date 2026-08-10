@@ -1,0 +1,7 @@
+{
+  "manifest": "D:\\DataAI\\AIEx\\newdataset\\class_f\\manifest.csv",
+  "rows": 13088,
+  "leakage_groups": 9489,
+  "cross_split_leakage_groups": 0,
+  "examples": {}
+}

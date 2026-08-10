@@ -1,0 +1,35 @@
+{
+  "schema": "trkh_saspa_f1_no_output_retry_lock_v1",
+  "state": "prospective_before_retry_and_before_any_f1_synthetic_output",
+  "created_local_date": "2026-07-24",
+  "original_clean_commit": "6f883103ca10a649a436e1a82813eeaaf40f1b68",
+  "original_output_directory": "runs/audit_saspa_dual_view_synthetic_a0_20260723/f1_tiny_output",
+  "failure_artifact": {
+    "path": "runs/audit_saspa_dual_view_synthetic_a0_20260723/f1_tiny_output/failure.json",
+    "sha256": "8bc4b1e631422a170080b3825552e8d440820b6faf17c9473387bc6788f9ede3",
+    "failure_stage": "model_snapshot_verify",
+    "error": "Model snapshot path escaped its root",
+    "only_file_in_output_tree": true,
+    "generation_worker_started": false,
+    "pipeline_invoked": false,
+    "synthetic_pixels_generated_or_saved": false
+  },
+  "root_cause": "Hugging Face snapshot entries are legitimate symlinks from snapshots/<revision> to blobs within the same models--Salesforce--blipdiffusion-controlnet cache root. The first implementation incorrectly required each resolved target to remain under snapshots/<revision>.",
+  "locked_fix": {
+    "manifest_relative_path": "Reject absolute paths and every '..' component.",
+    "symlink_target_boundary": "Allow a resolved target only inside the same Hugging Face model cache root that contains blobs, refs, and snapshots.",
+    "content_validation": "Keep exact size and SHA256 verification for every model file and the locked total byte count.",
+    "test_requirement": "Cover valid in-root files and reject parent traversal before the retry."
+  },
+  "retry": {
+    "output_directory": "runs/audit_saspa_dual_view_synthetic_a0_20260723/f1_tiny_output_v2",
+    "allowed_count": 1,
+    "same_source_rows_prompts_seeds_and_generation_parameters": true,
+    "fallback_policy_unchanged": true,
+    "validation_test_generation_access": false,
+    "a1_authorized": false,
+    "training_authorized": false,
+    "full_train_authorized": false,
+    "current_best_command_update": false
+  }
+}

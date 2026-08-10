@@ -1,0 +1,323 @@
+{
+  "schema_version": 1,
+  "protocol_id": "trkh_cross_colour_ratio_surface_a0_20260725",
+  "state": "fresh_process_clean_fit_replay_complete_clean_gate_failed",
+  "value_label": "negative-but-reusable",
+  "observed_date": "2026-07-25",
+  "authorization": {
+    "path": "docs/TRKH_5CLASS_CROSS_COLOUR_RATIO_SURFACE_A0_FIT_RECOVERY_AUTHORIZATION_20260725.json",
+    "sha256": "b7cda19bfb30def61d02d8fdf1f51922aff3e4d85074b79f1d5ef4c674a36770",
+    "commit": "54c3e5c309aec0f9b60a5c39e452f12f938748df",
+    "required_correction_commit": "0218379db7fa43135e7e22529121965c49ef0b71",
+    "recovery_of_failure_sha256": "51a58928b949a5f48417cca735ed84f483ab98fc692121bba0332537c1983ccf",
+    "superseded_consumed_authorization_sha256": "3ecb6a82213f8aef70bf4f71577fd6b95e5a622b44c3dcaf1467466c0d1697b5",
+    "all_authorization_checks_passed": true
+  },
+  "repository": {
+    "branch": "classification-only-research",
+    "formal_head": "54c3e5c309aec0f9b60a5c39e452f12f938748df",
+    "formal_upstream": "54c3e5c309aec0f9b60a5c39e452f12f938748df",
+    "required_ancestor_present": true,
+    "unexpected_status": [],
+    "protected_untracked_paths_only": [
+      "BaoCao/",
+      "deep-research-report (10).md",
+      "deep-research-report (9).md"
+    ]
+  },
+  "execution": {
+    "formal_process_id": 26120,
+    "formal_elapsed_seconds": 190.4927751,
+    "replay_process_id": 3184,
+    "replay_elapsed_seconds": 188.7562594,
+    "fresh_process": true
+  },
+  "cohort": {
+    "rows": 763,
+    "unique_images": 735,
+    "source_held_folds": 5,
+    "raw_dataset_reads": 0,
+    "validation_data_used": false,
+    "test_data_used": false
+  },
+  "training": {
+    "scratch_only": true,
+    "roles": 4,
+    "folds_per_role": 5,
+    "epochs_per_fold_role": 20,
+    "updates_per_fold_role": 160,
+    "total_updates": 3200,
+    "trainable_parameters_per_head": 3004,
+    "requested_workers": 4,
+    "effective_workers_all_fold_roles": 4,
+    "all_gradients_present_and_finite": true,
+    "all_parameters_changed": true,
+    "optimizer_state_fp32": true,
+    "mean_loss": {
+      "colour_ratio_control": {
+        "epoch_0": 1.32579574882984,
+        "epoch_19": 0.802052403241396
+      },
+      "cross_colour_ratio_candidate": {
+        "epoch_0": 1.32792147397995,
+        "epoch_19": 0.799994801729918
+      },
+      "cross_colour_ratio_seed_repeat": {
+        "epoch_0": 1.39705399274826,
+        "epoch_19": 0.811752960085869
+      },
+      "cross_colour_ratio_spatial_dephased_control": {
+        "epoch_0": 1.34357466697693,
+        "epoch_19": 0.813796591758728
+      }
+    }
+  },
+  "metrics": {
+    "baseline_full_train": {
+      "macro_f1": 0.9398761496593044,
+      "class_1": {
+        "precision": 0.7002652519893899,
+        "recall": 0.9759704251386322,
+        "f1": 0.8154440154440155
+      }
+    },
+    "keeper_margin": {
+      "auroc": 0.8166974738139248,
+      "auprc": 0.921070118462715
+    },
+    "colour_ratio_control": {
+      "auroc": 0.5281510715891492,
+      "auprc": 0.7553513658170989,
+      "changed": 32,
+      "corrections": 7,
+      "harms": 25,
+      "restricted_fp_rejected": 7,
+      "restricted_fp_rows": 222,
+      "keeper_tp_retention": 0.9526515151515151,
+      "full_macro_f1_gain": -0.004624021388086597,
+      "full_class_1_f1_gain": -0.01892778424844932
+    },
+    "cross_colour_ratio_candidate": {
+      "auroc": 0.5355198081630614,
+      "auprc": 0.7571397457203374,
+      "fold_aurocs": [
+        0.4125891946992865,
+        0.5269565217391304,
+        0.5382612179487181,
+        0.565160567587752,
+        0.6425720620842572
+      ],
+      "folds_beating_both_learned_controls": 2,
+      "pair_aurocs": {
+        "1_vs_0": 0.5998385549498116,
+        "1_vs_2": 0.4627233518176217,
+        "1_vs_4": 0.3968576709796673
+      },
+      "auroc_gain_over_keeper_margin": -0.2811776656508634,
+      "auroc_gain_over_colour_ratio_control": 0.0073687365739122,
+      "auroc_gain_over_trained_spatial_dephase": 0.031723035419893,
+      "same_weight_dephase_auroc_drop": 0.03613595110822467,
+      "action": {
+        "changed": 32,
+        "corrections": 2,
+        "harms": 30,
+        "restricted_fp_rejected": 2,
+        "restricted_fp_rows": 222,
+        "target_0_rejected": 1,
+        "target_0_rows": 158,
+        "target_2_rejected": 1,
+        "target_2_rows": 54,
+        "target_4_rejected": 0,
+        "target_4_rows": 10,
+        "all_class_1_retention": 0.9426987060998152,
+        "keeper_tp_retained": 498,
+        "keeper_tp_rows": 528,
+        "keeper_fn_supported": 12,
+        "keeper_fn_rows": 13
+      },
+      "full_train_update": {
+        "macro_f1": 0.9331378941197018,
+        "class_1": {
+          "precision": 0.6897506925207756,
+          "recall": 0.9205175600739371,
+          "f1": 0.7885985748218527
+        },
+        "gains": {
+          "macro_f1": -0.006738255539602611,
+          "class_1_precision": -0.010514559468614348,
+          "class_1_recall": -0.055452865064695045,
+          "class_1_f1": -0.026845440622162764
+        }
+      }
+    },
+    "cross_colour_ratio_seed_repeat": {
+      "auroc": 0.5376679822151171,
+      "auprc": 0.7530973171530605,
+      "candidate_auroc_absolute_difference": 0.0021481740520556958,
+      "candidate_action_agreement": 0.9803407601572739,
+      "changed": 23,
+      "corrections": 3,
+      "harms": 20,
+      "restricted_fp_rejected": 3,
+      "restricted_fp_rows": 222,
+      "keeper_tp_retention": 0.9621212121212122,
+      "full_macro_f1_gain": -0.004166030387765973,
+      "full_class_1_f1_gain": -0.01670187707923554
+    },
+    "trained_spatial_dephase": {
+      "auroc": 0.5037967727431684,
+      "auprc": 0.716771951401469,
+      "changed": 23,
+      "corrections": 3,
+      "harms": 20,
+      "full_macro_f1_gain": -0.0041228981506925555,
+      "full_class_1_f1_gain": -0.01670187707923554
+    },
+    "same_weight_dephased_candidate": {
+      "auroc": 0.49938385705483673,
+      "changed": 444,
+      "corrections": 121,
+      "harms": 314,
+      "keeper_tp_retention": 0.4053030303030303,
+      "full_macro_f1_gain": -0.07121761466274878,
+      "full_class_1_f1_gain": -0.31250629511499073
+    }
+  },
+  "clean_gate": {
+    "passed": false,
+    "passed_checks": [
+      "candidate__keeper_fn_supported_gte_8",
+      "candidate__same_weight_dephase_drop_gte_0p03",
+      "seed_repeat_action_agreement_gte_0p95",
+      "seed_repeat_auroc_difference_lte_0p01",
+      "seed_repeat_pass_decision_identical"
+    ],
+    "failed_checks": [
+      "candidate__aggregate_auroc_gte_0p86",
+      "candidate__aggregate_auprc_gte_0p92",
+      "candidate__auroc_gain_over_keeper_gte_0p02",
+      "candidate__auroc_gain_over_colour_ratio_gte_0p02",
+      "candidate__auroc_gain_over_trained_dephase_gte_0p04",
+      "candidate__fold_wins_gte_4_of_5",
+      "candidate__pair_1_vs_0_auroc_gte_0p82",
+      "candidate__pair_1_vs_2_auroc_gte_0p80",
+      "candidate__pair_1_vs_4_auroc_gte_0p75",
+      "candidate__all_class1_retention_gte_0p95",
+      "candidate__keeper_tp_retention_gte_0p95",
+      "candidate__restricted_fp_rejection_gte_0p25",
+      "candidate__target0_rejection_gte_0p20",
+      "candidate__target2_rejection_gte_0p20",
+      "candidate__target4_rejected_gte_2",
+      "candidate__corrections_plus_fn_support_ge_twice_tp_harms",
+      "candidate__full_macro_f1_gain_gte_0p002",
+      "candidate__full_class1_precision_gain_gte_0p03",
+      "candidate__full_class1_f1_gain_gte_0p01",
+      "candidate__full_class1_recall_drop_lte_0p03",
+      "candidate__nonfocus_f1_drop_lte_0p003"
+    ]
+  },
+  "access_ledger": {
+    "hook_installed": true,
+    "hook_probe_seen": true,
+    "passed": true,
+    "observed_event_count": 55,
+    "logical_open_count": 34,
+    "unique_path_count": 9,
+    "blocked_attempt_count": 0,
+    "write_like_event_count": 0,
+    "validation_open_count": 0,
+    "test_open_count": 0,
+    "raw_dataset_open_count": 0,
+    "ordered_events_sha256": "d23fe7e8ec5b433274930c78717d625668de58507c9b9a21091e7d97becbbc8b"
+  },
+  "resource": {
+    "formal_elapsed_seconds": 190.4927751,
+    "clean_wall_seconds_limit": 1200,
+    "peak_cuda_allocated_bytes": 366425600,
+    "head_peak_cuda_limit_bytes": 2147483648,
+    "peak_process_rss_bytes": 2416246784,
+    "process_rss_limit_bytes": 10737418240,
+    "maximum_combined_temporary_bytes": 333692816,
+    "temporary_cache_limit_bytes": 429496730,
+    "retained_artifact_bytes": 25863405,
+    "all_resource_checks_passed": true,
+    "orphan_compute_children_zero": true
+  },
+  "replay": {
+    "state": "fresh_process_clean_fit_replay_complete",
+    "passed": true,
+    "numeric_tolerance": 1e-7,
+    "state_array_count": 180,
+    "state_arrays_all_exact": true,
+    "state_maximum_absolute_error": 0.0,
+    "output_array_count": 46,
+    "output_arrays_all_exact": true,
+    "output_maximum_absolute_error": 0.0,
+    "metrics_exact": true,
+    "training_science_exact": true,
+    "access_ledger_exact": true,
+    "authorization_exact": true,
+    "validation_unused": true,
+    "test_unused": true
+  },
+  "artifacts": {
+    "output_dir": "runs/audit_cross_colour_ratio_surface_a0_20260725",
+    "local_artifact_set_retained": true,
+    "files": {
+      "access_ledger.json": {
+        "bytes": 20861,
+        "sha256": "5fafc1c479c6cf642ed8dd51d80bb44912b7122f2dc22b7b58d9cba733302e31"
+      },
+      "artifact_set_manifest.json": {
+        "bytes": 1602,
+        "sha256": "9f504ab91018d97a271ae71a493481b29d94990760ee4dbea9abd7c5711a3ba1"
+      },
+      "formal_manifest.json": {
+        "bytes": 1122,
+        "sha256": "b358a9d5fea3e3641b3087bbdaa8abdced8d3d4ae1b02ca225a10dbf7dcd76af"
+      },
+      "held_outputs.npz": {
+        "bytes": 25243508,
+        "sha256": "c2437cf1fbe103f1ec31b969aa02968e68f40d0441558f970c702961a2a0eff9"
+      },
+      "metrics.json": {
+        "bytes": 42078,
+        "sha256": "b2617256f65ef20b937dfa2831f3d7b32c58e7d43e6b9b3878dcb907633d2d7d"
+      },
+      "replay_manifest.json": {
+        "bytes": 1442,
+        "sha256": "e2f8414f21fff007c88e2d066ecc25979cd83362feda1d37b0f515aaaee59c39"
+      },
+      "replay_summary.json": {
+        "bytes": 39038,
+        "sha256": "6a71ed2a6424680b26d64efe6058b624850c2fd95d6c05a788e61cc2d5863e22"
+      },
+      "states.npz": {
+        "bytes": 279915,
+        "sha256": "e91cd48a8987ea21a7695a4656bb35e7a6635d5320438d30cbd0d10fe155acfd"
+      },
+      "summary.json": {
+        "bytes": 26933,
+        "sha256": "86c0501685e7a6ac6aba1a0b8f58d0084971fc37c46c0f852ea0a7ffdad841be"
+      },
+      "training_records.json": {
+        "bytes": 208508,
+        "sha256": "4293e18fee96b2be00552ba66e4e48e35e470b57cec74b43ccbeec5b118635a8"
+      }
+    }
+  },
+  "scientific_boundary": {
+    "clean_gate_passed": false,
+    "xai_run": false,
+    "xai_reason": "The prospective protocol authorizes XAI only after the complete clean information conjunction passes.",
+    "shifted_conditions_run": false,
+    "deployment_run": false,
+    "production_integration": false,
+    "validation": false,
+    "test": false,
+    "full_train": false,
+    "current_best_command_update": false,
+    "keeper_unchanged": true,
+    "next_rule": "Close the exact CCR descriptor/head neighborhood. Reopen only for an equation-distinct sample-conditional surface mechanism that prospectively beats keeper and causal controls under pairwise, TP-retention, precision, replay, and standard-op inference gates."
+  }
+}

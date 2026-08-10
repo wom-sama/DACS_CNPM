@@ -6,7 +6,7 @@ from typing import Dict, List, Optional, Tuple
 
 import torch
 import torch.nn.functional as F
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 from torch import nn
 
 from trkh.core.config import IMAGENET_MEAN, IMAGENET_STD, to_serializable
@@ -32,6 +32,18 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--output-json", type=Path, default=None)
     parser.add_argument("--output-dir", type=Path, default=None)
+    parser.add_argument(
+        "--save-images",
+        action="store_true",
+        default=False,
+        help="Luu anh co overlay du doan vao output-dir khi dung --image-dir.",
+    )
+    parser.add_argument(
+        "--overlay-top-k",
+        type=int,
+        default=1,
+        help="So nhan top-k ve len anh khi dung bai toan phan loai.",
+    )
     parser.add_argument("--override-image-size", type=int, default=None)
     parser.add_argument("--export-onnx", type=Path, default=None)
     parser.add_argument("--onnx-opset", type=int, default=17)
@@ -185,6 +197,7 @@ def predict_tensor_outputs(
     model: nn.Module,
     images: torch.Tensor,
     image_valid_mask: Optional[torch.Tensor] = None,
+    bbox: Optional[torch.Tensor] = None,
     amp: bool = True,
     tta: bool = False,
     tta_brightness_delta: float = 0.08,
@@ -194,6 +207,24 @@ def predict_tensor_outputs(
     images = ensure_temporal_input(images, temporal_frames).to(device, non_blocking=True)
     if image_valid_mask is not None:
         image_valid_mask = image_valid_mask.to(device, non_blocking=True, dtype=torch.bool)
+    if bbox is not None:
+        bbox = bbox.to(device, non_blocking=True, dtype=torch.float32)
+    requires_spatial_metadata = bool(
+        getattr(model, "requires_spatial_metadata", False)
+    )
+    spatial_metadata_fallback = False
+    if requires_spatial_metadata:
+        if image_valid_mask is None:
+            image_valid_mask = torch.ones(
+                (int(images.shape[0]), int(images.shape[-2]), int(images.shape[-1])),
+                device=device,
+                dtype=torch.bool,
+            )
+            spatial_metadata_fallback = True
+        if bbox is None:
+            bbox = images.new_tensor((0.5, 0.5, 1.0, 1.0)).view(1, 4)
+            bbox = bbox.expand(int(images.shape[0]), -1)
+            spatial_metadata_fallback = True
 
     logits_views = []
     merged_boxes = []
@@ -207,8 +238,26 @@ def predict_tensor_outputs(
                     saturation_delta=tta_brightness_delta,
                     num_aug=4,
                 )
-                tta_outputs = tta_runner.forward(model, images)
+                if requires_spatial_metadata:
+                    def _metadata_tta_forward(augmented_images: torch.Tensor):
+                        return model(
+                            augmented_images,
+                            image_valid_mask=image_valid_mask,
+                            bbox=bbox,
+                        )
+
+                    tta_outputs = tta_runner.forward(
+                        model,
+                        images,
+                        forward_fn=_metadata_tta_forward,
+                    )
+                else:
+                    tta_outputs = tta_runner.forward(model, images)
                 result = {"logits": tta_outputs["logits"].float()}
+                if spatial_metadata_fallback:
+                    result["spatial_metadata_fallback"] = torch.ones(
+                        (), device=device, dtype=torch.bool
+                    )
                 if tta_outputs.get("boxes") is not None:
                     result["boxes"] = tta_outputs["boxes"].float()
                 if tta_outputs.get("objectness_logits") is not None:
@@ -216,7 +265,13 @@ def predict_tensor_outputs(
                 return result
 
         with autocast_context(device, amp):
-            if (
+            if requires_spatial_metadata:
+                model_output = model(
+                    images,
+                    image_valid_mask=image_valid_mask,
+                    bbox=bbox,
+                )
+            elif (
                 image_valid_mask is not None
                 and hasattr(model, "forward_features")
                 and hasattr(model, "forward_heads")
@@ -235,6 +290,10 @@ def predict_tensor_outputs(
     result = {
         "logits": torch.stack(logits_views, dim=0).mean(dim=0),
     }
+    if spatial_metadata_fallback:
+        result["spatial_metadata_fallback"] = torch.ones(
+            (), device=device, dtype=torch.bool
+        )
     if merged_boxes:
         result["boxes"] = torch.stack(merged_boxes, dim=0).mean(dim=0)
     if objectness_views:
@@ -246,6 +305,7 @@ def predict_tensor_probabilities(
     model: nn.Module,
     images: torch.Tensor,
     image_valid_mask: Optional[torch.Tensor] = None,
+    bbox: Optional[torch.Tensor] = None,
     amp: bool = True,
     tta: bool = False,
     tta_brightness_delta: float = 0.08,
@@ -254,6 +314,7 @@ def predict_tensor_probabilities(
         model=model,
         images=images,
         image_valid_mask=image_valid_mask,
+        bbox=bbox,
         amp=amp,
         tta=tta,
         tta_brightness_delta=tta_brightness_delta,
@@ -474,9 +535,32 @@ def predict(
     nms_iou_threshold: Optional[float] = 0.5,
 ) -> Dict[str, object]:
     image_size = int(checkpoint["model_config"]["image_size"])
+    augmentation_config = checkpoint.get("augmentation_config", {})
+    if not isinstance(augmentation_config, dict):
+        augmentation_config = {}
     transform = build_eval_transform(
         image_size=image_size,
-        resize_mode=checkpoint.get("augmentation_config", {}).get("resize_mode", "pad"),
+        resize_mode=augmentation_config.get("resize_mode", "pad"),
+        illumination_normalization=bool(augmentation_config.get("illumination_normalization", False)),
+        illumination_normalization_strength=float(augmentation_config.get("illumination_normalization_strength", 0.0) or 0.0),
+        background_suppression_mode=str(augmentation_config.get("background_suppression_mode", "none") or "none"),
+        background_suppression_margin=float(augmentation_config.get("background_suppression_margin", 0.08) or 0.08),
+        background_suppression_blur_radius=float(augmentation_config.get("background_suppression_blur_radius", 7.0) or 7.0),
+        surface_detail_amplification_mode=str(
+            augmentation_config.get("surface_detail_amplification_mode", "none") or "none"
+        ),
+        surface_detail_amplification_strength=float(
+            augmentation_config.get("surface_detail_amplification_strength", 0.0) or 0.0
+        ),
+        surface_detail_amplification_blur_radius=float(
+            augmentation_config.get("surface_detail_amplification_blur_radius", 1.25) or 1.25
+        ),
+        surface_detail_amplification_foreground_weight=float(
+            augmentation_config.get("surface_detail_amplification_foreground_weight", 0.85) or 0.85
+        ),
+        eval_surface_detail_amplification=bool(
+            augmentation_config.get("eval_surface_detail_amplification", False)
+        ),
     )
 
     with Image.open(image_path) as handle:
@@ -503,6 +587,13 @@ def predict(
             confidence_threshold=confidence_threshold,
         )
         result["image_path"] = str(image_path.resolve())
+        if bool(
+            prediction_outputs.get(
+                "spatial_metadata_fallback",
+                torch.zeros((), dtype=torch.bool),
+            ).detach().cpu().item()
+        ):
+            result["spatial_metadata_mode"] = "unverified_full_frame_fallback"
         return result
 
     raw_detections = post_process_detections(
@@ -538,6 +629,125 @@ def predict(
     }
 
 
+def _class_color(class_index: int) -> Tuple[int, int, int]:
+    palette = [
+        (46, 125, 50),
+        (239, 108, 0),
+        (21, 101, 192),
+        (123, 31, 162),
+        (198, 40, 40),
+        (0, 121, 107),
+        (93, 64, 55),
+    ]
+    return palette[int(class_index) % len(palette)]
+
+
+def _text_size(draw: ImageDraw.ImageDraw, text: str, font) -> Tuple[int, int]:
+    bbox = draw.textbbox((0, 0), text, font=font)
+    return int(bbox[2] - bbox[0]), int(bbox[3] - bbox[1])
+
+
+def _draw_label_box(
+    draw: ImageDraw.ImageDraw,
+    xy: Tuple[int, int],
+    text: str,
+    fill: Tuple[int, int, int],
+    font,
+) -> None:
+    x, y = xy
+    text_width, text_height = _text_size(draw, text, font)
+    pad_x, pad_y = 8, 5
+    box = (x, y, x + text_width + pad_x * 2, y + text_height + pad_y * 2)
+    draw.rounded_rectangle(box, radius=4, fill=fill)
+    draw.text((x + pad_x, y + pad_y), text, fill=(255, 255, 255), font=font)
+
+
+def _draw_prediction_list(
+    draw: ImageDraw.ImageDraw,
+    predictions: List[Dict[str, object]],
+    top_prediction: Dict[str, object],
+    status: str,
+    overlay_top_k: int,
+    font,
+) -> None:
+    overlay_top_k = max(1, int(overlay_top_k))
+    rows = predictions[:overlay_top_k] if predictions else [top_prediction]
+    x, y = 12, 12
+    row_gap = 4
+    for row_index, prediction in enumerate(rows):
+        if not isinstance(prediction, dict):
+            continue
+        class_index = int(prediction.get("class_index", 0) or 0)
+        color = _class_color(class_index)
+        prefix = "1" if row_index == 0 else str(row_index + 1)
+        label = (
+            f"{prefix}. {prediction.get('class_name', class_index)} "
+            f"{float(prediction.get('probability', 0.0)):.3f}"
+        )
+        if row_index == 0 and status != "accepted":
+            label = f"{label} | {status}"
+        fill_alpha = 235 if row_index == 0 else 205
+        _draw_label_box(draw, (x, y), label, (*color, fill_alpha), font)
+        _, text_height = _text_size(draw, label, font)
+        y += text_height + 10 + row_gap
+
+
+def render_prediction_image(
+    image_path: Path,
+    result: Dict[str, object],
+    output_path: Path,
+    overlay_top_k: int = 1,
+) -> Path:
+    with Image.open(image_path) as handle:
+        image = handle.convert("RGB")
+
+    draw = ImageDraw.Draw(image, "RGBA")
+    font = ImageFont.load_default()
+    width, height = image.size
+
+    detections = result.get("detections")
+    if isinstance(detections, list):
+        for detection in detections:
+            if not isinstance(detection, dict):
+                continue
+            class_index = int(detection.get("class_index", 0) or 0)
+            color = _class_color(class_index)
+            bbox = detection.get("bbox", {})
+            xyxy = bbox.get("xyxy") if isinstance(bbox, dict) else None
+            if not isinstance(xyxy, list) or len(xyxy) != 4:
+                continue
+            x1, y1, x2, y2 = [int(round(float(value))) for value in xyxy]
+            x1 = max(0, min(width - 1, x1))
+            y1 = max(0, min(height - 1, y1))
+            x2 = max(0, min(width - 1, x2))
+            y2 = max(0, min(height - 1, y2))
+            if x2 <= x1 or y2 <= y1:
+                continue
+            draw.rectangle((x1, y1, x2, y2), outline=(*color, 255), width=3)
+            label = f"{detection.get('class_name', class_index)} {float(detection.get('probability', 0.0)):.3f}"
+            label_y = max(0, y1 - 22)
+            _draw_label_box(draw, (x1, label_y), label, (*color, 230), font)
+    else:
+        top_prediction = result.get("top_prediction", {})
+        if isinstance(top_prediction, dict):
+            status = str(result.get("prediction_status", "accepted"))
+            predictions = result.get("predictions", [])
+            if not isinstance(predictions, list):
+                predictions = []
+            _draw_prediction_list(
+                draw=draw,
+                predictions=predictions,
+                top_prediction=top_prediction,
+                status=status,
+                overlay_top_k=overlay_top_k,
+                font=font,
+            )
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    image.save(output_path)
+    return output_path
+
+
 def export_onnx(
     model: nn.Module,
     checkpoint: Dict[str, object],
@@ -571,28 +781,119 @@ def export_onnx(
                 return logits, boxes, objectness_logits
             return logits, boxes
 
-    export_model = OnnxExportWrapper(model).eval()
+    class SpatialMetadataOnnxExportWrapper(nn.Module):
+        def __init__(self, base_model: nn.Module) -> None:
+            super().__init__()
+            self.base_model = base_model
+
+        def forward(self, images, image_valid_mask, bbox):
+            deployment_outputs = getattr(
+                self.base_model,
+                "deployment_outputs",
+                None,
+            )
+            if callable(deployment_outputs):
+                return deployment_outputs(
+                    images,
+                    image_valid_mask=image_valid_mask,
+                    bbox=bbox,
+                )
+            model_output = self.base_model(
+                images,
+                image_valid_mask=image_valid_mask,
+                bbox=bbox,
+            )
+            logits, boxes, objectness_logits = extract_detection_from_model_output(
+                model_output
+            )
+            if boxes is None:
+                return logits
+            if objectness_logits is not None:
+                return logits, boxes, objectness_logits
+            return logits, boxes
+
+    requires_spatial_metadata = bool(
+        getattr(model, "requires_spatial_metadata", False)
+    )
+    supports_dynamic_batch = bool(
+        getattr(model, "supports_dynamic_batch", True)
+    )
+    if requires_spatial_metadata:
+        image_valid_mask = torch.ones(
+            (1, image_size, image_size),
+            device=dummy.device,
+            dtype=torch.float32,
+        )
+        bbox = torch.tensor(
+            ((0.5, 0.5, 1.0, 1.0),),
+            device=dummy.device,
+            dtype=torch.float32,
+        )
+        export_model = SpatialMetadataOnnxExportWrapper(model).eval()
+        export_args = (dummy, image_valid_mask, bbox)
+        input_names = ["images", "image_valid_mask", "bbox"]
+        deployment_outputs = getattr(model, "deployment_outputs", None)
+        if callable(deployment_outputs):
+            sample_output = deployment_outputs(
+                dummy,
+                image_valid_mask=image_valid_mask,
+                bbox=bbox,
+            )
+        else:
+            sample_output = model(
+                dummy,
+                image_valid_mask=image_valid_mask,
+                bbox=bbox,
+            )
+    else:
+        export_model = OnnxExportWrapper(model).eval()
+        export_args = dummy
+        input_names = ["images"]
+        sample_output = model(dummy)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    logits, boxes, objectness_logits = extract_detection_from_model_output(model(dummy))
-    output_names = ["logits"] if boxes is None else ["logits", "bbox"]
-    if objectness_logits is not None:
-        output_names.append("objectness_logits")
-    dynamic_axes = {
-        "images": {0: "batch"},
-        "logits": {0: "batch"},
-    }
-    if boxes is not None:
-        dynamic_axes["bbox"] = {0: "batch"}
-    if objectness_logits is not None:
-        dynamic_axes["objectness_logits"] = {0: "batch"}
+    deployment_output_names = tuple(
+        str(name) for name in getattr(model, "deployment_output_names", ())
+    )
+    if deployment_output_names:
+        if not isinstance(sample_output, tuple):
+            raise TypeError("deployment_outputs must return a tuple of tensors.")
+        if len(sample_output) != len(deployment_output_names):
+            raise ValueError(
+                "deployment output name/tensor count mismatch: "
+                f"names={len(deployment_output_names)}, tensors={len(sample_output)}"
+            )
+        logits = sample_output[0]
+        boxes = None
+        objectness_logits = None
+        output_names = list(deployment_output_names)
+    else:
+        logits, boxes, objectness_logits = extract_detection_from_model_output(sample_output)
+        output_names = ["logits"] if boxes is None else ["logits", "bbox"]
+        if objectness_logits is not None:
+            output_names.append("objectness_logits")
+    dynamic_axes = None
+    if supports_dynamic_batch:
+        dynamic_axes = {
+            "images": {0: "batch"},
+            "logits": {0: "batch"},
+        }
+        if requires_spatial_metadata:
+            dynamic_axes["image_valid_mask"] = {0: "batch"}
+            dynamic_axes["bbox"] = {0: "batch"}
+        for output_name in output_names:
+            dynamic_axes[output_name] = {0: "batch"}
+        if boxes is not None:
+            dynamic_axes["bbox"] = {0: "batch"}
+        if objectness_logits is not None:
+            dynamic_axes["objectness_logits"] = {0: "batch"}
     torch.onnx.export(
         export_model,
-        dummy,
+        export_args,
         output_path,
         export_params=True,
         opset_version=opset,
         do_constant_folding=True,
-        input_names=["images"],
+        input_names=input_names,
         output_names=output_names,
         dynamic_axes=dynamic_axes,
     )
@@ -667,13 +968,23 @@ def main() -> None:
             nms_iou_threshold=args.nms_iou_threshold,
         )
         results.append(result)
-        json_dump(output_dir / f"{image_path.stem}.json", to_serializable(result))
+        relative_path = image_path.relative_to(args.image_dir)
+        json_output_path = output_dir / relative_path.with_suffix(".json")
+        json_dump(json_output_path, to_serializable(result))
+        if args.save_images:
+            render_prediction_image(
+                image_path=image_path,
+                result=result,
+                output_path=output_dir / relative_path,
+                overlay_top_k=args.overlay_top_k,
+            )
 
     summary = {
         "checkpoint": str(args.checkpoint.resolve()),
         "image_dir": str(args.image_dir.resolve()),
         "images": len(image_paths),
         "output_dir": str(output_dir.resolve()),
+        "saved_images": bool(args.save_images),
         "results": results,
     }
     if args.output_json is not None:

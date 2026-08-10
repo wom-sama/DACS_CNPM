@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Mapping, Optional, Tuple
 
 import numpy as np
 import torch
@@ -17,7 +17,10 @@ from trkh.data.dataset import MangoYOLOCropDataset, PseudoVideoAugmenter, build_
 from trkh.evaluation.evaluate import resolve_crop_to_primary_object
 from trkh.models.feature_hooks import count_attention_layers
 from trkh.inference.inference import load_model
-from trkh.models.model import extract_bbox_from_model_output, extract_head_input_from_features
+from trkh.models.model import (
+    classification_logits_from_features,
+    extract_bbox_from_model_output,
+)
 from trkh.core.utils import (
     build_safe_dataloader_kwargs,
     ensure_dir,
@@ -96,6 +99,98 @@ class IdentityCorruption:
         return image.copy()
 
 
+def _unpack_classification_sample(sample: object) -> Tuple[Image.Image, int, Mapping[str, object], torch.Tensor]:
+    if not isinstance(sample, (tuple, list)) or len(sample) != 3:
+        raise ValueError(
+            "Robustness evaluation requires classification samples as "
+            "(PIL image, label, metadata)."
+        )
+    image, label, metadata = sample
+    if not isinstance(image, Image.Image) or not isinstance(metadata, Mapping):
+        raise ValueError("Invalid robustness classification sample types.")
+    bbox = metadata.get("bbox")
+    if not torch.is_tensor(bbox) or bbox.numel() != 4:
+        raise ValueError("Robustness classification sample requires a four-value bbox tensor.")
+    return image, int(label), metadata, bbox.reshape(4).to(dtype=torch.float32)
+
+
+def _transform_classification_image(
+    image: Image.Image,
+    *,
+    label: int,
+    metadata: Mapping[str, object],
+    bbox: torch.Tensor,
+    transform,
+) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+    crop_bbox = metadata.get("crop_bbox")
+    if not torch.is_tensor(crop_bbox) or crop_bbox.numel() != 4:
+        crop_bbox = bbox
+    target = {
+        "labels": torch.tensor([int(label)], dtype=torch.long),
+        "boxes": crop_bbox.reshape(1, 4).to(dtype=torch.float32),
+    }
+    transformed = transform(image, target=target)
+    if not isinstance(transformed, (tuple, list)) or len(transformed) != 2:
+        raise ValueError("Robustness transform must return (tensor, transformed_target).")
+    tensor, transformed_target = transformed
+    if not torch.is_tensor(tensor) or not isinstance(transformed_target, Mapping):
+        raise ValueError("Invalid robustness transform output types.")
+    transformed_boxes = transformed_target.get("boxes")
+    if not torch.is_tensor(transformed_boxes) or transformed_boxes.ndim != 2 or transformed_boxes.size(0) < 1:
+        raise ValueError("Robustness transform removed the classification bbox.")
+    output_metadata = {
+        "bbox": bbox.to(dtype=torch.float32),
+        "crop_bbox": transformed_boxes[0].to(dtype=torch.float32),
+    }
+    image_mask = transformed_target.get("image_mask")
+    if torch.is_tensor(image_mask):
+        output_metadata["image_mask"] = image_mask.to(dtype=torch.bool)
+    return tensor, output_metadata
+
+
+def _forward_classification_with_metadata(
+    model,
+    images: torch.Tensor,
+    metadata: Optional[Mapping[str, object]],
+    *,
+    device: torch.device,
+) -> Tuple[torch.Tensor, Optional[Dict[str, torch.Tensor]]]:
+    bbox = metadata.get("bbox") if isinstance(metadata, Mapping) else None
+    image_mask = metadata.get("image_mask") if isinstance(metadata, Mapping) else None
+    if torch.is_tensor(bbox):
+        bbox = bbox.to(device=device, dtype=torch.float32, non_blocking=True)
+    else:
+        bbox = None
+    if torch.is_tensor(image_mask):
+        image_mask = image_mask.to(device=device, dtype=torch.bool, non_blocking=True)
+    else:
+        image_mask = None
+
+    features = None
+    if hasattr(model, "forward_features") and hasattr(model, "forward_heads") and hasattr(model, "num_registers"):
+        features = model.forward_features(
+            images,
+            image_valid_mask=image_mask,
+            bbox_token_prior=bbox,
+        )
+        if bbox is not None:
+            features["bbox"] = bbox
+        output = model.forward_heads(features)
+    elif hasattr(model, "forward_features") and hasattr(model, "head") and hasattr(model, "num_registers"):
+        features = model.forward_features(
+            images,
+            image_valid_mask=image_mask,
+            bbox_token_prior=bbox,
+        )
+        if bbox is not None:
+            features["bbox"] = bbox
+        output = classification_logits_from_features(model, features)
+    else:
+        output = model(images)
+    logits, _ = extract_bbox_from_model_output(output)
+    return logits, features
+
+
 class CorruptedDataset(Dataset):
     def __init__(
         self,
@@ -120,10 +215,16 @@ class CorruptedDataset(Dataset):
         return stats_fn() if callable(stats_fn) else {}
 
     def __getitem__(self, index: int):
-        image, label, targets = self.base_dataset[index]
+        image, label, targets, bbox = _unpack_classification_sample(self.base_dataset[index])
         image = self.corruption(image)
-        transformed = self.transform(image, bbox=tuple(float(value) for value in targets["bbox"].tolist()))
-        return transformed[0], label, {"bbox": transformed[1]}
+        tensor, transformed_metadata = _transform_classification_image(
+            image,
+            label=label,
+            metadata=targets,
+            bbox=bbox,
+            transform=self.transform,
+        )
+        return tensor, label, transformed_metadata
 
 
 def evaluate_condition(
@@ -180,17 +281,15 @@ def evaluate_condition(
             if max_batches and batch_index >= max_batches:
                 break
             images, labels = batch[0], batch[1]
+            metadata = batch[2] if len(batch) == 3 and isinstance(batch[2], Mapping) else None
             images = images.to(device, non_blocking=True)
             labels = labels.to(device, non_blocking=True)
-            features = None
-            if hasattr(model, "forward_features") and hasattr(model, "forward_heads") and hasattr(model, "num_registers"):
-                features = model.forward_features(images)
-                logits, _ = model.forward_heads(features)
-            elif hasattr(model, "forward_features") and hasattr(model, "head") and hasattr(model, "num_registers"):
-                features = model.forward_features(images)
-                logits = model.head(extract_head_input_from_features(model, features))
-            else:
-                logits, _ = extract_bbox_from_model_output(model(images))
+            logits, features = _forward_classification_with_metadata(
+                model,
+                images,
+                metadata,
+                device=device,
+            )
             predictions = logits.argmax(dim=1)
             all_targets.append(labels.detach().cpu())
             all_predictions.append(predictions.detach().cpu())
@@ -251,15 +350,27 @@ def collect_fail_cases(
         if len(fail_cases) >= num_fail_cases:
             break
 
-        crop_image, label, targets = base_dataset[index]
+        crop_image, label, targets, bbox = _unpack_classification_sample(base_dataset[index])
         corrupted_image = corruption(crop_image)
-        transformed = transform(
+        transformed_tensor, transformed_metadata = _transform_classification_image(
             corrupted_image,
-            bbox=tuple(float(value) for value in targets["bbox"].tolist()),
+            label=label,
+            metadata=targets,
+            bbox=bbox,
+            transform=transform,
         )
-        tensor = transformed[0].unsqueeze(0).to(device)
+        tensor = transformed_tensor.unsqueeze(0).to(device)
+        batched_metadata = {
+            key: value.unsqueeze(0) if torch.is_tensor(value) else value
+            for key, value in transformed_metadata.items()
+        }
         with torch.no_grad():
-            logits, _ = extract_bbox_from_model_output(model(tensor))
+            logits, _ = _forward_classification_with_metadata(
+                model,
+                tensor,
+                batched_metadata,
+                device=device,
+            )
             probabilities = F.softmax(logits, dim=1)[0].detach().cpu()
             prediction = int(probabilities.argmax().item())
 
@@ -288,7 +399,7 @@ def collect_fail_cases(
             "prediction_index": prediction,
             "prediction_name": class_names[prediction],
             "prediction_probability": float(probabilities[prediction].item()),
-            "bbox": [float(value) for value in sample.bbox],
+            "bbox": [float(value) for value in bbox.tolist()],
             "viz": viz_summary,
         }
         json_dump(case_dir / "fail_case.json", to_serializable(record))
@@ -329,8 +440,48 @@ def main() -> None:
         transform=None,
         crop_margin_ratio=crop_margin_ratio,
         crop_to_primary_object=resolve_crop_to_primary_object(checkpoint),
+        classification_target=True,
+        classification_object_crops=True,
+        classification_bbox_metadata=True,
     )
-    base_transform = build_eval_transform(image_size=image_size, resize_mode=resize_mode)
+    augmentation_config = checkpoint.get("augmentation_config", {})
+    if not isinstance(augmentation_config, dict):
+        augmentation_config = {}
+    base_transform = build_eval_transform(
+        image_size=image_size,
+        resize_mode=resize_mode,
+        illumination_normalization=bool(augmentation_config.get("illumination_normalization", False)),
+        illumination_normalization_strength=float(augmentation_config.get("illumination_normalization_strength", 0.0) or 0.0),
+        foreground_crop_mode=str(augmentation_config.get("foreground_crop_mode", "none") or "none"),
+        foreground_crop_margin_ratio=float(augmentation_config.get("foreground_crop_margin_ratio", 0.08) or 0.08),
+        foreground_crop_min_mask_area_ratio=float(
+            augmentation_config.get("foreground_crop_min_mask_area_ratio", 0.03) or 0.03
+        ),
+        foreground_crop_max_mask_area_ratio=float(
+            augmentation_config.get("foreground_crop_max_mask_area_ratio", 0.92) or 0.92
+        ),
+        foreground_crop_max_crop_area_ratio=float(
+            augmentation_config.get("foreground_crop_max_crop_area_ratio", 0.98) or 0.98
+        ),
+        background_suppression_mode=str(augmentation_config.get("background_suppression_mode", "none") or "none"),
+        background_suppression_margin=float(augmentation_config.get("background_suppression_margin", 0.08) or 0.08),
+        background_suppression_blur_radius=float(augmentation_config.get("background_suppression_blur_radius", 7.0) or 7.0),
+        surface_detail_amplification_mode=str(
+            augmentation_config.get("surface_detail_amplification_mode", "none") or "none"
+        ),
+        surface_detail_amplification_strength=float(
+            augmentation_config.get("surface_detail_amplification_strength", 0.0) or 0.0
+        ),
+        surface_detail_amplification_blur_radius=float(
+            augmentation_config.get("surface_detail_amplification_blur_radius", 1.25) or 1.25
+        ),
+        surface_detail_amplification_foreground_weight=float(
+            augmentation_config.get("surface_detail_amplification_foreground_weight", 0.85) or 0.85
+        ),
+        eval_surface_detail_amplification=bool(
+            augmentation_config.get("eval_surface_detail_amplification", False)
+        ),
+    )
     if temporal_frames > 1:
         transform = PseudoVideoAugmenter(
             frame_transform=base_transform,

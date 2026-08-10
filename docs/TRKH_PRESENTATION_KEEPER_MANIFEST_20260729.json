@@ -1,0 +1,273 @@
+{
+  "schema_version": 1,
+  "created_local": "2026-07-29T01:07:44+07:00",
+  "purpose": "Preserve one complete, presentable and integrity-audited TRKH baseline-and-comparison bundle before any later cleanup or new scientific candidate run.",
+  "repository": {
+    "path": "D:\\DataAI\\AIEx\\TRKH",
+    "branch": "classification-only-research",
+    "pair_surface_ddf_engine_commit": "fb9880c77057d887d9e3b3ab91e9dbb55e47cfe9",
+    "resume_and_promotion_fix_commit": "2456dde06e9a2aa6de15c0f60a0af5c951beb1d6",
+    "pretrained_export_safety_commit": "2ee8d032f0c82bb8ada4bcbdc3ceae1ac685ddd2",
+    "upstream_pushed_commit_at_freeze": "742fce03700b17f8e8f4449eac8a49dc0a03e211"
+  },
+  "guardrails": {
+    "delete_anything": false,
+    "raw_dataset_touched": false,
+    "test_opened_for_new_selection": false,
+    "runs_are_gitignored": true,
+    "stale_latest_full_pipeline_pointer_is_not_evidence": true,
+    "historical_test_already_opened": true,
+    "new_confirmatory_claim_requires_external_or_temporal_holdout": true
+  },
+  "retained_directories": [
+    {
+      "role": "deployable_historical_trkh_keeper",
+      "path": "runs\\probe_v8_yolof_pairroute_teacherfocusbinary015_boundarydrop_bboxprior_120b_2e_20260701",
+      "size_mb": 347.008,
+      "checkpoint_sha256": "1f49d577240c69dc63c30af70db52ec2aa9da65a17aef1c4b1c09ece6c482677",
+      "resolved_config_sha256": "e9c4f48917e333d2f34f61806bb54041b35f2217ebb23afb3bd0ced969854674",
+      "validation_macro_f1": 0.882925,
+      "validation_focus_class_f1": 0.678261,
+      "status": "keep"
+    },
+    {
+      "role": "completed_strict_balanced_random_init_full_baseline",
+      "path": "runs\\full_v8_yolof_randominit_30e_20260714_105524",
+      "size_mb": 292.253,
+      "checkpoint_sha256": "f8bd6309b9820d2b2d6db28815a9a01e11ebbaf0bd5eb6c5ce097b6aa081a549",
+      "summary_sha256": "cc9484fcfb610796b71d42279c1a3468cef5d2adb62c2d678f73a6fae257a4f6",
+      "independent_val_metrics_path": "runs\\full_v8_yolof_randominit_30e_20260714_105524\\final_audit_manual\\val_raw_fp32\\metrics_detailed.json",
+      "independent_val_metrics_sha256": "f4495803069f40ae7a7a4901b9511f0c2a4bde25852f71b6cd09714960828dee",
+      "validation_macro_f1": 0.874172,
+      "validation_focus_class_f1": 0.654639,
+      "status": "keep_full_baseline"
+    },
+    {
+      "role": "pre_fix_warm_start_plateau_diagnostic",
+      "path": "runs\\full_v8_yolof_current_best_30e_20260728_184850",
+      "size_mb": 356.175,
+      "summary_sha256": "c199380f7d2ccf222ad7501cd4e55bc5e5d86443dc7722a6f19a8f7e6deaf0b2",
+      "best_epoch": 2,
+      "last_epoch": 5,
+      "status": "keep_rejected_diagnostic_do_not_promote"
+    },
+    {
+      "role": "natural_only_scratch_negative_control",
+      "path": "runs\\probe_v8_scratch_natural_120b_10e_20260728_223907",
+      "size_mb": 330.282,
+      "summary_sha256": "ebb38359f2ad2bc8dcc505cf22e742dbc3a245ad904d3671cb7fa062fbcf2e8c",
+      "validation_macro_f1": 0.754579,
+      "validation_focus_class_f1": 0.246154,
+      "status": "keep_negative_control_do_not_resume_or_extend"
+    },
+    {
+      "role": "validation_only_seven_model_comparison",
+      "path": "runs\\paper_pretrained_compare_val_reuse_20260729_001455",
+      "size_mb": 18.761,
+      "run_readme_sha256": "8b999ca5db863af003f48d48e5f5a1b5718c5d06655996b27304a7427058291f",
+      "table_path": "runs\\paper_pretrained_compare_val_reuse_20260729_001455\\comparison_val_complete_models\\model_metrics.md",
+      "table_sha256": "26316bee4b32448aa05f4c9bef6553f37c64057377d5147139ef824f57828544",
+      "summary_path": "runs\\paper_pretrained_compare_val_reuse_20260729_001455\\comparison_val_complete_models\\summary.json",
+      "summary_sha256": "18b06a5dad0b7b02b0758303d20dd4cb150d2184fbf768e8af80d5209d6b143f",
+      "status": "keep_presentation_comparison"
+    },
+    {
+      "role": "pair_surface_ddf_synthetic_engineering_evidence",
+      "path": "runs\\audit_pair_surface_ddf_a0_synthetic_20260729_003200",
+      "summary_sha256": "be1b6e31781c9e05e4e97a9dc3ce021f04cf534e54a9b603d5d124568913ebdd",
+      "status": "passed_engineering_mechanism_unproven"
+    },
+    {
+      "role": "train_only_materialized_cache_dependency",
+      "path": "runs\\audit_cross_colour_ratio_surface_a0_materialized_20260725",
+      "summary_sha256": "3ba9964bc7b06caf56fd32e817a7550156d38f10840c23c28c400587e2b646db",
+      "cohort_arrays_sha256": "a835d3498319d3d25d83c0279ab24d6fcc703a2266ff5f091dc2273bbb8baa9d",
+      "status": "keep_exact_replayed_dependency"
+    },
+    {
+      "role": "pair_surface_ddf_v1_fold_leakage_supersession_evidence",
+      "path": "runs\\audit_pair_surface_ddf_v1_fold_leakage_20260729",
+      "summary_sha256": "81d3a7f461cdcabaee05eac74818ef7203189262e10ecf24fc0429a5ef2d693b",
+      "status": "keep_protocol_supersession_evidence"
+    },
+    {
+      "role": "pair_surface_ddf_v2_geometry_preflight",
+      "path": "runs\\audit_pair_surface_ddf_v2_geometry_metadata_20260729",
+      "summary_sha256": "4b80126e58e7853b8082977b05b6f7bfc6ae67270df0ecb1ad3ba50419039c22",
+      "bbox_usable_rows": 751,
+      "bbox_unusable_rows": 12,
+      "usable_q_mean": 0.3585639994345054,
+      "usable_q_median": 0.34615384615384615,
+      "status": "keep_prospective_protocol_evidence"
+    }
+  ],
+  "comparison_checkpoint_lock": [
+    {
+      "model": "TRKH keeper",
+      "path": "runs\\probe_v8_yolof_pairroute_teacherfocusbinary015_boundarydrop_bboxprior_120b_2e_20260701\\checkpoints\\best.pt",
+      "sha256": "1f49d577240c69dc63c30af70db52ec2aa9da65a17aef1c4b1c09ece6c482677"
+    },
+    {
+      "model": "TRKH random-init full",
+      "path": "runs\\full_v8_yolof_randominit_30e_20260714_105524\\checkpoints\\best.pt",
+      "sha256": "f8bd6309b9820d2b2d6db28815a9a01e11ebbaf0bd5eb6c5ce097b6aa081a549"
+    },
+    {
+      "model": "ResNet-50 pretrained baseline",
+      "path": "D:\\DataAI\\AIEx\\image_baseline_experiments\\outputs\\resnet50\\best.pt",
+      "sha256": "abf96e70735dcb9d37911776dfe759428450c35615fb707ccf48bc941a717929"
+    },
+    {
+      "model": "MobileNetV3-Large pretrained baseline",
+      "path": "D:\\DataAI\\AIEx\\image_baseline_experiments\\outputs\\mobilenetv3\\best.pt",
+      "sha256": "9d04d979aff163e4ff1f06996f9a6084ef5b48ca10033abe7d7150d7cf54eef4"
+    },
+    {
+      "model": "EfficientNetV2-S pretrained baseline",
+      "path": "D:\\DataAI\\AIEx\\image_baseline_experiments\\outputs\\efficientnetv2_s\\best.pt",
+      "sha256": "0b581a8f264007407db1d88927bf2539c9eaf8bca00b300d9e0381d8dfc92cf9"
+    },
+    {
+      "model": "ConvNeXt-Tiny pretrained baseline",
+      "path": "D:\\DataAI\\AIEx\\image_baseline_experiments\\outputs\\convnext_tiny\\best.pt",
+      "sha256": "0b0613e2e96ef6c9569726bcd1a33b64a1d21f7164c4c6b196d15e81bb143650"
+    },
+    {
+      "model": "AIDT ResNet50 plus ViT-B/16 fusion",
+      "path": "D:\\DataAI\\AIDT\\runs\\resnet50_vit_b16_class_f_5class_pretrained\\best.pt",
+      "sha256": "f902cefc19218ca4db8b5acfd998e6fea8ff6c3dfa30070aa91550b189cf7a4f"
+    }
+  ],
+  "external_source_snapshot": {
+    "path": "runs\\presentation_keeper_bundle_20260729",
+    "source_file_count": 28,
+    "aidt_source_file_count": 11,
+    "timm_source_file_count": 17,
+    "aidt_archive_sha256": "c282974ed3eb29d448ae37af74f1a257159bd7de9ca122031d1069c78c3b63bf",
+    "timm_archive_sha256": "8083a21d1de73fe9a778e55fc95a6df97084b862ff791c367703abcba7df8816",
+    "selection": "Source/config/docs only; excludes data, outputs, runs, checkpoints, weights, downloads and caches.",
+    "source_snapshot_summary_sha256": "897dd1607ad9f7e76114362bbef7bc39135e8879c6e69ae9225146c34c3f0d7d",
+    "environment_snapshot": {
+      "path": "runs\\presentation_keeper_bundle_20260729\\environment_snapshot_20260729.json",
+      "bytes": 1552,
+      "sha256": "1fef0e23b9ca9b1c1d362468dad8218dd7d76832436671c40642bcac3fd553c7",
+      "python": "3.9.11",
+      "torch": "2.6.0+cu124",
+      "torchvision": "0.21.0+cu124",
+      "timm": "1.0.27",
+      "gpu": "NVIDIA GeForce RTX 4060 Laptop GPU, 8188 MiB",
+      "scope": "Current validation-inference replay environment only.",
+      "exact_historical_checkpoint_training_environment_recovered": false,
+      "caveat": "AIDT and TIMM requirements are not fully pinned; this is not proof of the historical checkpoint-training environment."
+    }
+  },
+  "dataset_export_lineage": {
+    "repository": "D:\\DataAI\\AIEx\\CVAT_",
+    "git_commit": "0c7fd8b873d34d18c6f6f6588b772996528ba0ec",
+    "working_tree_clean_at_audit": true,
+    "exporter_path": "src\\cvat_nhai\\yolo_editor.py",
+    "exporter_git_blob_oid": "d405bf3522f8e7809488b4842f9ffb988a069195",
+    "exporter_bytes": 44941,
+    "exporter_sha256": "65e6056dac1793eaa9775b458a448828bfd0debd7adc4d9acb58807b7b74e4b5",
+    "leakage_group_semantics": "Transitive union of normalized source family and near-visual dHash/quantized-colour-thumbnail matches.",
+    "portability_caveat": "Group IDs hash absolute resolved source paths; the current YOLO manifest bytes are canonical and identical IDs are not promised after relocating the dataset root."
+  },
+  "current_scientific_state": {
+    "keeper_validation": {
+      "macro_f1": 0.882925,
+      "focus_class_f1": 0.678261
+    },
+    "completed_random_init_full_validation": {
+      "macro_f1": 0.874172,
+      "focus_class_f1": 0.654639
+    },
+    "best_external_pretrained_validation": {
+      "model": "AIDT ResNet50 plus ViT-B/16 fusion",
+      "macro_f1": 0.910267,
+      "focus_class_f1": 0.718563
+    },
+    "pair_surface_ddf_v1": {
+      "protocol_sha256": "724f63ef7a0701f4a250cb9aabc04bf2d474ffe9929b9680f05e14fb2dc0fc42",
+      "lock_sha256": "d0d93579e10ad9f8bbd678d252a707b5032894290923b07d86c589a8bd92a16f",
+      "formal_runs_consumed": 0,
+      "replay_runs_consumed": 0,
+      "decision": "supersede_before_formal_due_to_manifest_group_and_numeric_neighborhood_disjointness_failure",
+      "manifest_group_audit": {
+        "cohort_groups": 531,
+        "cross_fold_groups": 150,
+        "covered_rows": 330,
+        "covered_unique_stems": 330,
+        "cross_fold_row_pairs": 217,
+        "same_label_pairs": 92,
+        "cross_label_pairs": 125,
+        "multi_label_cross_fold_groups": 105,
+        "fold_span_histogram": {
+          "2": 140,
+          "3": 7,
+          "4": 2,
+          "5": 1
+        }
+      },
+      "numeric_neighborhood_audit": {
+        "window_1_cross_fold_row_pairs": 393,
+        "window_1_covered_rows": 541,
+        "window_1_same_label_pairs": 316,
+        "window_1_cross_label_pairs": 77,
+        "window_3_cross_fold_row_pairs": 974,
+        "window_3_covered_rows": 659,
+        "window_3_same_label_pairs": 748,
+        "window_3_cross_label_pairs": 226
+      }
+    },
+    "pair_surface_ddf_v2": {
+      "state": "prospective_protocol_fold_and_geometry_only_no_formal_authorization",
+      "protocol_path": "docs\\TRKH_5CLASS_PAIR_SURFACE_DDF_A0_V2_PROTOCOL_20260729.md",
+      "protocol_sha256_at_manifest_update": "b5fa5e2ada7e078a08276902f5897a0358d21ae03658c0d398402c4277c0b679",
+      "fold_manifest_path": "docs\\TRKH_5CLASS_PAIR_SURFACE_DDF_V2_FOLD_MANIFEST_20260729.json",
+      "fold_manifest_sha256": "8a084b171b12c4d8a4e85d09d748d30cdf46191ea7160748cdd03519b38f924b",
+      "component_count": 158,
+      "fold_row_counts": [153, 153, 153, 152, 152],
+      "component_to_fold_mapping_sha256": "c0726d114df69290d68d9f9e1a40857074ccb1a66e5ca41883caa004f2b0ea40",
+      "geometry_preflight_summary_sha256": "4b80126e58e7853b8082977b05b6f7bfc6ae67270df0ecb1ad3ba50419039c22",
+      "candidate_scores_observed": false,
+      "formal_runs_consumed": 0,
+      "replay_runs_consumed": 0,
+      "engine_implemented": false,
+      "machine_lock_written": false,
+      "gpu_training_authorized": false
+    }
+  },
+  "cleanup_policy": {
+    "keep_whole_directories": true,
+    "integrity_locked_root_count": 10,
+    "integrity_locked_file_count": 5007,
+    "integrity_locked_total_bytes": 1568605601,
+    "integrity_locked_total_mib": 1495.939,
+    "essential_file_lock_count": 9,
+    "free_disk_gb_at_audit": 87.388,
+    "retention_audit": {
+      "path": "runs\\artifact_retention_audit_presentation_keeper_20260729",
+      "summary_sha256": "2e8e66914cb6fb6bc3240660015358004aa573db2f56e9915e79171d3ba5f23d",
+      "summary_bytes": 1334363,
+      "file_inventory_path": "runs\\artifact_retention_audit_presentation_keeper_20260729\\presentation_root_file_inventory.csv",
+      "file_inventory_sha256": "00687ac6ac0ddbd313138f7437903437e6cca4795e37ed3c8369c0c4974af846",
+      "directory_count": 872,
+      "essential_files_passed": "9/9",
+      "presentation_roots_passed": "10/10",
+      "presentation_inventory_files": 5007,
+      "protected_missing": 0,
+      "blockers": [],
+      "passed": true
+    },
+    "do_not_delete_before": [
+      "tracked manifest committed and pushed",
+      "retention audit rerun passes",
+      "replacement candidate has complete checkpoint, config, metrics, audit and provenance bundle"
+    ],
+    "never_stage_or_delete_as_task_artifacts": [
+      "BaoCao/",
+      "deep-research-report (9).md",
+      "deep-research-report (10).md"
+    ]
+  }
+}

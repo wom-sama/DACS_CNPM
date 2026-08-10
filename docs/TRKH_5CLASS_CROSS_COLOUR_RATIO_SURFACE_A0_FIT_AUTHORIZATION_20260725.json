@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "protocol_id": "trkh_cross_colour_ratio_surface_a0_20260725",
+  "state": "fit_authorized_train_only_no_validation_test",
+  "authorized_date": "2026-07-25",
+  "materialized_cache_dir": "D:\\DataAI\\AIEx\\TRKH\\runs\\audit_cross_colour_ratio_surface_a0_materialized_20260725",
+  "output_dir": "D:\\DataAI\\AIEx\\TRKH\\runs\\audit_cross_colour_ratio_surface_a0_20260725",
+  "expected": {
+    "lock_sha256": "6c2a604deb4f976a3556ffb0ad8ddb60c7f376e81e374ae16272c6e6d49fc835",
+    "evidence_sha256": "e992c297c2416976152694dec95df6d99692dd63af6395f00df99b9efa98c3ed",
+    "engine_sha256": "ac610d7c37eda1b96a54257f6814a3e8c7ef5bfc243ec3bb3c7ae13a86d26fe9",
+    "runner_sha256": "b8e782a8392fc3709023a4a6aad4e7cad8c9ec845b4408f1bdcbe8a2ff124d6b",
+    "runner_test_sha256": "ee8577b607a48a880ad6dd36d9137bf5cb57fd4b70271e27118c4ed40774e511",
+    "launcher_sha256": "0423c924843b1296920392ea6c40cd95ee9f93286c09b3a20fb02869c64eea77",
+    "implementation_note_sha256": "64698cb58b228529613c03830e05638e9c5905a20376cb0015427ee2d6f2a5be",
+    "cache_artifact_set_manifest_sha256": "84811728ab7f795f4be15226962dbb3f33e694aff871cda4fa568cecae1df6aa",
+    "implementation_commit": "0289a944bb7bed67e3633e5dfa6b62418423fb0f",
+    "upstream_commit": "0289a944bb7bed67e3633e5dfa6b62418423fb0f"
+  },
+  "resource_limits": {
+    "batch1_mean_ratio": 1.15,
+    "batch1_p95_ratio": 1.15,
+    "batch_throughput_ratio": 0.85,
+    "clean_wall_seconds": 1200,
+    "end_to_end_peak_cuda_bytes": 6442450944,
+    "end_to_end_peak_cuda_ratio": 1.15,
+    "head_peak_cuda_bytes": 2147483648,
+    "onnx_max_probability_error": 1e-05,
+    "process_rss_bytes": 10737418240,
+    "retained_bytes": 107374183,
+    "temporary_cache_bytes": 429496730,
+    "tensorrt_fp32_max_probability_error": 0.0001
+  },
+  "execution_constraints": {
+    "formal_runs": 1,
+    "fresh_process_replays": 1,
+    "descriptor_creation": true,
+    "head_fit": true,
+    "scratch_only": true,
+    "conditions": [
+      "clean"
+    ],
+    "epochs": 20,
+    "folds": 5,
+    "roles": [
+      "colour_ratio_control",
+      "cross_colour_ratio_candidate",
+      "cross_colour_ratio_seed_repeat",
+      "cross_colour_ratio_spatial_dephased_control"
+    ],
+    "requested_workers": 4,
+    "raw_dataset_read": false,
+    "raw_dataset_write": false,
+    "keeper_forward": false,
+    "shifted_conditions": false,
+    "xai": false,
+    "deployment": false,
+    "validation": false,
+    "test": false,
+    "production_integration": false,
+    "full_train": false,
+    "current_best_command_update": false
+  }
+}

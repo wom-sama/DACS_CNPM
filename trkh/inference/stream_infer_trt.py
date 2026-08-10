@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import time
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Mapping, Optional, Union
 
 import cv2
 import tensorrt as trt
@@ -16,9 +16,11 @@ from trkh.inference.inference import (
     post_process_detections,
     resolve_confidence_threshold,
     resolve_detection_output_limit,
+    valid_mask_from_transform_meta,
 )
 from trkh.inference.stream_infer import (
     StreamSmoother,
+    build_classification_prediction_result,
     build_output_video_path,
     compute_preview_size,
     create_video_writer,
@@ -33,7 +35,9 @@ from trkh.core.utils import PredictionDriftMonitor, load_checkpoint
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Suy dien webcam/video bang TensorRT DETR ViT-Registers engine.")
+    parser = argparse.ArgumentParser(
+        description="Suy dien webcam/video bang TensorRT classification hoac detection engine."
+    )
     parser.add_argument("--engine", type=Path, required=True)
     parser.add_argument("--checkpoint", type=Path, required=True)
     parser.add_argument("--source", type=str, default=None)
@@ -106,11 +110,18 @@ class TensorRTHybridModel:
             elif mode == trt.TensorIOMode.OUTPUT:
                 self.output_names.append(name)
 
-        if len(self.input_names) != 1:
-            raise NotImplementedError(f"Chi ho tro engine 1 input. Tim thay {len(self.input_names)} input.")
+        if not self.input_names:
+            raise RuntimeError("TensorRT engine does not expose an input tensor.")
 
+        self.input_dtypes = {
+            name: torch_dtype_from_trt(self.engine.get_tensor_dtype(name))
+            for name in self.input_names
+        }
         self.input_name = self.input_names[0]
-        self.input_dtype = torch_dtype_from_trt(self.engine.get_tensor_dtype(self.input_name))
+        self.input_dtype = self.input_dtypes.get(
+            "images",
+            self.input_dtypes[self.input_name],
+        )
         self.output_dtypes = {
             name: torch_dtype_from_trt(self.engine.get_tensor_dtype(name))
             for name in self.output_names
@@ -130,22 +141,48 @@ class TensorRTHybridModel:
             raise RuntimeError(f"Khong set duoc optimization profile {self.profile_index}.")
         self.profile_selected = True
 
-    def infer(self, input_tensor: torch.Tensor) -> Dict[str, torch.Tensor]:
-        if input_tensor.device != self.device:
-            input_tensor = input_tensor.to(device=self.device, non_blocking=True)
-        if input_tensor.dtype != self.input_dtype:
-            input_tensor = input_tensor.to(dtype=self.input_dtype)
-        if not input_tensor.is_contiguous():
-            input_tensor = input_tensor.contiguous()
+    def infer(
+        self,
+        inputs: Union[torch.Tensor, Mapping[str, torch.Tensor]],
+    ) -> Dict[str, torch.Tensor]:
+        if torch.is_tensor(inputs):
+            if len(self.input_names) != 1:
+                raise ValueError(
+                    "Multi-input TensorRT engine requires a name-to-tensor mapping; "
+                    f"expected inputs={self.input_names}."
+                )
+            supplied_inputs = {self.input_name: inputs}
+        else:
+            supplied_inputs = dict(inputs)
+        missing = [name for name in self.input_names if name not in supplied_inputs]
+        unexpected = [name for name in supplied_inputs if name not in self.input_names]
+        if missing or unexpected:
+            raise ValueError(
+                "TensorRT input mapping mismatch: "
+                f"missing={missing}, unexpected={unexpected}."
+            )
 
         stream = torch.cuda.current_stream(device=self.device)
         stream_handle = int(stream.cuda_stream)
         self._ensure_profile_selected(stream_handle)
 
-        input_shape = tuple(int(dim) for dim in input_tensor.shape)
-        if not self.context.set_input_shape(self.input_name, input_shape):
-            raise RuntimeError(f"Khong set duoc input shape {input_shape} cho tensor {self.input_name}.")
-        self.context.set_tensor_address(self.input_name, int(input_tensor.data_ptr()))
+        prepared_inputs: Dict[str, torch.Tensor] = {}
+        for input_name in self.input_names:
+            input_tensor = supplied_inputs[input_name]
+            if input_tensor.device != self.device:
+                input_tensor = input_tensor.to(device=self.device, non_blocking=True)
+            input_dtype = self.input_dtypes[input_name]
+            if input_tensor.dtype != input_dtype:
+                input_tensor = input_tensor.to(dtype=input_dtype)
+            if not input_tensor.is_contiguous():
+                input_tensor = input_tensor.contiguous()
+            input_shape = tuple(int(dim) for dim in input_tensor.shape)
+            if not self.context.set_input_shape(input_name, input_shape):
+                raise RuntimeError(
+                    f"Khong set duoc input shape {input_shape} cho tensor {input_name}."
+                )
+            self.context.set_tensor_address(input_name, int(input_tensor.data_ptr()))
+            prepared_inputs[input_name] = input_tensor
 
         outputs: Dict[str, torch.Tensor] = {}
         for output_name in self.output_names:
@@ -179,22 +216,59 @@ def load_metadata(
 def predict_tensor_outputs_trt(
     classifier: TensorRTHybridModel,
     input_tensor: torch.Tensor,
-) -> Dict[str, torch.Tensor]:
+    image_valid_mask: Optional[torch.Tensor] = None,
+    bbox: Optional[torch.Tensor] = None,
+) -> Dict[str, object]:
     input_tensor = input_tensor.to(
         device=classifier.device,
-        dtype=classifier.input_dtype,
+        dtype=classifier.input_dtypes.get("images", classifier.input_dtype),
         non_blocking=True,
     )
+    spatial_metadata_fallback = False
+    if len(classifier.input_names) == 1:
+        runtime_inputs: Union[torch.Tensor, Dict[str, torch.Tensor]] = input_tensor
+    else:
+        expected_spatial_inputs = {"images", "image_valid_mask", "bbox"}
+        if set(classifier.input_names) != expected_spatial_inputs:
+            raise ValueError(
+                "Unsupported multi-input engine contract: "
+                f"inputs={classifier.input_names}."
+            )
+        if image_valid_mask is None:
+            image_valid_mask = torch.ones(
+                (
+                    int(input_tensor.shape[0]),
+                    int(input_tensor.shape[-2]),
+                    int(input_tensor.shape[-1]),
+                ),
+                device=classifier.device,
+                dtype=torch.float32,
+            )
+            spatial_metadata_fallback = True
+        if bbox is None:
+            bbox = input_tensor.new_tensor((0.5, 0.5, 1.0, 1.0)).view(1, 4)
+            bbox = bbox.expand(int(input_tensor.shape[0]), -1)
+            spatial_metadata_fallback = True
+        runtime_inputs = {
+            "images": input_tensor,
+            "image_valid_mask": image_valid_mask,
+            "bbox": bbox,
+        }
     with torch.inference_mode():
-        outputs = classifier.infer(input_tensor)
+        outputs = classifier.infer(runtime_inputs)
         logits = outputs.get("logits")
         bbox = outputs.get("bbox")
         objectness_logits = outputs.get("objectness_logits")
         if logits is None:
             first_name = classifier.output_names[0]
             logits = outputs[first_name]
-        result = {
+        result: Dict[str, object] = {
             "logits": logits.float(),
+            "spatial_metadata_mode": (
+                "unverified_full_frame_fallback"
+                if spatial_metadata_fallback
+                else "certified_explicit_metadata"
+            ),
         }
         if bbox is not None:
             result["boxes"] = bbox.float()
@@ -287,44 +361,63 @@ def main() -> None:
                 frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
                 pil_image = Image.fromarray(frame_rgb)
                 tensor, meta = transform(pil_image, return_meta=True)
-                outputs = predict_tensor_outputs_trt(classifier, tensor.unsqueeze(0))
-                if "boxes" not in outputs:
-                    raise RuntimeError("TensorRT stream moi yeu cau engine detection co output boxes.")
-                objectness_logits = outputs.get("objectness_logits")
-                smoothed_logits, smoothed_boxes, smoothed_objectness_logits = smoother.smooth_query_outputs(
-                    outputs["logits"][0].detach().cpu(),
-                    outputs["boxes"][0].detach().cpu(),
-                    objectness_logits[0].detach().cpu() if objectness_logits is not None else None,
+                image_valid_mask = valid_mask_from_transform_meta(meta).unsqueeze(0)
+                outputs = predict_tensor_outputs_trt(
+                    classifier,
+                    tensor.unsqueeze(0),
+                    image_valid_mask=image_valid_mask,
                 )
-                raw_detections = post_process_detections(
-                    logits=smoothed_logits.unsqueeze(0),
-                    boxes=smoothed_boxes.unsqueeze(0),
-                    objectness_logits=(
-                        smoothed_objectness_logits.unsqueeze(0)
-                        if smoothed_objectness_logits is not None
-                        else None
-                    ),
-                    conf_threshold=checkpoint.get("resolved_confidence_threshold"),
-                    max_detections=max_detections,
-                    nms_iou_threshold=args.nms_iou_threshold,
-                )[0]
-                detections: List[Dict[str, object]] = []
-                for detection in raw_detections:
-                    bbox_payload = invert_bbox_from_transform_meta(detection["box"], meta)
-                    detections.append(
-                        {
-                            "query_index": int(detection["query_index"]),
-                            "class_index": int(detection["class_index"]),
-                            "class_name": str(checkpoint["class_names"][int(detection["class_index"])]),
-                            "probability": float(detection["probability"]),
-                            "bbox": bbox_payload,
-                        }
+                if "boxes" not in outputs:
+                    logits = outputs["logits"]
+                    if not torch.is_tensor(logits):
+                        raise TypeError("TensorRT logits output is not a tensor.")
+                    smoothed_logits = smoother.smooth_class_logits(logits[0].detach().cpu())
+                    last_prediction_result = build_classification_prediction_result(
+                        logits=smoothed_logits,
+                        class_names=list(checkpoint["class_names"]),
+                        top_k=args.top_k,
+                        confidence_threshold=checkpoint.get("resolved_confidence_threshold"),
                     )
-                last_prediction_result = {
-                    "detections": detections,
-                    "num_detections": len(detections),
-                }
-                drift_prediction = detections[0] if detections else None
+                    last_prediction_result["spatial_metadata_mode"] = outputs.get(
+                        "spatial_metadata_mode"
+                    )
+                    drift_prediction = last_prediction_result.get("top_prediction")
+                else:
+                    objectness_logits = outputs.get("objectness_logits")
+                    smoothed_logits, smoothed_boxes, smoothed_objectness_logits = smoother.smooth_query_outputs(
+                        outputs["logits"][0].detach().cpu(),
+                        outputs["boxes"][0].detach().cpu(),
+                        objectness_logits[0].detach().cpu() if objectness_logits is not None else None,
+                    )
+                    raw_detections = post_process_detections(
+                        logits=smoothed_logits.unsqueeze(0),
+                        boxes=smoothed_boxes.unsqueeze(0),
+                        objectness_logits=(
+                            smoothed_objectness_logits.unsqueeze(0)
+                            if smoothed_objectness_logits is not None
+                            else None
+                        ),
+                        conf_threshold=checkpoint.get("resolved_confidence_threshold"),
+                        max_detections=max_detections,
+                        nms_iou_threshold=args.nms_iou_threshold,
+                    )[0]
+                    detections: List[Dict[str, object]] = []
+                    for detection in raw_detections:
+                        bbox_payload = invert_bbox_from_transform_meta(detection["box"], meta)
+                        detections.append(
+                            {
+                                "query_index": int(detection["query_index"]),
+                                "class_index": int(detection["class_index"]),
+                                "class_name": str(checkpoint["class_names"][int(detection["class_index"])]),
+                                "probability": float(detection["probability"]),
+                                "bbox": bbox_payload,
+                            }
+                        )
+                    last_prediction_result = {
+                        "detections": detections,
+                        "num_detections": len(detections),
+                    }
+                    drift_prediction = detections[0] if detections else None
                 drift_event = drift_monitor.update(
                     None if drift_prediction is None else int(drift_prediction.get("class_index", -1))
                 )
@@ -353,10 +446,27 @@ def main() -> None:
                     classify_every=args.classify_every,
                     smoothing_mode=args.temporal_smoothing,
                 )
+            elif last_prediction_result.get("predictions"):
+                draw_prediction_overlay(
+                    frame_bgr,
+                    list(last_prediction_result.get("predictions", [])),
+                    fps=smoothed_fps,
+                    classify_every=args.classify_every,
+                    smoothing_mode=args.temporal_smoothing,
+                )
 
             cv2.putText(
                 frame_bgr,
-                f"source: {capture_source} | TRT | q: quit",
+                (
+                    f"source: {capture_source} | TRT | "
+                    + (
+                        "full-frame fallback: unverified | "
+                        if last_prediction_result.get("spatial_metadata_mode")
+                        == "unverified_full_frame_fallback"
+                        else ""
+                    )
+                    + "q: quit"
+                ),
                 (20, frame_bgr.shape[0] - 20),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.55,

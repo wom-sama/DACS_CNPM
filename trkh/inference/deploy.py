@@ -7,7 +7,7 @@ import shutil
 import subprocess
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Mapping, Optional, Sequence, Tuple, Union
 
 import torch
 from torch import nn
@@ -70,6 +70,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--skip-onnx", action="store_true", default=False)
     parser.add_argument("--skip-trt-engine", action="store_true", default=False)
+    parser.add_argument(
+        "--allow-uncertified-precision-ensemble-tensorrt",
+        action="store_true",
+        default=False,
+        help=(
+            "Explicit research-only override. Precision-ensemble TensorRT "
+            "backends currently fail the frozen probability parity gate."
+        ),
+    )
     parser.add_argument("--trtexec-path", type=Path, default=None)
     parser.add_argument("--trt-int8", action="store_true", default=False)
     parser.add_argument("--trt-calibration-samples", type=int, default=128)
@@ -83,6 +92,32 @@ def parse_args() -> argparse.Namespace:
 
 def resolve_temporal_frames(checkpoint: Dict[str, object]) -> int:
     return max(1, int(checkpoint.get("model_config", {}).get("temporal_frames", 1)))
+
+
+def validate_tensorrt_export_policy(
+    checkpoint: Mapping[str, object],
+    *,
+    skip_trt_engine: bool,
+    allow_uncertified_precision_ensemble_tensorrt: bool,
+) -> None:
+    model_config = checkpoint.get("model_config", {})
+    model_type = (
+        str(model_config.get("model_type", "")).strip().lower()
+        if isinstance(model_config, Mapping)
+        else ""
+    )
+    if (
+        model_type == "precision_ensemble"
+        and not bool(skip_trt_engine)
+        and not bool(allow_uncertified_precision_ensemble_tensorrt)
+    ):
+        raise ValueError(
+            "Precision-ensemble TensorRT export is blocked by default: FP16 "
+            "and FP32 noTF32/O0 failed the frozen probability parity gate. "
+            "Use --skip-trt-engine for the certified ONNX CPU artifact. The "
+            "explicit --allow-uncertified-precision-ensemble-tensorrt override "
+            "is research-only and does not certify the resulting engine."
+        )
 
 
 def resolve_input_shape(
@@ -99,14 +134,99 @@ def format_trt_shape(input_shape: Sequence[int]) -> str:
     return "images:" + "x".join(str(int(dim)) for dim in input_shape)
 
 
+def resolve_runtime_input_shapes(
+    model: nn.Module,
+    image_input_shape: Sequence[int],
+) -> Dict[str, Tuple[int, ...]]:
+    image_shape = tuple(int(dim) for dim in image_input_shape)
+    shapes = {"images": image_shape}
+    if bool(getattr(model, "requires_spatial_metadata", False)):
+        if len(image_shape) != 4:
+            raise ValueError(
+                "Spatial-metadata classifier requires image shape [B,C,H,W]."
+            )
+        shapes["image_valid_mask"] = (
+            image_shape[0],
+            image_shape[-2],
+            image_shape[-1],
+        )
+        shapes["bbox"] = (image_shape[0], 4)
+    return shapes
+
+
+def build_runtime_inputs(
+    model: nn.Module,
+    image_input_shape: Sequence[int],
+    device: torch.device,
+) -> Tuple[torch.Tensor, ...]:
+    shapes = resolve_runtime_input_shapes(model, image_input_shape)
+    images = torch.randn(*shapes["images"], device=device, dtype=torch.float32)
+    if "image_valid_mask" not in shapes:
+        return (images,)
+    image_valid_mask = torch.ones(
+        *shapes["image_valid_mask"],
+        device=device,
+        dtype=torch.float32,
+    )
+    bbox = torch.tensor(
+        ((0.5, 0.5, 1.0, 1.0),),
+        device=device,
+        dtype=torch.float32,
+    ).expand(shapes["bbox"][0], -1)
+    return images, image_valid_mask, bbox
+
+
+def format_trt_shapes(input_shapes: Mapping[str, Sequence[int]]) -> str:
+    return ",".join(
+        f"{name}:" + "x".join(str(int(dim)) for dim in shape)
+        for name, shape in input_shapes.items()
+    )
+
+
 def build_runtime_transform(
     checkpoint: Dict[str, object],
     image_size: int,
     temporal_frames: int,
 ):
+    augmentation_config = checkpoint.get("augmentation_config", {})
+    if not isinstance(augmentation_config, dict):
+        augmentation_config = {}
     base_transform = build_eval_transform(
         image_size=image_size,
-        resize_mode=checkpoint.get("augmentation_config", {}).get("resize_mode", "pad"),
+        resize_mode=augmentation_config.get("resize_mode", "pad"),
+        illumination_normalization=bool(augmentation_config.get("illumination_normalization", False)),
+        illumination_normalization_strength=float(
+            augmentation_config.get("illumination_normalization_strength", 0.0) or 0.0
+        ),
+        foreground_crop_mode=str(augmentation_config.get("foreground_crop_mode", "none") or "none"),
+        foreground_crop_margin_ratio=float(augmentation_config.get("foreground_crop_margin_ratio", 0.08) or 0.08),
+        foreground_crop_min_mask_area_ratio=float(
+            augmentation_config.get("foreground_crop_min_mask_area_ratio", 0.03) or 0.03
+        ),
+        foreground_crop_max_mask_area_ratio=float(
+            augmentation_config.get("foreground_crop_max_mask_area_ratio", 0.92) or 0.92
+        ),
+        foreground_crop_max_crop_area_ratio=float(
+            augmentation_config.get("foreground_crop_max_crop_area_ratio", 0.98) or 0.98
+        ),
+        background_suppression_mode=str(augmentation_config.get("background_suppression_mode", "none") or "none"),
+        background_suppression_margin=float(augmentation_config.get("background_suppression_margin", 0.08) or 0.08),
+        background_suppression_blur_radius=float(augmentation_config.get("background_suppression_blur_radius", 7.0) or 7.0),
+        surface_detail_amplification_mode=str(
+            augmentation_config.get("surface_detail_amplification_mode", "none") or "none"
+        ),
+        surface_detail_amplification_strength=float(
+            augmentation_config.get("surface_detail_amplification_strength", 0.0) or 0.0
+        ),
+        surface_detail_amplification_blur_radius=float(
+            augmentation_config.get("surface_detail_amplification_blur_radius", 1.25) or 1.25
+        ),
+        surface_detail_amplification_foreground_weight=float(
+            augmentation_config.get("surface_detail_amplification_foreground_weight", 0.85) or 0.85
+        ),
+        eval_surface_detail_amplification=bool(
+            augmentation_config.get("eval_surface_detail_amplification", False)
+        ),
     )
     if temporal_frames > 1:
         return PseudoVideoAugmenter(
@@ -133,8 +253,12 @@ def build_runtime_model_from_checkpoint(
 
 
 def export_torchscript(model: nn.Module, input_shape: Sequence[int], output_path: Path) -> Path:
-    dummy = torch.randn(*input_shape, device=next(model.parameters()).device)
-    scripted = torch.jit.trace(model, dummy, strict=False)
+    inputs = build_runtime_inputs(
+        model,
+        input_shape,
+        next(model.parameters()).device,
+    )
+    scripted = torch.jit.trace(model, inputs, strict=False)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     scripted.save(str(output_path))
     return output_path
@@ -143,8 +267,8 @@ def export_torchscript(model: nn.Module, input_shape: Sequence[int], output_path
 def export_dynamic_int8(model: nn.Module, input_shape: Sequence[int], output_path: Path) -> tuple[nn.Module, Path]:
     cpu_model = copy.deepcopy(model).cpu().eval()
     quantized_model = quantize_dynamic(cpu_model, {nn.Linear}, dtype=torch.qint8)
-    dummy = torch.randn(*input_shape)
-    quantized_script = torch.jit.trace(quantized_model, dummy, strict=False)
+    inputs = build_runtime_inputs(quantized_model, input_shape, torch.device("cpu"))
+    quantized_script = torch.jit.trace(quantized_model, inputs, strict=False)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     quantized_script.save(str(output_path))
     return quantized_model, output_path
@@ -171,6 +295,9 @@ def build_eval_loader(
     resolved_split = "test" if split == "auto" and data_spec.has_test_split else split
     if resolved_split == "auto":
         resolved_split = "val"
+    precision_ensemble = str(
+        checkpoint.get("model_config", {}).get("model_type", "")
+    ).strip().lower() == "precision_ensemble"
     dataset = MangoYOLOCropDataset.from_data_spec(
         data_spec=data_spec,
         split=resolved_split,
@@ -179,6 +306,9 @@ def build_eval_loader(
             checkpoint.get("augmentation_config", {}).get("crop_margin_ratio", 0.05)
         ),
         crop_to_primary_object=resolve_crop_to_primary_object(checkpoint),
+        classification_target=precision_ensemble,
+        classification_object_crops=True,
+        classification_bbox_metadata=precision_ensemble,
     )
     dataloader_kwargs, dataloader_summary = build_safe_dataloader_kwargs(
         requested_num_workers=num_workers,
@@ -239,18 +369,18 @@ def benchmark_torch_module(
     runs: int,
 ) -> Dict[str, float]:
     model.eval()
-    dummy = torch.randn(*input_shape, device=device)
+    inputs = build_runtime_inputs(model, input_shape, device)
     timings = []
     batch_size = int(input_shape[0]) if input_shape else 1
     with torch.no_grad():
         for _ in range(max(0, warmup)):
-            _ = model(dummy)
+            _ = model(*inputs)
             if device.type == "cuda":
                 torch.cuda.synchronize()
 
         for _ in range(max(1, runs)):
             start = time.perf_counter()
-            _ = model(dummy)
+            _ = model(*inputs)
             if device.type == "cuda":
                 torch.cuda.synchronize()
             end = time.perf_counter()
@@ -268,7 +398,7 @@ def benchmark_torch_module(
 
 def benchmark_onnx_model(
     onnx_path: Path,
-    input_shape: Sequence[int],
+    input_shapes: Mapping[str, Sequence[int]],
     warmup: int,
     runs: int,
 ) -> Optional[Dict[str, float]]:
@@ -279,16 +409,27 @@ def benchmark_onnx_model(
         str(onnx_path),
         providers=["CPUExecutionProvider"],
     )
-    dummy = torch.randn(*input_shape).numpy()
+    dummy_inputs: Dict[str, object] = {}
+    for name, shape in input_shapes.items():
+        if name == "image_valid_mask":
+            dummy_inputs[name] = torch.ones(*shape, dtype=torch.float32).numpy()
+        elif name == "bbox":
+            dummy_inputs[name] = torch.tensor(
+                ((0.5, 0.5, 1.0, 1.0),),
+                dtype=torch.float32,
+            ).expand(int(shape[0]), -1).numpy()
+        else:
+            dummy_inputs[name] = torch.randn(*shape).numpy()
     timings = []
-    batch_size = int(input_shape[0]) if input_shape else 1
+    image_shape = tuple(int(dim) for dim in input_shapes["images"])
+    batch_size = int(image_shape[0]) if image_shape else 1
 
     for _ in range(max(0, warmup)):
-        session.run(None, {"images": dummy})
+        session.run(None, dummy_inputs)
 
     for _ in range(max(1, runs)):
         start = time.perf_counter()
-        session.run(None, {"images": dummy})
+        session.run(None, dummy_inputs)
         end = time.perf_counter()
         timings.append((end - start) * 1000.0)
 
@@ -387,23 +528,31 @@ def collect_calibration_batches(loader: DataLoader, max_samples: int) -> tuple[L
 def build_trt_engine_fp16(
     onnx_path: Path,
     output_path: Path,
-    input_shape: Sequence[int],
+    input_shape: Optional[
+        Union[Sequence[int], Mapping[str, Sequence[int]]]
+    ] = None,
     trtexec_path: Optional[Path] = None,
 ) -> Optional[Path]:
     executable = resolve_trtexec_path(trtexec_path)
     if executable is None:
         return None
 
-    shape = format_trt_shape(input_shape)
     command_args = [
         f"--onnx={onnx_path}",
         f"--saveEngine={output_path}",
-        f"--minShapes={shape}",
-        f"--optShapes={shape}",
-        f"--maxShapes={shape}",
         "--fp16",
         "--skipInference",
     ]
+    if input_shape is not None:
+        if isinstance(input_shape, Mapping):
+            shape = format_trt_shapes(input_shape)
+        else:
+            shape = format_trt_shape(input_shape)
+        command_args[2:2] = [
+            f"--minShapes={shape}",
+            f"--optShapes={shape}",
+            f"--maxShapes={shape}",
+        ]
     if Path(executable).suffix.lower() in {".cmd", ".bat"}:
         command = ["cmd", "/c", executable, *command_args]
     else:
@@ -465,6 +614,13 @@ def main() -> None:
     args = parse_args()
     set_seed(args.seed, deterministic=False)
     checkpoint = load_checkpoint(args.checkpoint, map_location="cpu")
+    validate_tensorrt_export_policy(
+        checkpoint,
+        skip_trt_engine=bool(args.skip_trt_engine or args.skip_onnx),
+        allow_uncertified_precision_ensemble_tensorrt=(
+            args.allow_uncertified_precision_ensemble_tensorrt
+        ),
+    )
     image_size = int(args.override_image_size or checkpoint["model_config"].get("image_size", 224))
     temporal_frames = resolve_temporal_frames(checkpoint)
 
@@ -490,17 +646,45 @@ def main() -> None:
         batch_size=args.benchmark_batch_size,
         temporal_frames=temporal_frames,
     )
+    export_input_shapes = resolve_runtime_input_shapes(fp32_model, export_input_shape)
+    benchmark_input_shapes = resolve_runtime_input_shapes(
+        fp32_model,
+        benchmark_input_shape,
+    )
+    requires_spatial_metadata = bool(
+        getattr(fp32_model, "requires_spatial_metadata", False)
+    )
+    supports_dynamic_batch = bool(
+        getattr(fp32_model, "supports_dynamic_batch", True)
+    )
+    supports_torchscript_deployment = bool(
+        getattr(fp32_model, "supports_torchscript_deployment", True)
+    )
+    if (
+        not supports_dynamic_batch
+        and not args.skip_benchmark
+        and int(args.benchmark_batch_size) != 1
+    ):
+        raise ValueError(
+            "This checkpoint has a fixed batch-1 deployment contract; "
+            "set --benchmark-batch-size 1."
+        )
 
-    fp32_torchscript_path = export_torchscript(
-        model=fp32_model,
-        input_shape=export_input_shape,
-        output_path=output_dir / "model_fp32_torchscript.pt",
-    )
-    int8_model, int8_torchscript_path = export_dynamic_int8(
-        model=fp32_model,
-        input_shape=export_input_shape,
-        output_path=output_dir / "model_int8_dynamic_torchscript.pt",
-    )
+    fp32_torchscript_path = None
+    if supports_torchscript_deployment:
+        fp32_torchscript_path = export_torchscript(
+            model=fp32_model,
+            input_shape=export_input_shape,
+            output_path=output_dir / "model_fp32_torchscript.pt",
+        )
+    int8_model = None
+    int8_torchscript_path = None
+    if not requires_spatial_metadata:
+        int8_model, int8_torchscript_path = export_dynamic_int8(
+            model=fp32_model,
+            input_shape=export_input_shape,
+            output_path=output_dir / "model_int8_dynamic_torchscript.pt",
+        )
 
     onnx_path = None
     if not args.skip_onnx:
@@ -524,10 +708,14 @@ def main() -> None:
         trt_engine_path = build_trt_engine_fp16(
             onnx_path=onnx_path,
             output_path=output_dir / "model_fp32_fp16.engine",
-            input_shape=export_input_shape,
+            input_shape=export_input_shapes if supports_dynamic_batch else None,
             trtexec_path=args.trtexec_path,
         )
         if args.trt_int8:
+            if requires_spatial_metadata:
+                raise NotImplementedError(
+                    "INT8 calibration for multi-input spatial metadata is not implemented."
+                )
             calibration_loader, _ = build_eval_loader(
                 checkpoint=checkpoint,
                 data_yaml=args.data,
@@ -558,9 +746,26 @@ def main() -> None:
         "image_size": image_size,
         "temporal_frames": temporal_frames,
         "input_shape": list(export_input_shape),
+        "input_shapes": {
+            name: list(shape) for name, shape in export_input_shapes.items()
+        },
+        "requires_spatial_metadata": requires_spatial_metadata,
+        "supports_dynamic_batch": supports_dynamic_batch,
+        "certified_batch_sizes": list(
+            getattr(fp32_model, "certified_batch_sizes", ())
+        ),
+        "supports_torchscript_deployment": supports_torchscript_deployment,
         "exports": {
-            "torchscript_fp32": str(fp32_torchscript_path.resolve()),
-            "torchscript_int8_dynamic": str(int8_torchscript_path.resolve()),
+            "torchscript_fp32": (
+                str(fp32_torchscript_path.resolve())
+                if fp32_torchscript_path is not None
+                else None
+            ),
+            "torchscript_int8_dynamic": (
+                str(int8_torchscript_path.resolve())
+                if int8_torchscript_path is not None
+                else None
+            ),
             "onnx_fp32": str(onnx_path.resolve()) if onnx_path is not None else None,
             "tensorrt_fp16": str(trt_engine_path.resolve()) if trt_engine_path is not None else None,
             "tensorrt_int8_ptq": (
@@ -603,10 +808,11 @@ def main() -> None:
             "fp32_cpu": to_serializable(
                 evaluate_accuracy(fp32_cpu, loader, class_names, torch.device("cpu"))
             ),
-            "int8_dynamic_cpu": to_serializable(
-                evaluate_accuracy(int8_model, loader, class_names, torch.device("cpu"))
-            ),
         }
+        if int8_model is not None:
+            payload["accuracy"]["int8_dynamic_cpu"] = to_serializable(
+                evaluate_accuracy(int8_model, loader, class_names, torch.device("cpu"))
+            )
 
     if not args.skip_benchmark:
         payload["benchmark"] = {
@@ -621,14 +827,15 @@ def main() -> None:
                 warmup=args.benchmark_warmup,
                 runs=args.benchmark_runs,
             ),
-            "int8_dynamic_cpu": benchmark_torch_module(
+        }
+        if int8_model is not None:
+            payload["benchmark"]["int8_dynamic_cpu"] = benchmark_torch_module(
                 model=int8_model,
                 input_shape=benchmark_input_shape,
                 device=torch.device("cpu"),
                 warmup=args.benchmark_warmup,
                 runs=args.benchmark_runs,
-            ),
-        }
+            )
         if export_device.type == "cuda":
             payload["benchmark"]["fp32_cuda"] = benchmark_torch_module(
                 model=build_runtime_model_from_checkpoint(
@@ -644,7 +851,7 @@ def main() -> None:
         if onnx_path is not None:
             payload["benchmark"]["onnx_cpu"] = benchmark_onnx_model(
                 onnx_path=onnx_path,
-                input_shape=benchmark_input_shape,
+                input_shapes=benchmark_input_shapes,
                 warmup=args.benchmark_warmup,
                 runs=args.benchmark_runs,
             )

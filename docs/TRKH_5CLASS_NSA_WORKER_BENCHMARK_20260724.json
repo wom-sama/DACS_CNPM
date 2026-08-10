@@ -1,0 +1,50 @@
+{
+  "mode": "nsa_poisson_loader_worker_benchmark",
+  "date": "2026-07-24",
+  "dataset": "D:\\DataAI\\AIEx\\newdataset\\yolo_f\\data.yaml",
+  "split": "train",
+  "held_fold": 0,
+  "target_rows_per_trial": 128,
+  "views_per_target": 4,
+  "batch_size": 16,
+  "opencv_threads_per_worker": 1,
+  "pin_memory": true,
+  "persistent_workers": true,
+  "prefetch_factor": 2,
+  "trials_in_order": [
+    {
+      "workers": 2,
+      "elapsed_seconds": 38.4901235,
+      "stem_images_per_second": 13.302113722757994,
+      "peak_cuda_mib": 1099.65625
+    },
+    {
+      "workers": 4,
+      "elapsed_seconds": 35.7175307,
+      "stem_images_per_second": 14.334697555114023,
+      "peak_cuda_mib": 1099.65625
+    },
+    {
+      "workers": 4,
+      "elapsed_seconds": 35.2807082,
+      "stem_images_per_second": 14.512180342230206,
+      "peak_cuda_mib": 1099.65625
+    },
+    {
+      "workers": 2,
+      "elapsed_seconds": 39.3630858,
+      "stem_images_per_second": 13.007110331781968,
+      "peak_cuda_mib": 1099.65625
+    }
+  ],
+  "means": {
+    "workers_2_stem_images_per_second": 13.15461202726998,
+    "workers_4_stem_images_per_second": 14.423438948672114,
+    "workers_4_gain_percent": 9.645491016928599
+  },
+  "selected_workers": 4,
+  "selection_basis": "higher symmetric-trial mean throughput with equal peak CUDA allocation",
+  "validation_split_used": false,
+  "test_split_used": false,
+  "raw_dataset_modified": false
+}

@@ -56,3 +56,9 @@ labels/
 deploy/
 robustness/
 attention_viz/
+
+# Local Kaggle dataset/upload bundles are preserved outside Git history.
+/kagle/**/*.zip
+
+# Presentation exports are curated in D:/DataAI/CAUTRUC, not source history.
+/BaoCao/

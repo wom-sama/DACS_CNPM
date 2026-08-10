@@ -1,0 +1,31 @@
+{
+  "$schema": "https://repomix.com/schemas/latest/schema.json",
+  "output": {
+    "filePath": "runs/context/trkh-repomix-output.xml",
+    "style": "xml",
+    "compress": true,
+    "showLineNumbers": true,
+    "topFilesLength": 20
+  },
+  "ignore": {
+    "customPatterns": [
+      "runs/**",
+      "logs/**",
+      ".pytest_cache/**",
+      "__pycache__/**",
+      "**/__pycache__/**",
+      "**/*.pt",
+      "**/*.pth",
+      "**/*.onnx",
+      "**/*.png",
+      "**/*.jpg",
+      "**/*.jpeg",
+      "**/*.webp",
+      "**/*.bmp",
+      "**/*.sqlite",
+      "**/*.sqlite-*",
+      "BaoCao/**",
+      "deep-research-report*.md"
+    ]
+  }
+}

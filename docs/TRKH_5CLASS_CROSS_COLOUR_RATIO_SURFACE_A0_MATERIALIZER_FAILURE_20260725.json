@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "protocol_id": "trkh_cross_colour_ratio_surface_a0_20260725",
+  "state": "formal_materialization_failed_no_artifact",
+  "observed_date": "2026-07-25",
+  "authorization_sha256": "e76bd56c5b592714f90272d51df113ab17ede9edb87e31c126747dcc93907068",
+  "authorization_commit": "c594549493b397d094b6d61949cace3668a8f2af",
+  "formal_attempt_count": 1,
+  "authorization_consumed": true,
+  "wall_seconds_approx": 25.4,
+  "exit_code": 1,
+  "failure": {
+    "type": "RuntimeError",
+    "message": "CCR same-tensor parity failed",
+    "checks": {
+      "all_rows_completed": true,
+      "image_manifest_exact": true,
+      "label_manifest_exact": true,
+      "model_boxes_exact": true,
+      "crop_boxes_exact": false,
+      "valid_masks_exact": true,
+      "bbox_masks_exact": true,
+      "model_tensor_roundtrip_exact": true
+    }
+  },
+  "cleanup": {
+    "formal_output_exists": false,
+    "temporary_directory_count": 0,
+    "candidate_descriptor_created": false,
+    "candidate_model_state_created": false,
+    "candidate_metric_observed": false,
+    "validation_data_used": false,
+    "test_data_used": false
+  },
+  "diagnosis": {
+    "root_cause": "The production crop computes integer crop bounds from the original parsed primary bbox, but converts all object boxes through a torch.float32 tensor before computing crop-relative boxes. The direct loader used original decimal object boxes for the second step.",
+    "effect": "The crop-relative float32 bbox can differ by one ULP while the crop, valid mask, bbox mask, image tensor, manifests, and model bbox remain exact.",
+    "synthetic_reproduction": {
+      "image_size": [2938, 1150],
+      "bbox_xywh": [0.617804, 0.027735, 0.303894, 0.8],
+      "absolute_difference": [
+        2.9802322387695312e-08,
+        2.9802322387695312e-08,
+        5.960464477539063e-08,
+        5.960464477539063e-08
+      ]
+    },
+    "correction": "Round all iterated object boxes through one torch.float32 tensor exactly where the production dataset does, while retaining the original primary bbox for integer crop-bound calculation.",
+    "corrected_module_sha256": "cc30d9734a2d75c621f56fed5b90b86a6169e071a33ce51aa0c8edb46f24af22",
+    "corrected_test_sha256": "f8b2962f47d0515d27b11806752a3faf98ea0ebd40b8908bbd8470b4cedf5945",
+    "focused_materializer_tests": "11/11"
+  },
+  "recovery": {
+    "authorized": false,
+    "rule": "Do not reuse the consumed authorization. Commit and push the correction and this failure evidence, then create and push a separate hash-locked one-attempt recovery authorization before any second image pass."
+  }
+}

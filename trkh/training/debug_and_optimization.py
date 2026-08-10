@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple, Union
+from typing import Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -745,6 +745,8 @@ class TestTimeAugmentation:
         model: nn.Module,
         images: Tensor,
         return_logits: bool = True,
+        model_kwargs: Optional[Dict[str, Tensor]] = None,
+        forward_fn: Optional[Callable[[Tensor], object]] = None,
     ) -> Dict[str, Tensor]:
         """
         Perform TTA inference.
@@ -765,8 +767,9 @@ class TestTimeAugmentation:
         all_quality_logits = []
         all_count_logits = []
 
+        forward_kwargs = dict(model_kwargs or {})
         for aug_img in aug_images:
-            output = model(aug_img)
+            output = forward_fn(aug_img) if forward_fn is not None else model(aug_img, **forward_kwargs)
 
             # Extract logits and boxes
             if isinstance(output, dict):

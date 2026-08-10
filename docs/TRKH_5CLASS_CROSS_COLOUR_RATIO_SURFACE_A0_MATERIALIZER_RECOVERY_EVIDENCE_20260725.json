@@ -1,0 +1,164 @@
+{
+  "schema_version": 1,
+  "protocol_id": "trkh_cross_colour_ratio_surface_a0_20260725",
+  "state": "fresh_process_materializer_replay_complete_no_fit",
+  "observed_date": "2026-07-25",
+  "authorization": {
+    "path": "docs/TRKH_5CLASS_CROSS_COLOUR_RATIO_SURFACE_A0_MATERIALIZER_RECOVERY_AUTHORIZATION_20260725.json",
+    "sha256": "7081cece04fb3907f55e70cb623545d951d824626ab75f3f750fc76f86716e42",
+    "commit": "3ac7302c554dc5f2023868ec63775516f1263be2",
+    "required_correction_commit": "fb1931e991451c356c2f3971577823bffe93442c",
+    "recovery_of_failure_sha256": "117143047b0992a0ed63a15e5d92db7f452e3947fbda5e38b921bbe1d4a554e9",
+    "superseded_consumed_authorization_sha256": "e76bd56c5b592714f90272d51df113ab17ede9edb87e31c126747dcc93907068"
+  },
+  "execution": {
+    "materialization_process_id": 28104,
+    "materialization_elapsed_seconds": 22.013372999999998,
+    "replay_process_id": 17800,
+    "replay_elapsed_seconds": 21.7846517,
+    "fresh_process": true
+  },
+  "cohort": {
+    "rows": 763,
+    "unique_images": 735,
+    "unique_labels": 735,
+    "model_srgb": {
+      "shape": [763, 3, 256, 256],
+      "dtype": "uint8"
+    },
+    "packed_valid_masks": {
+      "shape": [763, 8192],
+      "dtype": "uint8",
+      "bit_order": "little"
+    },
+    "cohort_arrays": {
+      "crop_boxes": {"shape": [763, 4], "dtype": "float32"},
+      "folds": {"shape": [763], "dtype": "int64"},
+      "image_paths": {"shape": [763], "dtype": "<U61"},
+      "keeper_probabilities": {"shape": [763, 5], "dtype": "float32"},
+      "label_paths": {"shape": [763], "dtype": "<U61"},
+      "model_boxes": {"shape": [763, 4], "dtype": "float32"},
+      "sample_indices": {"shape": [763], "dtype": "int64"},
+      "source_stems": {"shape": [763], "dtype": "<U11"},
+      "targets": {"shape": [763], "dtype": "int64"}
+    },
+    "object_dtype_arrays": 0,
+    "candidate_descriptor_arrays": 0,
+    "candidate_state_arrays": 0
+  },
+  "parity": {
+    "all_rows_completed": true,
+    "image_manifest_exact": true,
+    "label_manifest_exact": true,
+    "model_boxes_exact": true,
+    "crop_boxes_exact": true,
+    "valid_masks_exact": true,
+    "bbox_masks_exact": true,
+    "model_tensor_roundtrip_exact": true,
+    "packed_valid_mask_replay_exact": true,
+    "maximum_crop_bbox_error": 0.0,
+    "maximum_model_bbox_error": 0.0,
+    "maximum_model_tensor_roundtrip_error": 0.0
+  },
+  "access_ledger": {
+    "hook_installed": true,
+    "hook_probe_seen": true,
+    "passed": true,
+    "observed_event_count": 2958,
+    "logical_open_count": 1479,
+    "unique_path_count": 1479,
+    "train_image_paths": 735,
+    "train_label_paths": 735,
+    "other_locked_inputs": 9,
+    "every_logical_path_opened_once": true,
+    "blocked_attempt_count": 0,
+    "write_like_event_count": 0,
+    "validation_open_count": 0,
+    "test_open_count": 0,
+    "ordered_events_sha256": "684e92e5632b65588ed2666a56a74998adedff5bb3c0a461c8e4763c1372ebb1"
+  },
+  "resource": {
+    "cpu_only": true,
+    "cuda_used": false,
+    "cache_bytes": 156728872,
+    "temporary_cache_limit_bytes": 429496730,
+    "peak_process_rss_bytes": 744726528,
+    "process_rss_limit_bytes": 10737418240,
+    "clean_wall_seconds_limit": 1200,
+    "all_materializer_resource_checks_passed": true
+  },
+  "replay": {
+    "passed": true,
+    "checks": {
+      "access_ledger_exact": true,
+      "authorization_exact": true,
+      "automatic_passed": true,
+      "cohort_arrays_exact": true,
+      "fresh_process": true,
+      "image_manifest_exact": true,
+      "label_manifest_exact": true,
+      "lock_exact": true,
+      "module_exact": true,
+      "parity_exact": true,
+      "srgb_cache_exact": true,
+      "transform_exact": true,
+      "valid_mask_cache_exact": true
+    }
+  },
+  "artifacts": {
+    "output_dir": "runs/audit_cross_colour_ratio_surface_a0_materialized_20260725",
+    "local_cache_retained": true,
+    "formal_manifest": {
+      "file_count": 5,
+      "total_bytes": 157894395,
+      "rows_sha256": "6a1e9a871578afddf699fd840df592a41a563691ce418397fd3dffd0cadfcea9",
+      "file_sha256": "322cf7fcc600e46bc5312c8c2fdc69aad18e12ad351117b33e8b8dd536a52769"
+    },
+    "artifact_set_manifest": {
+      "file_count": 7,
+      "total_bytes": 157896093,
+      "rows_sha256": "12ef4bb3a4e086e61e47746a3f7d1b079d44cae63beebc5daadeb47060efee2b",
+      "file_sha256": "84811728ab7f795f4be15226962dbb3f33e694aff871cda4fa568cecae1df6aa"
+    },
+    "files": {
+      "access_ledger.json": {
+        "bytes": 1157566,
+        "sha256": "7d76c8af3fcb3dfc5803c7befa5517126fb94e66cb69842ba0d0f8b5e65c8bbc"
+      },
+      "cohort_arrays.npz": {
+        "bytes": 466216,
+        "sha256": "a835d3498319d3d25d83c0279ab24d6fcc703a2266ff5f091dc2273bbb8baa9d"
+      },
+      "image_valid_masks_packbits.npy": {
+        "bytes": 6250624,
+        "sha256": "1c742f6d3067014d78ae299fab07f3baeb4c0ec0014dc112975c4d7199e4771e"
+      },
+      "model_srgb_uint8.npy": {
+        "bytes": 150012032,
+        "sha256": "6c56dabe69ae02f94f6754669614966227806b52be11a8559adc5fb82e05af97"
+      },
+      "replay_summary.json": {
+        "bytes": 738,
+        "sha256": "ffe0aabebecd92ebe3970dab25d8212bf4807a44a3387e0814e7543d76b04284"
+      },
+      "summary.json": {
+        "bytes": 7957,
+        "sha256": "3ba9964bc7b06caf56fd32e817a7550156d38f10840c23c28c400587e2b646db"
+      }
+    },
+    "independent_manifest_name_hash_byte_checks_passed": true,
+    "temporary_sibling_directory_count": 0
+  },
+  "scientific_boundary": {
+    "candidate_descriptor_created": false,
+    "candidate_model_state_created": false,
+    "candidate_metric_observed": false,
+    "fit_authorized": false,
+    "validation_data_used": false,
+    "test_data_used": false,
+    "production_integration": false,
+    "full_train": false,
+    "current_best_command_update": false,
+    "next_rule": "Commit and push this evidence before prospectively locking descriptor extraction and the four-role head fit."
+  }
+}

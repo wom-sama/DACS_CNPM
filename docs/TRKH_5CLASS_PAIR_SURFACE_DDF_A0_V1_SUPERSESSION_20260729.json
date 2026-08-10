@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "created_local": "2026-07-29T01:20:00+07:00",
+  "protocol_id": "trkh_pair_surface_ddf_a0_20260725",
+  "state": "superseded_before_formal_execution",
+  "decision": "forbid_v1_oof_formal_replay_integration_and_full_train",
+  "reason": "The locked folds are exact-stem disjoint but violate the dataset leakage_group relation and a conservative numeric filename-neighborhood relation; verified fruit/session identity is unavailable.",
+  "consumption": {
+    "formal_runs": 0,
+    "replay_runs": 0,
+    "formal_cohort_candidate_scores_observed": false,
+    "candidate_pixels_read_for_this_audit": false,
+    "validation_opened_during_supersession_audit": false,
+    "test_opened_during_supersession_audit": false,
+    "historical_project_test_already_opened": true,
+    "gpu_used": false
+  },
+  "immutable_v1_lineage": {
+    "protocol_path": "docs\\TRKH_5CLASS_PAIR_SURFACE_DDF_A0_PROTOCOL_20260725.md",
+    "protocol_sha256": "724f63ef7a0701f4a250cb9aabc04bf2d474ffe9929b9680f05e14fb2dc0fc42",
+    "lock_path": "docs\\TRKH_5CLASS_PAIR_SURFACE_DDF_A0_LOCK_20260725.json",
+    "lock_sha256": "d0d93579e10ad9f8bbd678d252a707b5032894290923b07d86c589a8bd92a16f",
+    "engine_commit": "fb9880c77057d887d9e3b3ab91e9dbb55e47cfe9",
+    "synthetic_summary_path": "runs\\audit_pair_surface_ddf_a0_synthetic_20260729_003200\\summary.json",
+    "synthetic_summary_sha256": "be1b6e31781c9e05e4e97a9dc3ce021f04cf534e54a9b603d5d124568913ebdd",
+    "synthetic_status": "passed_mechanism_unproven"
+  },
+  "metadata_inputs": {
+    "cohort_arrays_path": "runs\\audit_cross_colour_ratio_surface_a0_materialized_20260725\\cohort_arrays.npz",
+    "cohort_arrays_sha256": "a835d3498319d3d25d83c0279ab24d6fcc703a2266ff5f091dc2273bbb8baa9d",
+    "yolo_manifest_path": "D:\\DataAI\\AIEx\\newdataset\\yolo_f\\manifest.csv",
+    "yolo_manifest_sha256": "eb16e09cd20fff8480b50aa79e7d5fec779e4614398911e2e257ba6a37642ff2"
+  },
+  "audit_implementation": {
+    "module_path": "trkh\\tools\\audit_pair_surface_ddf_fold_leakage.py",
+    "module_sha256": "0450ae519c56cf090988cc0fc3b1303823f9e5d04deb541f73a32caf562a26f8",
+    "test_path": "tests\\test_audit_pair_surface_ddf_fold_leakage.py",
+    "test_sha256": "22c2a4f89a47e966b3c4bce5369572eab0f4df45cc6509c1dee0f32d56addf42",
+    "focused_tests": "6 passed",
+    "output_path": "runs\\audit_pair_surface_ddf_v1_fold_leakage_20260729\\summary.json",
+    "output_sha256": "81d3a7f461cdcabaee05eac74818ef7203189262e10ecf24fc0429a5ef2d693b"
+  },
+  "findings": {
+    "rows": 763,
+    "unique_stems": 735,
+    "old_exact_stem_cross_fold_groups": 0,
+    "manifest_leakage_groups": 531,
+    "manifest_cross_fold_groups": 150,
+    "manifest_cross_fold_covered_rows": 330,
+    "manifest_cross_fold_row_pairs": 217,
+    "manifest_same_label_pairs": 92,
+    "manifest_cross_label_pairs": 125,
+    "manifest_multi_label_cross_fold_groups": 105,
+    "numeric_window_1_cross_fold_row_pairs": 393,
+    "numeric_window_1_covered_rows": 541,
+    "numeric_window_3_cross_fold_row_pairs": 974,
+    "numeric_window_3_covered_rows": 659,
+    "transitive_v2_components": 158,
+    "old_fold_crossing_components": 85,
+    "old_fold_crossing_component_rows": 679,
+    "largest_component_rows": 82,
+    "p95_component_rows_nearest_rank": 21
+  },
+  "v2_minimum_group_contract": {
+    "relations": [
+      "casefold_exact_source_stem",
+      "exact_yolo_manifest_leakage_group",
+      "transitive_Image_N_numeric_adjacency_gap_le_3"
+    ],
+    "old_fold_array_is_lineage_only": true,
+    "candidate_score_may_select_group_or_fold": false,
+    "component_cross_fold_count_required": 0,
+    "manifest_group_cross_fold_count_required": 0,
+    "numeric_window_1_cross_fold_pair_count_required": 0,
+    "numeric_window_3_cross_fold_pair_count_required": 0
+  }
+}

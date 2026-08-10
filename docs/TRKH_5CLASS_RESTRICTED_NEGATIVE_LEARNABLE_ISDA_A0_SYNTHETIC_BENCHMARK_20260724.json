@@ -1,0 +1,129 @@
+{
+  "schema_version": 1,
+  "evidence_id": "trkh_rn_lisda_a0_synthetic_runtime_benchmark_20260724",
+  "status": "pre_candidate_synthetic_only",
+  "claim_boundary": {
+    "scientific_performance_evidence": false,
+    "actual_trkh_data_opened": false,
+    "candidate_metric_created": false,
+    "validation_or_test_opened": false,
+    "purpose": "prospective runtime and resource feasibility only"
+  },
+  "provenance": {
+    "benchmark_script_external_draft_sha256": "27712b0b7bca0dc93d214099f0b60ffbf09f177464e11b80e7328885b57da136",
+    "candidate_engine_external_draft_sha256": "f500e3b45b55b272b63e7651ed3c10ad6b92bb4b02186c992f34d23caf279c93",
+    "formal_auditor_external_draft_sha256": "2f8457f46233d8988ddbf5909f3649200ccda90557332eb03e4cc50a320a3507",
+    "raw_stdout": {
+      "bytes": 1324,
+      "sha256": "0bff4701f3388a45d48b1cf53d638e0682829c32554dd41664f598dbae851baa"
+    },
+    "device": "NVIDIA GeForce RTX 4060 Laptop GPU",
+    "formal_peak_resource_monitor_reused": true
+  },
+  "attempt_history": [
+    {
+      "attempt": "v1",
+      "result": "harness_rejected_before_role_metrics",
+      "reason": "CUBLAS_WORKSPACE_CONFIG was not installed before deterministic CUDA execution",
+      "candidate_metric_created": false
+    },
+    {
+      "attempt": "v2",
+      "result": "runtime_projection_completed",
+      "limitation": "process RSS was not sampled",
+      "projected_formal_minutes_with_25pct_margin": 18.634255989583338,
+      "candidate_metric_created": false
+    },
+    {
+      "attempt": "v3",
+      "result": "superseding_runtime_and_resource_projection_completed",
+      "formal_peak_resource_monitor_reused": true,
+      "candidate_metric_created": false
+    }
+  ],
+  "synthetic_contract": {
+    "rows": 9215,
+    "feature_dim": 256,
+    "class_counts": [
+      1941,
+      541,
+      1920,
+      2520,
+      2293
+    ],
+    "partition_rows": [
+      3699,
+      3673,
+      1843
+    ],
+    "feature_generator": "NumPy default_rng(20260724) independent normal vectors plus a 0.02 synthetic label offset",
+    "source_generator": "one unique synthetic source string per row",
+    "trkh_cache_dataset_checkpoint_or_metric_input": false
+  },
+  "result": {
+    "actual_trkh_data_opened": false,
+    "candidate_metric_created": false,
+    "device": "cuda",
+    "device_name": "NVIDIA GeForce RTX 4060 Laptop GPU",
+    "feature_dim": 256,
+    "mode": "rn_lisda_synthetic_runtime_benchmark",
+    "partition_rows": [
+      3699,
+      3673,
+      1843
+    ],
+    "peak_process_rss_bytes": 1226530816,
+    "peak_process_rss_gib": 1.1422958374023438,
+    "peak_virtual_memory_fraction": 0.799,
+    "projected_formal_minutes_with_25pct_margin": 23.6631581875,
+    "projected_formal_seconds_with_25pct_margin": 1419.7894912499999,
+    "roles": [
+      {
+        "elapsed_seconds": 13.2826199,
+        "head_updates": 6840,
+        "meta_updates": 0,
+        "peak_cuda_bytes": 79695360,
+        "role": "ce_control"
+      },
+      {
+        "elapsed_seconds": 25.4647507,
+        "head_updates": 6840,
+        "meta_updates": 0,
+        "peak_cuda_bytes": 90420224,
+        "role": "restricted_classwise_isda"
+      },
+      {
+        "elapsed_seconds": 30.550794500000002,
+        "head_updates": 6840,
+        "meta_updates": 456,
+        "peak_cuda_bytes": 90683904,
+        "role": "rn_lisda_candidate"
+      },
+      {
+        "elapsed_seconds": 35.6649755,
+        "head_updates": 6840,
+        "meta_updates": 0,
+        "peak_cuda_bytes": 90683904,
+        "role": "rn_lisda_joint_no_meta"
+      }
+    ],
+    "rows": 9215
+  },
+  "locked_threshold_comparison": {
+    "peak_process_rss_gib": {
+      "observed": 1.1422958374023438,
+      "locked_max": 4.0,
+      "within_limit": true
+    },
+    "peak_cuda_allocated_gib": {
+      "observed": 0.08445596694946289,
+      "locked_max": 2.0,
+      "within_limit": true
+    },
+    "formal_elapsed_minutes": {
+      "projected_with_25pct_margin": 23.6631581875,
+      "locked_max": 45.0,
+      "within_limit": true
+    }
+  }
+}

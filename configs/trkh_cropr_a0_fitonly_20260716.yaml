@@ -1,0 +1,17 @@
+path: D:\DataAI\AIEx\TRKH\runs\yolof_cidt_fold0_trainonly_20260716
+train: images/train
+val: images/train
+test: images/train
+nc: 5
+names:
+- Xoai_Song_Chua_KhoDap
+- Xoai_Song_ChuaNhe_CoNguyCo
+- Xoai_Chin_NgotThanh_DeDap
+- Xoai_ChinGia_NgotGat_KhongVanChuyen
+- Xoai_Hu_KhongAnDuoc
+format: yolo
+class_name_mode: raw
+note: Cropr A0 fit-only launcher view. All loader-compatible splits point to the
+  locked 7372-row fit partition; the 1843-row holdout is forbidden during train.
+held_out_fold: 0
+holdout_data_yaml: D:\DataAI\AIEx\TRKH\runs\yolof_cidt_fold0_trainonly_20260716\data.yaml
