@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "approved_ready",
+  "status": "executed_verified",
   "created_at": "2026-08-10T00:00:00+07:00",
   "scope": "Pause local TRKH research and remove only reviewed disposable artifacts under D:/DataAI.",
   "workspace_root": "D:/DataAI",
@@ -209,5 +209,39 @@
     "Remote branch SHAs must match before deleting quarantined WIP or stale source archives.",
     "Deletion uses PowerShell Remove-Item with LiteralPath only."
   ],
-  "execution_result": null
+  "execution_result": {
+    "executed_at": "2026-08-10T10:07:21.5902153+07:00",
+    "executor_commit": "c883925bceb195962ccfdcecbbb32674ffd3b9eb",
+    "executor_tests": "3 passed",
+    "planned_targets": 63,
+    "present_before_execution": 62,
+    "already_absent": [
+      "D:/DataAI/AIEx/TRKH/deep-research-report (9).md"
+    ],
+    "deleted_targets": 62,
+    "remaining_targets": 0,
+    "free_bytes_before": 64113274880,
+    "free_bytes_after": 94485127168,
+    "physical_bytes_recovered": 30371852288,
+    "physical_gib_recovered": 28.285991668701172,
+    "canonical_class_f_before": {
+      "files": 13093,
+      "bytes": 1123064754,
+      "data_yaml_sha256": "312eb376e89023f42e9df24fea8723b64a6b885c15c24f85d8e319d1ff4f1fa8"
+    },
+    "canonical_class_f_after": {
+      "files": 13093,
+      "bytes": 1123064754,
+      "data_yaml_sha256": "312eb376e89023f42e9df24fea8723b64a6b885c15c24f85d8e319d1ff4f1fa8"
+    },
+    "retained_kaggle_assets": {
+      "dataset_zip_sha256": "c3695cf9dd44b559ce158b1ffee96533d4549c5724188f9df2f864b3d37dfadb",
+      "v4_bundle_sha256": "a6625c3f202c2461119ee12f0476f4106393bf296b1a1f8936922247a12afc19"
+    },
+    "remote_heads_verified_after_cleanup": {
+      "classification-only-research": "05854d04c2b12340bc303884d535934ef5e03f09",
+      "archive/no-pretrain-wip-20260810": "590d380a98bdc25bef8dee0c303e6d80083cd646",
+      "research/pretrained-classf-b1_before_receipt": "c883925bceb195962ccfdcecbbb32674ffd3b9eb"
+    }
+  }
 }
